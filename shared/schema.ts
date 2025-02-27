@@ -40,11 +40,26 @@ export const insertUserSchema = createInsertSchema(users).pick({
   role: true,
 });
 
-export const insertAuctionSchema = createInsertSchema(auctions).omit({
-  id: true,
-  approved: true,
-  currentPrice: true,
-});
+export const insertAuctionSchema = createInsertSchema(auctions)
+  .omit({
+    id: true,
+    approved: true,
+    currentPrice: true,
+  })
+  .extend({
+    startPrice: z.union([z.string(), z.number()]).transform(val => 
+      typeof val === 'string' ? parseInt(val) : val
+    ),
+    reservePrice: z.union([z.string(), z.number()]).transform(val => 
+      typeof val === 'string' ? parseInt(val) : val
+    ),
+    startDate: z.union([z.string(), z.date()]).transform(val => 
+      typeof val === 'string' ? new Date(val) : val
+    ),
+    endDate: z.union([z.string(), z.date()]).transform(val => 
+      typeof val === 'string' ? new Date(val) : val
+    ),
+  });
 
 export const insertBidSchema = createInsertSchema(bids).omit({
   id: true,
