@@ -155,6 +155,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add single auction endpoint
+  app.get("/api/auctions/:id", async (req, res) => {
+    try {
+      const auction = await storage.getAuction(parseInt(req.params.id));
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+      res.json(auction);
+    } catch (error) {
+      console.error("Error fetching auction:", error);
+      res.status(500).json({ message: "Failed to fetch auction" });
+    }
+  });
+
+  // Add auction bids endpoint
+  app.get("/api/auctions/:id/bids", async (req, res) => {
+    try {
+      const bids = await storage.getBidsForAuction(parseInt(req.params.id));
+      res.json(bids);
+    } catch (error) {
+      console.error("Error fetching bids:", error);
+      res.status(500).json({ message: "Failed to fetch bids" });
+    }
+  });
+
   // Admin routes
   app.get("/api/admin/auctions", requireAdmin, async (req, res) => {
     try {

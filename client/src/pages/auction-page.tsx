@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { Auction, Bid } from "@shared/schema";
 import BidForm from "@/components/bid-form";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
@@ -40,6 +41,13 @@ export default function AuctionPage() {
 
   return (
     <div className="container mx-auto py-8">
+      <Link href="/">
+        <Button variant="ghost" className="mb-6">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Auctions
+        </Button>
+      </Link>
+
       <div className="grid md:grid-cols-2 gap-8">
         <div>
           <img
@@ -55,6 +63,9 @@ export default function AuctionPage() {
             <div className="flex gap-2 mt-2">
               <Badge>{auction.species}</Badge>
               <Badge variant="outline">{auction.category}</Badge>
+              <Badge variant={isActive ? "default" : "secondary"}>
+                {isActive ? "Active" : "Ended"}
+              </Badge>
             </div>
           </div>
 
