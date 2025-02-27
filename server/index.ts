@@ -72,7 +72,7 @@ app.use((req, res, next) => {
         log(`Port ${port} is already in use. Attempting to close existing server...`);
         
         // Try to find and kill the process using this port
-        require('child_process').exec(`lsof -i :${port} -t | xargs kill -9`, (err: any) => {
+        import('child_process').then(cp => cp.exec(`lsof -i :${port} -t | xargs kill -9`, (err: any) => {
           if (err) {
             log(`Could not free port ${port}: ${err.message}`);
             process.exit(1);
@@ -81,7 +81,7 @@ app.use((req, res, next) => {
             // Wait a moment before trying again
             setTimeout(startServer, 1000);
           }
-        });
+        }));
       } else {
         log(`Server error: ${e.message}`);
         process.exit(1);
