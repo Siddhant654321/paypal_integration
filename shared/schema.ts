@@ -1,74 +1,100 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 
+import { z } from "zod";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { relations, sql } from "drizzle-orm";
+import { 
+  pgTable, 
+  serial, 
+  varchar, 
+  text, 
+  timestamp, 
+  integer, 
+  decimal, 
+  boolean 
+} from "drizzle-orm/pg-core";
+
+// Users table
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
+  username: varchar("username", { length: 50 }).notNull().unique(),
   password: text("password").notNull(),
-  role: text("role", { enum: ["buyer", "seller", "admin"] }).notNull(),
+  email: varchar("email", { length: 100 }).notNull().unique(),
+  fullName: varchar("full_name", { length: 100 }).notNull(),
+  role: varchar("role", { length: 20 }).notNull().default("buyer"),
   approved: boolean("approved").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Auctions table
 export const auctions = pgTable("auctions", {
   id: serial("id").primaryKey(),
-  sellerId: integer("seller_id").notNull(),
-  title: text("title").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
   description: text("description").notNull(),
-  species: text("species").notNull(),
-  category: text("category", { enum: ["quality", "production", "fun"] }).notNull(),
-  imageUrl: text("image_url").notNull(),
-  startPrice: integer("start_price").notNull(),
-  reservePrice: integer("reserve_price").notNull(),
-  currentPrice: integer("current_price").notNull(),
+  species: varchar("species", { length: 50 }).notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  location: varchar("location", { length: 100 }).notNull(),
+  startingPrice: decimal("starting_price", { precision: 10, scale: 2 }).notNull(),
+  currentPrice: decimal("current_price", { precision: 10, scale: 2 }),
+  reservePrice: decimal("reserve_price", { precision: 10, scale: 2 }),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
+  imageUrl: text("image_url"),
+  sellerId: integer("seller_id").notNull().references(() => users.id),
   approved: boolean("approved").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Bids table
 export const bids = pgTable("bids", {
   id: serial("id").primaryKey(),
-  auctionId: integer("auction_id").notNull(),
-  bidderId: integer("bidder_id").notNull(),
-  amount: integer("amount").notNull(),
-  timestamp: timestamp("timestamp").notNull(),
+  auctionId: integer("auction_id").notNull().references(() => auctions.id),
+  bidderId: integer("bidder_id").notNull().references(() => users.id),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  role: true,
-});
+// Define relationships
+export const usersRelations = relations(users, ({ many }) => ({
+  auctions: many(auctions),
+  bids: many(bids),
+}));
 
-export const insertAuctionSchema = createInsertSchema(auctions)
-  .omit({
-    id: true,
-    approved: true,
-    currentPrice: true,
-  })
-  .extend({
-    startPrice: z.union([z.string(), z.number()]).transform(val => 
-      typeof val === 'string' ? parseInt(val) : val
-    ),
-    reservePrice: z.union([z.string(), z.number()]).transform(val => 
-      typeof val === 'string' ? parseInt(val) : val
-    ),
-    startDate: z.union([z.string(), z.date()]).transform(val => 
-      typeof val === 'string' ? new Date(val) : val
-    ),
-    endDate: z.union([z.string(), z.date()]).transform(val => 
-      typeof val === 'string' ? new Date(val) : val
-    ),
-  });
+export const auctionsRelations = relations(auctions, ({ one, many }) => ({
+  seller: one(users, {
+    fields: [auctions.sellerId],
+    references: [users.id],
+  }),
+  bids: many(bids),
+}));
 
-export const insertBidSchema = createInsertSchema(bids).omit({
-  id: true,
-  timestamp: true,
-});
+export const bidsRelations = relations(bids, ({ one }) => ({
+  auction: one(auctions, {
+    fields: [bids.auctionId],
+    references: [auctions.id],
+  }),
+  bidder: one(users, {
+    fields: [bids.bidderId],
+    references: [users.id],
+  }),
+}));
 
-export type User = typeof users.$inferSelect;
+// Zod schemas for validation
+export const insertUserSchema = createInsertSchema(users);
+export const selectUserSchema = createSelectSchema(users);
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export type Auction = typeof auctions.$inferSelect;
+export type User = z.infer<typeof selectUserSchema>;
+
+export const insertAuctionSchema = createInsertSchema(auctions, {
+  startingPrice: z.number().min(0),
+  reservePrice: z.number().min(0).nullable().optional(),
+});
+export const selectAuctionSchema = createSelectSchema(auctions);
 export type InsertAuction = z.infer<typeof insertAuctionSchema>;
-export type Bid = typeof bids.$inferSelect;
+export type Auction = z.infer<typeof selectAuctionSchema>;
+
+export const insertBidSchema = createInsertSchema(bids, {
+  amount: z.number().min(0),
+});
+export const selectBidSchema = createSelectSchema(bids);
 export type InsertBid = z.infer<typeof insertBidSchema>;
+export type Bid = z.infer<typeof selectBidSchema>;
