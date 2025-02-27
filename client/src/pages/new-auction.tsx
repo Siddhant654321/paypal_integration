@@ -57,9 +57,9 @@ export default function NewAuction() {
         ...data,
         startPrice: Number(data.startPrice),
         reservePrice: Number(data.reservePrice),
-        // Ensure dates are strings in the correct format
-        startDate: typeof data.startDate === 'string' ? data.startDate : data.startDate.toISOString().split('T')[0],
-        endDate: typeof data.endDate === 'string' ? data.endDate : data.endDate.toISOString().split('T')[0],
+        // Ensure dates are always strings in the correct format
+        startDate: data.startDate instanceof Date ? data.startDate.toISOString().split('T')[0] : data.startDate,
+        endDate: data.endDate instanceof Date ? data.endDate.toISOString().split('T')[0] : data.endDate,
       };
       console.log("Submitting auction data:", submissionData);
       const res = await apiRequest("POST", "/api/auctions", submissionData);
@@ -89,16 +89,13 @@ export default function NewAuction() {
         <form
           onSubmit={form.handleSubmit((data) => {
             console.log("Form data before submission:", data);
-            // Convert Date objects to ISO strings for proper API submission
+            // Convert Date objects to string format
             const formattedData = {
               ...data,
-              startDate: typeof data.startDate === 'string' 
-                ? data.startDate 
-                : data.startDate.toISOString().split('T')[0],
-              endDate: typeof data.endDate === 'string' 
-                ? data.endDate 
-                : data.endDate.toISOString().split('T')[0],
+              startDate: data.startDate instanceof Date ? data.startDate.toISOString().split('T')[0] : data.startDate,
+              endDate: data.endDate instanceof Date ? data.endDate.toISOString().split('T')[0] : data.endDate,
             };
+            console.log("Formatted data for submission:", formattedData);
             createAuctionMutation.mutate(formattedData);
           })}
           className="space-y-6"
