@@ -15,14 +15,16 @@ export default function AuctionCard({ auction, showStatus }: Props) {
 
   return (
     <Card className="overflow-hidden">
-      <img
-        src={auction.imageUrl || (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ? auction.images[0] : '')}
-        alt={auction.title}
-        className="w-full h-48 object-cover"
-        onError={(e) => {
-          e.currentTarget.src = ''; // Don't set a fallback image
-        }}
-      />
+      <div className="aspect-square w-full overflow-hidden">
+        <img
+          src={auction.imageUrl || (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ? auction.images[0] : '')}
+          alt={auction.title}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            e.currentTarget.src = ''; // Don't set a fallback image
+          }}
+        />
+      </div>
       <CardContent className="p-4">
         <div className="flex gap-2 mb-2">
           <Badge>{auction.species}</Badge>

@@ -83,27 +83,30 @@ export default function AuctionPage() {
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
           {/* Main image */}
-          <img
-            src={auction.imageUrl}
-            alt={auction.title}
-            className="w-full rounded-lg object-cover aspect-square"
-          />
+          <div className="aspect-square w-full overflow-hidden rounded-lg">
+            <img
+              src={auction.imageUrl}
+              alt={auction.title}
+              className="w-full h-full object-cover"
+            />
+          </div>
           
           {/* Thumbnails for additional images if available */}
           {auction.images && auction.images.length > 1 && (
             <div className="grid grid-cols-5 gap-2">
               {auction.images.map((img, index) => (
-                <img
-                  key={index}
-                  src={img}
-                  alt={`${auction.title} - Image ${index + 1}`}
-                  className="w-full h-16 object-cover rounded cursor-pointer"
+                <div key={index} className="aspect-square overflow-hidden rounded cursor-pointer" 
                   onClick={() => {
                     // Simple image switching - update the auction.imageUrl with the selected image
                     const updatedAuction = { ...auction, imageUrl: img };
                     setAuction(updatedAuction);
-                  }}
-                />
+                  }}>
+                  <img
+                    src={img}
+                    alt={`${auction.title} - Image ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
               ))}
             </div>
           )}
