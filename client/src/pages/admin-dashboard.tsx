@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Search } from "lucide-react";
+import { Loader2, CheckCircle2, Search, Trash2, Edit } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -19,6 +19,25 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AuctionCard from "@/components/auction-card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -47,18 +66,16 @@ export default function AdminDashboard() {
     queryKey: ["/api/auctions", { approved: true }],
   });
 
-  const approveUserMutation = useMutation({
+  // Profile management mutations
+  const deleteProfileMutation = useMutation({
     mutationFn: async (userId: number) => {
-      const res = await apiRequest("POST", `/api/admin/users/${userId}/approve`);
-      return await res.json();
+      await apiRequest("DELETE", `/api/admin/profiles/${userId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-        queryKey: ["/api/admin/users"]
-      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({
         title: "Success",
-        description: "User has been approved",
+        description: "Profile has been deleted",
       });
     },
     onError: (error: Error) => {
@@ -70,6 +87,7 @@ export default function AdminDashboard() {
     },
   });
 
+  // Auction management mutations
   const approveAuctionMutation = useMutation({
     mutationFn: async (auctionId: number) => {
       const res = await apiRequest("POST", `/api/admin/auctions/${auctionId}/approve`);
@@ -81,6 +99,49 @@ export default function AdminDashboard() {
       toast({
         title: "Success",
         description: "Auction has been approved",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteAuctionMutation = useMutation({
+    mutationFn: async (auctionId: number) => {
+      await apiRequest("DELETE", `/api/admin/auctions/${auctionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      toast({
+        title: "Success",
+        description: "Auction has been deleted",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateAuctionMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Auction> }) => {
+      const res = await apiRequest("PATCH", `/api/admin/auctions/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      toast({
+        title: "Success",
+        description: "Auction has been updated",
       });
     },
     onError: (error: Error) => {
@@ -140,17 +201,33 @@ export default function AdminDashboard() {
                           <p className="font-medium">{user.username}</p>
                           <Badge variant="secondary">{user.role}</Badge>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => approveUserMutation.mutate(user.id)}
-                          disabled={approveUserMutation.isPending}
-                        >
-                          {approveUserMutation.isPending && (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <div className="flex gap-2">
+                          {user.hasProfile && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Profile</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this user's profile? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteProfileMutation.mutate(user.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           )}
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Approve
-                        </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -185,6 +262,33 @@ export default function AdminDashboard() {
                           <div>
                             <p className="font-medium">{seller.username}</p>
                             <Badge variant="outline">{seller.role}</Badge>
+                          </div>
+                          <div className="flex gap-2">
+                            {seller.hasProfile && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="destructive" size="sm">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Profile</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this seller's profile? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deleteProfileMutation.mutate(seller.id)}
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -233,17 +337,42 @@ export default function AdminDashboard() {
                             <Badge variant="outline">{auction.category}</Badge>
                           </div>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => approveAuctionMutation.mutate(auction.id)}
-                          disabled={approveAuctionMutation.isPending}
-                        >
-                          {approveAuctionMutation.isPending && (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          )}
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Approve
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => approveAuctionMutation.mutate(auction.id)}
+                            disabled={approveAuctionMutation.isPending}
+                          >
+                            {approveAuctionMutation.isPending && (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            )}
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Approve
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this auction? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -271,10 +400,34 @@ export default function AdminDashboard() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {filteredApprovedAuctions.map((auction) => (
-                        <AuctionCard 
-                          key={auction.id} 
-                          auction={auction}
-                        />
+                        <div key={auction.id} className="relative">
+                          <div className="absolute top-2 right-2 z-10 flex gap-2">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                          <AuctionCard auction={auction} />
+                        </div>
                       ))}
                     </div>
                   )}

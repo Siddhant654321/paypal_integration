@@ -9,6 +9,7 @@ import { log } from "./vite";
 
 const PostgresSessionStore = connectPg(session);
 
+// Add these new methods to the IStorage interface
 export interface IStorage {
   sessionStore: session.Store;
 
@@ -43,6 +44,12 @@ export interface IStorage {
   getProfile(userId: number): Promise<Profile | undefined>;
   hasProfile(userId: number): Promise<boolean>;
   updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile>;
+
+  // Admin operations
+  deleteProfile(userId: number): Promise<void>;
+  deleteAuction(auctionId: number): Promise<void>;
+  deleteBid(bidId: number): Promise<void>;
+  updateAuction(auctionId: number, data: Partial<InsertAuction>): Promise<Auction>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -333,6 +340,74 @@ export class DatabaseStorage implements IStorage {
       return updatedProfile;
     } catch (error) {
       log(`Error updating profile for user ${userId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async deleteProfile(userId: number): Promise<void> {
+    try {
+      await db
+        .delete(profiles)
+        .where(eq(profiles.userId, userId));
+
+      // Update user hasProfile flag
+      await db
+        .update(users)
+        .set({ hasProfile: false })
+        .where(eq(users.id, userId));
+    } catch (error) {
+      log(`Error deleting profile for user ${userId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async deleteAuction(auctionId: number): Promise<void> {
+    try {
+      // First delete all bids associated with this auction
+      await db
+        .delete(bids)
+        .where(eq(bids.auctionId, auctionId));
+
+      // Then delete the auction
+      await db
+        .delete(auctions)
+        .where(eq(auctions.id, auctionId));
+    } catch (error) {
+      log(`Error deleting auction ${auctionId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async deleteBid(bidId: number): Promise<void> {
+    try {
+      await db
+        .delete(bids)
+        .where(eq(bids.id, bidId));
+    } catch (error) {
+      log(`Error deleting bid ${bidId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async updateAuction(auctionId: number, data: Partial<InsertAuction>): Promise<Auction> {
+    try {
+      const [updatedAuction] = await db
+        .update(auctions)
+        .set({
+          ...data,
+          startDate: data.startDate ? new Date(data.startDate) : undefined,
+          endDate: data.endDate ? new Date(data.endDate) : undefined,
+        })
+        .where(eq(auctions.id, auctionId))
+        .returning();
+
+      if (!updatedAuction) {
+        throw new Error("Auction not found");
+      }
+
+      return updatedAuction;
+    } catch (error) {
+      log(`Error updating auction ${auctionId}: ${error}`, "storage");
       throw error;
     }
   }

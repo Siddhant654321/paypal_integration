@@ -157,14 +157,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(201).json(result);
       } catch (dbError) {
         console.error("Database error creating auction:", dbError);
-        return res.status(500).json({ 
+        return res.status(500).json({
           message: `Failed to save auction: ${(dbError as Error).message}`,
-          details: dbError 
+          details: dbError
         });
       }
     } catch (error) {
       console.error("Error creating auction:", error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: `Failed to create auction: ${(error as Error).message}`,
         details: error
       });
@@ -395,6 +395,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // Add these new routes in the admin section of registerRoutes
+  // Admin profile management
+  app.delete("/api/admin/profiles/:userId", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteProfile(parseInt(req.params.userId));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting profile:", error);
+      res.status(500).json({ message: "Failed to delete profile" });
+    }
+  });
+
+  // Admin auction management
+  app.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteAuction(parseInt(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting auction:", error);
+      res.status(500).json({ message: "Failed to delete auction" });
+    }
+  });
+
+  app.patch("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const updatedAuction = await storage.updateAuction(auctionId, req.body);
+      res.json(updatedAuction);
+    } catch (error) {
+      console.error("Error updating auction:", error);
+      res.status(500).json({ message: "Failed to update auction" });
+    }
+  });
+
+  // Admin bid management
+  app.delete("/api/admin/bids/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteBid(parseInt(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting bid:", error);
+      res.status(500).json({ message: "Failed to delete bid" });
+    }
+  });
+
+  // Get all bids (admin only)
+  app.get("/api/admin/bids", requireAdmin, async (req, res) => {
+    try {
+      const auctionId = req.query.auctionId ? parseInt(req.query.auctionId as string) : undefined;
+      const bids = await storage.getBidsForAuction(auctionId!);
+      res.json(bids);
+    } catch (error) {
+      console.error("Error fetching bids:", error);
+      res.status(500).json({ message: "Failed to fetch bids" });
     }
   });
 
