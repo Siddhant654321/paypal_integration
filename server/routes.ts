@@ -24,6 +24,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
+  // Middleware to check if user is an approved seller
+  const requireApprovedSeller = (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated() || req.user.role !== "seller" || !req.user.approved) {
+      return res.status(403).json({ message: "Only approved sellers can perform this action" });
+    }
+    next();
+  };
+
   // Get all auctions with optional filters
   app.get("/api/auctions", async (req, res) => {
     try {
@@ -39,26 +47,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get a single auction
-  app.get("/api/auctions/:id", async (req, res) => {
+  // Get seller's auctions
+  app.get("/api/seller/auctions", requireApprovedSeller, async (req, res) => {
     try {
-      const auction = await storage.getAuction(parseInt(req.params.id));
-      if (!auction) {
-        return res.status(404).json({ message: "Auction not found" });
-      }
-      res.json(auction);
+      const auctions = await storage.getAuctions({ sellerId: req.user.id });
+      res.json(auctions);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch auction" });
+      res.status(500).json({ message: "Failed to fetch seller auctions" });
     }
   });
 
   // Create new auction (sellers only)
-  app.post("/api/auctions", requireAuth, async (req, res) => {
+  app.post("/api/auctions", requireApprovedSeller, async (req, res) => {
     try {
-      if (req.user.role !== "seller" || !req.user.approved) {
-        return res.status(403).json({ message: "Only approved sellers can create auctions" });
-      }
-
       const auctionData = insertAuctionSchema.parse({
         ...req.body,
         sellerId: req.user.id,
@@ -67,7 +68,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(auction);
     } catch (error) {
       if (error instanceof ZodError) {
-        res.status(400).json({ message: "Invalid auction data" });
+        res.status(400).json({ message: "Invalid auction data", errors: error.errors });
       } else {
         res.status(500).json({ message: "Failed to create auction" });
       }

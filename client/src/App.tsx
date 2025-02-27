@@ -7,6 +7,8 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import AuctionPage from "@/pages/auction-page";
+import SellerDashboard from "@/pages/seller-dashboard";
+import NewAuction from "@/pages/new-auction";
 
 function Router() {
   return (
@@ -14,6 +16,8 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/auction/:id" component={AuctionPage} />
+      <Route path="/seller/dashboard" component={SellerDashboard} />
+      <Route path="/seller/new-auction" component={NewAuction} />
       <Route component={NotFound} />
     </Switch>
   );

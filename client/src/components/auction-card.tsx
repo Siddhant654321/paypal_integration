@@ -5,7 +5,12 @@ import { type Auction } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 
-export default function AuctionCard({ auction }: { auction: Auction }) {
+type Props = {
+  auction: Auction;
+  showStatus?: boolean;
+};
+
+export default function AuctionCard({ auction, showStatus }: Props) {
   const isActive = new Date() >= new Date(auction.startDate) && new Date() <= new Date(auction.endDate);
 
   return (
@@ -19,6 +24,11 @@ export default function AuctionCard({ auction }: { auction: Auction }) {
         <div className="flex gap-2 mb-2">
           <Badge>{auction.species}</Badge>
           <Badge variant="outline">{auction.category}</Badge>
+          {showStatus && (
+            <Badge variant={auction.approved ? "default" : "secondary"}>
+              {auction.approved ? "Approved" : "Pending Approval"}
+            </Badge>
+          )}
         </div>
         <h3 className="text-lg font-semibold mb-2">{auction.title}</h3>
         <p className="text-sm text-muted-foreground line-clamp-2">

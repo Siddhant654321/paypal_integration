@@ -37,6 +37,11 @@ export default function HomePage() {
                 <span className="text-accent-foreground">
                   Welcome, {user.username}!
                 </span>
+                {user.role === "seller" && (
+                  <Link href="/seller/dashboard">
+                    <Button variant="secondary">Seller Dashboard</Button>
+                  </Link>
+                )}
                 <Button 
                   variant="secondary" 
                   onClick={() => logoutMutation.mutate()}
