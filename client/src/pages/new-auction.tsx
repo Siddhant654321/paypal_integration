@@ -53,6 +53,7 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
+      console.log("Submitting auction data:", data);
       const res = await apiRequest("POST", "/api/auctions", {
         ...data,
         startPrice: parseInt(data.startPrice),
@@ -84,7 +85,10 @@ export default function NewAuction() {
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit((data) => createAuctionMutation.mutate(data))}
+          onSubmit={form.handleSubmit((data) => {
+            console.log("Form data before submission:", data);
+            createAuctionMutation.mutate(data);
+          })}
           className="space-y-6"
         >
           <FormField
@@ -223,7 +227,7 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>Start Date</FormLabel>
                   <FormControl>
-                    <Input {...field} type="date" />
+                    <Input {...field} type="date" min={new Date().toISOString().split('T')[0]} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -237,7 +241,7 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>End Date</FormLabel>
                   <FormControl>
-                    <Input {...field} type="date" />
+                    <Input {...field} type="date" min={form.watch('startDate')} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

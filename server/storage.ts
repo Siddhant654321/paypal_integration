@@ -19,12 +19,13 @@ export interface IStorage {
   approveUser(id: number): Promise<User>;
 
   // Auction operations
-  createAuction(auction: InsertAuction): Promise<Auction>;
+  createAuction(auction: InsertAuction & { sellerId: number }): Promise<Auction>;
   getAuction(id: number): Promise<Auction | undefined>;
   getAuctions(filters?: {
     species?: string;
     category?: string;
     approved?: boolean;
+    sellerId?: number;
   }): Promise<Auction[]>;
   approveAuction(id: number): Promise<Auction>;
 
@@ -94,7 +95,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createAuction(insertAuction: InsertAuction): Promise<Auction> {
+  async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
       const [auction] = await db
         .insert(auctions)
@@ -125,6 +126,7 @@ export class DatabaseStorage implements IStorage {
     species?: string;
     category?: string;
     approved?: boolean;
+    sellerId?: number;
   }): Promise<Auction[]> {
     try {
       let query = db.select().from(auctions);
@@ -140,10 +142,13 @@ export class DatabaseStorage implements IStorage {
         if (filters.approved !== undefined) {
           conditions.push(eq(auctions.approved, filters.approved));
         }
+        if (filters.sellerId !== undefined) {
+          conditions.push(eq(auctions.sellerId, filters.sellerId));
+        }
       }
 
       if (conditions.length > 0) {
-        query = query.where(sql`${conditions.reduce((acc, condition) => sql`${acc} AND ${condition}`)}`);
+        query = query.where(sql`${conditions[0]}${sql.join(conditions.slice(1), sql` AND `)}`);
       }
 
       const results = await query;

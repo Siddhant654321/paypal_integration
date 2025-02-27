@@ -43,6 +43,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auctions = await storage.getAuctions(filters);
       res.json(auctions);
     } catch (error) {
+      console.error("Error fetching auctions:", error);
       res.status(500).json({ message: "Failed to fetch auctions" });
     }
   });
@@ -50,9 +51,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get seller's auctions
   app.get("/api/seller/auctions", requireApprovedSeller, async (req, res) => {
     try {
-      const auctions = await storage.getAuctions({ sellerId: req.user.id });
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const auctions = await storage.getAuctions({
+        sellerId: req.user.id
+      });
       res.json(auctions);
     } catch (error) {
+      console.error("Error fetching seller auctions:", error);
       res.status(500).json({ message: "Failed to fetch seller auctions" });
     }
   });
@@ -60,16 +68,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new auction (sellers only)
   app.post("/api/auctions", requireApprovedSeller, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      console.log("Received auction data:", req.body);
+
       const auctionData = insertAuctionSchema.parse({
         ...req.body,
         sellerId: req.user.id,
+        startDate: new Date(req.body.startDate),
+        endDate: new Date(req.body.endDate),
+        startPrice: Number(req.body.startPrice),
+        reservePrice: Number(req.body.reservePrice),
       });
-      const auction = await storage.createAuction(auctionData);
+
+      console.log("Parsed auction data:", auctionData);
+
+      const auction = await storage.createAuction({
+        ...auctionData,
+        sellerId: req.user.id,
+      });
       res.status(201).json(auction);
     } catch (error) {
       if (error instanceof ZodError) {
-        res.status(400).json({ message: "Invalid auction data", errors: error.errors });
+        console.error("Validation error:", error.errors);
+        res.status(400).json({
+          message: "Invalid auction data",
+          errors: error.errors
+        });
       } else {
+        console.error("Error creating auction:", error);
         res.status(500).json({ message: "Failed to create auction" });
       }
     }
@@ -78,6 +107,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Place bid on auction (buyers only)
   app.post("/api/auctions/:id/bid", requireAuth, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
       if (req.user.role !== "buyer") {
         return res.status(403).json({ message: "Only buyers can place bids" });
       }
