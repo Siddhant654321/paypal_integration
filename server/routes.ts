@@ -85,11 +85,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("Received auction data:", req.body);
 
+      // Ensure dates are properly formatted
+      const startDate = req.body.startDate instanceof Date 
+        ? req.body.startDate 
+        : new Date(req.body.startDate);
+        
+      const endDate = req.body.endDate instanceof Date 
+        ? req.body.endDate 
+        : new Date(req.body.endDate);
+      
       const auctionData = insertAuctionSchema.parse({
         ...req.body,
         sellerId: req.user.id,
-        startDate: new Date(req.body.startDate),
-        endDate: new Date(req.body.endDate),
+        startDate: startDate,
+        endDate: endDate,
         startPrice: Number(req.body.startPrice),
         reservePrice: Number(req.body.reservePrice),
       });

@@ -1,3 +1,4 @@
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -59,11 +60,34 @@ app.use((req, res, next) => {
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client
   const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+  
+  const startServer = () => {
+    server.listen({
+      port,
+      host: "0.0.0.0",
+    }, () => {
+      log(`serving on port ${port}`);
+    }).on('error', (e: any) => {
+      if (e.code === 'EADDRINUSE') {
+        log(`Port ${port} is already in use. Attempting to close existing server...`);
+        
+        // Try to find and kill the process using this port
+        require('child_process').exec(`lsof -i :${port} -t | xargs kill -9`, (err: any) => {
+          if (err) {
+            log(`Could not free port ${port}: ${err.message}`);
+            process.exit(1);
+          } else {
+            log(`Successfully freed port ${port}, restarting server...`);
+            // Wait a moment before trying again
+            setTimeout(startServer, 1000);
+          }
+        });
+      } else {
+        log(`Server error: ${e.message}`);
+        process.exit(1);
+      }
+    });
+  };
+  
+  startServer();
 })();

@@ -53,14 +53,30 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
+      // Ensure all date fields are properly formatted strings (YYYY-MM-DD)
+      const formatDateString = (dateValue: any): string => {
+        if (dateValue instanceof Date) {
+          return dateValue.toISOString().split('T')[0];
+        }
+        if (typeof dateValue === 'string') {
+          // Handle ISO strings or date strings
+          if (dateValue.includes('T')) {
+            return dateValue.split('T')[0];
+          }
+          return dateValue;
+        }
+        // Fallback
+        return new Date().toISOString().split('T')[0];
+      };
+      
       const submissionData = {
         ...data,
         startPrice: Number(data.startPrice),
         reservePrice: Number(data.reservePrice),
-        // Ensure dates are always strings in the correct format
-        startDate: data.startDate instanceof Date ? data.startDate.toISOString().split('T')[0] : data.startDate,
-        endDate: data.endDate instanceof Date ? data.endDate.toISOString().split('T')[0] : data.endDate,
+        startDate: formatDateString(data.startDate),
+        endDate: formatDateString(data.endDate),
       };
+      
       console.log("Submitting auction data:", submissionData);
       const res = await apiRequest("POST", "/api/auctions", submissionData);
       return res.json();
@@ -89,12 +105,28 @@ export default function NewAuction() {
         <form
           onSubmit={form.handleSubmit((data) => {
             console.log("Form data before submission:", data);
-            // Convert Date objects to string format
+            
+            // Format all dates consistently
+            const formatDate = (date: any): string => {
+              if (date instanceof Date) {
+                return date.toISOString().split('T')[0];
+              }
+              if (typeof date === 'string') {
+                if (date.includes('T')) {
+                  return date.split('T')[0];
+                }
+                return date;
+              }
+              return new Date().toISOString().split('T')[0];
+            };
+            
+            // Apply consistent formatting
             const formattedData = {
               ...data,
-              startDate: data.startDate instanceof Date ? data.startDate.toISOString().split('T')[0] : data.startDate,
-              endDate: data.endDate instanceof Date ? data.endDate.toISOString().split('T')[0] : data.endDate,
+              startDate: formatDate(data.startDate),
+              endDate: formatDate(data.endDate),
             };
+            
             console.log("Formatted data for submission:", formattedData);
             createAuctionMutation.mutate(formattedData);
           })}
