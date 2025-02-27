@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertAuctionSchema } from "@shared/schema";
 import { Button } from "@/components/ui/button";
+import { FileUpload } from "@/components/file-upload";
 import {
   Form,
   FormControl,
@@ -21,53 +22,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
 import { useState } from 'react';
 
-
-function FileUpload({ multiple, maxFiles, onFilesChange }) {
-  const [selectedFiles, setSelectedFiles] = useState([]);
-
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    if (maxFiles && files.length > maxFiles) {
-      // Handle exceeding maxFiles limit
-      console.warn(`Maximum ${maxFiles} files allowed.`);
-      return;
-    }
-    setSelectedFiles(files);
-    onFilesChange(files);
-  };
-
-  return (
-    <div>
-      <input
-        type="file"
-        multiple={multiple}
-        onChange={handleFileChange}
-      />
-      {/* Display selected files (optional) */}
-      {selectedFiles.length > 0 && (
-        <ul>
-          {selectedFiles.map((file) => (
-            <li key={file.name}>{file.name}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-
 export default function NewAuction() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [selectedFiles, setSelectedFiles] = useState([]); // Add state for selected files
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -81,11 +46,10 @@ export default function NewAuction() {
       description: "",
       species: "",
       category: "quality",
-      imageUrl: "",
       startPrice: 0,
       reservePrice: 0,
-      startDate: new Date().toISOString().split('T')[0], // Already in string format
-      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Already in string format
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     },
   });
 
@@ -107,7 +71,6 @@ export default function NewAuction() {
       selectedFiles.forEach(file => {
         formData.append('images', file);
       });
-      // Remove imageUrl handling completely
 
       console.log("Submitting FormData with files:", selectedFiles.length);
 
@@ -149,7 +112,7 @@ export default function NewAuction() {
         <form
           onSubmit={form.handleSubmit((data) => {
             console.log("Form data before submission:", data);
-            createAuctionMutation.mutate({...data, files: selectedFiles});
+            createAuctionMutation.mutate({...data});
           })}
           className="space-y-6"
           encType="multipart/form-data"
@@ -242,22 +205,14 @@ export default function NewAuction() {
           </div>
 
           <div className="mb-4">
-            <FormLabel>Upload Images</FormLabel>
-            <Input 
-              type="file" 
+            <FormLabel>Images</FormLabel>
+            <FileUpload
               multiple
+              onFilesChange={setSelectedFiles}
               accept="image/*"
-              onChange={(e) => {
-                const files = Array.from(e.target.files || []);
-                setSelectedFiles(files);
-                console.log("Selected files:", files.length);
-              }}
+              maxFiles={5}
             />
-            <FormDescription>
-              Upload up to 5 images for your auction
-            </FormDescription>
           </div>
-
 
           <div className="grid grid-cols-2 gap-4">
             <FormField

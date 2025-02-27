@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { insertAuctionSchema, insertBidSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import path from "path";
+import multer from 'multer';
 import { upload, handleFileUpload } from "./uploads";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -86,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const auctionData = req.body;
-      
+
       console.log("Received auction data:", auctionData);
       console.log("Received files:", req.files);
 
