@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -245,21 +246,47 @@ export default function NewAuction() {
               <FormItem>
                 <FormLabel>Images</FormLabel>
                 <FormControl>
-                  <FileUpload 
-                    multiple={true}
-                    maxFiles={5}
-                    onFilesChange={(files) => {
-                      setSelectedFiles(files);
-                      // We'll still keep the imageUrl field for compatibility
-                      // but it will be overridden by the uploaded files later
-                      field.onChange(files.length > 0 ? 'uploaded-via-form' : '');
-                    }}
-                  />
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          setSelectedFiles(Array.from(e.target.files));
+                        }
+                      }}
+                      className="w-full"
+                    />
+                    {selectedFiles.length > 0 && (
+                      <div className="text-sm text-muted-foreground">
+                        {selectedFiles.length} file(s) selected
+                      </div>
+                    )}
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name="imageUrl"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Fallback Image URL (optional)</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Enter fallback image URL" />
+                </FormControl>
+                <FormDescription>
+                  Used if no images are uploaded
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
 
           <div className="grid grid-cols-2 gap-4">
             <FormField

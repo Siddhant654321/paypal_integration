@@ -9,7 +9,7 @@ import { upload, handleFileUpload } from "./uploads";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
-  
+
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -82,40 +82,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create new auction (sellers only)
-  app.post("/api/auctions", requireApprovedSeller, async (req, res) => {
+  app.post("/api/auctions", requireApprovedSeller, upload.array('images', 5), async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
+      const userId = req.user.id;
+      const auctionData = req.body;
+
+      // Convert string values to appropriate types
+      const parsedData = {
+        ...auctionData,
+        startPrice: Number(auctionData.startPrice),
+        reservePrice: Number(auctionData.reservePrice),
+      };
+
+      try {
+        insertAuctionSchema.parse(parsedData);
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return res.status(400).json({ message: "Invalid auction data", errors: error.errors });
+        }
+        throw error;
       }
 
-      console.log("Received auction data:", req.body);
+      // Handle uploaded files
+      const uploadedFiles = req.files as Express.Multer.File[];
+      let imageUrls = [];
 
-      // First validate all fields with the schema
-      const validatedData = insertAuctionSchema.parse({
-        ...req.body,
-        startPrice: Number(req.body.startPrice),
-        reservePrice: Number(req.body.reservePrice),
-      });
+      if (uploadedFiles && uploadedFiles.length > 0) {
+        // Create URLs for uploaded images
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        imageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
+      }
 
-      console.log("Validated auction data:", validatedData);
+      // Set the seller ID, current price, and image URLs
+      const newAuction = {
+        ...parsedData,
+        sellerId: userId,
+        currentPrice: parsedData.startPrice,
+        imageUrl: imageUrls.length > 0 ? imageUrls[0] : (parsedData.imageUrl || 'placeholder-image.jpg'),
+        images: imageUrls,
+      };
 
-      const auction = await storage.createAuction({
-        ...validatedData,
-        sellerId: req.user.id,
-      });
-
-      res.status(201).json(auction);
+      const result = await storage.createAuction(newAuction);
+      return res.status(201).json(result);
     } catch (error) {
-      if (error instanceof ZodError) {
-        console.error("Validation error:", error.errors);
-        res.status(400).json({
-          message: "Invalid auction data",
-          errors: error.errors
-        });
-      } else {
-        console.error("Error creating auction:", error);
-        res.status(500).json({ message: "Failed to create auction" });
-      }
+      console.error("Error creating auction:", error);
+      return res.status(500).json({ message: "Failed to create auction" });
     }
   });
 
@@ -269,7 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to approve user" });
     }
   });
-  
+
   // File upload endpoint
   app.post("/api/upload", requireAuth, upload.array('files', 5), handleFileUpload);
 
