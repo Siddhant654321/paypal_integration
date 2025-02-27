@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Auction, Bid, Profile } from "@shared/schema";
 import BidForm from "@/components/bid-form";
@@ -19,6 +19,7 @@ import {
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
   const { user } = useAuth();
+  const queryClient = useQueryClient(); // Added queryClient import and instantiation
   const [timeLeft, setTimeLeft] = useState("");
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
@@ -41,6 +42,23 @@ export default function AuctionPage() {
       if (now < start) {
         setTimeLeft(`Starts ${formatDistanceToNow(start, { addSuffix: true })}`);
       } else if (now > end) {
+        // If auction has ended and no winning bidder is set, update it
+        if (!auction.winningBidderId && bids && bids.length > 0) {
+          const highestBid = bids.reduce((max, bid) =>
+            bid.amount > max.amount ? bid : max
+          , bids[0]);
+
+          // Update auction with winning bidder
+          fetch(`/api/auctions/${auction.id}/end`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ winningBidderId: highestBid.bidderId })
+          }).then(() => {
+            queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction.id}`] });
+          });
+        }
         setTimeLeft("Auction ended");
       } else {
         const seconds = differenceInSeconds(end, now);
@@ -57,7 +75,7 @@ export default function AuctionPage() {
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [auction]);
+  }, [auction, bids, queryClient]); // Added queryClient to dependencies
 
   if (isLoadingAuction) {
     return (

@@ -577,6 +577,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this new endpoint for handling auction end
+  app.post("/api/auctions/:id/end", requireAuth, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const { winningBidderId } = req.body;
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Verify auction has actually ended
+      if (new Date() <= new Date(auction.endDate)) {
+        return res.status(400).json({ message: "Auction has not ended yet" });
+      }
+
+      // Set winning bidder and update payment status
+      await storage.updateAuction(auctionId, {
+        winningBidderId,
+        paymentStatus: "pending",
+        paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days to pay
+      });
+
+      res.json({ message: "Auction ended successfully" });
+    } catch (error) {
+      console.error("Error ending auction:", error);
+      res.status(500).json({ message: "Failed to end auction" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
