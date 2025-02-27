@@ -19,10 +19,11 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
 
   const bidMutation = useMutation({
     mutationFn: async (bidAmount: number) => {
-      const bidData = insertBidSchema.parse({
+      // We don't need to include bidderId here as it will be set by the server from the authenticated user
+      const bidData = {
         auctionId,
         amount: bidAmount,
-      });
+      };
       const res = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, bidData);
       return res.json();
     },
@@ -35,10 +36,28 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
         description: "Your bid has been recorded",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      let errorMessage = "An unexpected error occurred";
+      
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Try to extract more detailed error from response if available
+      if (error.response) {
+        try {
+          const responseData = error.response.json();
+          if (responseData && responseData.message) {
+            errorMessage = responseData.message;
+          }
+        } catch (e) {
+          // Ignore JSON parsing errors
+        }
+      }
+      
       toast({
         title: "Failed to place bid",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     },

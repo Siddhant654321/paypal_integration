@@ -121,7 +121,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const auction = await storage.getAuction(parseInt(req.params.id));
+      const auctionId = parseInt(req.params.id);
+      if (isNaN(auctionId)) {
+        return res.status(400).json({ message: "Invalid auction ID" });
+      }
+
+      const auction = await storage.getAuction(auctionId);
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
       }
@@ -131,27 +136,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You cannot bid on your own auction" });
       }
 
-      if (new Date() < auction.startDate || new Date() > auction.endDate) {
-        return res.status(400).json({ message: "Auction is not active" });
+      const now = new Date();
+      if (now < auction.startDate) {
+        return res.status(400).json({ message: "Auction has not started yet" });
+      }
+      
+      if (now > auction.endDate) {
+        return res.status(400).json({ message: "Auction has already ended" });
+      }
+
+      // Convert amount to number if it's a string
+      const amount = typeof req.body.amount === 'string' 
+        ? parseInt(req.body.amount) 
+        : req.body.amount;
+      
+      if (isNaN(amount)) {
+        return res.status(400).json({ message: "Bid amount must be a valid number" });
+      }
+
+      if (amount <= auction.currentPrice) {
+        return res.status(400).json({ 
+          message: `Bid must be higher than current price of $${auction.currentPrice}` 
+        });
       }
 
       const bidData = insertBidSchema.parse({
         auctionId: auction.id,
         bidderId: req.user.id,
-        amount: req.body.amount,
+        amount: amount,
       });
-
-      if (bidData.amount <= auction.currentPrice) {
-        return res.status(400).json({ message: "Bid must be higher than current price" });
-      }
 
       const bid = await storage.createBid(bidData);
       res.status(201).json(bid);
     } catch (error) {
+      console.error("Bid error:", error);
       if (error instanceof ZodError) {
-        res.status(400).json({ message: "Invalid bid data" });
+        res.status(400).json({ 
+          message: "Invalid bid data", 
+          errors: error.errors
+        });
       } else {
-        res.status(500).json({ message: "Failed to place bid" });
+        res.status(500).json({ 
+          message: "Failed to place bid", 
+          error: (error as Error).message
+        });
       }
     }
   });
