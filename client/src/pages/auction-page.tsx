@@ -4,7 +4,7 @@ import { Auction, Bid, Profile } from "@shared/schema";
 import BidForm from "@/components/bid-form";
 import { formatDistanceToNow, differenceInSeconds } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Clock, Store, User } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, Store, User, MapPin } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
   CardContent,
+  CardDescription,
 } from "@/components/ui/card";
 
 export default function AuctionPage() {
@@ -116,29 +117,51 @@ export default function AuctionPage() {
           {auction.sellerProfile && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Seller Information</CardTitle>
+                <CardTitle className="text-lg">About the Seller</CardTitle>
+                <CardDescription>
+                  Learn more about this seller and their specialties
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Store className="h-4 w-4" />
                   <span className="font-medium">
                     {auction.sellerProfile.businessName || "Anonymous Seller"}
                   </span>
                 </div>
-                {auction.sellerProfile.breedSpecialty && (
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Specializes in:</strong> {auction.sellerProfile.breedSpecialty}
-                  </p>
-                )}
-                {auction.sellerProfile.isPublicBio && auction.sellerProfile.bio && (
-                  <div className="mt-2">
-                    <p className="text-sm text-muted-foreground">{auction.sellerProfile.bio}</p>
+
+                {auction.sellerProfile.state && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="h-4 w-4" />
+                    <span>Shipping from {auction.sellerProfile.state}</span>
                   </div>
                 )}
+
+                {auction.sellerProfile.breedSpecialty && (
+                  <div className="space-y-1">
+                    <p className="font-medium text-sm">Breed Specialty</p>
+                    <p className="text-sm text-muted-foreground">
+                      {auction.sellerProfile.breedSpecialty}
+                    </p>
+                  </div>
+                )}
+
+                {auction.sellerProfile.isPublicBio && auction.sellerProfile.bio && (
+                  <div className="space-y-1">
+                    <p className="font-medium text-sm">About Us</p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {auction.sellerProfile.bio}
+                    </p>
+                  </div>
+                )}
+
                 {auction.sellerProfile.npipNumber && (
-                  <p className="text-sm">
-                    <strong>NPIP Number:</strong> {auction.sellerProfile.npipNumber}
-                  </p>
+                  <div className="space-y-1">
+                    <p className="font-medium text-sm">NPIP Certification</p>
+                    <p className="text-sm text-muted-foreground">
+                      NPIP Number: {auction.sellerProfile.npipNumber}
+                    </p>
+                  </div>
                 )}
               </CardContent>
             </Card>
