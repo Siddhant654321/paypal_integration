@@ -24,9 +24,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Middleware to check if user is an approved seller
+  // Middleware to check if user is an approved seller or admin
   const requireApprovedSeller = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated() || req.user.role !== "seller" || !req.user.approved) {
+    if (!req.isAuthenticated() || 
+        (req.user.role !== "seller" && req.user.role !== "admin") || 
+        (req.user.role === "seller" && !req.user.approved)) {
       return res.status(403).json({ message: "Only approved sellers can perform this action" });
     }
     next();

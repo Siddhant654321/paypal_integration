@@ -229,7 +229,7 @@ export class DatabaseStorage implements IStorage {
           conditions.push(eq(users.approved, filters.approved));
         }
         if (filters.role) {
-          conditions.push(eq(users.role, filters.role));
+          conditions.push(eq(users.role, filters.role.toLowerCase()));
         }
       }
 
@@ -237,7 +237,9 @@ export class DatabaseStorage implements IStorage {
         query = query.where(sql`${conditions[0]}${sql.join(conditions.slice(1), sql` AND `)}`);
       }
 
+      log(`Fetching users with filters: ${JSON.stringify(filters)}`, "storage");
       const results = await query;
+      log(`Retrieved ${results.length} users`, "storage");
       return results;
     } catch (error) {
       log(`Error getting users: ${error}`, "storage");
