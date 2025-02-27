@@ -25,11 +25,48 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
+import { useState } from 'react';
+
+
+function FileUpload({ multiple, maxFiles, onFilesChange }) {
+  const [selectedFiles, setSelectedFiles] = useState([]);
+
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (maxFiles && files.length > maxFiles) {
+      // Handle exceeding maxFiles limit
+      console.warn(`Maximum ${maxFiles} files allowed.`);
+      return;
+    }
+    setSelectedFiles(files);
+    onFilesChange(files);
+  };
+
+  return (
+    <div>
+      <input
+        type="file"
+        multiple={multiple}
+        onChange={handleFileChange}
+      />
+      {/* Display selected files (optional) */}
+      {selectedFiles.length > 0 && (
+        <ul>
+          {selectedFiles.map((file) => (
+            <li key={file.name}>{file.name}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 
 export default function NewAuction() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [selectedFiles, setSelectedFiles] = useState([]); // Add state for selected files
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -61,8 +98,23 @@ export default function NewAuction() {
         endDate: new Date(data.endDate).toISOString(),
       };
 
+      // Handle file uploads here
+      const formData = new FormData();
+      for (let i = 0; i < selectedFiles.length; i++) {
+        formData.append('images', selectedFiles[i]);
+      }
+      formData.append('title', data.title);
+      formData.append('description', data.description);
+      formData.append('species', data.species);
+      formData.append('category', data.category);
+      formData.append('startPrice', data.startPrice);
+      formData.append('reservePrice', data.reservePrice);
+      formData.append('startDate', data.startDate);
+      formData.append('endDate', data.endDate);
+
+
       console.log("Submitting auction data:", formattedData);
-      const res = await apiRequest("POST", "/api/auctions", formattedData);
+      const res = await apiRequest("POST", "/api/auctions", formData); // Send FormData
       return res.json();
     },
     onSuccess: () => {
@@ -95,7 +147,7 @@ export default function NewAuction() {
               endDate: new Date(data.endDate).toISOString(),
             };            
             console.log("Formatted data for submission:", formattedData);
-            createAuctionMutation.mutate(formattedData);
+            createAuctionMutation.mutate(data);
           })}
           className="space-y-6"
         >
@@ -191,9 +243,18 @@ export default function NewAuction() {
             name="imageUrl"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Image URL</FormLabel>
+                <FormLabel>Images</FormLabel>
                 <FormControl>
-                  <Input {...field} type="url" placeholder="https://example.com/image.jpg" />
+                  <FileUpload 
+                    multiple={true}
+                    maxFiles={5}
+                    onFilesChange={(files) => {
+                      setSelectedFiles(files);
+                      // We'll still keep the imageUrl field for compatibility
+                      // but it will be overridden by the uploaded files later
+                      field.onChange(files.length > 0 ? 'uploaded-via-form' : '');
+                    }}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

@@ -17,7 +17,8 @@ export const auctions = pgTable("auctions", {
   description: text("description").notNull(),
   species: text("species").notNull(),
   category: text("category", { enum: ["quality", "production", "fun"] }).notNull(),
-  imageUrl: text("image_url").notNull(),
+  imageUrl: text("image_url").notNull(), // Keep for backward compatibility
+  images: text("images").array().notNull().default([]), // New field for multiple images
   startPrice: integer("start_price").notNull(),
   reservePrice: integer("reserve_price").notNull(),
   currentPrice: integer("current_price").notNull(),
@@ -55,6 +56,8 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     reservePrice: z.number().min(1, "Reserve price must be at least 1"),
     startDate: z.string().transform((str) => new Date(str)),
     endDate: z.string().transform((str) => new Date(str)),
+    imageUrl: z.string(), // Keep for backward compatibility
+    images: z.array(z.string()).optional().default([]), // Make optional for validation, default to empty array
   })
   .refine(
     (data) => data.reservePrice >= data.startPrice,

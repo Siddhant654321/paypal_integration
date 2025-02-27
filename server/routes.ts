@@ -4,9 +4,14 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertAuctionSchema, insertBidSchema } from "@shared/schema";
 import { ZodError } from "zod";
+import path from "path";
+import { upload, handleFileUpload } from "./uploads";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+  
+  // Serve static files from uploads directory
+  app.use('/uploads', app.static(path.join(process.cwd(), 'uploads')));
 
   // Middleware to check if user is authenticated
   const requireAuth = (req: any, res: any, next: any) => {
@@ -264,6 +269,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to approve user" });
     }
   });
+  
+  // File upload endpoint
+  app.post("/api/upload", requireAuth, upload.array('files', 5), handleFileUpload);
 
   // Get all users for admin (with filters)
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
