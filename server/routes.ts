@@ -93,8 +93,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Convert string values to appropriate types
       const parsedData = {
         ...auctionData,
-        startPrice: Number(auctionData.startPrice),
-        reservePrice: Number(auctionData.reservePrice),
+        startPrice: Number(auctionData.startPrice || 0),
+        reservePrice: Number(auctionData.reservePrice || 0),
+        startDate: auctionData.startDate || new Date().toISOString(),
+        endDate: auctionData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       };
 
       try {
