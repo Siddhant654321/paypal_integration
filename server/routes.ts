@@ -85,26 +85,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("Received auction data:", req.body);
 
-      // Parse dates and validate them
-      const startDate = new Date(req.body.startDate);
-      const endDate = new Date(req.body.endDate);
-
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        return res.status(400).json({ message: "Invalid date format" });
-      }
-
-      const auctionData = {
+      // First validate all fields with the schema
+      const validatedData = insertAuctionSchema.parse({
         ...req.body,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
         startPrice: Number(req.body.startPrice),
         reservePrice: Number(req.body.reservePrice),
-      };
+      });
 
-      console.log("Parsed auction data:", auctionData);
+      console.log("Validated auction data:", validatedData);
 
       const auction = await storage.createAuction({
-        ...auctionData,
+        ...validatedData,
         sellerId: req.user.id,
       });
 
