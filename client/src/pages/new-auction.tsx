@@ -115,7 +115,10 @@ const NewAuctionPage: React.FC = () => {
                 control={control}
                 rules={{ required: "Species is required" }}
                 render={({ field }) => (
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select species" />
                     </SelectTrigger>
@@ -125,7 +128,7 @@ const NewAuctionPage: React.FC = () => {
                       <SelectItem value="goat">Goat</SelectItem>
                       <SelectItem value="pig">Pig</SelectItem>
                       <SelectItem value="horse">Horse</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="poultry">Poultry</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
@@ -142,7 +145,10 @@ const NewAuctionPage: React.FC = () => {
                 control={control}
                 rules={{ required: "Category is required" }}
                 render={({ field }) => (
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
@@ -150,9 +156,8 @@ const NewAuctionPage: React.FC = () => {
                       <SelectItem value="breeding">Breeding</SelectItem>
                       <SelectItem value="dairy">Dairy</SelectItem>
                       <SelectItem value="meat">Meat</SelectItem>
+                      <SelectItem value="working">Working</SelectItem>
                       <SelectItem value="show">Show</SelectItem>
-                      <SelectItem value="work">Work</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
@@ -161,21 +166,21 @@ const NewAuctionPage: React.FC = () => {
                 <p className="text-red-500 text-sm mt-1">{errors.category.message}</p>
               )}
             </div>
+          </div>
 
+          <div className="space-y-4">
             <div>
               <Label htmlFor="location">Location</Label>
               <Input
                 id="location"
                 {...register("location", { required: "Location is required" })}
-                placeholder="Where is the animal located?"
+                placeholder="Enter location"
               />
               {errors.location && (
                 <p className="text-red-500 text-sm mt-1">{errors.location.message}</p>
               )}
             </div>
-          </div>
 
-          <div className="space-y-4">
             <div>
               <Label htmlFor="startingPrice">Starting Price ($)</Label>
               <Input
@@ -185,12 +190,9 @@ const NewAuctionPage: React.FC = () => {
                 min="0"
                 {...register("startingPrice", {
                   required: "Starting price is required",
-                  min: {
-                    value: 0,
-                    message: "Price must be positive",
-                  },
+                  valueAsNumber: true,
                 })}
-                placeholder="0.00"
+                placeholder="Enter starting price"
               />
               {errors.startingPrice && (
                 <p className="text-red-500 text-sm mt-1">
@@ -207,12 +209,9 @@ const NewAuctionPage: React.FC = () => {
                 step="0.01"
                 min="0"
                 {...register("reservePrice", {
-                  min: {
-                    value: 0,
-                    message: "Price must be positive",
-                  },
+                  valueAsNumber: true,
                 })}
-                placeholder="0.00"
+                placeholder="Enter reserve price (optional)"
               />
               {errors.reservePrice && (
                 <p className="text-red-500 text-sm mt-1">
@@ -233,7 +232,7 @@ const NewAuctionPage: React.FC = () => {
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                    {startDate ? format(startDate, "PPP") : "Select start date"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
@@ -259,7 +258,7 @@ const NewAuctionPage: React.FC = () => {
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
+                    {endDate ? format(endDate, "PPP") : "Select end date"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
@@ -274,12 +273,15 @@ const NewAuctionPage: React.FC = () => {
             </div>
 
             <div>
-              <Label htmlFor="imageUrl">Image URL</Label>
+              <Label htmlFor="imageUrl">Image URL (Optional)</Label>
               <Input
                 id="imageUrl"
                 {...register("imageUrl")}
-                placeholder="URL to the animal's image"
+                placeholder="Enter image URL"
               />
+              {errors.imageUrl && (
+                <p className="text-red-500 text-sm mt-1">{errors.imageUrl.message}</p>
+              )}
             </div>
           </div>
         </div>

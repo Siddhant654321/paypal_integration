@@ -85,8 +85,10 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = z.infer<typeof selectUserSchema>;
 
 export const insertAuctionSchema = createInsertSchema(auctions, {
-  startingPrice: z.number().min(0),
+  startingPrice: z.number().min(0).positive("Starting price must be greater than 0"),
   reservePrice: z.number().min(0).nullable().optional(),
+  species: z.string().min(1, "Species is required"),
+  category: z.string().min(1, "Category is required"),
 });
 export const selectAuctionSchema = createSelectSchema(auctions);
 export type InsertAuction = z.infer<typeof insertAuctionSchema>;
