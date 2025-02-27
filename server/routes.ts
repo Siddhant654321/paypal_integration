@@ -139,12 +139,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newAuction.imageUrl = imageUrls[0];
       }
 
-      console.log("Creating auction:", newAuction);
-      const result = await storage.createAuction(newAuction);
-      return res.status(201).json(result);
+      try {
+        console.log("Creating auction:", newAuction);
+        const result = await storage.createAuction(newAuction);
+        return res.status(201).json(result);
+      } catch (dbError) {
+        console.error("Database error creating auction:", dbError);
+        return res.status(500).json({ 
+          message: `Failed to save auction: ${(dbError as Error).message}`,
+          details: dbError 
+        });
+      }
     } catch (error) {
       console.error("Error creating auction:", error);
-      return res.status(500).json({ message: `Failed to create auction: ${(error as Error).message}` });
+      return res.status(500).json({ 
+        message: `Failed to create auction: ${(error as Error).message}`,
+        details: error
+      });
     }
   });
 

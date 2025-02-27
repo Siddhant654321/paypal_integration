@@ -104,11 +104,9 @@ export default function NewAuction() {
       });
 
       // Handle file uploads
-      if (selectedFiles.length > 0) {
-        selectedFiles.forEach(file => {
-          formData.append('images', file);
-        });
-      }
+      selectedFiles.forEach(file => {
+        formData.append('images', file);
+      });
       // Remove imageUrl handling completely
 
       console.log("Submitting FormData with files:", selectedFiles.length);
@@ -151,7 +149,7 @@ export default function NewAuction() {
         <form
           onSubmit={form.handleSubmit((data) => {
             console.log("Form data before submission:", data);
-            createAuctionMutation.mutate(data);
+            createAuctionMutation.mutate({...data, files: selectedFiles});
           })}
           className="space-y-6"
           encType="multipart/form-data"
@@ -243,36 +241,23 @@ export default function NewAuction() {
             />
           </div>
 
-          <FormField
-            control={form.control}
-            name="imageUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Images</FormLabel>
-                <FormControl>
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files) {
-                          setSelectedFiles(Array.from(e.target.files));
-                        }
-                      }}
-                      className="w-full"
-                    />
-                    {selectedFiles.length > 0 && (
-                      <div className="text-sm text-muted-foreground">
-                        {selectedFiles.length} file(s) selected
-                      </div>
-                    )}
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="mb-4">
+            <FormLabel>Upload Images</FormLabel>
+            <Input 
+              type="file" 
+              multiple
+              accept="image/*"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                setSelectedFiles(files);
+                console.log("Selected files:", files.length);
+              }}
+            />
+            <FormDescription>
+              Upload up to 5 images for your auction
+            </FormDescription>
+          </div>
+
 
           <div className="grid grid-cols-2 gap-4">
             <FormField
