@@ -1,13 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
-import { Auction, Bid } from "@shared/schema";
+import { Auction, Bid, Profile } from "@shared/schema";
 import BidForm from "@/components/bid-form";
 import { formatDistanceToNow, differenceInSeconds } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Clock } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, Store, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
@@ -90,17 +96,12 @@ export default function AuctionPage() {
               className="w-full h-full object-cover"
             />
           </div>
-          
-          {/* Thumbnails for additional images if available */}
+
+          {/* Thumbnails */}
           {auction.images && auction.images.length > 1 && (
             <div className="grid grid-cols-5 gap-2">
               {auction.images.map((img, index) => (
-                <div key={index} className="aspect-square overflow-hidden rounded cursor-pointer" 
-                  onClick={() => {
-                    // Simple image switching - update the auction.imageUrl with the selected image
-                    const updatedAuction = { ...auction, imageUrl: img };
-                    setAuction(updatedAuction);
-                  }}>
+                <div key={index} className="aspect-square overflow-hidden rounded cursor-pointer">
                   <img
                     src={img}
                     alt={`${auction.title} - Image ${index + 1}`}
@@ -109,6 +110,38 @@ export default function AuctionPage() {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Seller Information Card */}
+          {auction.sellerProfile && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Seller Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Store className="h-4 w-4" />
+                  <span className="font-medium">
+                    {auction.sellerProfile.businessName || "Anonymous Seller"}
+                  </span>
+                </div>
+                {auction.sellerProfile.breedSpecialty && (
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Specializes in:</strong> {auction.sellerProfile.breedSpecialty}
+                  </p>
+                )}
+                {auction.sellerProfile.isPublicBio && auction.sellerProfile.bio && (
+                  <div className="mt-2">
+                    <p className="text-sm text-muted-foreground">{auction.sellerProfile.bio}</p>
+                  </div>
+                )}
+                {auction.sellerProfile.npipNumber && (
+                  <p className="text-sm">
+                    <strong>NPIP Number:</strong> {auction.sellerProfile.npipNumber}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           )}
         </div>
 

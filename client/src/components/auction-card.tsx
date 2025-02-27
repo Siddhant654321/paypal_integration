@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { type Auction } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
+import { Store } from "lucide-react";
 
 type Props = {
   auction: Auction;
@@ -39,6 +40,19 @@ export default function AuctionCard({ auction, showStatus }: Props) {
         <p className="text-sm text-muted-foreground line-clamp-2">
           {auction.description}
         </p>
+        {auction.sellerProfile && (
+          <div className="mt-2 pt-2 border-t">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Store className="h-4 w-4" />
+              <span>{auction.sellerProfile.businessName || "Anonymous Seller"}</span>
+            </div>
+            {auction.sellerProfile.breedSpecialty && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Specializes in: {auction.sellerProfile.breedSpecialty}
+              </p>
+            )}
+          </div>
+        )}
       </CardContent>
       <CardFooter className="p-4 pt-0 flex justify-between items-center">
         <div>

@@ -63,16 +63,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Get all auctions with optional filters
+  // Update the getAuctions endpoint to include seller profiles
   app.get("/api/auctions", async (req, res) => {
     try {
       const filters = {
         species: req.query.species as string | undefined,
         category: req.query.category as string | undefined,
-        approved: true, // Only return approved auctions
+        approved: true, // Only return approved auctions by default
       };
       const auctions = await storage.getAuctions(filters);
-      res.json(auctions);
+
+      // Get seller profiles for each auction
+      const auctionsWithProfiles = await Promise.all(
+        auctions.map(async (auction) => {
+          const sellerProfile = await storage.getProfile(auction.sellerId);
+          return { ...auction, sellerProfile };
+        })
+      );
+
+      res.json(auctionsWithProfiles);
     } catch (error) {
       console.error("Error fetching auctions:", error);
       res.status(500).json({ message: "Failed to fetch auctions" });
@@ -241,14 +250,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add single auction endpoint
+  // Update the single auction endpoint to include seller profile
   app.get("/api/auctions/:id", async (req, res) => {
     try {
       const auction = await storage.getAuction(parseInt(req.params.id));
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
       }
-      res.json(auction);
+
+      // Get the seller's profile
+      const sellerProfile = await storage.getProfile(auction.sellerId);
+      res.json({ ...auction, sellerProfile });
     } catch (error) {
       console.error("Error fetching auction:", error);
       res.status(500).json({ message: "Failed to fetch auction" });
