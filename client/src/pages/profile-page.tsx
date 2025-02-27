@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertProfileSchema, type InsertProfile } from "@shared/schema";
+import { insertProfileSchema, type InsertProfile, type Profile } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,21 @@ import { FileUpload } from "@/components/file-upload";
 import { Separator } from "@/components/ui/separator";
 import React from 'react';
 
+const defaultValues: InsertProfile = {
+  fullName: "",
+  phoneNumber: "",
+  address: "",
+  city: "",
+  state: "",
+  zipCode: "",
+  bio: "",
+  isPublicBio: true,
+  profilePicture: "",
+  businessName: "",
+  breedSpecialty: "",
+  npipNumber: "",
+};
+
 export default function ProfilePage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
@@ -31,26 +46,13 @@ export default function ProfilePage() {
     return <Redirect to="/auth" />;
   }
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery<Profile>({
     queryKey: [`/api/profile`],
   });
 
   const form = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
-    defaultValues: {
-      fullName: profile?.fullName || "",
-      phoneNumber: profile?.phoneNumber || "",
-      address: profile?.address || "",
-      city: profile?.city || "",
-      state: profile?.state || "",
-      zipCode: profile?.zipCode || "",
-      bio: profile?.bio || "",
-      isPublicBio: profile?.isPublicBio ?? true,
-      profilePicture: profile?.profilePicture || "",
-      businessName: profile?.businessName || "",
-      breedSpecialty: profile?.breedSpecialty || "",
-      npipNumber: profile?.npipNumber || "",
-    },
+    defaultValues,
   });
 
   // Update form values when profile data is loaded
