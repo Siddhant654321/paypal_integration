@@ -42,6 +42,7 @@ export interface IStorage {
   createProfile(profile: InsertProfile & { userId: number }): Promise<Profile>;
   getProfile(userId: number): Promise<Profile | undefined>;
   hasProfile(userId: number): Promise<boolean>;
+  updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -311,6 +312,27 @@ export class DatabaseStorage implements IStorage {
       return results;
     } catch (error) {
       log(`Error getting users: ${error}`, "storage");
+      throw error;
+    }
+  }
+  async updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile> {
+    try {
+      const [updatedProfile] = await db
+        .update(profiles)
+        .set({
+          ...profile,
+          updatedAt: new Date(),
+        })
+        .where(eq(profiles.userId, userId))
+        .returning();
+
+      if (!updatedProfile) {
+        throw new Error("Profile not found");
+      }
+
+      return updatedProfile;
+    } catch (error) {
+      log(`Error updating profile for user ${userId}: ${error}`, "storage");
       throw error;
     }
   }

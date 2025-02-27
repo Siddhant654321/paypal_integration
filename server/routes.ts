@@ -302,10 +302,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const profileData = insertProfileSchema.parse(req.body);
-      const profile = await storage.createProfile({
-        ...profileData,
-        userId: req.user.id,
-      });
+
+      // Check if profile exists
+      const existingProfile = await storage.getProfile(req.user.id);
+
+      let profile;
+      if (existingProfile) {
+        // Update existing profile
+        profile = await storage.updateProfile(req.user.id, profileData);
+      } else {
+        // Create new profile
+        profile = await storage.createProfile({
+          ...profileData,
+          userId: req.user.id,
+        });
+      }
 
       res.status(201).json(profile);
     } catch (error) {
@@ -315,8 +326,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errors: error.errors,
         });
       } else {
-        console.error("Error creating profile:", error);
-        res.status(500).json({ message: "Failed to create profile" });
+        console.error("Error saving profile:", error);
+        res.status(500).json({ message: "Failed to save profile" });
       }
     }
   });

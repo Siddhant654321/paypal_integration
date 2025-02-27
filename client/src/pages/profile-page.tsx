@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { FileUpload } from "@/components/file-upload";
 import { Separator } from "@/components/ui/separator";
+import React from 'react';
 
 export default function ProfilePage() {
   const { user, logoutMutation } = useAuth();
@@ -37,20 +38,40 @@ export default function ProfilePage() {
   const form = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
     defaultValues: {
-      fullName: "",
-      phoneNumber: "",
-      address: "",
-      city: "",
-      state: "",
-      zipCode: "",
-      bio: "",
-      isPublicBio: true,
-      profilePicture: "",
-      businessName: "",
-      breedSpecialty: "",
-      npipNumber: "",
+      fullName: profile?.fullName || "",
+      phoneNumber: profile?.phoneNumber || "",
+      address: profile?.address || "",
+      city: profile?.city || "",
+      state: profile?.state || "",
+      zipCode: profile?.zipCode || "",
+      bio: profile?.bio || "",
+      isPublicBio: profile?.isPublicBio ?? true,
+      profilePicture: profile?.profilePicture || "",
+      businessName: profile?.businessName || "",
+      breedSpecialty: profile?.breedSpecialty || "",
+      npipNumber: profile?.npipNumber || "",
     },
   });
+
+  // Update form values when profile data is loaded
+  React.useEffect(() => {
+    if (profile) {
+      form.reset({
+        fullName: profile.fullName,
+        phoneNumber: profile.phoneNumber,
+        address: profile.address,
+        city: profile.city,
+        state: profile.state,
+        zipCode: profile.zipCode,
+        bio: profile.bio || "",
+        isPublicBio: profile.isPublicBio,
+        profilePicture: profile.profilePicture || "",
+        businessName: profile.businessName || "",
+        breedSpecialty: profile.breedSpecialty || "",
+        npipNumber: profile.npipNumber || "",
+      });
+    }
+  }, [profile, form]);
 
   const createProfileMutation = useMutation({
     mutationFn: async (data: InsertProfile) => {
@@ -62,18 +83,18 @@ export default function ProfilePage() {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to create profile");
+      if (!res.ok) throw new Error("Failed to save profile");
       return res.json();
     },
     onSuccess: () => {
       toast({
-        title: "Profile created",
-        description: "Your profile has been created successfully.",
+        title: "Profile saved",
+        description: "Your profile has been saved successfully.",
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error creating profile",
+        title: "Error saving profile",
         description: error.message,
         variant: "destructive",
       });
@@ -94,8 +115,8 @@ export default function ProfilePage() {
     <div className="container max-w-2xl mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Profile Settings</h1>
-        <Button 
-          variant="destructive" 
+        <Button
+          variant="destructive"
           onClick={() => logoutMutation.mutate()}
           disabled={logoutMutation.isPending}
         >
