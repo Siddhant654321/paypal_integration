@@ -8,7 +8,35 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   role: text("role", { enum: ["buyer", "seller", "admin", "seller_admin"] }).notNull(),
   approved: boolean("approved").notNull().default(false),
+  hasProfile: boolean("has_profile").notNull().default(false), // New field
 });
+
+export const profiles = pgTable("profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  fullName: text("full_name").notNull(),
+  phoneNumber: text("phone_number").notNull(),
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  zipCode: text("zip_code").notNull(),
+  bio: text("bio"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Create insert schema for profile
+export const insertProfileSchema = createInsertSchema(profiles)
+  .omit({ id: true, userId: true, createdAt: true, updatedAt: true })
+  .extend({
+    fullName: z.string().min(2, "Full name must be at least 2 characters"),
+    phoneNumber: z.string().regex(/^\+?[\d\s-()]{10,}$/, "Invalid phone number format"),
+    address: z.string().min(5, "Address must be at least 5 characters"),
+    city: z.string().min(2, "City must be at least 2 characters"),
+    state: z.string().min(2, "State must be at least 2 characters"),
+    zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, "Invalid ZIP code format"),
+    bio: z.string().optional(),
+  });
 
 export const auctions = pgTable("auctions", {
   id: serial("id").primaryKey(),
@@ -83,3 +111,5 @@ export type Auction = typeof auctions.$inferSelect;
 export type InsertAuction = z.infer<typeof insertAuctionSchema>;
 export type Bid = typeof bids.$inferSelect;
 export type InsertBid = z.infer<typeof insertBidSchema>;
+export type Profile = typeof profiles.$inferSelect;
+export type InsertProfile = z.infer<typeof insertProfileSchema>;

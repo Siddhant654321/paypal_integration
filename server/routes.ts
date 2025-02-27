@@ -2,11 +2,25 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertAuctionSchema, insertBidSchema } from "@shared/schema";
+import { insertAuctionSchema, insertBidSchema, insertProfileSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import path from "path";
 import multer from 'multer';
 import { upload, handleFileUpload } from "./uploads";
+
+// Add middleware to check profile completion
+const requireProfile = async (req: any, res: any, next: any) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const hasProfile = await storage.hasProfile(req.user.id);
+  if (!hasProfile) {
+    return res.status(403).json({ message: "Profile completion required" });
+  }
+
+  next();
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -83,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create new auction (sellers only)
-  app.post("/api/auctions", requireApprovedSeller, upload.array('images', 5), async (req, res) => {
+  app.post("/api/auctions", requireApprovedSeller, requireProfile, upload.array('images', 5), async (req, res) => {
     try {
       const userId = req.user!.id;
       const auctionData = req.body;
@@ -158,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Place bid on auction (anyone can bid except the seller of the auction)
-  app.post("/api/auctions/:id/bid", requireAuth, async (req, res) => {
+  app.post("/api/auctions/:id/bid", requireAuth, requireProfile, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -279,6 +293,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  // Profile routes
+  app.post("/api/profile", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profileData = insertProfileSchema.parse(req.body);
+      const profile = await storage.createProfile({
+        ...profileData,
+        userId: req.user.id,
+      });
+
+      res.status(201).json(profile);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({
+          message: "Invalid profile data",
+          errors: error.errors,
+        });
+      } else {
+        console.error("Error creating profile:", error);
+        res.status(500).json({ message: "Failed to create profile" });
+      }
+    }
+  });
+
+  app.get("/api/profile", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      res.json(profile);
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
 
   // Admin routes
   app.get("/api/admin/auctions", requireAdmin, async (req, res) => {

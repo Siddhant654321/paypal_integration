@@ -2,8 +2,8 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 import { db } from "./db";
-import { users, auctions, bids } from "@shared/schema";
-import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid } from "@shared/schema";
+import { users, auctions, bids, profiles } from "@shared/schema";
+import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { log } from "./vite";
 
@@ -37,6 +37,11 @@ export interface IStorage {
   createBid(bid: InsertBid): Promise<Bid>;
   getBidsForAuction(auctionId: number): Promise<Bid[]>;
   getBidsByUser(userId: number): Promise<Bid[]>; // Added method
+
+  // Profile operations
+  createProfile(profile: InsertProfile & { userId: number }): Promise<Profile>;
+  getProfile(userId: number): Promise<Profile | undefined>;
+  hasProfile(userId: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -228,6 +233,53 @@ export class DatabaseStorage implements IStorage {
         .orderBy(bids.timestamp, "desc");
     } catch (error) {
       log(`Error getting bids for user ${userId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async createProfile(profile: InsertProfile & { userId: number }): Promise<Profile> {
+    try {
+      const [createdProfile] = await db
+        .insert(profiles)
+        .values({
+          ...profile,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      // Update user hasProfile flag
+      await db
+        .update(users)
+        .set({ hasProfile: true })
+        .where(eq(users.id, profile.userId));
+
+      return createdProfile;
+    } catch (error) {
+      log(`Error creating profile: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async getProfile(userId: number): Promise<Profile | undefined> {
+    try {
+      const [profile] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.userId, userId));
+      return profile;
+    } catch (error) {
+      log(`Error getting profile for user ${userId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async hasProfile(userId: number): Promise<boolean> {
+    try {
+      const user = await this.getUser(userId);
+      return user?.hasProfile ?? false;
+    } catch (error) {
+      log(`Error checking profile status for user ${userId}: ${error}`, "storage");
       throw error;
     }
   }
