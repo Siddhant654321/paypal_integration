@@ -15,11 +15,19 @@ export default function AuctionCard({ auction, showStatus }: Props) {
 
   return (
     <Card className="overflow-hidden">
-      <img
-        src={auction.imageUrl}
-        alt={auction.title}
-        className="w-full h-48 object-cover"
-      />
+      {auction.mediaUrls[0].toLowerCase().endsWith('.mp4') ? (
+        <video 
+          src={auction.mediaUrls[0]}
+          className="w-full h-48 object-cover"
+          controls
+        />
+      ) : (
+        <img
+          src={auction.mediaUrls[0]}
+          alt={auction.title}
+          className="w-full h-48 object-cover"
+        />
+      )}
       <CardContent className="p-4">
         <div className="flex gap-2 mb-2">
           <Badge>{auction.species}</Badge>

@@ -82,11 +82,21 @@ export default function AuctionPage() {
 
       <div className="grid md:grid-cols-2 gap-8">
         <div>
-          <img
-            src={auction.imageUrl}
-            alt={auction.title}
-            className="w-full rounded-lg object-cover aspect-square"
-          />
+          {auction.mediaUrls && auction.mediaUrls.length > 0 && (
+            auction.mediaUrls[0].toLowerCase().endsWith('.mp4') ? (
+              <video
+                src={auction.mediaUrls[0]}
+                className="w-full rounded-lg object-cover aspect-square"
+                controls
+              />
+            ) : (
+              <img
+                src={auction.mediaUrls[0]}
+                alt={auction.title}
+                className="w-full rounded-lg object-cover aspect-square"
+              />
+            )
+          )}
         </div>
 
         <div className="space-y-6">
