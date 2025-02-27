@@ -20,6 +20,13 @@ export default function NavBar() {
               <span className="text-accent-foreground">
                 Welcome, {user.username}!
               </span>
+              {!user.hasProfile && (
+                <Link href="/profile">
+                  <Button variant="secondary" className="bg-primary text-primary-foreground">
+                    Complete Profile
+                  </Button>
+                </Link>
+              )}
               {(user.role === "admin" || user.role === "seller_admin") && (
                 <Link href="/admin">
                   <Button variant="secondary">Admin Dashboard</Button>
