@@ -85,9 +85,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new auction (sellers only)
   app.post("/api/auctions", requireApprovedSeller, upload.array('images', 5), async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.user!.id;
       const auctionData = req.body;
 
+      console.log("Creating auction with user:", userId);
       console.log("Received auction data:", auctionData);
       console.log("Received files:", req.files);
 
@@ -132,13 +133,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sellerId: userId,
         currentPrice: parsedData.startPrice,
         images: imageUrls,
+        imageUrl: imageUrls[0] || "", // Set first image as main image
         approved: false, // New auctions start unapproved
       };
-
-      // Set imageUrl to first uploaded image if available
-      if (imageUrls.length > 0) {
-        newAuction.imageUrl = imageUrls[0];
-      }
 
       try {
         console.log("Creating auction:", newAuction);
