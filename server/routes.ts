@@ -18,7 +18,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Middleware to check if user is an admin
   const requireAdmin = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated() || req.user.role !== "admin") {
+    if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "seller_admin")) {
       return res.status(403).json({ message: "Forbidden" });
     }
     next();
@@ -27,7 +27,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Middleware to check if user is an approved seller or admin
   const requireApprovedSeller = (req: any, res: any, next: any) => {
     if (!req.isAuthenticated() || 
-        (req.user.role !== "seller" && req.user.role !== "admin") || 
+        (req.user.role !== "seller" && req.user.role !== "seller_admin") || 
         (req.user.role === "seller" && !req.user.approved)) {
       return res.status(403).json({ message: "Only approved sellers can perform this action" });
     }

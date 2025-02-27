@@ -37,12 +37,12 @@ export default function HomePage() {
                 <span className="text-accent-foreground">
                   Welcome, {user.username}!
                 </span>
-                {user.role === "admin" && (
+                {(user.role === "admin" || user.role === "seller_admin") && (
                   <Link href="/admin">
                     <Button variant="secondary">Admin Dashboard</Button>
                   </Link>
                 )}
-                {user.role === "seller" && (
+                {(user.role === "seller" || user.role === "seller_admin") && (
                   <Link href="/seller/dashboard">
                     <Button variant="secondary">Seller Dashboard</Button>
                   </Link>

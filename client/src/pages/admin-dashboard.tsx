@@ -21,7 +21,7 @@ export default function AdminDashboard() {
   const { toast } = useToast();
 
   // Redirect if not an admin
-  if (!user || user.role !== "admin") {
+  if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
   }
 
