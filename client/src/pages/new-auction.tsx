@@ -25,13 +25,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
-import MediaUpload from "@/components/media-upload";
 
 export default function NewAuction() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
+  // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
   }
@@ -43,11 +43,11 @@ export default function NewAuction() {
       description: "",
       species: "",
       category: "quality",
-      mediaUrls: [],
+      imageUrl: "",
       startPrice: 0,
       reservePrice: 0,
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      startDate: new Date().toISOString().split('T')[0], // Already in string format
+      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Already in string format
     },
   });
 
@@ -88,8 +88,14 @@ export default function NewAuction() {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit((data) => {
-            console.log("Form data before submission:", data);
-            createAuctionMutation.mutate(data);
+            console.log("Form data before submission:", data);            
+            const formattedData = {
+              ...data,
+              startDate: new Date(data.startDate).toISOString(),
+              endDate: new Date(data.endDate).toISOString(),
+            };            
+            console.log("Formatted data for submission:", formattedData);
+            createAuctionMutation.mutate(formattedData);
           })}
           className="space-y-6"
         >
@@ -114,26 +120,9 @@ export default function NewAuction() {
               <FormItem>
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Textarea
-                    {...field}
+                  <Textarea 
+                    {...field} 
                     placeholder="Provide detailed description of your auction item"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="mediaUrls"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Media Files</FormLabel>
-                <FormControl>
-                  <MediaUpload
-                    onUpload={(urls) => field.onChange(urls)}
-                    defaultUrls={field.value}
                   />
                 </FormControl>
                 <FormMessage />
@@ -197,6 +186,20 @@ export default function NewAuction() {
             />
           </div>
 
+          <FormField
+            control={form.control}
+            name="imageUrl"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Image URL</FormLabel>
+                <FormControl>
+                  <Input {...field} type="url" placeholder="https://example.com/image.jpg" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
           <div className="grid grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -205,10 +208,10 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>Start Price ($)</FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      type="number"
-                      min="1"
+                    <Input 
+                      {...field} 
+                      type="number" 
+                      min="1" 
                       onChange={(e) => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
@@ -224,10 +227,10 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>Reserve Price ($)</FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      type="number"
-                      min={form.watch('startPrice')}
+                    <Input 
+                      {...field} 
+                      type="number" 
+                      min={form.watch('startPrice')} 
                       onChange={(e) => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
@@ -245,9 +248,9 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>Start Date</FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      type="date"
+                    <Input 
+                      {...field} 
+                      type="date" 
                       min={new Date().toISOString().split('T')[0]}
                     />
                   </FormControl>
@@ -263,9 +266,9 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>End Date</FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      type="date"
+                    <Input 
+                      {...field} 
+                      type="date" 
                       min={form.watch('startDate')}
                     />
                   </FormControl>

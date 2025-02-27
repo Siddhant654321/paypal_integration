@@ -1,70 +1,20 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import multer from "multer";
-import path from "path";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertAuctionSchema, insertBidSchema } from "@shared/schema";
 import { ZodError } from "zod";
-import express from 'express';
-
-// Middleware to check if user is authenticated
-const requireAuth = (req: any, res: any, next: any) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-  next();
-};
-
-// Configure multer for file uploads
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: "./uploads",
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
-    },
-  }),
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "video/mp4"];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`Invalid file type. Allowed types: ${allowedTypes.join(", ")}`));
-    }
-  },
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
-  },
-});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
-  // Serve uploaded files
-  app.use("/uploads", express.static("uploads"));
-
-  // Add file upload endpoint
-  app.post("/api/upload", requireAuth, (req, res) => {
-    upload.array("media", 5)(req, res, (err) => {
-      if (err instanceof multer.MulterError) {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(400).json({ message: "File too large. Maximum size is 10MB" });
-        }
-        return res.status(400).json({ message: err.message });
-      } else if (err) {
-        return res.status(400).json({ message: err.message });
-      }
-
-      const files = req.files as Express.Multer.File[];
-      if (!files?.length) {
-        return res.status(400).json({ message: "No files uploaded" });
-      }
-
-      const urls = files.map(file => `/uploads/${file.filename}`);
-      res.json({ urls });
-    });
-  });
+  // Middleware to check if user is authenticated
+  const requireAuth = (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    next();
+  };
 
   // Middleware to check if user is an admin
   const requireAdmin = (req: any, res: any, next: any) => {

@@ -17,7 +17,7 @@ export const auctions = pgTable("auctions", {
   description: text("description").notNull(),
   species: text("species").notNull(),
   category: text("category", { enum: ["quality", "production", "fun"] }).notNull(),
-  mediaUrls: text("media_urls").array().notNull(),
+  imageUrl: text("image_url").notNull(),
   startPrice: integer("start_price").notNull(),
   reservePrice: integer("reserve_price").notNull(),
   currentPrice: integer("current_price").notNull(),
@@ -40,6 +40,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   role: true,
 });
 
+// Enhanced auction schema with additional validations
 export const insertAuctionSchema = createInsertSchema(auctions)
   .omit({
     id: true,
@@ -50,7 +51,6 @@ export const insertAuctionSchema = createInsertSchema(auctions)
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),
     description: z.string().min(20, "Description must be at least 20 characters"),
-    mediaUrls: z.array(z.string().url()).min(1, "At least one media file is required"),
     startPrice: z.number().min(1, "Start price must be at least 1"),
     reservePrice: z.number().min(1, "Reserve price must be at least 1"),
     startDate: z.string().transform((str) => new Date(str)),
