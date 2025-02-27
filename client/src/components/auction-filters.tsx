@@ -33,16 +33,16 @@ export default function AuctionFilters({ filters, onFilterChange }: Props) {
           <div className="space-y-2">
             <Label htmlFor="species">Species</Label>
             <Select
-              value={filters.species}
+              value={filters.species || "all"}
               onValueChange={(value) =>
-                onFilterChange({ ...filters, species: value })
+                onFilterChange({ ...filters, species: value === "all" ? "" : value })
               }
             >
               <SelectTrigger id="species">
                 <SelectValue placeholder="All Species" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Species</SelectItem>
+                <SelectItem value="all">All Species</SelectItem>
                 {species.map((s) => (
                   <SelectItem key={s} value={s.toLowerCase()}>
                     {s}
@@ -55,16 +55,16 @@ export default function AuctionFilters({ filters, onFilterChange }: Props) {
           <div className="space-y-2">
             <Label htmlFor="category">Category</Label>
             <Select
-              value={filters.category}
+              value={filters.category || "all"}
               onValueChange={(value) =>
-                onFilterChange({ ...filters, category: value })
+                onFilterChange({ ...filters, category: value === "all" ? "" : value })
               }
             >
               <SelectTrigger id="category">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
                 {categories.map((c) => (
                   <SelectItem key={c.value} value={c.value}>
                     {c.label}

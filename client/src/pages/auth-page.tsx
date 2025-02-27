@@ -127,9 +127,9 @@ export default function AuthPage() {
                   <div className="space-y-2">
                     <Label htmlFor="role">Account Type</Label>
                     <Select
-                      defaultValue="buyer"
-                      onValueChange={(value) =>
-                        registerForm.setValue("role", value as "buyer" | "seller")
+                      value={registerForm.watch("role")}
+                      onValueChange={(value: "buyer" | "seller") =>
+                        registerForm.setValue("role", value)
                       }
                     >
                       <SelectTrigger>
