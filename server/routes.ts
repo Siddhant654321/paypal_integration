@@ -140,23 +140,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (now < auction.startDate) {
         return res.status(400).json({ message: "Auction has not started yet" });
       }
-      
+
       if (now > auction.endDate) {
         return res.status(400).json({ message: "Auction has already ended" });
       }
 
       // Convert amount to number if it's a string
-      const amount = typeof req.body.amount === 'string' 
-        ? parseInt(req.body.amount) 
+      const amount = typeof req.body.amount === 'string'
+        ? parseInt(req.body.amount)
         : req.body.amount;
-      
+
       if (isNaN(amount)) {
         return res.status(400).json({ message: "Bid amount must be a valid number" });
       }
 
       if (amount <= auction.currentPrice) {
-        return res.status(400).json({ 
-          message: `Bid must be higher than current price of $${auction.currentPrice}` 
+        return res.status(400).json({
+          message: `Bid must be higher than current price of $${auction.currentPrice}`
         });
       }
 
@@ -171,13 +171,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Bid error:", error);
       if (error instanceof ZodError) {
-        res.status(400).json({ 
-          message: "Invalid bid data", 
+        res.status(400).json({
+          message: "Invalid bid data",
           errors: error.errors
         });
       } else {
-        res.status(500).json({ 
-          message: "Failed to place bid", 
+        res.status(500).json({
+          message: "Failed to place bid",
           error: (error as Error).message
         });
       }
@@ -208,6 +208,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch bids" });
     }
   });
+
+  // Add this new endpoint after the other auction routes
+  app.get("/api/user/bids", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Get all bids by the user
+      const bids = await storage.getBidsByUser(req.user.id);
+
+      // Get all auctions for these bids
+      const auctions = await Promise.all(
+        bids.map(bid => storage.getAuction(bid.auctionId))
+      );
+
+      // Filter out any undefined auctions and deduplicate
+      const uniqueAuctions = [...new Map(
+        auctions.filter(Boolean).map(auction => [auction.id, auction])
+      ).values()];
+
+      res.json(uniqueAuctions);
+    } catch (error) {
+      console.error("Error fetching user bids:", error);
+      res.status(500).json({ message: "Failed to fetch user bids" });
+    }
+  });
+
 
   // Admin routes
   app.get("/api/admin/auctions", requireAdmin, async (req, res) => {
@@ -242,7 +270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const filters = {
         approved: req.query.approved === 'true' ? true :
-                 req.query.approved === 'false' ? false : undefined,
+          req.query.approved === 'false' ? false : undefined,
         role: req.query.role as string | undefined
       };
       console.log("Fetching users with filters:", filters);

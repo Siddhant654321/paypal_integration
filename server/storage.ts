@@ -36,6 +36,7 @@ export interface IStorage {
   // Bid operations
   createBid(bid: InsertBid): Promise<Bid>;
   getBidsForAuction(auctionId: number): Promise<Bid[]>;
+  getBidsByUser(userId: number): Promise<Bid[]>; // Added method
 }
 
 export class DatabaseStorage implements IStorage {
@@ -214,6 +215,19 @@ export class DatabaseStorage implements IStorage {
         .orderBy(bids.timestamp, "desc");
     } catch (error) {
       log(`Error getting bids for auction ${auctionId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async getBidsByUser(userId: number): Promise<Bid[]> { // Added method
+    try {
+      return await db
+        .select()
+        .from(bids)
+        .where(eq(bids.bidderId, userId))
+        .orderBy(bids.timestamp, "desc");
+    } catch (error) {
+      log(`Error getting bids for user ${userId}: ${error}`, "storage");
       throw error;
     }
   }
