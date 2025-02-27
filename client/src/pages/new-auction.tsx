@@ -108,13 +108,8 @@ export default function NewAuction() {
         selectedFiles.forEach(file => {
           formData.append('images', file);
         });
-      } else if (auctionData.imageUrl) {
-        // If no files selected but imageUrl is provided
-        formData.append('imageUrl', auctionData.imageUrl);
-      } else {
-        // Make sure we have an empty string instead of undefined
-        formData.append('imageUrl', '');
       }
+      // Remove imageUrl handling completely
 
       console.log("Submitting FormData with files:", selectedFiles.length);
 
@@ -278,24 +273,6 @@ export default function NewAuction() {
               </FormItem>
             )}
           />
-
-          <FormField
-            control={form.control}
-            name="imageUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Fallback Image URL (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="Enter fallback image URL" />
-                </FormControl>
-                <FormDescription>
-                  Used if no images are uploaded
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
 
           <div className="grid grid-cols-2 gap-4">
             <FormField

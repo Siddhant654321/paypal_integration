@@ -130,13 +130,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...parsedData,
         sellerId: userId,
         currentPrice: parsedData.startPrice,
-        imageUrl: imageUrls.length > 0 ? imageUrls[0] : (parsedData.imageUrl || ''),
         images: imageUrls,
         approved: false, // New auctions start unapproved
       };
 
-      // Ensure imageUrl is not empty for database validation
-      if (!newAuction.imageUrl && imageUrls.length > 0) {
+      // Set imageUrl to first uploaded image if available
+      if (imageUrls.length > 0) {
         newAuction.imageUrl = imageUrls[0];
       }
 
