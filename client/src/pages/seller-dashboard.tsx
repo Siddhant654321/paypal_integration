@@ -9,8 +9,8 @@ import AuctionCard from "@/components/auction-card";
 export default function SellerDashboard() {
   const { user } = useAuth();
 
-  // Redirect if not a seller
-  if (!user || user.role !== "seller") {
+  // Redirect if not a seller or seller_admin
+  if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
   }
 

@@ -4,9 +4,6 @@ import AuctionFilters from "@/components/auction-filters";
 import { useState } from "react";
 import { Auction } from "@shared/schema";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
-import { Link } from "wouter";
 
 export default function HomePage() {
   const [filters, setFilters] = useState({
@@ -22,51 +19,8 @@ export default function HomePage() {
     ].filter(Boolean),
   });
 
-  const { user, logoutMutation } = useAuth();
-
   return (
-    <div className="min-h-screen bg-background">
-      <div className="bg-accent p-4">
-        <div className="container mx-auto flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-accent-foreground">
-            Pips 'n Chicks
-          </h2>
-          <div className="flex gap-4">
-            {user ? (
-              <>
-                <span className="text-accent-foreground">
-                  Welcome, {user.username}!
-                </span>
-                {(user.role === "admin" || user.role === "seller_admin") && (
-                  <Link href="/admin">
-                    <Button variant="secondary">Admin Dashboard</Button>
-                  </Link>
-                )}
-                {(user.role === "seller" || user.role === "seller_admin") && (
-                  <Link href="/seller/dashboard">
-                    <Button variant="secondary">Seller Dashboard</Button>
-                  </Link>
-                )}
-                <Button 
-                  variant="secondary" 
-                  onClick={() => logoutMutation.mutate()}
-                  disabled={logoutMutation.isPending}
-                >
-                  {logoutMutation.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Logout
-                </Button>
-              </>
-            ) : (
-              <Link href="/auth">
-                <Button>Login / Register</Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
-
+    <div>
       <div
         className="bg-cover bg-center h-64 relative"
         style={{
