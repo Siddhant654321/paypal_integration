@@ -15,14 +15,25 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
   const { user } = useAuth();
-  const queryClient = useQueryClient(); // Added queryClient import and instantiation
+  const queryClient = useQueryClient();
   const [timeLeft, setTimeLeft] = useState("");
 
-  const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
+  const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
     queryKey: [`/api/auctions/${params?.id}`],
   });
 
@@ -41,24 +52,17 @@ export default function AuctionPage() {
 
       if (now < start) {
         setTimeLeft(`Starts ${formatDistanceToNow(start, { addSuffix: true })}`);
+      } else if (now > end && auction.status === "active") {
+        fetch(`/api/auctions/${auction.id}/end`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }).then(() => {
+          queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction.id}`] });
+        });
+        setTimeLeft("Auction ended");
       } else if (now > end) {
-        // If auction has ended and no winning bidder is set, update it
-        if (!auction.winningBidderId && bids && bids.length > 0) {
-          const highestBid = bids.reduce((max, bid) =>
-            bid.amount > max.amount ? bid : max
-          , bids[0]);
-
-          // Update auction with winning bidder
-          fetch(`/api/auctions/${auction.id}/end`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ winningBidderId: highestBid.bidderId })
-          }).then(() => {
-            queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction.id}`] });
-          });
-        }
         setTimeLeft("Auction ended");
       } else {
         const seconds = differenceInSeconds(end, now);
@@ -75,7 +79,22 @@ export default function AuctionPage() {
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [auction, bids, queryClient]); // Added queryClient to dependencies
+  }, [auction, queryClient]);
+
+  const handleSellerDecision = async (decision: "accept" | "void") => {
+    try {
+      await fetch(`/api/auctions/${auction?.id}/seller-decision`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ decision })
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction?.id}`] });
+    } catch (error) {
+      console.error("Error making seller decision:", error);
+    }
+  };
 
   if (isLoadingAuction) {
     return (
@@ -94,7 +113,24 @@ export default function AuctionPage() {
   }
 
   const isActive = new Date() >= new Date(auction.startDate) && new Date() <= new Date(auction.endDate);
-  const reserveMet = auction.currentPrice >= auction.reservePrice;
+
+  const showSellerDecision = auction.status === "pending_seller_decision" &&
+                            user?.id === auction.sellerId;
+
+  const getStatusBadge = () => {
+    switch (auction.status) {
+      case "active":
+        return <Badge>Active</Badge>;
+      case "ended":
+        return <Badge variant="secondary">{auction.winningBidderId ? "Sold" : "Ended"}</Badge>;
+      case "pending_seller_decision":
+        return <Badge variant="secondary">Awaiting Seller Decision</Badge>;
+      case "voided":
+        return <Badge variant="destructive">Voided</Badge>;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="container mx-auto py-8">
@@ -107,16 +143,14 @@ export default function AuctionPage() {
 
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
-          {/* Main image */}
           <div className="aspect-square w-full overflow-hidden rounded-lg">
             <img
-              src={auction.imageUrl}
+              src={auction.imageUrl || ''}
               alt={auction.title}
               className="w-full h-full object-cover"
             />
           </div>
 
-          {/* Thumbnails */}
           {auction.images && auction.images.length > 1 && (
             <div className="grid grid-cols-5 gap-2">
               {auction.images.map((img, index) => (
@@ -131,7 +165,6 @@ export default function AuctionPage() {
             </div>
           )}
 
-          {/* Seller Information Card */}
           {auction.sellerProfile && (
             <Card>
               <CardHeader>
@@ -192,12 +225,10 @@ export default function AuctionPage() {
             <div className="flex gap-2 mt-2">
               <Badge>{auction.species}</Badge>
               <Badge variant="outline">{auction.category}</Badge>
-              <Badge variant={isActive ? "default" : "secondary"}>
-                {isActive ? "Active" : "Ended"}
-              </Badge>
-              {isActive && (
-                <Badge variant={reserveMet ? "default" : "destructive"}>
-                  {reserveMet ? "Reserve Met" : "Reserve Not Met"}
+              {getStatusBadge()}
+              {auction.status === "active" && (
+                <Badge variant={auction.currentPrice >= auction.reservePrice ? "default" : "destructive"}>
+                  {auction.currentPrice >= auction.reservePrice ? "Reserve Met" : "Reserve Not Met"}
                 </Badge>
               )}
             </div>
@@ -219,6 +250,35 @@ export default function AuctionPage() {
               Starting price: ${auction.startPrice}
             </div>
           </div>
+
+          {showSellerDecision && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button className="w-full">Make Decision</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Auction Decision Required</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The reserve price was not met. The highest bid was ${auction.currentPrice}.
+                    Would you like to accept this bid or void the auction?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleSellerDecision("accept")}>
+                    Accept Bid
+                  </AlertDialogAction>
+                  <AlertDialogAction 
+                    onClick={() => handleSellerDecision("void")} 
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Void Auction
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
 
           {user && isActive && user.id !== auction.sellerId && (
             <BidForm

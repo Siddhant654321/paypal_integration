@@ -64,11 +64,18 @@ export const auctions = pgTable("auctions", {
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   approved: boolean("approved").notNull().default(false),
+  status: text("status", {
+    enum: ["active", "ended", "pending_seller_decision", "voided"],
+  }).notNull().default("active"),
   paymentStatus: text("payment_status", {
     enum: ["pending", "processing", "completed", "failed"],
   }).notNull().default("pending"),
   paymentDueDate: timestamp("payment_due_date"),
   winningBidderId: integer("winning_bidder_id"),
+  sellerDecision: text("seller_decision", {
+    enum: ["accept", "void"],
+  }).default(null),
+  reserveMet: boolean("reserve_met").notNull().default(false),
 });
 
 export const bids = pgTable("bids", {
@@ -112,6 +119,9 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     paymentStatus: true,
     paymentDueDate: true,
     winningBidderId: true,
+    status: true,
+    sellerDecision: true,
+    reserveMet: true,
   })
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),

@@ -581,9 +581,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auctions/:id/end", requireAuth, async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
-      const { winningBidderId } = req.body;
-
       const auction = await storage.getAuction(auctionId);
+
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
       }
@@ -593,17 +592,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Auction has not ended yet" });
       }
 
-      // Set winning bidder and update payment status
-      await storage.updateAuction(auctionId, {
-        winningBidderId,
-        paymentStatus: "pending",
-        paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days to pay
-      });
+      // Get highest bid
+      const bids = await storage.getBidsForAuction(auctionId);
+      const highestBid = bids.length > 0
+        ? bids.reduce((max, bid) => bid.amount > max.amount ? bid : max, bids[0])
+        : null;
 
-      res.json({ message: "Auction ended successfully" });
+      if (!highestBid) {
+        // No bids placed, void the auction
+        await storage.updateAuction(auctionId, {
+          status: "voided",
+        });
+        return res.json({ message: "Auction ended with no bids" });
+      }
+
+      // Check if reserve price was met
+      const reserveMet = highestBid.amount >= auction.reservePrice;
+
+      if (reserveMet) {
+        // Automatically award to highest bidder
+        await storage.updateAuction(auctionId, {
+          status: "ended",
+          winningBidderId: highestBid.bidderId,
+          reserveMet: true,
+          paymentStatus: "pending",
+          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days to pay
+        });
+        return res.json({
+          message: "Auction ended successfully, reserve met",
+          winningBidderId: highestBid.bidderId
+        });
+      } else {
+        // Set to pending seller decision
+        await storage.updateAuction(auctionId, {
+          status: "pending_seller_decision",
+          reserveMet: false,
+        });
+        return res.json({
+          message: "Auction ended, awaiting seller decision",
+          highestBid: highestBid.amount
+        });
+      }
     } catch (error) {
       console.error("Error ending auction:", error);
       res.status(500).json({ message: "Failed to end auction" });
+    }
+  });
+
+  // Add endpoint for seller decision
+  app.post("/api/auctions/:id/seller-decision", requireAuth, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const { decision } = req.body;
+
+      if (!decision || !["accept", "void"].includes(decision)) {
+        return res.status(400).json({ message: "Invalid decision" });
+      }
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Verify this is the seller
+      if (auction.sellerId !== req.user!.id) {
+        return res.status(403).json({ message: "Only the seller can make this decision" });
+      }
+
+      // Verify auction is in pending_seller_decision status
+      if (auction.status !== "pending_seller_decision") {
+        return res.status(400).json({ message: "Auction is not awaiting seller decision" });
+      }
+
+      // Get highest bid
+      const bids = await storage.getBidsForAuction(auctionId);
+      const highestBid = bids.reduce((max, bid) => bid.amount > max.amount ? bid : max, bids[0]);
+
+      if (decision === "accept") {
+        // Accept the highest bid
+        await storage.updateAuction(auctionId, {
+          status: "ended",
+          winningBidderId: highestBid.bidderId,
+          sellerDecision: "accept",
+          paymentStatus: "pending",
+          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days to pay
+        });
+        return res.json({
+          message: "Highest bid accepted",
+          winningBidderId: highestBid.bidderId
+        });
+      } else {
+        // Void the auction
+        await storage.updateAuction(auctionId, {
+          status: "voided",
+          sellerDecision: "void"
+        });
+        return res.json({ message: "Auction voided by seller" });
+      }
+    } catch (error) {
+      console.error("Error processing seller decision:", error);
+      res.status(500).json({ message: "Failed to process seller decision" });
     }
   });
 
