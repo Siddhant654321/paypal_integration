@@ -53,12 +53,17 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Add ViewBidsDialog component
+// Update the ViewBidsDialog component
 function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctionTitle: string }) {
   const { toast } = useToast();
 
   const { data: bids, isLoading } = useQuery<Bid[]>({
-    queryKey: ["/api/admin/bids", { auctionId }],
+    queryKey: ["/api/admin/bids", auctionId],
+    queryFn: () => 
+      fetch(`/api/admin/bids?auctionId=${auctionId}`).then(res => {
+        if (!res.ok) throw new Error('Failed to fetch bids');
+        return res.json();
+      }),
   });
 
   const deleteBidMutation = useMutation({
@@ -66,7 +71,8 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
       await apiRequest("DELETE", `/api/admin/bids/${bidId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/bids"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/bids", auctionId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       toast({
         title: "Success",
         description: "Bid has been deleted",
@@ -135,7 +141,9 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => deleteBidMutation.mutate(bid.id)}
+                          onClick={() => {
+                            deleteBidMutation.mutate(bid.id);
+                          }}
                         >
                           Delete
                         </AlertDialogAction>
@@ -356,8 +364,6 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
 }
 
 export default function AdminDashboard() {
-  // ... Keep existing state and queries ...
-
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
@@ -384,7 +390,68 @@ export default function AdminDashboard() {
     queryKey: ["/api/auctions", { approved: true }],
   });
 
-  // ... Keep existing mutations ...
+
+  const approveAuctionMutation = useMutation({
+    mutationFn: async (auctionId: number) => {
+      await apiRequest("PATCH", `/api/admin/auctions/${auctionId}`, { approved: true });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      toast({
+        title: "Success",
+        description: "Auction has been approved",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteAuctionMutation = useMutation({
+    mutationFn: async (auctionId: number) => {
+      await apiRequest("DELETE", `/api/admin/auctions/${auctionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      toast({
+        title: "Success",
+        description: "Auction has been deleted",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteProfileMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      await apiRequest("DELETE", `/api/admin/users/${userId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "Success",
+        description: "User profile has been deleted",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const filteredSellers = approvedSellers?.filter(seller =>
     seller.username.toLowerCase().includes(searchTerm.toLowerCase())
@@ -400,7 +467,6 @@ export default function AdminDashboard() {
       <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
 
       <div className="grid gap-8">
-        {/* Keep existing Sellers Card */}
         <Card>
           <CardHeader>
             <CardTitle>Sellers</CardTitle>

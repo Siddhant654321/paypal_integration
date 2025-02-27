@@ -266,14 +266,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this new endpoint after the other auction routes
+  // Add this new endpoint for admin bid management
+  app.get("/api/admin/bids", requireAdmin, async (req, res) => {
+    try {
+      const auctionId = req.query.auctionId ? parseInt(req.query.auctionId as string) : undefined;
+
+      // If auctionId is provided, get bids for that auction
+      // Otherwise, return an error as we should always specify an auction
+      if (!auctionId) {
+        return res.status(400).json({ message: "Auction ID is required" });
+      }
+
+      const bids = await storage.getBidsForAuction(auctionId);
+      res.json(bids);
+    } catch (error) {
+      console.error("Error fetching bids:", error);
+      res.status(500).json({ message: "Failed to fetch bids" });
+    }
+  });
+
+  // Update the user bids endpoint
   app.get("/api/user/bids", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      // Get all bids by the user
+      // Get all bids by the user with their corresponding auctions
       const bids = await storage.getBidsByUser(req.user.id);
 
       // Get all auctions for these bids
@@ -281,12 +300,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bids.map(bid => storage.getAuction(bid.auctionId))
       );
 
-      // Filter out any undefined auctions and deduplicate
-      const uniqueAuctions = [...new Map(
-        auctions.filter(Boolean).map(auction => [auction.id, auction])
-      ).values()];
+      // Filter out any undefined auctions and combine with bid data
+      const bidsWithAuctions = bids.map(bid => {
+        const auction = auctions.find(a => a?.id === bid.auctionId);
+        return auction ? { ...bid, auction } : null;
+      }).filter(Boolean);
 
-      res.json(uniqueAuctions);
+      res.json(bidsWithAuctions);
     } catch (error) {
       console.error("Error fetching user bids:", error);
       res.status(500).json({ message: "Failed to fetch user bids" });
@@ -443,17 +463,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all bids (admin only)
-  app.get("/api/admin/bids", requireAdmin, async (req, res) => {
-    try {
-      const auctionId = req.query.auctionId ? parseInt(req.query.auctionId as string) : undefined;
-      const bids = await storage.getBidsForAuction(auctionId!);
-      res.json(bids);
-    } catch (error) {
-      console.error("Error fetching bids:", error);
-      res.status(500).json({ message: "Failed to fetch bids" });
-    }
-  });
 
   const httpServer = createServer(app);
   return httpServer;
