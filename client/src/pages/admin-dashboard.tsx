@@ -19,6 +19,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AuctionCard from "@/components/auction-card";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -40,18 +52,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
 
 function EditAuctionDialog({ auction }: { auction: Auction }) {
   const { toast } = useToast();
@@ -66,11 +66,18 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       reservePrice: auction.reservePrice,
       startDate: new Date(auction.startDate).toISOString().split('T')[0],
       endDate: new Date(auction.endDate).toISOString().split('T')[0],
+      imageUrl: auction.imageUrl || "",
+      images: auction.images,
     },
   });
 
   const updateAuctionMutation = useMutation({
-    mutationFn: async (data: Partial<Auction>) => {
+    mutationFn: async (formData: typeof form.getValues) => {
+      const data = {
+        ...formData,
+        startDate: new Date(formData.startDate).toISOString(),
+        endDate: new Date(formData.endDate).toISOString(),
+      };
       const res = await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, data);
       return res.json();
     },
@@ -157,7 +164,11 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>Category</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <select {...field} className="form-select block w-full">
+                        <option value="quality">Quality</option>
+                        <option value="production">Production</option>
+                        <option value="fun">Fun</option>
+                      </select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -173,7 +184,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>Start Price</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value, 10))} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -187,7 +198,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>Reserve Price</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value, 10))} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
