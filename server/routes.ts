@@ -175,14 +175,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get pending sellers
-  app.get("/api/admin/users/pending", requireAdmin, async (req, res) => {
+  // Get all users for admin (with filters)
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
-      const users = await storage.getUsers({ approved: false, role: "seller" });
+      const filters = {
+        approved: req.query.approved === 'true' ? true : 
+                 req.query.approved === 'false' ? false : undefined,
+        role: req.query.role as string | undefined
+      };
+      console.log("Fetching users with filters:", filters);
+      const users = await storage.getUsers(filters);
       res.json(users);
     } catch (error) {
-      console.error("Error fetching pending users:", error);
-      res.status(500).json({ message: "Failed to fetch pending users" });
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
     }
   });
 
