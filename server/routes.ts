@@ -90,19 +90,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Received auction data:", auctionData);
       console.log("Received files:", req.files);
 
-      // Convert string values to appropriate types
+      // Convert string values to appropriate types and ensure required fields
       const parsedData = {
         ...auctionData,
         startPrice: Number(auctionData.startPrice || 0),
         reservePrice: Number(auctionData.reservePrice || 0),
         startDate: auctionData.startDate || new Date().toISOString(),
         endDate: auctionData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        // Ensure imageUrl has a value
+        imageUrl: auctionData.imageUrl || '/placeholder-image.jpg',
+        // Initialize images array if not present
+        images: Array.isArray(auctionData.images) ? auctionData.images : [],
       };
 
+      console.log("Parsed auction data for validation:", parsedData);
+
       try {
-        insertAuctionSchema.parse(parsedData);
+        const validatedData = insertAuctionSchema.parse(parsedData);
+        console.log("Validation successful:", validatedData);
       } catch (error) {
         if (error instanceof ZodError) {
+          console.error("Validation error:", error.errors);
           return res.status(400).json({ message: "Invalid auction data", errors: error.errors });
         }
         throw error;
