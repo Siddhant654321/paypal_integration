@@ -128,17 +128,22 @@ export class DatabaseStorage implements IStorage {
   }): Promise<Auction[]> {
     try {
       let query = db.select().from(auctions);
+      const conditions = [];
 
       if (filters) {
         if (filters.species) {
-          query = query.where(sql`${auctions.species} = ${filters.species}`);
+          conditions.push(eq(auctions.species, filters.species));
         }
         if (filters.category) {
-          query = query.where(sql`${auctions.category} = ${filters.category}`);
+          conditions.push(eq(auctions.category, filters.category));
         }
         if (filters.approved !== undefined) {
-          query = query.where(sql`${auctions.approved} = ${filters.approved}`);
+          conditions.push(eq(auctions.approved, filters.approved));
         }
+      }
+
+      if (conditions.length > 0) {
+        query = query.where(sql`${conditions.reduce((acc, condition) => sql`${acc} AND ${condition}`)}`);
       }
 
       const results = await query;
@@ -195,7 +200,7 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(bids)
         .where(eq(bids.auctionId, auctionId))
-        .orderBy(bids.amount);
+        .orderBy(bids.timestamp, "desc");
     } catch (error) {
       log(`Error getting bids for auction ${auctionId}: ${error}`, "storage");
       throw error;

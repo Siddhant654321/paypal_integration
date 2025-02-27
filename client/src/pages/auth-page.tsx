@@ -38,7 +38,7 @@ export default function AuthPage() {
     defaultValues: {
       username: "",
       password: "",
-      role: "buyer",
+      role: "buyer" as const,
     },
   });
 

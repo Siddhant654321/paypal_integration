@@ -7,14 +7,13 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import AuctionPage from "@/pages/auction-page";
-import { ProtectedRoute } from "./lib/protected-route";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
-      <ProtectedRoute path="/auction/:id" component={AuctionPage} />
+      <Route path="/auction/:id" component={AuctionPage} />
       <Route component={NotFound} />
     </Switch>
   );
