@@ -90,49 +90,46 @@ export default function NewAuction() {
   });
 
   const createAuctionMutation = useMutation({
-    mutationFn: async (data: any) => {
-      console.log("Form data before submission:", data);
-      
+    mutationFn: async (auctionData: any) => {
+      console.log("Form data before submission:", auctionData);
+
       // Create FormData for the multipart/form-data request
       const formData = new FormData();
-      
-      // Append all form fields
-      formData.append('title', data.title);
-      formData.append('description', data.description);
-      formData.append('species', data.species);
-      formData.append('category', data.category);
-      formData.append('startPrice', String(data.startPrice));
-      formData.append('reservePrice', String(data.reservePrice));
-      formData.append('startDate', new Date(data.startDate).toISOString());
-      formData.append('endDate', new Date(data.endDate).toISOString());
-      
-      // Handle file uploads
-      if (selectedFiles && selectedFiles.length > 0) {
-        console.log("Submitting FormData with files:", selectedFiles.length);
-        for (let i = 0; i < selectedFiles.length; i++) {
-          formData.append('images', selectedFiles[i]);
-        }
-      } else if (data.imageUrl) {
-        // If no files selected but imageUrl is provided
-        formData.append('imageUrl', data.imageUrl);
-      }
-      // No default fallback image
 
+      // Append all form fields
+      Object.keys(auctionData).forEach(key => {
+        if (key !== 'files' && key !== 'images') {
+          formData.append(key, auctionData[key].toString());
+        }
+      });
+
+      // Handle file uploads
+      if (selectedFiles.length > 0) {
+        selectedFiles.forEach(file => {
+          formData.append('images', file);
+        });
+      } else if (auctionData.imageUrl) {
+        // If no files selected but imageUrl is provided
+        formData.append('imageUrl', auctionData.imageUrl);
+      } else {
+        // Make sure we have an empty string instead of undefined
+        formData.append('imageUrl', '');
+      }
 
       console.log("Submitting FormData with files:", selectedFiles.length);
-      
+
       // Use fetch directly to properly handle FormData with files
       const res = await fetch("/api/auctions", {
         method: "POST",
         body: formData,
         credentials: "include"
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.message || "Failed to create auction");
       }
-      
+
       return res.json();
     },
     onSuccess: () => {

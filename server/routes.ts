@@ -131,9 +131,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sellerId: userId,
         currentPrice: parsedData.startPrice,
         imageUrl: imageUrls.length > 0 ? imageUrls[0] : (parsedData.imageUrl || ''),
-        images: imageUrls.length > 0 ? imageUrls : [],
+        images: imageUrls,
         approved: false, // New auctions start unapproved
       };
+
+      // Ensure imageUrl is not empty for database validation
+      if (!newAuction.imageUrl && imageUrls.length > 0) {
+        newAuction.imageUrl = imageUrls[0];
+      }
 
       console.log("Creating auction:", newAuction);
       const result = await storage.createAuction(newAuction);

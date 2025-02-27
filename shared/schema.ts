@@ -17,7 +17,7 @@ export const auctions = pgTable("auctions", {
   description: text("description").notNull(),
   species: text("species").notNull(),
   category: text("category", { enum: ["quality", "production", "fun"] }).notNull(),
-  imageUrl: text("imageUrl").notNull(), // Changed from image_url to imageUrl to match the database
+  imageUrl: text("image_url").notNull(), // Using the correct database column name
   images: text("images").array().notNull().default([]), // New field for multiple images
   startPrice: integer("start_price").notNull(),
   reservePrice: integer("reserve_price").notNull(),
