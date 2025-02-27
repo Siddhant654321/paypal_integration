@@ -173,6 +173,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get pending sellers
+  app.get("/api/admin/users/pending", requireAdmin, async (req, res) => {
+    try {
+      const users = await storage.getUsers({ approved: false, role: "seller" });
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching pending users:", error);
+      res.status(500).json({ message: "Failed to fetch pending users" });
+    }
+  });
+
+
   const httpServer = createServer(app);
   return httpServer;
 }

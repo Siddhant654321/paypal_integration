@@ -17,6 +17,10 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   approveUser(id: number): Promise<User>;
+  getUsers(filters?: {
+    approved?: boolean;
+    role?: string;
+  }): Promise<User[]>;
 
   // Auction operations
   createAuction(auction: InsertAuction & { sellerId: number }): Promise<Auction>;
@@ -208,6 +212,35 @@ export class DatabaseStorage implements IStorage {
         .orderBy(bids.timestamp, "desc");
     } catch (error) {
       log(`Error getting bids for auction ${auctionId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async getUsers(filters?: {
+    approved?: boolean;
+    role?: string;
+  }): Promise<User[]> {
+    try {
+      let query = db.select().from(users);
+      const conditions = [];
+
+      if (filters) {
+        if (filters.approved !== undefined) {
+          conditions.push(eq(users.approved, filters.approved));
+        }
+        if (filters.role) {
+          conditions.push(eq(users.role, filters.role));
+        }
+      }
+
+      if (conditions.length > 0) {
+        query = query.where(sql`${conditions[0]}${sql.join(conditions.slice(1), sql` AND `)}`);
+      }
+
+      const results = await query;
+      return results;
+    } catch (error) {
+      log(`Error getting users: ${error}`, "storage");
       throw error;
     }
   }
