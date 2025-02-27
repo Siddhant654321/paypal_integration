@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { User, Auction } from "@shared/schema";
+import { User, Auction, insertAuctionSchema } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +26,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -38,6 +40,208 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
+
+function EditAuctionDialog({ auction }: { auction: Auction }) {
+  const { toast } = useToast();
+  const form = useForm({
+    resolver: zodResolver(insertAuctionSchema),
+    defaultValues: {
+      title: auction.title,
+      description: auction.description,
+      species: auction.species,
+      category: auction.category,
+      startPrice: auction.startPrice,
+      reservePrice: auction.reservePrice,
+      startDate: new Date(auction.startDate).toISOString().split('T')[0],
+      endDate: new Date(auction.endDate).toISOString().split('T')[0],
+    },
+  });
+
+  const updateAuctionMutation = useMutation({
+    mutationFn: async (data: Partial<Auction>) => {
+      const res = await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      toast({
+        title: "Success",
+        description: "Auction has been updated",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Edit className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Edit Auction</DialogTitle>
+          <DialogDescription>
+            Make changes to the auction details below.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => updateAuctionMutation.mutate(data))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Title</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="species"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Species</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Price</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="reservePrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reserve Price</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>End Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="secondary">Cancel</Button>
+              </DialogClose>
+              <Button type="submit" disabled={updateAuctionMutation.isPending}>
+                {updateAuctionMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -153,7 +357,7 @@ export default function AdminDashboard() {
     },
   });
 
-  const filteredSellers = approvedSellers?.filter(seller => 
+  const filteredSellers = approvedSellers?.filter(seller =>
     seller.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -349,6 +553,9 @@ export default function AdminDashboard() {
                             <CheckCircle2 className="mr-2 h-4 w-4" />
                             Approve
                           </Button>
+
+                          <EditAuctionDialog auction={auction} />
+
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="destructive" size="sm">
@@ -402,6 +609,7 @@ export default function AdminDashboard() {
                       {filteredApprovedAuctions.map((auction) => (
                         <div key={auction.id} className="relative">
                           <div className="absolute top-2 right-2 z-10 flex gap-2">
+                            <EditAuctionDialog auction={auction} />
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="destructive" size="sm">
