@@ -26,11 +26,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Middleware to check if user is an approved seller or seller_admin
   const requireApprovedSeller = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated() || 
-        (req.user.role !== "seller" && req.user.role !== "seller_admin") || 
-        (req.user.role === "seller" && !req.user.approved)) {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Allow seller_admin without approval check
+    if (req.user.role === "seller_admin") {
+      return next();
+    }
+
+    // Check approval for regular sellers
+    if (req.user.role !== "seller" || !req.user.approved) {
       return res.status(403).json({ message: "Only approved sellers can perform this action" });
     }
+
     next();
   };
 
@@ -179,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
       const filters = {
-        approved: req.query.approved === 'true' ? true : 
+        approved: req.query.approved === 'true' ? true :
                  req.query.approved === 'false' ? false : undefined,
         role: req.query.role as string | undefined
       };

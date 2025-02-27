@@ -31,8 +31,8 @@ export default function NewAuction() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  // Redirect if not a seller
-  if (!user || user.role !== "seller") {
+  // Redirect if not a seller or seller_admin
+  if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
   }
 

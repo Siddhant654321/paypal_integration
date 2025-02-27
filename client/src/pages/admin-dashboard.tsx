@@ -44,7 +44,7 @@ export default function AdminDashboard() {
   const approveUserMutation = useMutation({
     mutationFn: async (userId: number) => {
       const res = await apiRequest("POST", `/api/admin/users/${userId}/approve`);
-      return res.json();
+      return await res.json();
     },
     onSuccess: () => {
       // Invalidate both pending and approved seller queries
