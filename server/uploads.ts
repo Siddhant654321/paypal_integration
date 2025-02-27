@@ -13,6 +13,38 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 
 // Configure multer storage
 const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueFilename = `${uuidv4()}${path.extname(file.originalname)}`;
+    cb(null, uniqueFilename);
+  }
+});
+
+export const upload = multer({ storage });
+
+// Handle file upload
+export const handleFileUpload = (req: Request, res: Response) => {
+  try {
+    const files = req.files as Express.Multer.File[];
+    
+    if (!files || files.length === 0) {
+      return res.status(400).json({ message: 'No files were uploaded' });
+    }
+    
+    const fileUrls = files.map(file => `/uploads/${file.filename}`);
+    
+    return res.status(200).json({ 
+      message: 'Files uploaded successfully',
+      files: fileUrls
+    });
+  } catch (error) {
+    console.error('Error uploading files:', error);
+    return res.status(500).json({ message: 'Failed to upload files' });
+  }
+};
+const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, UPLOADS_DIR);
   },
