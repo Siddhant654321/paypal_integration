@@ -2,12 +2,16 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function SellerDashboard() {
   const { user } = useAuth();
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -17,6 +21,14 @@ export default function SellerDashboard() {
   const { data: auctions, isLoading } = useQuery<Auction[]>({
     queryKey: [`/api/seller/auctions`],
   });
+
+  const filteredAuctions = auctions?.filter(auction =>
+    auction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    auction.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const pendingAuctions = filteredAuctions?.filter(auction => !auction.approved);
+  const approvedAuctions = filteredAuctions?.filter(auction => auction.approved);
 
   return (
     <div className="container mx-auto py-8">
@@ -30,6 +42,16 @@ export default function SellerDashboard() {
         </Link>
       </div>
 
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search your auctions..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       {isLoading ? (
         <div className="text-center">Loading your auctions...</div>
       ) : !auctions?.length ? (
@@ -37,15 +59,52 @@ export default function SellerDashboard() {
           You haven't created any auctions yet.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {auctions.map((auction) => (
-            <AuctionCard 
-              key={auction.id} 
-              auction={auction}
-              showStatus={true}
-            />
-          ))}
-        </div>
+        <Tabs defaultValue="approved">
+          <TabsList className="w-full">
+            <TabsTrigger value="approved">
+              Active Auctions ({approvedAuctions?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger value="pending">
+              Pending Approval ({pendingAuctions?.length || 0})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="approved">
+            {!approvedAuctions?.length ? (
+              <div className="text-center text-muted-foreground">
+                No approved auctions found
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {approvedAuctions.map((auction) => (
+                  <AuctionCard 
+                    key={auction.id} 
+                    auction={auction}
+                    showStatus={true}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="pending">
+            {!pendingAuctions?.length ? (
+              <div className="text-center text-muted-foreground">
+                No pending auctions found
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {pendingAuctions.map((auction) => (
+                  <AuctionCard 
+                    key={auction.id} 
+                    auction={auction}
+                    showStatus={true}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

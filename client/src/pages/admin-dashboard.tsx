@@ -18,11 +18,13 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import AuctionCard from "@/components/auction-card";
 
 export default function AdminDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [auctionSearchTerm, setAuctionSearchTerm] = useState("");
 
   // Redirect if not an admin
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
@@ -37,8 +39,12 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/users", { approved: true, role: "seller" }],
   });
 
-  const { data: pendingAuctions, isLoading: isLoadingAuctions } = useQuery<Auction[]>({
+  const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery<Auction[]>({
     queryKey: ["/api/admin/auctions"],
+  });
+
+  const { data: approvedAuctions, isLoading: isLoadingApprovedAuctions } = useQuery<Auction[]>({
+    queryKey: ["/api/auctions", { approved: true }],
   });
 
   const approveUserMutation = useMutation({
@@ -47,7 +53,6 @@ export default function AdminDashboard() {
       return await res.json();
     },
     onSuccess: () => {
-      // Invalidate both pending and approved seller queries
       queryClient.invalidateQueries({ 
         queryKey: ["/api/admin/users"]
       });
@@ -72,6 +77,7 @@ export default function AdminDashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       toast({
         title: "Success",
         description: "Auction has been approved",
@@ -88,6 +94,11 @@ export default function AdminDashboard() {
 
   const filteredSellers = approvedSellers?.filter(seller => 
     seller.username.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredApprovedAuctions = approvedAuctions?.filter(auction =>
+    auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+    auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase())
   );
 
   return (
@@ -185,48 +196,91 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Pending Auctions */}
         <Card>
           <CardHeader>
-            <CardTitle>Pending Auctions</CardTitle>
-            <CardDescription>New auctions awaiting approval</CardDescription>
+            <CardTitle>Auctions</CardTitle>
+            <CardDescription>Manage auction listings</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingAuctions ? (
-              <div className="flex justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : !pendingAuctions?.length ? (
-              <p className="text-muted-foreground">No pending auctions</p>
-            ) : (
-              <div className="space-y-4">
-                {pendingAuctions.map((auction) => (
-                  <div
-                    key={auction.id}
-                    className="flex items-center justify-between p-4 border rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium">{auction.title}</p>
-                      <div className="flex gap-2 mt-1">
-                        <Badge>{auction.species}</Badge>
-                        <Badge variant="outline">{auction.category}</Badge>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => approveAuctionMutation.mutate(auction.id)}
-                      disabled={approveAuctionMutation.isPending}
-                    >
-                      {approveAuctionMutation.isPending && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Approve
-                    </Button>
+            <Tabs defaultValue="pending">
+              <TabsList className="w-full">
+                <TabsTrigger value="pending">
+                  Pending Approval ({pendingAuctions?.length || 0})
+                </TabsTrigger>
+                <TabsTrigger value="approved">
+                  Approved Auctions ({approvedAuctions?.length || 0})
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="pending">
+                {isLoadingPendingAuctions ? (
+                  <div className="flex justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
-                ))}
-              </div>
-            )}
+                ) : !pendingAuctions?.length ? (
+                  <p className="text-muted-foreground">No pending auctions</p>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingAuctions.map((auction) => (
+                      <div
+                        key={auction.id}
+                        className="flex items-center justify-between p-4 border rounded-lg"
+                      >
+                        <div>
+                          <p className="font-medium">{auction.title}</p>
+                          <div className="flex gap-2 mt-1">
+                            <Badge>{auction.species}</Badge>
+                            <Badge variant="outline">{auction.category}</Badge>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => approveAuctionMutation.mutate(auction.id)}
+                          disabled={approveAuctionMutation.isPending}
+                        >
+                          {approveAuctionMutation.isPending && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Approve
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="approved">
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search auctions..."
+                      value={auctionSearchTerm}
+                      onChange={(e) => setAuctionSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  {isLoadingApprovedAuctions ? (
+                    <div className="flex justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : !filteredApprovedAuctions?.length ? (
+                    <p className="text-muted-foreground">No auctions found</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {filteredApprovedAuctions.map((auction) => (
+                        <AuctionCard 
+                          key={auction.id} 
+                          auction={auction}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>
