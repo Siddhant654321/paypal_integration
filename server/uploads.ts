@@ -2,12 +2,19 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
-import type { Request, Response } from 'express';
+import { Request, Response } from 'express';
 
-// Ensure uploads directory exists
+// Constants
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Ensure the uploads directory exists
+try {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    console.log("Created uploads directory at:", UPLOADS_DIR);
+  }
+} catch (error) {
+  console.error("Error creating uploads directory:", error);
 }
 
 // Configure multer storage

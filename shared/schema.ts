@@ -56,7 +56,7 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     reservePrice: z.number().min(1, "Reserve price must be at least 1"),
     startDate: z.string().transform((str) => new Date(str)),
     endDate: z.string().transform((str) => new Date(str)),
-    imageUrl: z.string(), // Keep for backward compatibility
+    imageUrl: z.string().default('/placeholder-image.jpg'), // Keep for backward compatibility with a default
     images: z.array(z.string()).optional().default([]), // Make optional for validation, default to empty array
   })
   .refine(

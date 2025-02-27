@@ -91,6 +91,8 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
+      console.log("Form data before submission:", data);
+      
       // Create FormData for the multipart/form-data request
       const formData = new FormData();
       
@@ -99,19 +101,23 @@ export default function NewAuction() {
       formData.append('description', data.description);
       formData.append('species', data.species);
       formData.append('category', data.category);
-      formData.append('startPrice', data.startPrice.toString());
-      formData.append('reservePrice', data.reservePrice.toString());
+      formData.append('startPrice', String(data.startPrice));
+      formData.append('reservePrice', String(data.reservePrice));
       formData.append('startDate', new Date(data.startDate).toISOString());
       formData.append('endDate', new Date(data.endDate).toISOString());
       
       // Handle file uploads
       if (selectedFiles && selectedFiles.length > 0) {
+        console.log("Submitting FormData with files:", selectedFiles.length);
         for (let i = 0; i < selectedFiles.length; i++) {
           formData.append('images', selectedFiles[i]);
         }
       } else if (data.imageUrl) {
         // If no files selected but imageUrl is provided
         formData.append('imageUrl', data.imageUrl);
+      } else {
+        // Default image URL as fallback
+        formData.append('imageUrl', '/placeholder-image.jpg');
       }
 
 
