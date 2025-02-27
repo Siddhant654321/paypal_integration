@@ -114,20 +114,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Place bid on auction (buyers only)
+  // Place bid on auction (anyone can bid except the seller of the auction)
   app.post("/api/auctions/:id/bid", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      if (req.user.role !== "buyer") {
-        return res.status(403).json({ message: "Only buyers can place bids" });
-      }
-
       const auction = await storage.getAuction(parseInt(req.params.id));
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Don't allow sellers to bid on their own auctions
+      if (auction.sellerId === req.user.id) {
+        return res.status(403).json({ message: "You cannot bid on your own auction" });
       }
 
       if (new Date() < auction.startDate || new Date() > auction.endDate) {

@@ -86,11 +86,18 @@ export default function AuctionPage() {
             </div>
           </div>
 
-          {user?.role === "buyer" && isActive && (
+          {/* Show bid form for all authenticated users except the seller */}
+          {user && isActive && user.id !== auction.sellerId && (
             <BidForm
               auctionId={auction.id}
               currentPrice={auction.currentPrice}
             />
+          )}
+
+          {user && user.id === auction.sellerId && (
+            <div className="text-sm text-muted-foreground">
+              You cannot bid on your own auction
+            </div>
           )}
 
           {bids && bids.length > 0 && (
