@@ -18,9 +18,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { FileUpload } from "@/components/file-upload";
+import { Separator } from "@/components/ui/separator";
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
 
   if (!user) {
@@ -41,6 +44,11 @@ export default function ProfilePage() {
       state: "",
       zipCode: "",
       bio: "",
+      isPublicBio: true,
+      profilePicture: "",
+      businessName: "",
+      breedSpecialty: "",
+      npipNumber: "",
     },
   });
 
@@ -80,13 +88,24 @@ export default function ProfilePage() {
     );
   }
 
-  if (profile) {
-    return <Redirect to="/" />;
-  }
+  const isSeller = user.role === "seller" || user.role === "seller_admin";
 
   return (
     <div className="container max-w-2xl mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-8">Complete Your Profile</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Profile Settings</h1>
+        <Button 
+          variant="destructive" 
+          onClick={() => logoutMutation.mutate()}
+          disabled={logoutMutation.isPending}
+        >
+          {logoutMutation.isPending && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          )}
+          Logout
+        </Button>
+      </div>
+
       <div className="text-muted-foreground mb-6">
         Please complete your profile to participate in auctions.
       </div>
@@ -96,55 +115,30 @@ export default function ProfilePage() {
           onSubmit={form.handleSubmit((data) => createProfileMutation.mutate(data))}
           className="space-y-6"
         >
-          <FormField
-            control={form.control}
-            name="fullName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Full Name</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-4">Profile Picture</h2>
+            <FileUpload
+              onFilesChange={(files) => {
+                if (files.length > 0) {
+                  form.setValue("profilePicture", URL.createObjectURL(files[0]));
+                }
+              }}
+              accept="image/*"
+              maxFiles={1}
+            />
+          </div>
 
-          <FormField
-            control={form.control}
-            name="phoneNumber"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Phone Number</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="+1 (555) 555-5555" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <Separator className="my-6" />
 
-          <FormField
-            control={form.control}
-            name="address"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Street Address</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="space-y-6">
+            <h2 className="text-lg font-semibold">Personal Information</h2>
 
-          <div className="grid grid-cols-2 gap-4">
             <FormField
               control={form.control}
-              name="city"
+              name="fullName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>City</FormLabel>
+                  <FormLabel>Full Name</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -155,10 +149,68 @@ export default function ProfilePage() {
 
             <FormField
               control={form.control}
-              name="state"
+              name="phoneNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>State</FormLabel>
+                  <FormLabel>Phone Number</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="+1 (555) 555-5555" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="address"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Street Address</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>State</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="zipCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ZIP Code</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -168,39 +220,107 @@ export default function ProfilePage() {
             />
           </div>
 
-          <FormField
-            control={form.control}
-            name="zipCode"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>ZIP Code</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {isSeller && (
+            <>
+              <Separator className="my-6" />
 
-          <FormField
-            control={form.control}
-            name="bio"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Bio</FormLabel>
-                <FormControl>
-                  <Textarea
-                    {...field}
-                    placeholder="Tell us a bit about yourself..."
-                  />
-                </FormControl>
-                <FormDescription>
-                  Optional: Share your experience with poultry or what interests you about the auction.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold">Seller Information</h2>
+
+                <FormField
+                  control={form.control}
+                  name="businessName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Business Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="breedSpecialty"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Breed Specialty</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="e.g., Silkies, Plymouth Rocks" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="npipNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>NPIP Number</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Enter your NPIP certification number" />
+                      </FormControl>
+                      <FormDescription>
+                        National Poultry Improvement Plan certification number
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </>
+          )}
+
+          <Separator className="my-6" />
+
+          <div className="space-y-6">
+            <h2 className="text-lg font-semibold">Bio</h2>
+
+            <FormField
+              control={form.control}
+              name="bio"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bio</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      placeholder="Tell us about yourself..."
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Share your experience with poultry or what interests you about the auction.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="isPublicBio"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Public Bio</FormLabel>
+                    <FormDescription>
+                      Make your bio visible to other users
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
 
           <Button
             type="submit"
@@ -210,7 +330,7 @@ export default function ProfilePage() {
             {createProfileMutation.isPending && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
-            Complete Profile
+            Save Profile
           </Button>
         </form>
       </Form>

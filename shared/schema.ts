@@ -8,7 +8,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   role: text("role", { enum: ["buyer", "seller", "admin", "seller_admin"] }).notNull(),
   approved: boolean("approved").notNull().default(false),
-  hasProfile: boolean("has_profile").notNull().default(false), // New field
+  hasProfile: boolean("has_profile").notNull().default(false),
 });
 
 export const profiles = pgTable("profiles", {
@@ -21,6 +21,12 @@ export const profiles = pgTable("profiles", {
   state: text("state").notNull(),
   zipCode: text("zip_code").notNull(),
   bio: text("bio"),
+  isPublicBio: boolean("is_public_bio").notNull().default(true),
+  profilePicture: text("profile_picture"),
+  // Seller specific fields
+  businessName: text("business_name"),
+  breedSpecialty: text("breed_specialty"),
+  npipNumber: text("npip_number"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -36,6 +42,11 @@ export const insertProfileSchema = createInsertSchema(profiles)
     state: z.string().min(2, "State must be at least 2 characters"),
     zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, "Invalid ZIP code format"),
     bio: z.string().optional(),
+    isPublicBio: z.boolean().default(true),
+    profilePicture: z.string().optional(),
+    businessName: z.string().optional(),
+    breedSpecialty: z.string().optional(),
+    npipNumber: z.string().optional(),
   });
 
 export const auctions = pgTable("auctions", {
@@ -45,8 +56,8 @@ export const auctions = pgTable("auctions", {
   description: text("description").notNull(),
   species: text("species").notNull(),
   category: text("category", { enum: ["quality", "production", "fun"] }).notNull(),
-  imageUrl: text("image_url"), // Make nullable to avoid validation issues
-  images: text("images").array().notNull().default([]), // New field for multiple images
+  imageUrl: text("image_url"),
+  images: text("images").array().notNull().default([]),
   startPrice: integer("start_price").notNull(),
   reservePrice: integer("reserve_price").notNull(),
   currentPrice: integer("current_price").notNull(),
@@ -84,8 +95,8 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     reservePrice: z.number().min(1, "Reserve price must be at least 1"),
     startDate: z.string().transform((str) => new Date(str)),
     endDate: z.string().transform((str) => new Date(str)),
-    imageUrl: z.string().optional(), // Make optional
-    images: z.array(z.string()).optional().default([]), // Make optional for validation, default to empty array
+    imageUrl: z.string().optional(),
+    images: z.array(z.string()).optional().default([]),
   })
   .refine(
     (data) => data.reservePrice >= data.startPrice,
