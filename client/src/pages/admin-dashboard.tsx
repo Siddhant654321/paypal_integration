@@ -47,7 +47,10 @@ export default function AdminDashboard() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      // Invalidate both pending and approved seller queries
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/admin/users"]
+      });
       toast({
         title: "Success",
         description: "User has been approved",

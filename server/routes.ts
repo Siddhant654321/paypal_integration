@@ -24,7 +24,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Middleware to check if user is an approved seller or admin
+  // Middleware to check if user is an approved seller or seller_admin
   const requireApprovedSeller = (req: any, res: any, next: any) => {
     if (!req.isAuthenticated() || 
         (req.user.role !== "seller" && req.user.role !== "seller_admin") || 
@@ -191,7 +191,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
-
 
   const httpServer = createServer(app);
   return httpServer;
