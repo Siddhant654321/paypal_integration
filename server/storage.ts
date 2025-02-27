@@ -2,8 +2,8 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 import { db } from "./db";
-import { users, auctions, bids, profiles } from "@shared/schema";
-import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile } from "@shared/schema";
+import { users, auctions, bids, profiles, payments } from "@shared/schema";
+import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile, type Payment, type InsertPayment } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { log } from "./vite";
 
@@ -50,6 +50,13 @@ export interface IStorage {
   deleteAuction(auctionId: number): Promise<void>;
   deleteBid(bidId: number): Promise<void>;
   updateAuction(auctionId: number, data: Partial<InsertAuction>): Promise<Auction>;
+
+  // Payment operations
+  createPayment(payment: InsertPayment & { stripePaymentIntentId: string }): Promise<Payment>;
+  getPayment(id: number): Promise<Payment | undefined>;
+  getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined>;
+  updatePayment(id: number, data: Partial<Payment>): Promise<Payment>;
+  updateAuctionPaymentStatus(auctionId: number, status: string, winningBidderId?: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -408,6 +415,91 @@ export class DatabaseStorage implements IStorage {
       return updatedAuction;
     } catch (error) {
       log(`Error updating auction ${auctionId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async createPayment(payment: InsertPayment & { stripePaymentIntentId: string }): Promise<Payment> {
+    try {
+      const [newPayment] = await db
+        .insert(payments)
+        .values({
+          ...payment,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+      return newPayment;
+    } catch (error) {
+      log(`Error creating payment: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async getPayment(id: number): Promise<Payment | undefined> {
+    try {
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.id, id));
+      return payment;
+    } catch (error) {
+      log(`Error getting payment ${id}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
+    try {
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.stripePaymentIntentId, stripePaymentIntentId));
+      return payment;
+    } catch (error) {
+      log(`Error getting payment by Stripe ID ${stripePaymentIntentId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async updatePayment(id: number, data: Partial<Payment>): Promise<Payment> {
+    try {
+      const [payment] = await db
+        .update(payments)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, id))
+        .returning();
+      if (!payment) throw new Error("Payment not found");
+      return payment;
+    } catch (error) {
+      log(`Error updating payment ${id}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async updateAuctionPaymentStatus(
+    auctionId: number,
+    status: string,
+    winningBidderId?: number
+  ): Promise<void> {
+    try {
+      const updateData: any = {
+        paymentStatus: status,
+      };
+
+      if (winningBidderId !== undefined) {
+        updateData.winningBidderId = winningBidderId;
+      }
+
+      await db
+        .update(auctions)
+        .set(updateData)
+        .where(eq(auctions.id, auctionId));
+    } catch (error) {
+      log(`Error updating auction payment status ${auctionId}: ${error}`, "storage");
       throw error;
     }
   }

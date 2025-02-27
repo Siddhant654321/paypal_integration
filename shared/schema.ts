@@ -64,6 +64,11 @@ export const auctions = pgTable("auctions", {
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   approved: boolean("approved").notNull().default(false),
+  paymentStatus: text("payment_status", {
+    enum: ["pending", "processing", "completed", "failed"],
+  }).notNull().default("pending"),
+  paymentDueDate: timestamp("payment_due_date"),
+  winningBidderId: integer("winning_bidder_id"),
 });
 
 export const bids = pgTable("bids", {
@@ -72,6 +77,23 @@ export const bids = pgTable("bids", {
   bidderId: integer("bidder_id").notNull(),
   amount: integer("amount").notNull(),
   timestamp: timestamp("timestamp").notNull(),
+});
+
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  auctionId: integer("auction_id").notNull(),
+  buyerId: integer("buyer_id").notNull(),
+  sellerId: integer("seller_id").notNull(),
+  amount: integer("amount").notNull(),
+  platformFee: integer("platform_fee").notNull(),
+  sellerPayout: integer("seller_payout").notNull(),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeTransferId: text("stripe_transfer_id"),
+  status: text("status", {
+    enum: ["pending", "processing", "completed", "failed"],
+  }).notNull().default("pending"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -87,6 +109,9 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     approved: true,
     currentPrice: true,
     sellerId: true,
+    paymentStatus: true,
+    paymentDueDate: true,
+    winningBidderId: true,
   })
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),
@@ -116,6 +141,17 @@ export const insertBidSchema = createInsertSchema(bids).omit({
   timestamp: true,
 });
 
+// Create insert schema for payments
+export const insertPaymentSchema = createInsertSchema(payments)
+  .omit({
+    id: true,
+    stripePaymentIntentId: true,
+    stripeTransferId: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+  });
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Auction = typeof auctions.$inferSelect;
@@ -124,3 +160,5 @@ export type Bid = typeof bids.$inferSelect;
 export type InsertBid = z.infer<typeof insertBidSchema>;
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;

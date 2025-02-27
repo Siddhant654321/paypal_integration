@@ -7,6 +7,9 @@ import { ZodError } from "zod";
 import path from "path";
 import multer from 'multer';
 import { upload, handleFileUpload } from "./uploads";
+import { PaymentService } from "./payments";
+import { buffer } from "micro";
+import Stripe from "stripe";
 
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -475,6 +478,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add these new routes in the registerRoutes function
+  app.post("/api/auctions/:id/pay", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const auctionId = parseInt(req.params.id);
+      const auction = await storage.getAuction(auctionId);
+
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Verify this user won the auction (highest bidder)
+      const bids = await storage.getBidsForAuction(auctionId);
+      const highestBid = bids.reduce((max, bid) =>
+        bid.amount > max.amount ? bid : max
+        , bids[0]);
+
+      if (!highestBid || highestBid.bidderId !== req.user.id) {
+        return res.status(403).json({ message: "Only the winning bidder can pay" });
+      }
+
+      // Create payment intent
+      const { clientSecret, payment } = await PaymentService.createPaymentIntent(
+        auctionId,
+        req.user.id
+      );
+
+      res.json({ clientSecret, payment });
+    } catch (error) {
+      console.error("Payment creation error:", error);
+      res.status(500).json({ message: "Failed to create payment" });
+    }
+  });
+
+  // Stripe webhook handling
+  app.post("/api/webhooks/stripe", async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    const rawBody = await buffer(req);
+
+    try {
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+        apiVersion: "2025-02-24.acacia",
+      });
+      const event = stripe.webhooks.constructEvent(
+        rawBody,
+        sig as string,
+        process.env.STRIPE_WEBHOOK_SECRET!
+      );
+
+      switch (event.type) {
+        case "payment_intent.succeeded":
+          await PaymentService.handlePaymentSuccess(event.data.object.id);
+          break;
+        case "payment_intent.payment_failed":
+          await PaymentService.handlePaymentFailure(event.data.object.id);
+          break;
+      }
+
+      res.json({ received: true });
+    } catch (error) {
+      console.error("Webhook error:", error);
+      res.status(400).json({ message: "Webhook error" });
+    }
+  });
+
+  // Get payment status for an auction
+  app.get("/api/auctions/:id/payment", requireAuth, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const auction = await storage.getAuction(auctionId);
+
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Only allow winner or seller to view payment status
+      if (req.user!.id !== auction.winningBidderId && req.user!.id !== auction.sellerId) {
+        return res.status(403).json({ message: "Unauthorized to view payment status" });
+      }
+
+      res.json({
+        status: auction.paymentStatus,
+        dueDate: auction.paymentDueDate,
+      });
+    } catch (error) {
+      console.error("Error fetching payment status:", error);
+      res.status(500).json({ message: "Failed to fetch payment status" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;
