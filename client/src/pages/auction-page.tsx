@@ -200,9 +200,6 @@ export default function AuctionPage() {
             <div className="text-sm text-muted-foreground">
               Starting price: ${auction.startPrice}
             </div>
-            <div className="text-sm text-muted-foreground">
-              Reserve price: ${auction.reservePrice}
-            </div>
           </div>
 
           {user && isActive && user.id !== auction.sellerId && (
