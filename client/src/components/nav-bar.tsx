@@ -30,6 +30,9 @@ export default function NavBar() {
                   <Button variant="secondary">Seller Dashboard</Button>
                 </Link>
               )}
+              <Link href="/buyer/dashboard">
+                <Button variant="secondary">My Bids</Button>
+              </Link>
               <Button 
                 variant="secondary" 
                 onClick={() => logoutMutation.mutate()}
