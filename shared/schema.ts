@@ -40,11 +40,34 @@ export const insertUserSchema = createInsertSchema(users).pick({
   role: true,
 });
 
-export const insertAuctionSchema = createInsertSchema(auctions).omit({
-  id: true,
-  approved: true,
-  currentPrice: true,
-});
+// Enhanced auction schema with additional validations
+export const insertAuctionSchema = createInsertSchema(auctions)
+  .omit({
+    id: true,
+    approved: true,
+    currentPrice: true,
+    sellerId: true,
+  })
+  .extend({
+    title: z.string().min(5, "Title must be at least 5 characters"),
+    description: z.string().min(20, "Description must be at least 20 characters"),
+    startPrice: z.number().min(1, "Start price must be at least 1"),
+    reservePrice: z.number().min(1, "Reserve price must be at least 1"),
+    startDate: z.string().transform((str) => new Date(str)),
+    endDate: z.string().transform((str) => new Date(str)),
+  })
+  .refine(
+    (data) => data.reservePrice >= data.startPrice,
+    "Reserve price must be greater than or equal to start price"
+  )
+  .refine(
+    (data) => {
+      const start = new Date(data.startDate);
+      const end = new Date(data.endDate);
+      return end > start;
+    },
+    "End date must be after start date"
+  );
 
 export const insertBidSchema = createInsertSchema(bids).omit({
   id: true,

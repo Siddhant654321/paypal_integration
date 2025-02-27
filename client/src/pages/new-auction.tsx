@@ -53,14 +53,13 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
-      console.log("Submitting auction data:", data);
-      const res = await apiRequest("POST", "/api/auctions", {
+      const submissionData = {
         ...data,
-        startPrice: parseInt(data.startPrice),
-        reservePrice: parseInt(data.reservePrice),
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
-      });
+        startPrice: Number(data.startPrice),
+        reservePrice: Number(data.reservePrice),
+      };
+      console.log("Submitting auction data:", submissionData);
+      const res = await apiRequest("POST", "/api/auctions", submissionData);
       return res.json();
     },
     onSuccess: () => {
@@ -72,7 +71,7 @@ export default function NewAuction() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: "Error creating auction",
         description: error.message,
         variant: "destructive",
       });
@@ -98,7 +97,7 @@ export default function NewAuction() {
               <FormItem>
                 <FormLabel>Title</FormLabel>
                 <FormControl>
-                  <Input {...field} />
+                  <Input {...field} placeholder="Enter auction title" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -112,7 +111,10 @@ export default function NewAuction() {
               <FormItem>
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Textarea {...field} />
+                  <Textarea 
+                    {...field} 
+                    placeholder="Provide detailed description of your auction item"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -182,7 +184,7 @@ export default function NewAuction() {
               <FormItem>
                 <FormLabel>Image URL</FormLabel>
                 <FormControl>
-                  <Input {...field} type="url" />
+                  <Input {...field} type="url" placeholder="https://example.com/image.jpg" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -197,7 +199,12 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>Start Price ($)</FormLabel>
                   <FormControl>
-                    <Input {...field} type="number" min="0" />
+                    <Input 
+                      {...field} 
+                      type="number" 
+                      min="1" 
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -211,7 +218,12 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>Reserve Price ($)</FormLabel>
                   <FormControl>
-                    <Input {...field} type="number" min="0" />
+                    <Input 
+                      {...field} 
+                      type="number" 
+                      min={form.watch('startPrice')} 
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -227,7 +239,11 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>Start Date</FormLabel>
                   <FormControl>
-                    <Input {...field} type="date" min={new Date().toISOString().split('T')[0]} />
+                    <Input 
+                      {...field} 
+                      type="date" 
+                      min={new Date().toISOString().split('T')[0]}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -241,7 +257,11 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>End Date</FormLabel>
                   <FormControl>
-                    <Input {...field} type="date" min={form.watch('startDate')} />
+                    <Input 
+                      {...field} 
+                      type="date" 
+                      min={form.watch('startDate')}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
