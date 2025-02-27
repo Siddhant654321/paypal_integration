@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, UserCircle } from "lucide-react";
 
 export default function NavBar() {
   const { user, logoutMutation } = useAuth();
@@ -14,19 +14,24 @@ export default function NavBar() {
             Pips 'n Chicks
           </h2>
         </Link>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
           {user ? (
             <>
               <span className="text-accent-foreground">
                 Welcome, {user.username}!
               </span>
-              {!user.hasProfile && (
-                <Link href="/profile">
-                  <Button variant="secondary" className="bg-primary text-primary-foreground">
-                    Complete Profile
-                  </Button>
-                </Link>
-              )}
+
+              {/* Profile Link - Highlighted if not completed */}
+              <Link href="/profile">
+                <Button 
+                  variant={user.hasProfile ? "secondary" : "default"}
+                  className={!user.hasProfile ? "bg-primary text-primary-foreground" : ""}
+                >
+                  <UserCircle className="mr-2 h-4 w-4" />
+                  {user.hasProfile ? "Profile" : "Complete Profile"}
+                </Button>
+              </Link>
+
               {(user.role === "admin" || user.role === "seller_admin") && (
                 <Link href="/admin">
                   <Button variant="secondary">Admin Dashboard</Button>
