@@ -91,31 +91,44 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
-      const formattedData = {
-        ...data,
-        startPrice: Number(data.startPrice),
-        reservePrice: Number(data.reservePrice),
-        startDate: new Date(data.startDate).toISOString(),
-        endDate: new Date(data.endDate).toISOString(),
-      };
-
-      // Handle file uploads here
+      // Create FormData for the multipart/form-data request
       const formData = new FormData();
-      for (let i = 0; i < selectedFiles.length; i++) {
-        formData.append('images', selectedFiles[i]);
-      }
+      
+      // Append all form fields
       formData.append('title', data.title);
       formData.append('description', data.description);
       formData.append('species', data.species);
       formData.append('category', data.category);
-      formData.append('startPrice', data.startPrice);
-      formData.append('reservePrice', data.reservePrice);
-      formData.append('startDate', data.startDate);
-      formData.append('endDate', data.endDate);
+      formData.append('startPrice', data.startPrice.toString());
+      formData.append('reservePrice', data.reservePrice.toString());
+      formData.append('startDate', new Date(data.startDate).toISOString());
+      formData.append('endDate', new Date(data.endDate).toISOString());
+      
+      // Handle file uploads
+      if (selectedFiles && selectedFiles.length > 0) {
+        for (let i = 0; i < selectedFiles.length; i++) {
+          formData.append('images', selectedFiles[i]);
+        }
+      } else if (data.imageUrl) {
+        // If no files selected but imageUrl is provided
+        formData.append('imageUrl', data.imageUrl);
+      }
 
 
-      console.log("Submitting auction data:", formattedData);
-      const res = await apiRequest("POST", "/api/auctions", formData); // Send FormData
+      console.log("Submitting FormData with files:", selectedFiles.length);
+      
+      // Use fetch directly to properly handle FormData with files
+      const res = await fetch("/api/auctions", {
+        method: "POST",
+        body: formData,
+        credentials: "include"
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to create auction");
+      }
+      
       return res.json();
     },
     onSuccess: () => {
@@ -141,16 +154,11 @@ export default function NewAuction() {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit((data) => {
-            console.log("Form data before submission:", data);            
-            const formattedData = {
-              ...data,
-              startDate: new Date(data.startDate).toISOString(),
-              endDate: new Date(data.endDate).toISOString(),
-            };            
-            console.log("Formatted data for submission:", formattedData);
+            console.log("Form data before submission:", data);
             createAuctionMutation.mutate(data);
           })}
           className="space-y-6"
+          encType="multipart/form-data"
         >
           <FormField
             control={form.control}

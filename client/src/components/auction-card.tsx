@@ -19,6 +19,9 @@ export default function AuctionCard({ auction, showStatus }: Props) {
         src={auction.imageUrl || (auction.images && auction.images.length > 0 ? auction.images[0] : '/placeholder-image.jpg')}
         alt={auction.title}
         className="w-full h-48 object-cover"
+        onError={(e) => {
+          e.currentTarget.src = '/placeholder-image.jpg';
+        }}
       />
       <CardContent className="p-4">
         <div className="flex gap-2 mb-2">

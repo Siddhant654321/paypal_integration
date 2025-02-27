@@ -86,6 +86,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const auctionData = req.body;
+      
+      console.log("Received auction data:", auctionData);
+      console.log("Received files:", req.files);
 
       // Convert string values to appropriate types
       const parsedData = {
@@ -111,6 +114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create URLs for uploaded images
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         imageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
+        console.log("Image URLs created:", imageUrls);
       }
 
       // Set the seller ID, current price, and image URLs
@@ -118,15 +122,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...parsedData,
         sellerId: userId,
         currentPrice: parsedData.startPrice,
-        imageUrl: imageUrls.length > 0 ? imageUrls[0] : (parsedData.imageUrl || 'placeholder-image.jpg'),
-        images: imageUrls,
+        imageUrl: imageUrls.length > 0 ? imageUrls[0] : (parsedData.imageUrl || '/placeholder-image.jpg'),
+        images: imageUrls.length > 0 ? imageUrls : [],
+        approved: false, // New auctions start unapproved
       };
 
+      console.log("Creating auction:", newAuction);
       const result = await storage.createAuction(newAuction);
       return res.status(201).json(result);
     } catch (error) {
       console.error("Error creating auction:", error);
-      return res.status(500).json({ message: "Failed to create auction" });
+      return res.status(500).json({ message: `Failed to create auction: ${(error as Error).message}` });
     }
   });
 
