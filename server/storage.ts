@@ -107,6 +107,8 @@ export class DatabaseStorage implements IStorage {
           ...insertAuction,
           currentPrice: insertAuction.startPrice,
           approved: false,
+          startDate: new Date(insertAuction.startDate),
+          endDate: new Date(insertAuction.endDate),
         })
         .returning();
       return auction;
