@@ -85,23 +85,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("Received auction data:", req.body);
 
-      // Ensure dates are properly formatted
-      const startDate = req.body.startDate instanceof Date 
-        ? req.body.startDate 
-        : new Date(req.body.startDate);
-        
-      const endDate = req.body.endDate instanceof Date 
-        ? req.body.endDate 
-        : new Date(req.body.endDate);
-      
-      const auctionData = insertAuctionSchema.parse({
+      // Parse dates and validate them
+      const startDate = new Date(req.body.startDate);
+      const endDate = new Date(req.body.endDate);
+
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+
+      const auctionData = {
         ...req.body,
-        sellerId: req.user.id,
-        startDate: startDate,
-        endDate: endDate,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
         startPrice: Number(req.body.startPrice),
         reservePrice: Number(req.body.reservePrice),
-      });
+      };
 
       console.log("Parsed auction data:", auctionData);
 
@@ -109,6 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...auctionData,
         sellerId: req.user.id,
       });
+
       res.status(201).json(auction);
     } catch (error) {
       if (error instanceof ZodError) {
