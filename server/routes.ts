@@ -300,7 +300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update the user bids endpoint
+  // Update the user bids endpoint to include payment information
   app.get("/api/user/bids", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
@@ -318,7 +318,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter out any undefined auctions and combine with bid data
       const bidsWithAuctions = bids.map(bid => {
         const auction = auctions.find(a => a?.id === bid.auctionId);
-        return auction ? { ...bid, auction } : null;
+        const isWinningBid = auction?.winningBidderId === req.user!.id;
+        return auction ? {
+          ...bid,
+          auction,
+          isWinningBid,
+          requiresPayment: isWinningBid && auction.paymentStatus === "pending",
+        } : null;
       }).filter(Boolean);
 
       res.json(bidsWithAuctions);
