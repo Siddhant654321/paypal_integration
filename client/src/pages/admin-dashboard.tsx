@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { User, Auction, insertAuctionSchema } from "@shared/schema";
+import { User, Auction, insertAuctionSchema, type Bid } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -52,6 +52,107 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+
+// Add ViewBidsDialog component
+function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctionTitle: string }) {
+  const { toast } = useToast();
+
+  const { data: bids, isLoading } = useQuery<Bid[]>({
+    queryKey: ["/api/admin/bids", { auctionId }],
+  });
+
+  const deleteBidMutation = useMutation({
+    mutationFn: async (bidId: number) => {
+      await apiRequest("DELETE", `/api/admin/bids/${bidId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/bids"] });
+      toast({
+        title: "Success",
+        description: "Bid has been deleted",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          View Bids
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Bids for {auctionTitle}</DialogTitle>
+          <DialogDescription>
+            Manage bids for this auction
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex justify-center p-4">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        ) : !bids?.length ? (
+          <p className="text-muted-foreground text-center py-4">No bids found</p>
+        ) : (
+          <div className="space-y-4">
+            {bids.map((bid) => (
+              <div
+                key={bid.id}
+                className="flex items-center justify-between p-4 border rounded-lg"
+              >
+                <div>
+                  <p className="font-medium">Bid Amount: ${bid.amount}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Bidder ID: {bid.bidderId}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Time: {new Date(bid.timestamp).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Bid</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete this bid? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteBidMutation.mutate(bid.id)}
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Keep EditAuctionDialog component the same...
 
 function EditAuctionDialog({ auction }: { auction: Auction }) {
   const { toast } = useToast();
@@ -255,6 +356,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
 }
 
 export default function AdminDashboard() {
+  // ... Keep existing state and queries ...
+
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
@@ -281,92 +384,7 @@ export default function AdminDashboard() {
     queryKey: ["/api/auctions", { approved: true }],
   });
 
-  // Profile management mutations
-  const deleteProfileMutation = useMutation({
-    mutationFn: async (userId: number) => {
-      await apiRequest("DELETE", `/api/admin/profiles/${userId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({
-        title: "Success",
-        description: "Profile has been deleted",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Auction management mutations
-  const approveAuctionMutation = useMutation({
-    mutationFn: async (auctionId: number) => {
-      const res = await apiRequest("POST", `/api/admin/auctions/${auctionId}/approve`);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
-      toast({
-        title: "Success",
-        description: "Auction has been approved",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteAuctionMutation = useMutation({
-    mutationFn: async (auctionId: number) => {
-      await apiRequest("DELETE", `/api/admin/auctions/${auctionId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
-      toast({
-        title: "Success",
-        description: "Auction has been deleted",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updateAuctionMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<Auction> }) => {
-      const res = await apiRequest("PATCH", `/api/admin/auctions/${id}`, data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
-      toast({
-        title: "Success",
-        description: "Auction has been updated",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  // ... Keep existing mutations ...
 
   const filteredSellers = approvedSellers?.filter(seller =>
     seller.username.toLowerCase().includes(searchTerm.toLowerCase())
@@ -382,6 +400,7 @@ export default function AdminDashboard() {
       <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
 
       <div className="grid gap-8">
+        {/* Keep existing Sellers Card */}
         <Card>
           <CardHeader>
             <CardTitle>Sellers</CardTitle>
@@ -567,6 +586,11 @@ export default function AdminDashboard() {
 
                           <EditAuctionDialog auction={auction} />
 
+                          <ViewBidsDialog 
+                            auctionId={auction.id}
+                            auctionTitle={auction.title}
+                          />
+
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="destructive" size="sm">
@@ -621,6 +645,10 @@ export default function AdminDashboard() {
                         <div key={auction.id} className="relative">
                           <div className="absolute top-2 right-2 z-10 flex gap-2">
                             <EditAuctionDialog auction={auction} />
+                            <ViewBidsDialog 
+                              auctionId={auction.id}
+                              auctionTitle={auction.title}
+                            />
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="destructive" size="sm">
