@@ -97,8 +97,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reservePrice: Number(auctionData.reservePrice || 0),
         startDate: auctionData.startDate || new Date().toISOString(),
         endDate: auctionData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        // Ensure imageUrl has a value
-        imageUrl: auctionData.imageUrl || '/placeholder-image.jpg',
         // Initialize images array if not present
         images: Array.isArray(auctionData.images) ? auctionData.images : [],
       };
@@ -132,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...parsedData,
         sellerId: userId,
         currentPrice: parsedData.startPrice,
-        imageUrl: imageUrls.length > 0 ? imageUrls[0] : (parsedData.imageUrl || '/placeholder-image.jpg'),
+        imageUrl: imageUrls.length > 0 ? imageUrls[0] : (parsedData.imageUrl || ''),
         images: imageUrls.length > 0 ? imageUrls : [],
         approved: false, // New auctions start unapproved
       };

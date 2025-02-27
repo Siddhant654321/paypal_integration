@@ -115,10 +115,8 @@ export default function NewAuction() {
       } else if (data.imageUrl) {
         // If no files selected but imageUrl is provided
         formData.append('imageUrl', data.imageUrl);
-      } else {
-        // Default image URL as fallback
-        formData.append('imageUrl', '/placeholder-image.jpg');
       }
+      // No default fallback image
 
 
       console.log("Submitting FormData with files:", selectedFiles.length);
