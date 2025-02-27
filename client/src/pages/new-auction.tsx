@@ -1,12 +1,17 @@
-
-import React, { useState } from "react";
-import { useRouter } from "next/router";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { insertAuctionSchema } from "@shared/schema";
 import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
 import {
   Select,
   SelectContent,
@@ -14,293 +19,244 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { type InsertAuction } from "@shared/schema";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { Loader2 } from "lucide-react";
+import { Redirect, useLocation } from "wouter";
 
-const NewAuctionPage: React.FC = () => {
-  const router = useRouter();
+export default function NewAuction() {
+  const { user } = useAuth();
   const { toast } = useToast();
-  const [startDate, setStartDate] = useState<Date | undefined>(new Date());
-  const [endDate, setEndDate] = useState<Date | undefined>(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  const [, setLocation] = useLocation();
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    formState: { errors, isSubmitting },
-  } = useForm<InsertAuction>();
+  // Redirect if not a seller
+  if (!user || user.role !== "seller") {
+    return <Redirect to="/" />;
+  }
 
-  const onSubmit = async (data: InsertAuction) => {
-    try {
-      const response = await fetch("/api/auctions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...data,
-          startDate,
-          endDate,
-          startingPrice: parseFloat(data.startingPrice.toString()),
-          reservePrice: data.reservePrice ? parseFloat(data.reservePrice.toString()) : null,
-        }),
+  const form = useForm({
+    resolver: zodResolver(insertAuctionSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      species: "",
+      category: "quality",
+      imageUrl: "",
+      startPrice: 0,
+      reservePrice: 0,
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    },
+  });
+
+  const createAuctionMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/auctions", {
+        ...data,
+        startPrice: parseInt(data.startPrice),
+        reservePrice: parseInt(data.reservePrice),
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to create auction");
-      }
-
+      return res.json();
+    },
+    onSuccess: () => {
       toast({
         title: "Success",
-        description: "Auction created successfully",
+        description: "Your auction has been created and is pending approval",
       });
-
-      router.push("/seller/dashboard");
-    } catch (error) {
+      setLocation("/seller/dashboard");
+    },
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to create auction",
+        description: error.message,
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
-      <h1 className="text-2xl font-bold mb-6">Create New Auction</h1>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="title">Auction Title</Label>
-              <Input
-                id="title"
-                {...register("title", { required: "Title is required" })}
-                placeholder="Enter a descriptive title"
-              />
-              {errors.title && (
-                <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>
-              )}
-            </div>
+    <div className="container max-w-2xl mx-auto py-8">
+      <h1 className="text-3xl font-bold mb-8">Create New Auction</h1>
 
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                {...register("description", {
-                  required: "Description is required",
-                })}
-                placeholder="Provide detailed information about the animal"
-                rows={4}
-              />
-              {errors.description && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.description.message}
-                </p>
-              )}
-            </div>
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit((data) => createAuctionMutation.mutate(data))}
+          className="space-y-6"
+        >
+          <FormField
+            control={form.control}
+            name="title"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Title</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <div>
-              <Label htmlFor="species">Species</Label>
-              <Controller
-                name="species"
-                control={control}
-                rules={{ required: "Species is required" }}
-                render={({ field }) => (
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="species"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Species</FormLabel>
                   <Select
+                    value={field.value}
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select species" />
-                    </SelectTrigger>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select species" />
+                      </SelectTrigger>
+                    </FormControl>
                     <SelectContent>
-                      <SelectItem value="cattle">Cattle</SelectItem>
-                      <SelectItem value="sheep">Sheep</SelectItem>
-                      <SelectItem value="goat">Goat</SelectItem>
-                      <SelectItem value="pig">Pig</SelectItem>
-                      <SelectItem value="horse">Horse</SelectItem>
-                      <SelectItem value="poultry">Poultry</SelectItem>
+                      <SelectItem value="chicken">Chicken</SelectItem>
+                      <SelectItem value="duck">Duck</SelectItem>
+                      <SelectItem value="turkey">Turkey</SelectItem>
+                      <SelectItem value="quail">Quail</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
-                )}
-              />
-              {errors.species && (
-                <p className="text-red-500 text-sm mt-1">{errors.species.message}</p>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
 
-            <div>
-              <Label htmlFor="category">Category</Label>
-              <Controller
-                name="category"
-                control={control}
-                rules={{ required: "Category is required" }}
-                render={({ field }) => (
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
                   <Select
+                    value={field.value}
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                    </FormControl>
                     <SelectContent>
-                      <SelectItem value="breeding">Breeding</SelectItem>
-                      <SelectItem value="dairy">Dairy</SelectItem>
-                      <SelectItem value="meat">Meat</SelectItem>
-                      <SelectItem value="working">Working</SelectItem>
-                      <SelectItem value="show">Show</SelectItem>
+                      <SelectItem value="quality">Show Quality/Purebred</SelectItem>
+                      <SelectItem value="production">Production/Mixed</SelectItem>
+                      <SelectItem value="fun">Fun/Hobby</SelectItem>
                     </SelectContent>
                   </Select>
-                )}
-              />
-              {errors.category && (
-                <p className="text-red-500 text-sm mt-1">{errors.category.message}</p>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                {...register("location", { required: "Location is required" })}
-                placeholder="Enter location"
-              />
-              {errors.location && (
-                <p className="text-red-500 text-sm mt-1">{errors.location.message}</p>
+          <FormField
+            control={form.control}
+            name="imageUrl"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Image URL</FormLabel>
+                <FormControl>
+                  <Input {...field} type="url" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="startPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Start Price ($)</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" min="0" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
 
-            <div>
-              <Label htmlFor="startingPrice">Starting Price ($)</Label>
-              <Input
-                id="startingPrice"
-                type="number"
-                step="0.01"
-                min="0"
-                {...register("startingPrice", {
-                  required: "Starting price is required",
-                  valueAsNumber: true,
-                })}
-                placeholder="Enter starting price"
-              />
-              {errors.startingPrice && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.startingPrice.message}
-                </p>
+            <FormField
+              control={form.control}
+              name="reservePrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Reserve Price ($)</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" min="0" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
-
-            <div>
-              <Label htmlFor="reservePrice">Reserve Price ($) (Optional)</Label>
-              <Input
-                id="reservePrice"
-                type="number"
-                step="0.01"
-                min="0"
-                {...register("reservePrice", {
-                  valueAsNumber: true,
-                })}
-                placeholder="Enter reserve price (optional)"
-              />
-              {errors.reservePrice && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.reservePrice.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label>Start Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "PPP") : "Select start date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={setStartDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div>
-              <Label>End Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "PPP") : "Select end date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={setEndDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div>
-              <Label htmlFor="imageUrl">Image URL (Optional)</Label>
-              <Input
-                id="imageUrl"
-                {...register("imageUrl")}
-                placeholder="Enter image URL"
-              />
-              {errors.imageUrl && (
-                <p className="text-red-500 text-sm mt-1">{errors.imageUrl.message}</p>
-              )}
-            </div>
+            />
           </div>
-        </div>
 
-        <div className="flex justify-end space-x-2">
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="startDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Start Date</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="date" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="endDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>End Date</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="date" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
           <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
+            type="submit"
+            className="w-full"
+            disabled={createAuctionMutation.isPending}
           >
-            Cancel
+            {createAuctionMutation.isPending && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Create Auction
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Creating..." : "Create Auction"}
-          </Button>
-        </div>
-      </form>
+        </form>
+      </Form>
     </div>
   );
-};
-
-export default NewAuctionPage;
+}
