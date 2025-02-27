@@ -45,16 +45,6 @@ export default function NavBar() {
               <Link href="/buyer/dashboard">
                 <Button variant="secondary">My Bids</Button>
               </Link>
-              <Button 
-                variant="secondary" 
-                onClick={() => logoutMutation.mutate()}
-                disabled={logoutMutation.isPending}
-              >
-                {logoutMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Logout
-              </Button>
             </>
           ) : (
             <Link href="/auth">
