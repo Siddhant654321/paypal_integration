@@ -313,8 +313,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       species: auction.species,
       // Ensure category is one of the allowed values
       category: ["show", "purebred", "fun"].includes(auction.category) ? auction.category : "purebred",
-      startPrice: auction.startPrice / 100, //Convert cents to dollars
-      reservePrice: auction.reservePrice / 100, //Convert cents to dollars
+      startPrice: auction.startPrice,
+      reservePrice: auction.reservePrice,
       startDate: new Date(auction.startDate).toISOString(),
       endDate: new Date(auction.endDate).toISOString(),
       imageUrl: auction.imageUrl || "",
@@ -324,24 +324,14 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (formData: any) => { //Added any type to avoid type error in the formData
-      console.log("Updating auction with data:", formData);
       const data = {
-        title: formData.title,
-        description: formData.description,
-        species: formData.species,
+        ...formData,
+        // Ensure category is valid before sending
         category: ["show", "purebred", "fun"].includes(formData.category) ? formData.category : "purebred",
-        startPrice: Math.round(formData.startPrice * 100), //Convert dollars to cents and ensure integer
-        reservePrice: Math.round(formData.reservePrice * 100), //Convert dollars to cents and ensure integer
         startDate: new Date(formData.startDate).toISOString(),
         endDate: new Date(formData.endDate).toISOString(),
-        imageUrl: formData.imageUrl || "",
       };
-      console.log("Transformed data:", data);
       const res = await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, data);
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to update auction");
-      }
       return res.json();
     },
     onSuccess: () => {
@@ -414,27 +404,10 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="species"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Animal Species</FormLabel>
-                    <Select 
-                      value={field.value} 
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select species" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="chicken">Chicken</SelectItem>
-                        <SelectItem value="duck">Duck</SelectItem>
-                        <SelectItem value="goose">Goose</SelectItem>
-                        <SelectItem value="turkey">Turkey</SelectItem>
-                        <SelectItem value="guinea">Guinea Fowl</SelectItem>
-                        <SelectItem value="quail">Quail</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Species</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -472,22 +445,15 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="startPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Price ($)</FormLabel>
+                    <FormLabel>Start Price</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01"
-                        min="1"
-                        {...field} 
-                        onChange={(e) => {
-                          // Use parseFloat to handle decimal values
-                          field.onChange(parseFloat(e.target.value));
-                        }}
+                      <Input
+                        type="number"
+                        {...field}
+                        value={field.value}
+                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
                       />
                     </FormControl>
-                    <FormDescription>
-                      Enter amount in dollars (min $1.00)
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -498,22 +464,15 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="reservePrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Reserve Price ($)</FormLabel>
+                    <FormLabel>Reserve Price</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01"
-                        min="1"
-                        {...field} 
-                        onChange={(e) => {
-                          // Use parseFloat to handle decimal values
-                          field.onChange(parseFloat(e.target.value));
-                        }}
+                      <Input
+                        type="number"
+                        {...field}
+                        value={field.value}
+                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
                       />
                     </FormControl>
-                    <FormDescription>
-                      Enter amount in dollars (min $1.00)
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -528,7 +487,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>Start Date and Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} defaultValue={new Date(auction.startDate).toISOString().slice(0, 16)} />
+                      <Input type="datetime-local" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -542,7 +501,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>End Date and Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} defaultValue={new Date(auction.endDate).toISOString().slice(0, 16)} />
+                      <Input type="datetime-local" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -942,7 +901,7 @@ export default function AdminDashboard() {
                     {pendingAuctions.map((auction) => (
                       <div
                         key={auction.id}
-                        className="flex items-center justifybetween p-4 border rounded-lg"
+                        className="flex items-center justify-between p-4 border rounded-lg"
                       >
                         <div>
                           <p className="font-medium">{auction.title}</p>
