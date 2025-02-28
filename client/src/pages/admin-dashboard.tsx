@@ -588,7 +588,7 @@ export default function AdminDashboard() {
 
   const approveAuctionMutation = useMutation({
     mutationFn: async (auctionId: number) => {
-      await apiRequest("PATCH", `/api/admin/auctions/${auctionId}`, { approved: true });
+      await apiRequest("POST", `/api/admin/auctions/${auctionId}/approve`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
