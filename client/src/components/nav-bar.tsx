@@ -1,133 +1,97 @@
-import React from "react";
-import { Link } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { useUser } from "@/hooks/use-user";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { 
-  LogOut, 
-  User as UserIcon, 
-  Package, 
-  Auction, 
-  LineChart, 
-  Plus, 
-  Heart,
-  History,
-  UserCircle
-} from "lucide-react";
+import { Link } from "wouter";
+import { Loader2, UserCircle, LineChart } from "lucide-react";
+import { NotificationsMenu } from "./notifications";
+import { useState } from "react";
 
-export function NavBar() {
-  const { user, logout } = useUser();
+// Example notifications (this will be replaced with real data from the backend)
+const initialNotifications = [
+  {
+    id: "1",
+    type: "bid" as const,
+    message: "New bid on your Brahma chickens auction",
+    read: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "2",
+    type: "auction" as const,
+    message: "Your auction has been approved",
+    read: true,
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+  },
+];
+
+export default function NavBar() {
+  const { user, logoutMutation } = useAuth();
+  const [notifications, setNotifications] = useState(initialNotifications);
+
+  const handleMarkAllRead = () => {
+    setNotifications(notifications.map(notification => ({
+      ...notification,
+      read: true
+    })));
+  };
 
   return (
     <div className="bg-accent p-4">
       <div className="container mx-auto flex justify-between items-center">
         <Link href="/">
-          <a className="text-2xl font-bold text-accent-foreground cursor-pointer">
+          <h2 className="text-2xl font-bold text-accent-foreground cursor-pointer">
             Pips 'n Chicks
-          </a>
+          </h2>
         </Link>
         <div className="flex gap-4 items-center">
-          {/* Main Navigation Links */}
-          <div className="flex gap-3">
-            <Link href="/auctions">
-              <Button variant="ghost" className="flex items-center gap-2">
-                <Auction className="h-4 w-4" />
-                Browse Auctions
-              </Button>
-            </Link>
+          {/* Analytics link - always visible */}
+          <Link href="/analytics">
+            <Button variant="secondary" className="flex items-center gap-2">
+              <LineChart className="h-4 w-4" />
+              Market Analytics
+            </Button>
+          </Link>
 
-            <Link href="/analytics">
-              <Button variant="ghost" className="flex items-center gap-2">
-                <LineChart className="h-4 w-4" />
-                Market Analytics
-              </Button>
-            </Link>
-
-            {user && (
-              <>
-                <Link href="/new-auction">
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    Create Auction
-                  </Button>
-                </Link>
-
-                <Link href="/watchlist">
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <Heart className="h-4 w-4" />
-                    Watchlist
-                  </Button>
-                </Link>
-
-                <Link href="/my-bids">
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <History className="h-4 w-4" />
-                    My Bids
-                  </Button>
-                </Link>
-              </>
-            )}
-
-            {user?.role === "admin" && (
-              <Link href="/admin">
-                <Button variant="ghost" className="flex items-center gap-2">
-                  <Package className="h-4 w-4" />
-                  Admin
-                </Button>
-              </Link>
-            )}
-          </div>
-
-          {/* User Menu */}
           {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src="/default-avatar.png" alt={user.name} />
-                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
+            <>
+              {/* Add NotificationsMenu before user info */}
+              <NotificationsMenu 
+                notifications={notifications} 
+                onMarkAllRead={handleMarkAllRead}
+              />
+
+              <span className="text-accent-foreground">
+                Welcome, {user.username}!
+              </span>
+
+              {/* Profile Link - Highlighted if not completed */}
+              <Link href="/profile">
+                <Button 
+                  variant={user.hasProfile ? "secondary" : "default"}
+                  className={!user.hasProfile ? "bg-primary text-primary-foreground" : ""}
+                >
+                  <UserCircle className="mr-2 h-4 w-4" />
+                  {user.hasProfile ? "Profile" : "Complete Profile"}
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user.name}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {user.email}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <Link href="/profile">
-                  <DropdownMenuItem>
-                    <UserCircle className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
-                  </DropdownMenuItem>
+              </Link>
+
+              {(user.role === "admin" || user.role === "seller_admin") && (
+                <Link href="/admin">
+                  <Button variant="secondary">Admin Dashboard</Button>
                 </Link>
-                <DropdownMenuItem onClick={() => logout()}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              )}
+              {(user.role === "seller" || user.role === "seller_admin") && (
+                <Link href="/seller/dashboard">
+                  <Button variant="secondary">Seller Dashboard</Button>
+                </Link>
+              )}
+              <Link href="/buyer/dashboard">
+                <Button variant="secondary">My Bids</Button>
+              </Link>
+            </>
           ) : (
-            <div className="flex gap-2">
-              <Link href="/login">
-                <Button variant="outline">Log in</Button>
-              </Link>
-              <Link href="/register">
-                <Button>Sign up</Button>
-              </Link>
-            </div>
+            <Link href="/auth">
+              <Button>Login / Register</Button>
+            </Link>
           )}
         </div>
       </div>
