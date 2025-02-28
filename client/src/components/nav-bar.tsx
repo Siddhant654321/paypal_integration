@@ -1,56 +1,38 @@
-
-import React, { useState } from "react";
-import Link from "next/link";
-import { LineChart, Bell, User, LogOut, Auction, Plus, Package } from "lucide-react";
+import React from "react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { useUser } from "@/hooks/use-user";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Badge,
-} from "@/components/ui";
-import { useAuth } from "@/lib/auth";
+} from "@/components/ui/dropdown-menu";
+import { 
+  LogOut, 
+  User as UserIcon, 
+  Package, 
+  Auction, 
+  LineChart, 
+  Plus, 
+  Heart,
+  History,
+  UserCircle
+} from "lucide-react";
 
-const initialNotifications = [
-  {
-    id: "1",
-    type: "bid" as const,
-    message: "New bid on your Brahma chickens auction",
-    read: false,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    type: "auction" as const,
-    message: "Your auction has been approved",
-    read: true,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-  },
-];
-
-export default function NavBar() {
-  const { user, logoutMutation } = useAuth();
-  const [notifications, setNotifications] = useState(initialNotifications);
-
-  const handleMarkAllRead = () => {
-    setNotifications(notifications.map(notification => ({
-      ...notification,
-      read: true
-    })));
-  };
-
-  const unreadCount = notifications.filter(n => !n.read).length;
+export function NavBar() {
+  const { user, logout } = useUser();
 
   return (
     <div className="bg-accent p-4">
       <div className="container mx-auto flex justify-between items-center">
         <Link href="/">
-          <h2 className="text-2xl font-bold text-accent-foreground cursor-pointer">
+          <a className="text-2xl font-bold text-accent-foreground cursor-pointer">
             Pips 'n Chicks
-          </h2>
+          </a>
         </Link>
         <div className="flex gap-4 items-center">
           {/* Main Navigation Links */}
@@ -61,23 +43,39 @@ export default function NavBar() {
                 Browse Auctions
               </Button>
             </Link>
-            
+
             <Link href="/analytics">
               <Button variant="ghost" className="flex items-center gap-2">
                 <LineChart className="h-4 w-4" />
                 Market Analytics
               </Button>
             </Link>
-            
+
             {user && (
-              <Link href="/new-auction">
-                <Button variant="ghost" className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Create Auction
-                </Button>
-              </Link>
+              <>
+                <Link href="/new-auction">
+                  <Button variant="ghost" className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Create Auction
+                  </Button>
+                </Link>
+
+                <Link href="/watchlist">
+                  <Button variant="ghost" className="flex items-center gap-2">
+                    <Heart className="h-4 w-4" />
+                    Watchlist
+                  </Button>
+                </Link>
+
+                <Link href="/my-bids">
+                  <Button variant="ghost" className="flex items-center gap-2">
+                    <History className="h-4 w-4" />
+                    My Bids
+                  </Button>
+                </Link>
+              </>
             )}
-            
+
             {user?.role === "admin" && (
               <Link href="/admin">
                 <Button variant="ghost" className="flex items-center gap-2">
@@ -88,79 +86,43 @@ export default function NavBar() {
             )}
           </div>
 
-          {/* User Account Section */}
+          {/* User Menu */}
           {user ? (
-            <div className="flex gap-2">
-              {/* Notifications Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" className="relative">
-                    <Bell className="h-4 w-4" />
-                    {unreadCount > 0 && (
-                      <Badge
-                        variant="destructive"
-                        className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0"
-                      >
-                        {unreadCount}
-                      </Badge>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <DropdownMenuLabel className="flex justify-between">
-                    <span>Notifications</span>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 text-xs"
-                      onClick={handleMarkAllRead}
-                    >
-                      Mark all as read
-                    </Button>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {notifications.map((notification) => (
-                    <DropdownMenuItem
-                      key={notification.id}
-                      className={`flex flex-col items-start ${
-                        !notification.read ? "bg-accent/50" : ""
-                      }`}
-                    >
-                      <div className="font-medium">{notification.message}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(notification.createdAt).toLocaleString()}
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* User Account Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon">
-                    <User className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <Link href="/profile">
-                    <DropdownMenuItem>
-                      <User className="mr-2 h-4 w-4" />
-                      Profile
-                    </DropdownMenuItem>
-                  </Link>
-                  <DropdownMenuItem onClick={() => logoutMutation.mutate()}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Log out
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src="/default-avatar.png" alt={user.name} />
+                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{user.name}</p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {user.email}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <Link href="/profile">
+                  <DropdownMenuItem>
+                    <UserCircle className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
                   </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                </Link>
+                <DropdownMenuItem onClick={() => logout()}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <div className="flex gap-2">
               <Link href="/login">
-                <Button variant="ghost">Log in</Button>
+                <Button variant="outline">Log in</Button>
               </Link>
               <Link href="/register">
                 <Button>Sign up</Button>
