@@ -225,12 +225,16 @@ export default function NewAuction() {
                   <FormControl>
                     <Input
                       type="number"
-                      min="0.01"
+                      min="0"
                       step="0.01"
                       placeholder="0.00"
-                      {...field}
+                      value={field.value}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                     />
                   </FormControl>
+                  <FormDescription>
+                    The starting bid amount in dollars
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -245,12 +249,16 @@ export default function NewAuction() {
                   <FormControl>
                     <Input
                       type="number"
-                      min="0.01"
+                      min="0"
                       step="0.01"
                       placeholder="0.00"
-                      {...field}
+                      value={field.value}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                     />
                   </FormControl>
+                  <FormDescription>
+                    The minimum price you're willing to accept
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
