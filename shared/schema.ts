@@ -160,8 +160,16 @@ export const insertAuctionSchema = createInsertSchema(auctions)
       .number()
       .min(100, "Reserve price must be at least $1.00")
       .transform((price) => Math.round(price * 100)), // Convert dollars to cents
-    startDate: z.string().transform((str) => new Date(str)),
-    endDate: z.string().transform((str) => new Date(str)),
+    startDate: z.string().transform((str) => {
+      // Make sure we have a full ISO string with time
+      const date = str.includes('T') ? str : `${str}T00:00:00`;
+      return new Date(date);
+    }),
+    endDate: z.string().transform((str) => {
+      // Make sure we have a full ISO string with time
+      const date = str.includes('T') ? str : `${str}T23:59:59`;
+      return new Date(date);
+    }),
     imageUrl: z.string().optional(),
     images: z.array(z.string()).optional().default([]),
   })

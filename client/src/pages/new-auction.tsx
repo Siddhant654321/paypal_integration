@@ -48,8 +48,8 @@ export default function NewAuction() {
       category: "quality",
       startPrice: 0,
       reservePrice: 0,
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      startDate: `${new Date().toISOString().split("T")[0]}T00:00`,
+      endDate: `${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}T23:59`,
     },
   });
 
@@ -260,14 +260,30 @@ export default function NewAuction() {
               name="startDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Start Date</FormLabel>
-                  <FormControl>
-                    <Input 
-                      {...field} 
-                      type="date" 
-                      min={new Date().toISOString().split('T')[0]}
+                  <FormLabel>Start Date and Time</FormLabel>
+                  <div className="flex gap-2">
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        min={new Date().toISOString().split("T")[0]}
+                        onChange={(e) => {
+                          const date = e.target.value;
+                          const time = form.getValues("startTime") || "00:00";
+                          field.onChange(`${date}T${time}`);
+                        }}
+                        value={field.value ? field.value.split("T")[0] : ""}
+                      />
+                    </FormControl>
+                    <Input
+                      type="time"
+                      value={field.value ? field.value.split("T")[1]?.substring(0, 5) : ""}
+                      onChange={(e) => {
+                        const date = form.getValues("startDate")?.split("T")[0] || new Date().toISOString().split("T")[0];
+                        field.onChange(`${date}T${e.target.value}`);
+                      }}
                     />
-                  </FormControl>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -278,14 +294,33 @@ export default function NewAuction() {
               name="endDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>End Date</FormLabel>
-                  <FormControl>
-                    <Input 
-                      {...field} 
-                      type="date" 
-                      min={form.watch('startDate')}
+                  <FormLabel>End Date and Time</FormLabel>
+                  <div className="flex gap-2">
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        min={
+                          (form.getValues("startDate")?.split("T")[0]) ||
+                          new Date().toISOString().split("T")[0]
+                        }
+                        onChange={(e) => {
+                          const date = e.target.value;
+                          const time = form.getValues("endTime") || "23:59";
+                          field.onChange(`${date}T${time}`);
+                        }}
+                        value={field.value ? field.value.split("T")[0] : ""}
+                      />
+                    </FormControl>
+                    <Input
+                      type="time"
+                      value={field.value ? field.value.split("T")[1]?.substring(0, 5) : ""}
+                      onChange={(e) => {
+                        const date = form.getValues("endDate")?.split("T")[0] || new Date().toISOString().split("T")[0];
+                        field.onChange(`${date}T${e.target.value}`);
+                      }}
                     />
-                  </FormControl>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}

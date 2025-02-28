@@ -173,8 +173,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       category: auction.category,
       startPrice: auction.startPrice,
       reservePrice: auction.reservePrice,
-      startDate: new Date(auction.startDate).toISOString().split('T')[0],
-      endDate: new Date(auction.endDate).toISOString().split('T')[0],
+      startDate: new Date(auction.startDate).toISOString(),
+      endDate: new Date(auction.endDate).toISOString(),
       imageUrl: auction.imageUrl || "",
       images: auction.images,
     },
@@ -321,10 +321,28 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="startDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
+                    <FormLabel>Start Date and Time</FormLabel>
+                    <div className="flex gap-2">
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          value={field.value ? field.value.split("T")[0] : ""}
+                          onChange={(e) => {
+                            const date = e.target.value;
+                            const time = field.value ? field.value.split("T")[1]?.substring(0, 5) : "00:00";
+                            field.onChange(`${date}T${time}`);
+                          }}
+                        />
+                      </FormControl>
+                      <Input 
+                        type="time"
+                        value={field.value ? field.value.split("T")[1]?.substring(0, 5) : ""}
+                        onChange={(e) => {
+                          const date = field.value?.split("T")[0] || new Date().toISOString().split("T")[0];
+                          field.onChange(`${date}T${e.target.value}`);
+                        }}
+                      />
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -335,10 +353,28 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="endDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>End Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
+                    <FormLabel>End Date and Time</FormLabel>
+                    <div className="flex gap-2">
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          value={field.value ? field.value.split("T")[0] : ""}
+                          onChange={(e) => {
+                            const date = e.target.value;
+                            const time = field.value ? field.value.split("T")[1]?.substring(0, 5) : "23:59";
+                            field.onChange(`${date}T${time}`);
+                          }}
+                        />
+                      </FormControl>
+                      <Input 
+                        type="time"
+                        value={field.value ? field.value.split("T")[1]?.substring(0, 5) : ""}
+                        onChange={(e) => {
+                          const date = field.value?.split("T")[0] || new Date().toISOString().split("T")[0];
+                          field.onChange(`${date}T${e.target.value}`);
+                        }}
+                      />
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
