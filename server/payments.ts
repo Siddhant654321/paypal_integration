@@ -31,7 +31,7 @@ export class PaymentService {
       }
 
       // Calculate amounts
-      const baseAmount = auction.currentPrice;
+      const baseAmount = Math.max(auction.currentPrice, 50); // Ensure minimum amount of 50 cents
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + insuranceFee;
       const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);

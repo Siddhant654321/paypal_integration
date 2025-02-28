@@ -3,7 +3,7 @@ import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Loader2, Shield } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -28,6 +28,7 @@ export default function PaymentPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
   const INSURANCE_FEE = 800; // $8.00 in cents
+  const cardElementRef = useRef(null);
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
     queryKey: [`/api/auctions/${params?.id}`],
@@ -35,7 +36,7 @@ export default function PaymentPage() {
 
   const { data: paymentData, isLoading: isLoadingPayment, refetch: refetchPayment } = useQuery<PaymentResponse>({
     queryKey: [`/api/auctions/${params?.id}/pay`],
-    enabled: !!auction?.id,
+    enabled: !!auction,
   });
 
   // Refetch payment data when insurance option changes
@@ -52,28 +53,38 @@ export default function PaymentPage() {
   }, [includeInsurance, auction?.id, refetchPayment]);
 
   useEffect(() => {
+    let stripe;
+    let elements;
+    let card;
+
     const initializeStripe = async () => {
       if (!paymentData?.clientSecret) return;
 
-      const stripe = await stripePromise;
+      stripe = await stripePromise;
       if (!stripe) return;
 
-      const elements = stripe.elements({
+      elements = stripe.elements({
         clientSecret: paymentData.clientSecret,
         appearance: {
           theme: 'stripe',
         },
       });
 
-      const card = elements.create('card');
-      card.mount('#card-element');
-
-      return () => {
-        card.destroy();
-      };
+      if (cardElementRef.current) {
+        card = elements.create('card');
+        card.mount('#card-element');
+        cardElementRef.current = card;
+      }
     };
 
     initializeStripe();
+
+    return () => {
+      if (cardElementRef.current) {
+        cardElementRef.current.destroy();
+        cardElementRef.current = null;
+      }
+    };
   }, [paymentData?.clientSecret]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,11 +93,15 @@ export default function PaymentPage() {
 
     try {
       const stripe = await stripePromise;
-      if (!stripe || !paymentData?.clientSecret) {
+      if (!stripe || !paymentData?.clientSecret || !cardElementRef.current) {
         throw new Error("Payment cannot be processed at this time");
       }
 
-      const { error } = await stripe.confirmCardPayment(paymentData.clientSecret);
+      const { error } = await stripe.confirmCardPayment(paymentData.clientSecret, {
+        payment_method: {
+          card: cardElementRef.current,
+        },
+      });
 
       if (error) {
         toast({
@@ -113,9 +128,12 @@ export default function PaymentPage() {
   };
 
   // Convert cents to dollars for display
-  const totalInDollars = auction ? auction.currentPrice / 100 : 0;
-  const insuranceInDollars = INSURANCE_FEE / 100;
-  const totalWithInsurance = includeInsurance ? totalInDollars + insuranceInDollars : totalInDollars;
+  const baseAmountDollars = auction ? (auction.currentPrice / 100).toFixed(2) : "0.00";
+  const insuranceAmountDollars = (INSURANCE_FEE / 100).toFixed(2);
+  const totalAmountDollars = (
+    (auction ? auction.currentPrice : 0) / 100 +
+    (includeInsurance ? INSURANCE_FEE / 100 : 0)
+  ).toFixed(2);
 
   if (isLoadingAuction || isLoadingPayment) {
     return (
@@ -152,7 +170,7 @@ export default function PaymentPage() {
           </div>
           <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
             <span>Winning bid amount</span>
-            <span className="font-medium">${totalInDollars.toFixed(2)}</span>
+            <span className="font-medium">${baseAmountDollars}</span>
           </div>
 
           <div className="flex items-center space-x-4 p-4 border rounded-lg">
@@ -160,7 +178,7 @@ export default function PaymentPage() {
             <div className="flex-1">
               <Label htmlFor="insurance">Shipping Insurance</Label>
               <p className="text-sm text-muted-foreground">
-                Add $8.00 insurance to protect against shipping issues
+                Add ${insuranceAmountDollars} insurance to protect against shipping issues
               </p>
             </div>
             <Switch
@@ -172,12 +190,12 @@ export default function PaymentPage() {
 
           <div className="text-2xl font-bold flex justify-between items-center">
             <span>Total Amount:</span>
-            <span>${totalWithInsurance.toFixed(2)}</span>
+            <span>${totalAmountDollars}</span>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="p-4 border rounded-lg">
-              <div id="card-element" className="min-h-[40px]" />
+              <div id="card-element" className="min-h-[40px]" ref={cardElementRef} />
             </div>
 
             <Button 
