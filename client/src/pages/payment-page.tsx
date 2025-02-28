@@ -103,16 +103,21 @@ export default function PaymentPage() {
 
       console.log("Redirecting to Stripe checkout...");
       
-      // Use Stripe's official redirectToCheckout method which handles all the URL formatting
-      const result = await stripe.redirectToCheckout({
-        sessionId: sessionId
+      // Get the checkout session to extract the URL
+      const checkoutSession = await fetch(`/api/checkout-session/${sessionId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
       });
       
-      // Handle any errors from redirectToCheckout
-      if (result.error) {
-        console.error('Stripe redirect error:', result.error);
-        throw new Error(result.error.message);
+      if (!checkoutSession.ok) {
+        throw new Error("Failed to get checkout session URL");
       }
+      
+      const { url } = await checkoutSession.json();
+      
+      // Redirect directly to the Stripe checkout URL
+      window.location.href = url;
       
       // Show success message
       toast({

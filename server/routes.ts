@@ -539,6 +539,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Endpoint to retrieve a checkout session URL
+  app.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      
+      // Retrieve the checkout session from Stripe
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      
+      // Return the URL for client-side redirect
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error retrieving checkout session:", error);
+      res.status(500).json({ message: "Failed to retrieve checkout session" });
+    }
+  });
+
   // Stripe webhook handling
   app.post("/api/webhooks/stripe", async (req, res) => {
     const sig = req.headers["stripe-signature"];
