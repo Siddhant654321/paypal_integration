@@ -59,9 +59,9 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
 
   const { data: bids, isLoading } = useQuery<Bid[]>({
     queryKey: ["/api/admin/bids", auctionId],
-    queryFn: () => 
-      fetch(`/api/admin/bids?auctionId=${auctionId}`).then(res => {
-        if (!res.ok) throw new Error('Failed to fetch bids');
+    queryFn: () =>
+      fetch(`/api/admin/bids?auctionId=${auctionId}`).then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch bids");
         return res.json();
       }),
   });
@@ -111,10 +111,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
         ) : (
           <div className="space-y-4">
             {bids.map((bid) => (
-              <div
-                key={bid.id}
-                className="flex items-center justify-between p-4 border rounded-lg"
-              >
+              <div key={bid.id} className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
                   <p className="font-medium">Bid Amount: ${bid.amount}</p>
                   <p className="text-sm text-muted-foreground">
@@ -161,7 +158,6 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
 }
 
 // Keep EditAuctionDialog component the same...
-
 function EditAuctionDialog({ auction }: { auction: Auction }) {
   const { toast } = useToast();
   const form = useForm({
@@ -222,7 +218,10 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((data) => updateAuctionMutation.mutate(data))} className="space-y-4">
+          <form
+            onSubmit={form.handleSubmit((data) => updateAuctionMutation.mutate(data))}
+            className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="title"
@@ -293,7 +292,12 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>Start Price</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value, 10))} />
+                      <Input
+                        type="number"
+                        {...field}
+                        value={field.value}
+                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -307,7 +311,12 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>Reserve Price</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value, 10))} />
+                      <Input
+                        type="number"
+                        {...field}
+                        value={field.value}
+                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -347,7 +356,9 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
 
             <DialogFooter>
               <DialogClose asChild>
-                <Button type="button" variant="secondary">Cancel</Button>
+                <Button type="button" variant="secondary">
+                  Cancel
+                </Button>
               </DialogClose>
               <Button type="submit" disabled={updateAuctionMutation.isPending}>
                 {updateAuctionMutation.isPending && (
@@ -368,13 +379,14 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [auctionSearchTerm, setAuctionSearchTerm] = useState("");
-  const [buyerSearchTerm, setBuyerSearchTerm] = useState(""); // Added buyer search term state
+  const [buyerSearchTerm, setBuyerSearchTerm] = useState("");
 
   // Redirect if not an admin
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
   }
 
+  // Existing queries
   const { data: pendingUsers, isLoading: isLoadingPending } = useQuery<User[]>({
     queryKey: ["/api/admin/users", { approved: false, role: "seller" }],
   });
@@ -383,20 +395,45 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/users", { approved: true, role: ["seller", "seller_admin"] }],
   });
 
+  const { data: buyers, isLoading: isLoadingBuyers } = useQuery<User[]>({
+    queryKey: ["/api/admin/users", { role: "buyer" }],
+  });
+
   const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery<Auction[]>({
-    queryKey: ["/api/admin/auctions"],
+    queryKey: ["/api/admin/auctions", { status: "pending" }],
   });
 
   const { data: approvedAuctions, isLoading: isLoadingApprovedAuctions } = useQuery<Auction[]>({
     queryKey: ["/api/auctions", { approved: true }],
   });
 
-  const { data: buyers, isLoading: isLoadingBuyers } = useQuery<User[]>({ // Added buyers query
-    queryKey: ["/api/admin/users", { role: "buyer" }],
-  });
+  // Filter buyers based on search term
+  const filteredBuyers = buyers?.filter((buyer) =>
+    buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase()) ||
+    buyer.email?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
+  );
 
-  const filteredBuyers = buyers?.filter(buyer =>
-    buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase())
+  // Filter sellers
+  const filteredSellers = approvedSellers?.filter((seller) =>
+    (seller.role === "seller" || seller.role === "seller_admin") &&
+    seller.username.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Make sure pendingUsers only contains sellers that are not approved
+  const realPendingUsers = pendingUsers?.filter((user) => user.role === "seller" && !user.approved);
+
+  // Separate active and completed auctions
+  const now = new Date();
+  const filteredActiveAuctions = approvedAuctions?.filter((auction) =>
+    new Date(auction.endDate) > now &&
+    (auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()))
+  );
+
+  const filteredCompletedAuctions = approvedAuctions?.filter((auction) =>
+    new Date(auction.endDate) <= now &&
+    (auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()))
   );
 
   const approveAuctionMutation = useMutation({
@@ -461,21 +498,6 @@ export default function AdminDashboard() {
     },
   });
 
-  // Filter approved sellers for the approved tab (only include sellers and seller_admins)
-  const filteredSellers = approvedSellers?.filter(seller =>
-    (seller.role === "seller" || seller.role === "seller_admin") && 
-    seller.username.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Make sure pendingUsers only contains sellers that are not approved
-  const realPendingUsers = pendingUsers?.filter(user => 
-    user.role === "seller" && !user.approved
-  );
-
-  const filteredApprovedAuctions = approvedAuctions?.filter(auction =>
-    auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-    auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase())
-  );
 
   return (
     <div className="container mx-auto py-8">
@@ -484,20 +506,24 @@ export default function AdminDashboard() {
       <div className="grid gap-8">
         <Card>
           <CardHeader>
-            <CardTitle>Sellers</CardTitle>
-            <CardDescription>Manage seller accounts</CardDescription>
+            <CardTitle>Users</CardTitle>
+            <CardDescription>Manage user accounts</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="pending">
               <TabsList className="w-full">
                 <TabsTrigger value="pending">
-                  Pending Approval ({realPendingUsers?.length || 0})
+                  Pending Sellers ({realPendingUsers?.length || 0})
                 </TabsTrigger>
-                <TabsTrigger value="approved">
+                <TabsTrigger value="sellers">
                   Approved Sellers ({filteredSellers?.length || 0})
+                </TabsTrigger>
+                <TabsTrigger value="buyers">
+                  Buyers ({filteredBuyers?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
+              {/* Keep existing pending tab content */}
               <TabsContent value="pending">
                 {isLoadingPending ? (
                   <div className="flex justify-center">
@@ -549,7 +575,8 @@ export default function AdminDashboard() {
                 )}
               </TabsContent>
 
-              <TabsContent value="approved">
+              {/* Keep existing approved sellers tab content */}
+              <TabsContent value="sellers">
                 <div className="space-y-4">
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -612,6 +639,7 @@ export default function AdminDashboard() {
                 </div>
               </TabsContent>
 
+              {/* Add buyers tab content */}
               <TabsContent value="buyers">
                 <div className="space-y-4">
                   <div className="relative">
@@ -689,13 +717,17 @@ export default function AdminDashboard() {
             <Tabs defaultValue="pending">
               <TabsList className="w-full">
                 <TabsTrigger value="pending">
-                  Pending Approval ({pendingAuctions?.length || 0})
+                  Pending ({pendingAuctions?.length || 0})
                 </TabsTrigger>
-                <TabsTrigger value="approved">
-                  Approved Auctions ({filteredApprovedAuctions?.length || 0})
+                <TabsTrigger value="active">
+                  Active ({filteredActiveAuctions?.length || 0})
+                </TabsTrigger>
+                <TabsTrigger value="completed">
+                  Completed ({filteredCompletedAuctions?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
+              {/* Keep existing pending auctions tab content */}
               <TabsContent value="pending">
                 {isLoadingPendingAuctions ? (
                   <div className="flex justify-center">
@@ -732,7 +764,7 @@ export default function AdminDashboard() {
 
                           <EditAuctionDialog auction={auction} />
 
-                          <ViewBidsDialog 
+                          <ViewBidsDialog
                             auctionId={auction.id}
                             auctionTitle={auction.title}
                           />
@@ -767,7 +799,8 @@ export default function AdminDashboard() {
                 )}
               </TabsContent>
 
-              <TabsContent value="approved">
+              {/* Update active auctions tab content */}
+              <TabsContent value="active">
                 <div className="space-y-4">
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -783,15 +816,75 @@ export default function AdminDashboard() {
                     <div className="flex justify-center">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-                  ) : !filteredApprovedAuctions?.length ? (
-                    <p className="text-muted-foreground">No auctions found</p>
+                  ) : !filteredActiveAuctions?.length ? (
+                    <p className="text-muted-foreground">No active auctions found</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {filteredApprovedAuctions.map((auction) => (
+                      {filteredActiveAuctions.map((auction) => (
                         <div key={auction.id} className="relative">
                           <div className="absolute top-2 right-2 z-10 flex gap-2">
                             <EditAuctionDialog auction={auction} />
-                            <ViewBidsDialog 
+                            <ViewBidsDialog
+                              auctionId={auction.id}
+                              auctionTitle={auction.title}
+                            />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                          <AuctionCard auction={auction} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* Add completed auctions tab content */}
+              <TabsContent value="completed">
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search completed auctions..."
+                      value={auctionSearchTerm}
+                      onChange={(e) => setAuctionSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  {isLoadingApprovedAuctions ? (
+                    <div className="flex justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : !filteredCompletedAuctions?.length ? (
+                    <p className="text-muted-foreground">No completed auctions found</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {filteredCompletedAuctions.map((auction) => (
+                        <div key={auction.id} className="relative">
+                          <div className="absolute top-2 right-2 z-10 flex gap-2">
+                            <ViewBidsDialog
                               auctionId={auction.id}
                               auctionTitle={auction.title}
                             />
