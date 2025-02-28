@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Loader2, UserCircle } from "lucide-react";
 import { NotificationsMenu } from "./notifications";
+import { useState } from "react";
 
 // Example notifications (this will be replaced with real data from the backend)
-const demoNotifications = [
+const initialNotifications = [
   {
     id: "1",
     type: "bid" as const,
@@ -24,6 +25,14 @@ const demoNotifications = [
 
 export default function NavBar() {
   const { user, logoutMutation } = useAuth();
+  const [notifications, setNotifications] = useState(initialNotifications);
+
+  const handleMarkAllRead = () => {
+    setNotifications(notifications.map(notification => ({
+      ...notification,
+      read: true
+    })));
+  };
 
   return (
     <div className="bg-accent p-4">
@@ -37,7 +46,10 @@ export default function NavBar() {
           {user ? (
             <>
               {/* Add NotificationsMenu before user info */}
-              <NotificationsMenu notifications={demoNotifications} />
+              <NotificationsMenu 
+                notifications={notifications} 
+                onMarkAllRead={handleMarkAllRead}
+              />
 
               <span className="text-accent-foreground">
                 Welcome, {user.username}!

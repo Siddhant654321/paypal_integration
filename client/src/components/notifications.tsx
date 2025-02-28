@@ -18,7 +18,13 @@ interface Notification {
   createdAt: string;
 }
 
-export function NotificationsMenu({ notifications = [] }: { notifications?: Notification[] }) {
+export function NotificationsMenu({ 
+  notifications = [],
+  onMarkAllRead
+}: { 
+  notifications?: Notification[];
+  onMarkAllRead?: () => void;
+}) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
@@ -36,7 +42,19 @@ export function NotificationsMenu({ notifications = [] }: { notifications?: Noti
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
-        <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+        <div className="flex items-center justify-between p-2">
+          <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+          {unreadCount > 0 && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => onMarkAllRead?.()}
+              className="text-xs hover:bg-accent"
+            >
+              Mark all as read
+            </Button>
+          )}
+        </div>
         <DropdownMenuSeparator />
         {notifications.length === 0 ? (
           <div className="p-4 text-center text-sm text-muted-foreground">
