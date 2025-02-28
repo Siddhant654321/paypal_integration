@@ -30,8 +30,8 @@ export class PaymentService {
         throw new Error("Auction not found");
       }
 
-      // Calculate amounts
-      const baseAmount = Math.max(auction.currentPrice, 50); // Ensure minimum amount of 50 cents
+      // Calculate amounts (amounts are already in cents)
+      const baseAmount = auction.currentPrice;
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + insuranceFee;
       const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
