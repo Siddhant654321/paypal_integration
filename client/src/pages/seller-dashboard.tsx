@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Auction, Payout } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, DollarSign } from "lucide-react";
@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function SellerDashboard() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
+  const queryClient = useQueryClient();
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -29,6 +31,34 @@ export default function SellerDashboard() {
 
   const { data: payouts, isLoading: isLoadingPayouts } = useQuery<Payout[]>({
     queryKey: ["/api/seller/payouts"],
+  });
+
+  // Get Stripe Connect status
+  const { data: stripeStatus } = useQuery({
+    queryKey: ["/api/seller/status"],
+  });
+
+  // Connect with Stripe mutation
+  const connectWithStripeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("/api/seller/connect", {
+        method: "POST",
+      });
+      const data = await response.json();
+      // Redirect to Stripe Connect onboarding
+      window.location.href = data.url;
+    },
+  });
+
+  // Refresh onboarding link mutation
+  const refreshOnboardingMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("/api/seller/onboarding/refresh", {
+        method: "POST",
+      });
+      const data = await response.json();
+      window.location.href = data.url;
+    },
   });
 
   const filteredAuctions = auctions?.filter(auction =>
@@ -50,6 +80,75 @@ export default function SellerDashboard() {
       style: 'currency',
       currency: 'USD'
     }).format(amount / 100);
+  };
+
+  // Render Stripe Connect status and actions
+  const renderStripeConnectStatus = () => {
+    if (!stripeStatus) return null;
+
+    switch (stripeStatus.status) {
+      case "not_started":
+        return (
+          <div className="text-center p-8 bg-muted rounded-lg">
+            <h3 className="text-lg font-semibold mb-4">Set Up Payouts</h3>
+            <p className="text-muted-foreground mb-4">
+              To receive payouts from your auctions, you'll need to connect your Stripe account.
+              This allows us to securely transfer payments to your bank account.
+            </p>
+            <Button 
+              onClick={() => connectWithStripeMutation.mutate()}
+              disabled={connectWithStripeMutation.isPending}
+            >
+              {connectWithStripeMutation.isPending ? (
+                "Setting up..."
+              ) : (
+                "Connect with Stripe"
+              )}
+            </Button>
+          </div>
+        );
+
+      case "pending":
+        return (
+          <div className="text-center p-8 bg-yellow-50 rounded-lg">
+            <h3 className="text-lg font-semibold mb-4">Complete Your Stripe Setup</h3>
+            <p className="text-muted-foreground mb-4">
+              You've started the Stripe connection process, but there are still some steps to complete.
+            </p>
+            <Button 
+              onClick={() => refreshOnboardingMutation.mutate()}
+              disabled={refreshOnboardingMutation.isPending}
+            >
+              Complete Setup
+            </Button>
+          </div>
+        );
+
+      case "verified":
+        return (
+          <div className="text-center p-4 bg-green-50 rounded-lg mb-6">
+            <p className="text-green-800">
+              ✓ Your Stripe account is connected and ready to receive payouts
+            </p>
+          </div>
+        );
+
+      case "rejected":
+        return (
+          <div className="text-center p-8 bg-red-50 rounded-lg">
+            <h3 className="text-lg font-semibold mb-4">Account Verification Failed</h3>
+            <p className="text-muted-foreground mb-4">
+              There was an issue verifying your Stripe account. Please try again or contact support.
+            </p>
+            <Button 
+              onClick={() => connectWithStripeMutation.mutate()}
+              disabled={connectWithStripeMutation.isPending}
+            >
+              Try Again
+            </Button>
+          </div>
+        );
+    }
   };
 
   return (
@@ -162,6 +261,7 @@ export default function SellerDashboard() {
         </TabsContent>
 
         <TabsContent value="payouts">
+          {renderStripeConnectStatus()}
           {isLoadingPayouts ? (
             <div className="text-center">Loading your payouts...</div>
           ) : !payouts?.length ? (
