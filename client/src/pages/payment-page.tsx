@@ -102,9 +102,15 @@ export default function PaymentPage() {
       }
 
       console.log("Redirecting to Stripe checkout...");
-      // Open in a new tab using the correct Stripe checkout URL format
-      const checkoutUrl = `https://checkout.stripe.com/pay/${sessionId}`;
-      window.open(checkoutUrl, '_blank');
+      // Use proper Stripe redirect method
+      const { error } = await stripe.redirectToCheckout({
+        sessionId: sessionId
+      });
+      
+      if (error) {
+        console.error("Stripe redirect error:", error);
+        throw error;
+      }
       
       // Show success message since we can't redirect back automatically
       toast({
