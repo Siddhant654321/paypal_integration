@@ -746,28 +746,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stripePublishableKey = process.env.VITE_STRIPE_PUBLISHABLE_KEY;
       if (!stripePublishableKey) {
         console.error("Missing Stripe publishable key");
-        return res.status(500).json({ message: "Server configuration error" });
+        return res.status(500).json({ 
+          message: "Server configuration error", 
+          details: "Missing Stripe publishable key"
+        });
       }
 
       console.log("Stripe Connect request initiated. PublishableKey available:", !!stripePublishableKey);
+
+      // Validate protocol and host
+      if (!req.protocol || !req.get('host')) {
+        console.error("Missing protocol or host in request:", { protocol: req.protocol, host: req.get('host') });
+        return res.status(500).json({ 
+          message: "Invalid server configuration", 
+          details: "Could not determine server URL"
+        });
+      }
+
+      // Construct base URL
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      console.log("Using base URL:", baseUrl);
 
       // Check if user already has a Stripe account
       const existingProfile = await storage.getProfile(req.user.id);
       if (existingProfile?.stripeAccountId) {
         console.log("User already has Stripe account:", existingProfile.stripeAccountId);
-        
+
         // Get onboarding link for existing account
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        const onboardingUrl = await SellerPaymentService.getOnboardingLink(
-          existingProfile.stripeAccountId,
-          baseUrl
-        );
-        
-        return res.json({ 
-          url: onboardingUrl,
-          accountId: existingProfile.stripeAccountId,
-          publishableKey: stripePublishableKey
-        });
+        try {
+          const onboardingUrl = await SellerPaymentService.getOnboardingLink(
+            existingProfile.stripeAccountId,
+            baseUrl
+          );
+
+          return res.json({ 
+            url: onboardingUrl,
+            accountId: existingProfile.stripeAccountId,
+            publishableKey: stripePublishableKey 
+          });
+        } catch (linkError) {
+          console.error("Failed to create onboarding link:", linkError);
+          return res.status(500).json({ 
+            message: "Failed to create Stripe onboarding link", 
+            error: linkError instanceof Error ? linkError.message : "Unknown error"
+          });
+        }
       }
 
       // Get user profile
@@ -777,16 +800,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log("Creating new Stripe account for user:", req.user.id);
-      
+
       // Create Stripe account
       const accountId = await SellerPaymentService.createSellerAccount(profile);
 
       // Get onboarding link
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
       const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
 
       console.log("Onboarding URL generated:", onboardingUrl);
-      
+
       res.json({ 
         url: onboardingUrl, 
         accountId, 
@@ -850,7 +872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const payouts = await storage.getPayoutsBySeller(req.user.id);
+      const payouts = await storage.getPayoutsBySeller(req.id);
       res.json(payouts);
     } catch (error) {
       console.error("Error fetching payouts:", error);

@@ -42,59 +42,94 @@ export default function SellerDashboard() {
 
   // Load Stripe.js and initialize
   useEffect(() => {
-    const loadStripe = async () => {
-      if (!window.Stripe) {
-        const script = document.createElement('script');
-        script.src = 'https://js.stripe.com/v3/';
-        script.async = true;
-        script.onload = () => {
-          setStripeLoaded(true);
-          // Initialize Stripe with publishable key
+    // Check if Stripe is already loaded to prevent duplicate loading
+    if (window.Stripe) {
+      setStripeLoaded(true);
+      if (!stripeInstance) {
+        try {
           const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
           setStripeInstance(stripe);
-        };
-        document.body.appendChild(script);
-      } else {
-        setStripeLoaded(true);
+          console.log("Stripe initialized from existing instance");
+        } catch (err) {
+          console.error("Error initializing Stripe with existing instance:", err);
+        }
+      }
+      return;
+    }
+
+    // Load Stripe script if not already loaded
+    const script = document.createElement('script');
+    script.src = 'https://js.stripe.com/v3/';
+    script.async = true;
+    
+    script.onload = () => {
+      setStripeLoaded(true);
+      try {
+        // Initialize Stripe with publishable key
         const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
         setStripeInstance(stripe);
+        console.log("Stripe initialized successfully");
+      } catch (err) {
+        console.error("Error initializing Stripe:", err);
       }
     };
-
-    loadStripe();
-  }, []);
+    
+    script.onerror = (error) => {
+      console.error("Error loading Stripe.js script:", error);
+    };
+    
+    document.body.appendChild(script);
+    
+    // Cleanup function
+    return () => {
+      if (script && script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+  }, [stripeInstance]);
 
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      console.log("Starting Stripe connect mutation");
-      const response = await fetch('/api/seller/connect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
+      console.log("Starting Stripe Connect mutation");
+      try {
+        const response = await fetch('/api/seller/connect', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Stripe connect error:", errorData);
-        throw new Error(errorData.message || 'Failed to connect with Stripe');
+        // Check for HTTP errors
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("Stripe Connect HTTP error:", errorData);
+          throw new Error(errorData.message || 'Failed to connect with Stripe');
+        }
+
+        // Parse response data
+        const data = await response.json();
+        console.log("Received Stripe data:", data);
+        
+        if (!data.url) {
+          throw new Error('No Stripe onboarding URL received from server');
+        }
+        
+        return data;
+      } catch (err) {
+        console.error("Stripe Connect request failed:", err);
+        throw err;
       }
-
-      const data = await response.json();
-      console.log("Received Stripe data:", data);
-
-      return data;
     },
     onSuccess: (data) => {
-      console.log("Stripe Connect response:", data);
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      console.log("Stripe Connect successful, redirecting to:", data.url);
+      // Use window.location.assign for more reliable navigation
+      window.location.assign(data.url);
     },
     onError: (error) => {
-      console.error("Stripe Connect error:", error);
+      console.error("Stripe Connect error:", error instanceof Error ? error.message : error);
+      // You could add toast notification here if you have a toast system
     }
   });
 
