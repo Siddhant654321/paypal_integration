@@ -305,6 +305,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
 
 function EditAuctionDialog({ auction }: { auction: Auction }) {
   const { toast } = useToast();
+  const [open, setOpen] = useState(false);
   const form = useForm({
     resolver: zodResolver(insertAuctionSchema),
     defaultValues: {
@@ -323,17 +324,20 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
   });
 
   const updateAuctionMutation = useMutation({
-    mutationFn: async (formData: any) => { //Added any type to avoid type error in the formData
-      const data = {
-        ...formData,
+    mutationFn: async (data: any) => { //Added any type to avoid type error in the formData
+      // Convert dollar amounts to cents before sending to the server
+      const updatedData = {
+        ...data,
         // Ensure category is valid before sending
-        category: ["show", "purebred", "fun"].includes(formData.category) ? formData.category : "purebred",
-        startDate: new Date(formData.startDate).toISOString(),
-        endDate: new Date(formData.endDate).toISOString(),
-        startPrice: Math.round(formData.startPrice * 100), //Convert back to cents
-        reservePrice: Math.round(formData.reservePrice * 100), //Convert back to cents
+        category: ["show", "purebred", "fun"].includes(data.category) ? data.category : "purebred",
+        startDate: new Date(data.startDate).toISOString(),
+        endDate: new Date(data.endDate).toISOString(),
+        startPrice: Math.round(Number(data.startPrice) * 100),
+        reservePrice: Math.round(Number(data.reservePrice) * 100),
       };
-      const res = await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, data);
+
+      console.log("Updating auction with data:", updatedData);
+      const res = await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, updatedData);
       return res.json();
     },
     onSuccess: () => {
@@ -343,6 +347,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
         title: "Success",
         description: "Auction has been updated",
       });
+      setOpen(false);
     },
     onError: (error: Error) => {
       toast({
@@ -354,12 +359,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
   });
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Edit className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit Auction</DialogTitle>
@@ -936,8 +936,7 @@ export default function AdminDashboard() {
                             disabled={approveAuctionMutation.isPending}
                           >
                             {approveAuctionMutation.isPending && (
-                              <Loader2 className="mr-2 h-4 w-4animate-spin" />
-                            )}
+                              <Loader2 className="mr-2 h-4 w-4animate-spin" />)}
                             <CheckCircle2 className="mr-2 h-4 w-4" />
                             Approve
                           </Button>

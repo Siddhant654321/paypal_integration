@@ -441,9 +441,16 @@ export class DatabaseStorage implements IStorage {
       if (data.imageUrl) updateData.imageUrl = data.imageUrl;
       if (data.images) updateData.images = data.images;
       
-      // Handle price fields (they should already be in cents)
-      if (data.startPrice !== undefined) updateData.startPrice = data.startPrice;
-      if (data.reservePrice !== undefined) updateData.reservePrice = data.reservePrice;
+      // Handle price fields (ensure they're in cents)
+      // Important: check for zero or any other number, not just truthy values
+      if (data.startPrice !== undefined) {
+        console.log(`Setting startPrice to ${data.startPrice} (${typeof data.startPrice})`);
+        updateData.startPrice = data.startPrice;
+      }
+      if (data.reservePrice !== undefined) {
+        console.log(`Setting reservePrice to ${data.reservePrice} (${typeof data.reservePrice})`);
+        updateData.reservePrice = data.reservePrice;
+      }
 
       // Handle dates
       if (data.startDate) updateData.startDate = new Date(data.startDate);
