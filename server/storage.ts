@@ -442,14 +442,21 @@ export class DatabaseStorage implements IStorage {
       if (data.images) updateData.images = data.images;
       
       // Handle price fields (ensure they're in cents)
-      // Important: check for zero or any other number, not just truthy values
+      // Important: directly check against undefined to handle cases where the value is 0
       if (data.startPrice !== undefined) {
         console.log(`Setting startPrice to ${data.startPrice} (${typeof data.startPrice})`);
-        updateData.startPrice = data.startPrice;
+        updateData.startPrice = Number(data.startPrice);
+        
+        // Also update currentPrice if this is a starting price change
+        const auction = await this.getAuction(auctionId);
+        if (auction && auction.currentPrice === auction.startPrice) {
+          updateData.currentPrice = Number(data.startPrice);
+        }
       }
+      
       if (data.reservePrice !== undefined) {
         console.log(`Setting reservePrice to ${data.reservePrice} (${typeof data.reservePrice})`);
-        updateData.reservePrice = data.reservePrice;
+        updateData.reservePrice = Number(data.reservePrice);
       }
 
       // Handle dates
