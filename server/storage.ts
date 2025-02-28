@@ -440,20 +440,21 @@ export class DatabaseStorage implements IStorage {
       if (data.species) updateData.species = data.species;
       if (data.imageUrl) updateData.imageUrl = data.imageUrl;
       if (data.images) updateData.images = data.images;
-      
-      // Handle price fields (ensure they're in cents)
+
+      // Handle price fields
       // Important: directly check against undefined to handle cases where the value is 0
       if (data.startPrice !== undefined) {
         console.log(`Setting startPrice to ${data.startPrice} (${typeof data.startPrice})`);
+        // Just use the value as-is - client already converted to cents
         updateData.startPrice = Number(data.startPrice);
-        
+
         // Also update currentPrice if this is a starting price change
         const auction = await this.getAuction(auctionId);
         if (auction && auction.currentPrice === auction.startPrice) {
           updateData.currentPrice = Number(data.startPrice);
         }
       }
-      
+
       if (data.reservePrice !== undefined) {
         console.log(`Setting reservePrice to ${data.reservePrice} (${typeof data.reservePrice})`);
         updateData.reservePrice = Number(data.reservePrice);
@@ -475,13 +476,13 @@ export class DatabaseStorage implements IStorage {
           "Purebred & Production": "Purebred & Production",
           "Fun & Mixed": "Fun & Mixed"
         };
-        
+
         // Convert and validate category
         const mappedCategory = categoryMap[data.category];
         if (!mappedCategory) {
           throw new Error("Invalid category. Must be one of: Show Quality, Purebred & Production, Fun & Mixed");
         }
-        
+
         updateData.category = mappedCategory;
         log(`Mapped category '${data.category}' to '${mappedCategory}'`, "storage");
       }

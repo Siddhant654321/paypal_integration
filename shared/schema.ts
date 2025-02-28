@@ -181,11 +181,11 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     startPrice: z
       .number()
       .min(0.01, "Start price must be at least $0.01")
-      .transform((price) => Math.round(price * 100)), // Convert dollars to cents
+      .transform((price) => Math.round(price * 100)), // Convert dollars to cents - only for NEW auctions
     reservePrice: z
       .number()
       .min(0.01, "Reserve price must be at least $0.01")
-      .transform((price) => Math.round(price * 100)), // Convert dollars to cents
+      .transform((price) => Math.round(price * 100)), // Convert dollars to cents - only for NEW auctions
     startDate: z.string().transform((str) => {
       // Make sure we have a full ISO string with time
       const date = str.includes('T') ? str : `${str}T00:00:00`;

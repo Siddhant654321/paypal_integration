@@ -338,21 +338,20 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Create a copy of data so we can map legacy category values and convert prices
+      // Create a copy of data so we can map legacy category values
       const mappedData = { ...data };
 
       // Convert dollar values to cents before sending to server
-      // The server expects prices in cents, but our form displays them in dollars
+      // We need to do this because the database stores values in cents
       if (typeof mappedData.startPrice === 'number') {
+        // Make sure we're actually sending the value as entered without multiplying again
         mappedData.startPrice = Math.round(mappedData.startPrice * 100);
       }
 
       if (typeof mappedData.reservePrice === 'number') {
+        // Make sure we're actually sending the value as entered without multiplying again
         mappedData.reservePrice = Math.round(mappedData.reservePrice * 100);
       }
-
-      console.log("Setting startPrice to", mappedData.startPrice, "(" + typeof mappedData.startPrice + ")");
-      console.log("Setting reservePrice to", mappedData.reservePrice, "(" + typeof mappedData.reservePrice + ")");
 
       const response = await fetch(`/api/admin/auctions/${auction.id}`, {
         method: 'PATCH',
@@ -952,7 +951,7 @@ export default function AdminDashboard() {
                         className="flex items-center justify-between p-4 border rounded-lg"
                       >
                         <div>
-                          <p className="font-medium">{auction.title}</p>
+                          <p className`font-medium">{auction.title}</p>
                           <div className="flex gap-2 mt-1">
                             <Badge>{auction.species}</Badge>
                             <Badge variant="outline">{auction.category}</Badge>
