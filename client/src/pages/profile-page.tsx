@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Redirect } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, Bell } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -36,6 +36,10 @@ const defaultValues: InsertProfile = {
   businessName: "",
   breedSpecialty: "",
   npipNumber: "",
+  emailBidNotifications: true,
+  emailAuctionNotifications: true,
+  emailPaymentNotifications: true,
+  emailAdminNotifications: true,
 };
 
 export default function ProfilePage() {
@@ -71,6 +75,10 @@ export default function ProfilePage() {
         businessName: profile.businessName || "",
         breedSpecialty: profile.breedSpecialty || "",
         npipNumber: profile.npipNumber || "",
+        emailBidNotifications: profile.emailBidNotifications,
+        emailAuctionNotifications: profile.emailAuctionNotifications,
+        emailPaymentNotifications: profile.emailPaymentNotifications,
+        emailAdminNotifications: profile.emailAdminNotifications,
       });
     }
   }, [profile, form]);
@@ -299,6 +307,100 @@ export default function ProfilePage() {
           )}
 
           <Separator className="my-6" />
+
+          <div className="space-y-6">
+            <div className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              <h2 className="text-lg font-semibold">Email Notifications</h2>
+            </div>
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="emailBidNotifications"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Bid Notifications</FormLabel>
+                      <FormDescription>
+                        Receive emails when someone bids on your auctions
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="emailAuctionNotifications"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Auction Updates</FormLabel>
+                      <FormDescription>
+                        Receive emails about auction status changes
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="emailPaymentNotifications"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Payment Notifications</FormLabel>
+                      <FormDescription>
+                        Receive emails about payment updates and transactions
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {(user.role === "seller" || user.role === "seller_admin") && (
+                <FormField
+                  control={form.control}
+                  name="emailAdminNotifications"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Admin Notifications</FormLabel>
+                        <FormDescription>
+                          Receive emails about admin actions and approvals
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+          </div>
 
           <div className="space-y-6">
             <h2 className="text-lg font-semibold">Bio</h2>
