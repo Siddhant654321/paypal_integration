@@ -1,14 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import AuctionCard from "@/components/auction-card";
 import AuctionFilters from "@/components/auction-filters";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Auction } from "@shared/schema";
 import { Loader2 } from "lucide-react";
+import { formatToUSD } from "@/utils/formatters";
 
 export default function HomePage() {
   const [filters, setFilters] = useState({
     species: "",
     category: "",
+    searchTerm: "",
+    sortBy: "",
   });
 
   const { data: auctions, isLoading } = useQuery<Auction[]>({
@@ -18,6 +21,41 @@ export default function HomePage() {
       filters.category && `category=${filters.category}`,
     ].filter(Boolean),
   });
+
+  // Function to sort and filter auctions based on user selection
+  const displayedAuctions = useMemo(() => {
+    if (!auctions) return [];
+    
+    // First filter by search term if provided
+    let filtered = auctions;
+    if (filters.searchTerm) {
+      const searchTerm = filters.searchTerm.toLowerCase();
+      filtered = auctions.filter(auction => 
+        auction.title.toLowerCase().includes(searchTerm) || 
+        auction.description.toLowerCase().includes(searchTerm)
+      );
+    }
+    
+    // Then sort based on the selected sort option
+    if (filters.sortBy) {
+      return [...filtered].sort((a, b) => {
+        switch (filters.sortBy) {
+          case 'endingSoon':
+            return new Date(a.endDate).getTime() - new Date(b.endDate).getTime();
+          case 'priceAsc':
+            return a.currentPrice - b.currentPrice;
+          case 'priceDesc':
+            return b.currentPrice - a.currentPrice;
+          case 'newest':
+            return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+          default:
+            return 0;
+        }
+      });
+    }
+    
+    return filtered;
+  }, [auctions, filters.searchTerm, filters.sortBy]);
 
   return (
     <div>
@@ -42,16 +80,22 @@ export default function HomePage() {
           <div className="flex justify-center my-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : !auctions?.length ? (
+        ) : !displayedAuctions?.length ? (
           <div className="text-center my-8 text-muted-foreground">
-            No auctions found
+            No auctions found{filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-            {auctions.map((auction) => (
-              <AuctionCard key={auction.id} auction={auction} />
-            ))}
-          </div>
+          <>
+            <div className="mt-4 mb-2 text-sm text-muted-foreground">
+              Showing {displayedAuctions.length} {displayedAuctions.length === 1 ? "auction" : "auctions"}
+              {filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-2">
+              {displayedAuctions.map((auction) => (
+                <AuctionCard key={auction.id} auction={auction} />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
