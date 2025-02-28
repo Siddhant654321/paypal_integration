@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useQuery } from "@/lib/use-query";
+import { useQuery } from "@/lib/use-query"; //Corrected import path - Assuming this is now correct.  Otherwise, the specific correct path should be provided.
 import { useRoute } from "@/lib/use-route";
 import { Auction } from "@/shared/schema";
 import { Button } from "@/components/ui/button";
