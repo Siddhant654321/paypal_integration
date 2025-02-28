@@ -52,6 +52,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -422,11 +423,9 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                       onValueChange={field.onChange}
                       defaultValue={field.value}
                     >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                      </FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="show">Show Quality</SelectItem>
                         <SelectItem value="purebred">Purebred & Production</SelectItem>
@@ -439,39 +438,6 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="species"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Species</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <FormControl>
-                      <select {...field} className="form-select block w-full">
-                        <option value="show">Show Quality</option>
-                        <option value="purebred">Purebred & Production</option>
-                        <option value="fun">Fun & Mixed</option>
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
