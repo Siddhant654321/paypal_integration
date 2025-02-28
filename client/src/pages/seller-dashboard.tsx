@@ -261,15 +261,23 @@ export default function SellerDashboard() {
         showStatus={true}
       />
       {auction.status === "ended" && auction.winningBidderId && (
-        <Link href={`/seller/fulfill/${auction.id}`}>
-          <Button 
-            className="w-full"
-            variant={auction.status === "fulfilled" ? "outline" : "default"}
-          >
-            <Package className="h-4 w-4 mr-2" />
-            {auction.status === "fulfilled" ? "View Fulfillment" : "Fulfill Order"}
-          </Button>
-        </Link>
+        <div className="space-y-2">
+          {auction.paymentStatus !== "completed" ? (
+            <div className="text-sm text-muted-foreground bg-muted p-2 rounded">
+              Waiting for buyer payment before fulfillment
+            </div>
+          ) : (
+            <Link href={`/seller/fulfill/${auction.id}`}>
+              <Button 
+                className="w-full"
+                variant={auction.status === "fulfilled" ? "outline" : "default"}
+              >
+                <Package className="h-4 w-4 mr-2" />
+                {auction.status === "fulfilled" ? "View Fulfillment" : "Fulfill Order"}
+              </Button>
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );
