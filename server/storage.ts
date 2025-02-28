@@ -141,10 +141,24 @@ export class DatabaseStorage implements IStorage {
 
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
+      // Map legacy categories to new format if present
+      let category = insertAuction.category;
+      const categoryMap = {
+        "show": "Show Quality",
+        "purebred": "Purebred & Production",
+        "fun": "Fun & Mixed"
+      };
+
+      if (categoryMap[category]) {
+        category = categoryMap[category];
+        console.log(`Mapped category from ${insertAuction.category} to ${category}`);
+      }
+
       const [auction] = await db
         .insert(auctions)
         .values({
           ...insertAuction,
+          category: category,
           currentPrice: insertAuction.startPrice,
           approved: false,
           startDate: new Date(insertAuction.startDate),

@@ -225,19 +225,17 @@ export default function NewAuction() {
               name="startPrice"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Start Price ($)</FormLabel>
+                  <FormLabel>Starting Price ($)</FormLabel>
                   <FormControl>
-                    <Input 
-                      {...field} 
-                      type="number" 
+                    <Input
+                      type="number"
                       min="0.01"
                       step="0.01"
                       placeholder="0.00"
+                      value={field.value || ""}
                       onChange={(e) => {
-                        const value = e.target.value ? parseFloat(e.target.value) : '';
-                        field.onChange(value);
+                        field.onChange(e.target.value ? parseFloat(e.target.value) : "");
                       }}
-                      value={field.value === '' ? '' : field.value}
                     />
                   </FormControl>
                   <FormMessage />
@@ -252,17 +250,15 @@ export default function NewAuction() {
                 <FormItem>
                   <FormLabel>Reserve Price ($)</FormLabel>
                   <FormControl>
-                    <Input 
-                      {...field} 
+                    <Input
                       type="number"
-                      min={form.watch('startPrice') || 0.01}
+                      min="0.01"
                       step="0.01"
                       placeholder="0.00"
+                      value={field.value || ""}
                       onChange={(e) => {
-                        const value = e.target.value ? parseFloat(e.target.value) : '';
-                        field.onChange(value);
+                        field.onChange(e.target.value ? parseFloat(e.target.value) : "");
                       }}
-                      value={field.value === '' ? '' : field.value}
                     />
                   </FormControl>
                   <FormMessage />

@@ -125,9 +125,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Convert string values to appropriate types and ensure required fields
       const parsedData = {
         ...auctionData,
-        // Convert price from dollars to cents (if it's already a number, no need for conversion in validation)
-        startPrice: Number(auctionData.startPrice || 0),
-        reservePrice: Number(auctionData.reservePrice || 0),
+        // Convert price from dollars to cents for storage (multiply by 100)
+        startPrice: Number(auctionData.startPrice || 0) * 100,
+        reservePrice: Number(auctionData.reservePrice || 0) * 100,
         startDate: auctionData.startDate || new Date().toISOString(),
         endDate: auctionData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         // Initialize images array if not present
