@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react"; // Added useEffect import
+import { useState, useEffect } from "react"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
@@ -15,6 +15,8 @@ export default function SellerDashboard() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
+  const [stripeLoaded, setStripeLoaded] = useState(false);
+  const [stripeInstance, setStripeInstance] = useState<any>(null);
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -37,6 +39,30 @@ export default function SellerDashboard() {
   const { data: stripeStatus } = useQuery({
     queryKey: ["/api/seller/status"],
   });
+
+  // Load Stripe.js and initialize
+  useEffect(() => {
+    const loadStripe = async () => {
+      if (!window.Stripe) {
+        const script = document.createElement('script');
+        script.src = 'https://js.stripe.com/v3/';
+        script.async = true;
+        script.onload = () => {
+          setStripeLoaded(true);
+          // Initialize Stripe with publishable key
+          const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+          setStripeInstance(stripe);
+        };
+        document.body.appendChild(script);
+      } else {
+        setStripeLoaded(true);
+        const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+        setStripeInstance(stripe);
+      }
+    };
+
+    loadStripe();
+  }, []);
 
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
@@ -62,8 +88,6 @@ export default function SellerDashboard() {
       return data;
     },
     onSuccess: (data) => {
-      // For embedded onboarding, either use the accountId and publishableKey to set up Stripe Elements
-      // or directly redirect to the onboarding URL
       console.log("Stripe Connect response:", data);
       if (data.url) {
         window.location.href = data.url;
@@ -73,18 +97,6 @@ export default function SellerDashboard() {
       console.error("Stripe Connect error:", error);
     }
   });
-
-  // Load Stripe.js for embedded onboarding (if needed)
-  useEffect(() => {
-    const loadStripe = async () => {
-      const stripeJs = document.createElement('script');
-      stripeJs.src = 'https://js.stripe.com/v3/';
-      stripeJs.async = true;
-      document.body.appendChild(stripeJs);
-    };
-
-    loadStripe();
-  }, []);
 
   // Refresh onboarding link mutation
   const refreshOnboardingMutation = useMutation({
