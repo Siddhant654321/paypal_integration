@@ -485,7 +485,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add these new routes in the registerRoutes function
-  app.post("/api/auctions/:id/pay", requireAuth, async (req, res) => {
+  app.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -493,19 +493,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const auctionId = parseInt(req.params.id);
       const { includeInsurance = false } = req.body;
-      const auction = await storage.getAuction(auctionId);
 
+      const auction = await storage.getAuction(auctionId);
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
       }
 
-      // Verify this user won the auction (highest bidder)
-      const bids = await storage.getBidsForAuction(auctionId);
-      const highestBid = bids.reduce((max, bid) =>
-        bid.amount > max.amount ? bid : max
-        , bids[0]);
-
-      if (!highestBid || highestBid.bidderId !== req.user.id) {
+      // Verify this user won the auction
+      if (auction.winningBidderId !== req.user.id) {
         return res.status(403).json({ message: "Only the winning bidder can pay" });
       }
 

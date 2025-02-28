@@ -24,11 +24,15 @@ export class PaymentService {
     payment: InsertPayment;
   }> {
     try {
+      log(`Creating payment intent for auction ${auctionId}`, "payments");
+
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
         throw new Error("Auction not found");
       }
+
+      log(`Auction current price: ${auction.currentPrice}`, "payments");
 
       // Calculate amounts (amounts are already in cents)
       const baseAmount = auction.currentPrice;
@@ -36,6 +40,8 @@ export class PaymentService {
       const totalAmount = baseAmount + insuranceFee;
       const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const sellerPayout = baseAmount - platformFee;
+
+      log(`Payment calculation: Total=${totalAmount}, PlatformFee=${platformFee}, SellerPayout=${sellerPayout}, InsuranceFee=${insuranceFee}`, "payments");
 
       // Create payment record
       const paymentData: InsertPayment = {
@@ -58,7 +64,12 @@ export class PaymentService {
           sellerId: auction.sellerId.toString(),
           includeInsurance: includeInsurance.toString(),
         },
+        automatic_payment_methods: {
+          enabled: true,
+        },
       });
+
+      log(`Created Stripe PaymentIntent: ${paymentIntent.id}`, "payments");
 
       // Create payment record in database
       const payment = await storage.createPayment({
