@@ -959,16 +959,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         averagePrice: Math.round(data.total / data.count)
       }));
 
-      // Get recent sales (ended auctions with winners)
-      const recentSales = allAuctions
-        .filter(auction => auction.winningBidderId && auction.paymentStatus === 'completed')
-        .sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())
-        .slice(0, 5)
-        .map(auction => ({
-          title: auction.title,
-          price: auction.currentPrice,
-          date: auction.endDate
-        }));
+      // Calculate top seller and buyer for the last month
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+      // Get completed auctions from last month
+      const lastMonthAuctions = allAuctions.filter(auction =>
+        auction.paymentStatus === 'completed' &&
+        new Date(auction.endDate) >= lastMonth
+      );
+
+      // Calculate seller totals
+      const sellerTotals = lastMonthAuctions.reduce((acc, auction) => {
+        if (!acc[auction.sellerId]) {
+          acc[auction.sellerId] = { total: 0, count: 0 };
+        }
+        acc[auction.sellerId].total += auction.currentPrice;
+        acc[auction.sellerId].count += 1;
+        return acc;
+      }, {} as Record<string, { total: number; count: number }>);
+
+      // Calculate buyer totals
+      const buyerTotals = lastMonthAuctions.reduce((acc, auction) => {
+        if (!acc[auction.winningBidderId]) {
+          acc[auction.winningBidderId] = { total: 0, count: 0 };
+        }
+        acc[auction.winningBidderId].total += auction.currentPrice;
+        acc[auction.winningBidderId].count += 1;
+        return acc;
+      }, {} as Record<string, { total: number; count: number }>);
+
+      // Find top seller
+      let topSeller = { userId: 0, total: 0, count: 0 };
+      for (const [userId, data] of Object.entries(sellerTotals)) {
+        if (data.total > topSeller.total) {
+          topSeller = { userId: parseInt(userId), ...data };
+        }
+      }
+
+      // Find top buyer
+      let topBuyer = { userId: 0, total: 0, count: 0 };
+      for (const [userId, data] of Object.entries(buyerTotals)) {
+        if (data.total > topBuyer.total) {
+          topBuyer = { userId: parseInt(userId), ...data };
+        }
+      }
+
+      // Get user profiles for top performers
+      const [topSellerProfile, topBuyerProfile] = await Promise.all([
+        topSeller.userId ? storage.getProfile(topSeller.userId) : null,
+        topBuyer.userId ? storage.getProfile(topBuyer.userId) : null,
+      ]);
 
       // Calculate price history (average price by month)
       const sixMonthsAgo = new Date();
@@ -1006,7 +1047,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         averagePrices,
         activeAuctions,
-        recentSales,
+        topPerformers: {
+          seller: topSellerProfile ? {
+            name: topSellerProfile.name,
+            total: topSeller.total,
+            auctionsWon: topSeller.count
+          } : null,
+          buyer: topBuyerProfile ? {
+            name: topBuyerProfile.name,
+            total: topBuyer.total,
+            auctionsWon: topBuyer.count
+          } : null
+        },
         priceHistory,
         popularCategories
       });
