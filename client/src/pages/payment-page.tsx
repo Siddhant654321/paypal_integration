@@ -102,8 +102,8 @@ export default function PaymentPage() {
       }
 
       console.log("Redirecting to Stripe checkout...");
-      // Open in a new tab instead of redirecting the current page
-      const checkoutUrl = `https://checkout.stripe.com/c/pay/${sessionId}`;
+      // Open in a new tab using the correct Stripe checkout URL format
+      const checkoutUrl = `https://checkout.stripe.com/pay/${sessionId}`;
       window.open(checkoutUrl, '_blank');
       
       // Show success message since we can't redirect back automatically
