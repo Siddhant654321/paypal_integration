@@ -88,19 +88,6 @@ export default function PaymentPage() {
         stripeRef.current = stripe;
         console.log("Stripe loaded successfully");
         
-        const elements = stripe.elements({
-          clientSecret: paymentData.clientSecret,
-          appearance: { theme: 'stripe' }
-        });
-        
-        // Create and mount the Payment Element
-        const paymentElement = elements.create('payment');
-        if (paymentElementRef.current) {
-          paymentElement.mount(paymentElementRef.current);
-          elementsRef.current = elements;
-          setStripeReady(true);
-        }
-
         console.log("Creating Elements instance...");
         const elements = stripe.elements({
           clientSecret: paymentData.clientSecret,
