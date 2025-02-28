@@ -103,16 +103,10 @@ export default function PaymentPage() {
 
       console.log("Redirecting to Stripe checkout...");
       
-      // Set up for the iframe environment (Replit)
-      // Create a form and submit it to open in a new tab instead of using redirectToCheckout
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = 'https://checkout.stripe.com/pay/' + sessionId;
-      form.target = '_blank'; // Open in new tab
-      
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
+      // Use a direct URL to open the Stripe checkout page with the session ID
+      // This format works with Stripe's security requirements and CloudFront
+      const checkoutUrl = `https://checkout.stripe.com/c/pay/${sessionId}`;
+      window.open(checkoutUrl, '_blank');
       
       // Show success message
       toast({
