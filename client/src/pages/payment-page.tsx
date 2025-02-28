@@ -70,7 +70,7 @@ export default function PaymentPage() {
 
   useEffect(() => {
     let mounted = true;
-    let stripeElement: any = null;
+    let paymentElementInstance: any = null;
 
     const initializeStripe = async () => {
       if (!paymentData?.clientSecret) return;
@@ -79,6 +79,15 @@ export default function PaymentPage() {
         const stripe = await stripePromise;
         if (!stripe || !mounted) return;
 
+        // Clear previous elements if they exist
+        if (elementsRef.current) {
+          const element = elementsRef.current.getElement('payment');
+          if (element) {
+            element.destroy();
+          }
+        }
+
+        // Create fresh elements instance
         const elements = stripe.elements({
           clientSecret: paymentData.clientSecret,
           appearance: {
@@ -89,19 +98,22 @@ export default function PaymentPage() {
           },
         });
 
-        const paymentElement = elements.create('payment');
-        stripeElement = elements;
+        // Store elements reference globally for later use
         elementsRef.current = elements;
-
+        
+        // Create and mount payment element
+        const paymentElement = elements.create('payment');
+        paymentElementInstance = paymentElement;
+        
         const container = document.getElementById('payment-element');
         if (container && mounted) {
           paymentElement.mount(container);
-          setIsFormReady(true);
         }
 
         // Listen for form ready state
         paymentElement.on('ready', () => {
           if (mounted) {
+            console.log('Payment element is ready');
             setIsFormReady(true);
           }
         });
@@ -137,11 +149,8 @@ export default function PaymentPage() {
 
     return () => {
       mounted = false;
-      if (stripeElement) {
-        const element = stripeElement.getElement('payment');
-        if (element) {
-          element.destroy();
-        }
+      if (paymentElementInstance) {
+        paymentElementInstance.destroy();
       }
       setIsFormReady(false);
     };
@@ -149,16 +158,28 @@ export default function PaymentPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormReady || isProcessing || !paymentData?.clientSecret) return;
+    console.log('Submit button clicked');
+    console.log('Form ready:', isFormReady);
+    console.log('Processing:', isProcessing);
+    console.log('Client secret exists:', !!paymentData?.clientSecret);
+    
+    if (!isFormReady || isProcessing || !paymentData?.clientSecret) {
+      console.log('Payment form not ready or already processing');
+      return;
+    }
 
     setIsProcessing(true);
 
     try {
+      console.log('Confirming payment...');
       const stripe = await stripePromise;
       if (!stripe || !elementsRef.current) {
+        console.error('Stripe or elements not available');
         throw new Error("Unable to process payment");
       }
 
+      console.log('Elements instance:', !!elementsRef.current);
+      
       const { error } = await stripe.confirmPayment({
         clientSecret: paymentData.clientSecret,
         elements: elementsRef.current,
@@ -168,13 +189,16 @@ export default function PaymentPage() {
       });
 
       if (error) {
+        console.error('Payment confirmation error:', error);
         toast({
           variant: "destructive",
           title: "Payment Failed",
           description: error.message || "Your payment could not be processed.",
         });
+      } else {
+        console.log('Payment successful, redirecting...');
+        // Success will redirect to return_url
       }
-      // Success will redirect to return_url
     } catch (err) {
       console.error("Payment error:", err);
       toast({
