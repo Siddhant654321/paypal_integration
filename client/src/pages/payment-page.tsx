@@ -3,7 +3,7 @@ import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Loader2, Shield } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -28,6 +28,7 @@ export default function PaymentPage() {
   const [includeInsurance, setIncludeInsurance] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFormReady, setIsFormReady] = useState(false);
+  const elementsRef = useRef<any>(null);
   const { toast } = useToast();
   const INSURANCE_FEE = 800; // $8.00 in cents
 
@@ -90,6 +91,7 @@ export default function PaymentPage() {
 
         const paymentElement = elements.create('payment');
         stripeElement = elements;
+        elementsRef.current = elements;
 
         const container = document.getElementById('payment-element');
         if (container && mounted) {
@@ -153,15 +155,13 @@ export default function PaymentPage() {
 
     try {
       const stripe = await stripePromise;
-      if (!stripe) {
+      if (!stripe || !elementsRef.current) {
         throw new Error("Unable to process payment");
       }
 
       const { error } = await stripe.confirmPayment({
         clientSecret: paymentData.clientSecret,
-        elements: stripe.elements({
-          clientSecret: paymentData.clientSecret,
-        }),
+        elements: elementsRef.current,
         confirmParams: {
           return_url: `${window.location.origin}/auction/${auction?.id}`,
         },
