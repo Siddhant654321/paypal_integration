@@ -1008,39 +1008,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Get all approved auctions
       const allAuctions = await storage.getAuctions({ approved: true });
-      
-      // Create a map to hold auctions with bids and their bid information
-      const auctionsWithBids = new Map();
-      
-      // For each auction, check if it has bids and add them to our map
-      await Promise.all(allAuctions.map(async (auction) => {
-        const bids = await storage.getBidsForAuction(auction.id);
-        if (bids.length > 0) {
-          // Find the highest bid
-          const highestBid = bids.reduce((max, bid) => bid.amount > max.amount ? bid : max, bids[0]);
-          auctionsWithBids.set(auction.id, {
-            ...auction,
-            highestBidAmount: highestBid.amount,
-            bidCount: bids.length
-          });
-        }
-      }));
-      
-      // Convert the map to an array for further processing
-      const auctionsWithBidsArray = Array.from(auctionsWithBids.values());
-      
-      // Count active auctions with bids (not ended and approved)
+
+      // Count active auctions (not ended and approved)
       const now = new Date();
-      const activeAuctions = auctionsWithBidsArray.filter(auction =>
-        new Date(auction.endDate) > now
+      const activeAuctions = allAuctions.filter(auction =>
+        new Date(auction.endDate) > now && auction.approved
       ).length;
 
-      // Calculate average prices by species (based on highest bid amounts)
-      const speciesPrices = auctionsWithBidsArray.reduce((acc, auction) => {
+      // Calculate average prices by species
+      const speciesPrices = allAuctions.reduce((acc, auction) => {
         if (!acc[auction.species]) {
           acc[auction.species] = { total: 0, count: 0 };
         }
-        acc[auction.species].total += auction.highestBidAmount;
+        acc[auction.species].total += auction.currentPrice;
         acc[auction.species].count += 1;
         return acc;
       }, {} as Record<string, { total: number; count: number }>);
@@ -1055,7 +1035,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       lastMonth.setMonth(lastMonth.getMonth() - 1);
 
       // Get completed auctions from last month
-      const lastMonthAuctions = auctionsWithBidsArray.filter(auction =>
+      const lastMonthAuctions = allAuctions.filter(auction =>
         auction.paymentStatus === 'completed' &&
         new Date(auction.endDate) >= lastMonth
       );
@@ -1065,7 +1045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!acc[auction.sellerId]) {
           acc[auction.sellerId] = { total: 0, count: 0 };
         }
-        acc[auction.sellerId].total += auction.highestBidAmount;
+        acc[auction.sellerId].total += auction.currentPrice;
         acc[auction.sellerId].count += 1;
         return acc;
       }, {} as Record<string, { total: number; count: number }>);
@@ -1075,7 +1055,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!acc[auction.winningBidderId]) {
           acc[auction.winningBidderId] = { total: 0, count: 0 };
         }
-        acc[auction.winningBidderId].total += auction.highestBidAmount;
+        acc[auction.winningBidderId].total += auction.currentPrice;
         acc[auction.winningBidderId].count += 1;
         return acc;
       }, {} as Record<string, { total: number; count: number }>);
@@ -1106,14 +1086,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-      const monthlyPrices = auctionsWithBidsArray
+      const monthlyPrices = allAuctions
         .filter(auction => new Date(auction.endDate) >= sixMonthsAgo)
         .reduce((acc, auction) => {
           const monthKey = new Date(auction.endDate).toISOString().slice(0, 7);
           if (!acc[monthKey]) {
             acc[monthKey] = { total: 0, count: 0 };
           }
-          acc[monthKey].total += auction.highestBidAmount;
+          acc[monthKey].total += auction.currentPrice;
           acc[monthKey].count += 1;
           return acc;
         }, {} as Record<string, { total: number; count: number }>);
@@ -1125,8 +1105,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-      // Calculate popular categories among auctions with bids
-      const categoryCount = auctionsWithBidsArray.reduce((acc, auction) => {
+      // Calculate popular categories
+      const categoryCount = allAuctions.reduce((acc, auction) => {
         acc[auction.category] = (acc[auction.category] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
