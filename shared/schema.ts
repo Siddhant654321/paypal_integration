@@ -183,25 +183,41 @@ export const insertBidSchema = createInsertSchema(bids).omit({
   timestamp: true,
 });
 
-// Update the payment schema to include insuranceFee
-export const insertPaymentSchema = createInsertSchema(payments)
-  .omit({
-    id: true,
-    stripePaymentIntentId: true,
-    stripeTransferId: true,
-    status: true,
-    createdAt: true,
-    updatedAt: true,
-  });
-
-// Create insert schema for payouts
-export const insertPayoutSchema = createInsertSchema(payouts).omit({
-  id: true,
-  stripeTransferId: true,
-  status: true,
-  createdAt: true,
-  updatedAt: true,
+// Payment types
+export const insertPaymentSchema = z.object({
+  auctionId: z.number(),
+  buyerId: z.number(),
+  sellerId: z.number(),
+  amount: z.number(),
+  platformFee: z.number(),
+  sellerPayout: z.number(),
+  insuranceFee: z.number().optional(),
 });
+
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = InsertPayment & {
+  id: number;
+  status: string;
+  stripePaymentIntentId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+// Payout types
+export const insertPayoutSchema = z.object({
+  sellerId: z.number(),
+  paymentId: z.number(),
+  amount: z.number(),
+  stripeTransferId: z.string(),
+});
+
+export type InsertPayout = z.infer<typeof insertPayoutSchema>;
+export type Payout = InsertPayout & {
+  id: number;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,

@@ -581,3 +581,99 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
+
+// Database schema and types
+const auctions = pgTable("auctions", {
+  id: serial("id").primaryKey(),
+  sellerId: integer("seller_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  species: text("species").notNull(),
+  category: text("category"),
+  startPrice: integer("start_price").notNull().default(0),
+  currentPrice: integer("current_price").notNull().default(0),
+  reservePrice: integer("reserve_price").notNull().default(0),
+  startDate: timestamp("start_date").notNull().defaultNow(),
+  endDate: timestamp("end_date").notNull(),
+  status: text("status").notNull().default("active"),
+  reserveMet: boolean("reserve_met"),
+  winningBidderId: integer("winning_bidder_id"),
+  sellerDecision: text("seller_decision"),
+  paymentStatus: text("payment_status").default("pending"),
+  paymentDueDate: timestamp("payment_due_date"),
+  imageUrl: text("image_url"),
+  images: text("images").array(),
+  approved: boolean("approved").default(false),
+});
+
+const bids = pgTable("bids", {
+  id: serial("id").primaryKey(),
+  auctionId: integer("auction_id").notNull(),
+  bidderId: integer("bidder_id").notNull(),
+  amount: integer("amount").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  email: text("email"),
+  role: text("role").notNull().default("user"),
+  approved: boolean("approved").default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+const profiles = pgTable("profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  fullName: text("full_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
+  businessName: text("business_name"),
+  stripeAccountId: text("stripe_account_id"),
+  stripeAccountStatus: text("stripe_account_status"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  auctionId: integer("auction_id").notNull(),
+  buyerId: integer("buyer_id").notNull(),
+  sellerId: integer("seller_id").notNull(),
+  amount: integer("amount").notNull(),
+  platformFee: integer("platform_fee").notNull().default(0),
+  sellerPayout: integer("seller_payout").notNull().default(0),
+  insuranceFee: integer("insurance_fee").default(0),
+  status: text("status").notNull().default("pending"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+const payouts = pgTable("payouts", {
+  id: serial("id").primaryKey(),
+  sellerId: integer("seller_id").notNull(),
+  paymentId: integer("payment_id").notNull(),
+  amount: integer("amount").notNull(),
+  status: text("status").notNull().default("pending"),
+  stripeTransferId: text("stripe_transfer_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+const schema = {
+  auctions,
+  bids,
+  users,
+  profiles,
+  payments,
+  payouts
+};
+
+export default schema;
