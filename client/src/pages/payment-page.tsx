@@ -57,35 +57,34 @@ export default function PaymentPage() {
     let cleanup = () => {};
 
     const initializeStripe = async () => {
-      if (!paymentData?.clientSecret) return;
+      if (!paymentData?.clientSecret) {
+        console.log("No client secret available yet");
+        return;
+      }
 
       try {
+        console.log("Loading Stripe...");
         const stripe = await stripePromise;
         if (!stripe) {
           throw new Error("Failed to load Stripe - publishable key may be missing");
         }
+        console.log("Stripe loaded successfully");
 
-        console.log("Stripe initialized successfully");
-
+        console.log("Creating Stripe Elements...");
         const elements = stripe.elements({
           clientSecret: paymentData.clientSecret,
           appearance: {
             theme: 'stripe',
           },
         });
-
-        const cardElement = elements.create('card');
-        cardElement.mount('#card-element');
-
-        // Store references
-        cardElementRef.current = cardElement;
         elementsRef.current = elements;
 
-        cleanup = () => {
-          cardElement.destroy();
-          cardElementRef.current = null;
-          elementsRef.current = null;
-        };
+        console.log("Creating card element...");
+        const cardElement = elements.create('card');
+        cardElementRef.current = cardElement;
+
+        console.log("Mounting card element...");
+        cardElement.mount('#card-element');
 
         // Add event listener for card element changes
         cardElement.on('change', (event) => {
@@ -97,6 +96,17 @@ export default function PaymentPage() {
             });
           }
         });
+
+        cleanup = () => {
+          console.log("Cleaning up Stripe elements...");
+          if (cardElementRef.current) {
+            cardElementRef.current.destroy();
+            cardElementRef.current = null;
+          }
+          elementsRef.current = null;
+        };
+
+        console.log("Stripe initialization complete");
       } catch (error) {
         console.error("Error initializing Stripe:", error);
         toast({
@@ -117,22 +127,28 @@ export default function PaymentPage() {
     setIsProcessing(true);
 
     try {
+      console.log("Starting payment process...");
       const stripe = await stripePromise;
-      const cardElement = cardElementRef.current;
 
-      if (!stripe || !cardElement || !paymentData?.clientSecret) {
-        throw new Error("Payment cannot be processed at this time");
+      if (!stripe) {
+        throw new Error("Stripe not loaded");
+      }
+      if (!cardElementRef.current) {
+        throw new Error("Card element not initialized");
+      }
+      if (!paymentData?.clientSecret) {
+        throw new Error("No payment intent available");
       }
 
       console.log("Confirming card payment...");
-      const { error, paymentIntent } = await stripe.confirmCardPayment(paymentData.clientSecret, {
-        payment_method: {
-          card: cardElement,
-          billing_details: {
-            // Optional: You can add billing details here
+      const { error, paymentIntent } = await stripe.confirmCardPayment(
+        paymentData.clientSecret,
+        {
+          payment_method: {
+            card: cardElementRef.current,
           },
-        },
-      });
+        }
+      );
 
       if (error) {
         console.error("Payment error:", error);
@@ -142,14 +158,14 @@ export default function PaymentPage() {
           description: error.message || "Your payment could not be processed.",
         });
       } else if (paymentIntent.status === 'succeeded') {
+        console.log("Payment successful:", paymentIntent);
         toast({
           title: "Payment Successful",
           description: "Your payment has been processed successfully.",
         });
-        // Optionally redirect to a success page or auction page
       }
     } catch (err) {
-      console.error("Payment error:", err);
+      console.error("Payment submission error:", err);
       toast({
         variant: "destructive",
         title: "Payment Error",
@@ -176,7 +192,7 @@ export default function PaymentPage() {
     );
   }
 
-  // Convert amounts to dollars for display only
+  // Convert cents to dollars for display only
   const baseAmountDollars = (auction.currentPrice / 100).toFixed(2);
   const insuranceAmountDollars = (INSURANCE_FEE / 100).toFixed(2);
   const totalAmountDollars = ((auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)) / 100).toFixed(2);
