@@ -63,7 +63,7 @@ export default function HomePage() {
         className="bg-cover bg-center h-64 relative"
         style={{
           backgroundImage:
-            'url("https://images.unsplash.com/photo-1444858291040-58f756a3bdd6")',
+            'url("https://images.unsplash.com/photo-1612170153139-6f881ff067e0?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1770&q=80")',
         }}
       >
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
