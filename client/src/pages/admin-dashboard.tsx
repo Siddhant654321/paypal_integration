@@ -511,7 +511,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>Start Date and Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <Input type="datetime-local" {...field} defaultValue={new Date(auction.startDate).toISOString().slice(0, 16)} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -525,7 +525,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>End Date and Time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <Input type="datetime-local" {...field} defaultValue={new Date(auction.endDate).toISOString().slice(0, 16)} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
