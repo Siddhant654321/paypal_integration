@@ -20,9 +20,9 @@ const speciesOptions = [
 ];
 
 const categoryOptions = [
-  { value: "show", label: "Show Quality" },
-  { value: "purebred", label: "Purebred & Production" },
-  { value: "fun", label: "Fun & Mixed" },
+  { value: "Show Quality", label: "Show Quality" },
+  { value: "Purebred & Production", label: "Purebred & Production" },
+  { value: "Fun & Mixed", label: "Fun & Mixed" },
 ];
 
 const sortOptions = [

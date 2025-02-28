@@ -45,7 +45,7 @@ export default function NewAuction() {
       title: "",
       description: "",
       species: "",
-      category: "show", // Default to "show" category
+      category: "Show Quality", // Default to "show" category
       startPrice: 0,
       reservePrice: 0,
       startDate: `${new Date().toISOString().split("T")[0]}T00:00`,
@@ -198,9 +198,9 @@ export default function NewAuction() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="show">Show Quality</SelectItem>
-                      <SelectItem value="purebred">Purebred & Production</SelectItem>
-                      <SelectItem value="fun">Fun & Mixed</SelectItem>
+                      <SelectItem value="Show Quality">Show Quality</SelectItem>
+                      <SelectItem value="Purebred & Production">Purebred & Production</SelectItem>
+                      <SelectItem value="Fun & Mixed">Fun & Mixed</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -272,10 +272,10 @@ export default function NewAuction() {
                         type="datetime-local"
                         {...field}
                         min={new Date().toISOString().split("T")[0] + "T00:00"}
-                        
+
                       />
                     </FormControl>
-                    
+
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -294,10 +294,10 @@ export default function NewAuction() {
                         type="datetime-local"
                         {...field}
                         min={form.watch("startDate")}
-                        
+
                       />
                     </FormControl>
-                    
+
                   </div>
                   <FormMessage />
                 </FormItem>
