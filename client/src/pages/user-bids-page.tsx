@@ -1,4 +1,3 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -10,6 +9,7 @@ import { formatDistanceToNow } from "date-fns";
 import { CreditCard, Search } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+import { formatPrice } from "../utils/formatters";
 
 // Define the BidWithAuction type to match what the API returns
 type BidWithAuction = Bid & {
@@ -68,7 +68,7 @@ export default function UserBidsPage() {
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <p className="font-bold">${bid.amount}</p>
+                    <p className="font-bold">{formatPrice(bid.amount)}</p>
                     {bid.isWinningBid && (
                       <Badge className="ml-2">
                         {bid.auction.paymentStatus === "completed"

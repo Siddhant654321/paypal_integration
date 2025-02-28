@@ -6,6 +6,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 import { Store, MapPin, CreditCard } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { formatPrice } from "../utils/formatters";
 
 type Props = {
   auction: Auction;
@@ -69,7 +70,7 @@ export default function AuctionCard({ auction, showStatus }: Props) {
       <CardFooter className="p-4 pt-0 flex flex-col gap-2">
         <div className="flex w-full justify-between items-center">
           <div>
-            <div className="font-semibold">${auction.currentPrice}</div>
+            <div className="font-semibold">{formatPrice(auction.currentPrice)}</div>
             <div className="text-sm text-muted-foreground">
               {isActive
                 ? `Ends ${formatDistanceToNow(new Date(auction.endDate), {
@@ -82,7 +83,7 @@ export default function AuctionCard({ auction, showStatus }: Props) {
             <Button variant="secondary">View Details</Button>
           </Link>
         </div>
-        
+
         {/* Always show Pay Now button for testing purposes if auction has ended */}
         {auction.status === "ended" && (
           <Link href={`/auction/${auction.id}/pay`}>

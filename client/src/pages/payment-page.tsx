@@ -1,4 +1,3 @@
-
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link, useLocation } from "wouter";
 import { Auction } from "@shared/schema";
@@ -12,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { formatPrice } from "../utils/formatters"; // Added import for the formatter
 
 // Verify Stripe key is available and in test mode
 if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
@@ -51,13 +51,13 @@ export default function PaymentPage() {
         setError("Error initializing payment system.");
       }
     };
-    
+
     checkStripe();
   }, []);
-  
+
   const handlePayment = async () => {
     if (isProcessing || !auction?.id) return;
-    
+
     // Clear any previous errors
     setError(null);
 
@@ -102,29 +102,29 @@ export default function PaymentPage() {
       }
 
       console.log("Redirecting to Stripe checkout...");
-      
+
       // Get the checkout session to extract the URL
       const checkoutSession = await fetch(`/api/checkout-session/${sessionId}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include'
       });
-      
+
       if (!checkoutSession.ok) {
         throw new Error("Failed to get checkout session URL");
       }
-      
+
       const { url } = await checkoutSession.json();
-      
+
       // Redirect directly to the Stripe checkout URL
       window.location.href = url;
-      
+
       // Show success message
       toast({
         title: "Checkout opened in new tab",
         description: "Complete your payment in the new tab. You'll be redirected back after payment."
       });
-      
+
       setIsProcessing(false);
     } catch (err) {
       console.error('Payment error:', err);
@@ -147,9 +147,9 @@ export default function PaymentPage() {
     );
   }
 
-  const baseAmountDollars = (auction.currentPrice / 100).toFixed(2);
-  const insuranceAmountDollars = (INSURANCE_FEE / 100).toFixed(2);
-  const totalAmountDollars = ((auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)) / 100).toFixed(2);
+  const baseAmountDollars = formatPrice(auction.currentPrice); // Use the formatter
+  const insuranceAmountDollars = formatPrice(INSURANCE_FEE); // Use the formatter
+  const totalAmountDollars = formatPrice(auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)); // Use the formatter
 
   return (
     <div className="container mx-auto py-8">
@@ -201,7 +201,7 @@ export default function PaymentPage() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-          
+
           <Button 
             onClick={handlePayment}
             className="w-full" 

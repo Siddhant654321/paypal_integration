@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { formatPrice } from "../utils/formatters"; // Added import
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
@@ -244,10 +245,10 @@ export default function AuctionPage() {
               <span>{timeLeft}</span>
             </div>
             <div className="text-lg">
-              Current bid: <span className="font-bold">${auction.currentPrice}</span>
+              Current bid: <span className="font-bold">{formatPrice(auction.currentPrice)}</span> {/* Updated */}
             </div>
             <div className="text-sm text-muted-foreground">
-              Starting price: ${auction.startPrice}
+              Starting price: {formatPrice(auction.startPrice)} {/* Updated */}
             </div>
           </div>
 
@@ -260,7 +261,7 @@ export default function AuctionPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Auction Decision Required</AlertDialogTitle>
                   <AlertDialogDescription>
-                    The reserve price was not met. The highest bid was ${auction.currentPrice}.
+                    The reserve price was not met. The highest bid was {formatPrice(auction.currentPrice)}. {/* Updated */}
                     Would you like to accept this bid or void the auction?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -303,7 +304,7 @@ export default function AuctionPage() {
                     className="flex justify-between items-center p-3 bg-muted rounded-lg"
                   >
                     <div>
-                      <span className="font-medium">${bid.amount}</span>
+                      <span className="font-medium">{formatPrice(bid.amount)}</span> {/* Updated */}
                       {bid.bidderId === user?.id && (
                         <Badge variant="outline" className="ml-2">Your Bid</Badge>
                       )}
