@@ -316,8 +316,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       species: auction.species,
       // Ensure category is one of the allowed values
       category: ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(auction.category) ? auction.category : "Purebred & Production",
-      startPrice: auction.startPrice / 100, // Convert cents to dollars for display
-      reservePrice: auction.reservePrice / 100, // Convert cents to dollars for display
+      startPrice: auction.startPrice, // Corrected: Removed division by 100
+      reservePrice: auction.reservePrice, // Corrected: Removed division by 100
       startDate: new Date(auction.startDate).toISOString(),
       endDate: new Date(auction.endDate).toISOString(),
       imageUrl: auction.imageUrl || "",
@@ -343,14 +343,14 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
 
       // Convert dollar values to cents before sending to server
       // We need to do this because the database stores values in cents
-      if (typeof mappedData.startPrice === 'number') {
+      if (mappedData.startPrice !== undefined) {
         // Make sure we're actually sending the value as entered without multiplying again
-        mappedData.startPrice = Math.round(mappedData.startPrice * 100);
+        mappedData.startPrice = Number(mappedData.startPrice);
       }
 
-      if (typeof mappedData.reservePrice === 'number') {
+      if (mappedData.reservePrice !== undefined) {
         // Make sure we're actually sending the value as entered without multiplying again
-        mappedData.reservePrice = Math.round(mappedData.reservePrice * 100);
+        mappedData.reservePrice = Number(mappedData.reservePrice);
       }
 
       const response = await fetch(`/api/admin/auctions/${auction.id}`, {
@@ -575,7 +575,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
   );
 }
 
-export default function AdminDashboard() {
+function AdminDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
@@ -951,8 +951,8 @@ export default function AdminDashboard() {
                         className="flex items-center justify-between p-4 border rounded-lg"
                       >
                         <div>
-                          <p className`font-medium">{auction.title}</p>
-                          <div className="flex gap-2 mt-1">
+                          <p className="font-medium">{auction.title}</p>
+                          <div className="flex gap-2 mt-1```
                             <Badge>{auction.species}</Badge>
                             <Badge variant="outline">{auction.category}</Badge>
                           </div>
