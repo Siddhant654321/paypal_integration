@@ -63,12 +63,8 @@ export default function NewAuction() {
       // Append all form fields
       Object.keys(auctionData).forEach(key => {
         if (key !== 'files' && key !== 'images') {
-          // Convert prices to cents.  This assumes the API expects cents.  Adjust as needed.
-          if (key === 'startPrice' || key === 'reservePrice') {
-            formData.append(key, (auctionData[key] * 100).toString());
-          } else {
-            formData.append(key, auctionData[key].toString());
-          }
+          // Prices are now passed directly as dollars; server-side conversion is assumed.
+          formData.append(key, auctionData[key].toString());
         }
       });
 
@@ -232,10 +228,7 @@ export default function NewAuction() {
                       min="0.01"
                       step="0.01"
                       placeholder="0.00"
-                      value={field.value || ""}
-                      onChange={(e) => {
-                        field.onChange(e.target.value ? parseFloat(e.target.value) : "");
-                      }}
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -255,10 +248,7 @@ export default function NewAuction() {
                       min="0.01"
                       step="0.01"
                       placeholder="0.00"
-                      value={field.value || ""}
-                      onChange={(e) => {
-                        field.onChange(e.target.value ? parseFloat(e.target.value) : "");
-                      }}
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />

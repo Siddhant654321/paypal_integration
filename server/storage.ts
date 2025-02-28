@@ -440,8 +440,10 @@ export class DatabaseStorage implements IStorage {
       if (data.species) updateData.species = data.species;
       if (data.imageUrl) updateData.imageUrl = data.imageUrl;
       if (data.images) updateData.images = data.images;
-      if (data.startPrice) updateData.startPrice = data.startPrice;
-      if (data.reservePrice) updateData.reservePrice = data.reservePrice;
+      
+      // Handle price fields (they should already be in cents)
+      if (data.startPrice !== undefined) updateData.startPrice = data.startPrice;
+      if (data.reservePrice !== undefined) updateData.reservePrice = data.reservePrice;
 
       // Handle dates
       if (data.startDate) updateData.startDate = new Date(data.startDate);

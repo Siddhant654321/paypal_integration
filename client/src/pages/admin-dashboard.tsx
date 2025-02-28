@@ -313,8 +313,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       species: auction.species,
       // Ensure category is one of the allowed values
       category: ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(auction.category) ? auction.category : "Purebred & Production",
-      startPrice: auction.startPrice,
-      reservePrice: auction.reservePrice,
+      startPrice: auction.startPrice / 100, // Convert cents to dollars for display
+      reservePrice: auction.reservePrice / 100, // Convert cents to dollars for display
       startDate: new Date(auction.startDate).toISOString(),
       endDate: new Date(auction.endDate).toISOString(),
       imageUrl: auction.imageUrl || "",
@@ -330,6 +330,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
         category: ["show", "purebred", "fun"].includes(formData.category) ? formData.category : "purebred",
         startDate: new Date(formData.startDate).toISOString(),
         endDate: new Date(formData.endDate).toISOString(),
+        startPrice: Math.round(formData.startPrice * 100), //Convert back to cents
+        reservePrice: Math.round(formData.reservePrice * 100), //Convert back to cents
       };
       const res = await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, data);
       return res.json();
@@ -454,7 +456,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                         placeholder="0.00"
                         {...field}
                         // Convert cents from DB to dollars for display
-                        value={field.value ? (field.value / 100).toFixed(2) : ''}
+                        value={field.value ? (field.value).toFixed(2) : ''}
                         onChange={(e) => {
                           const dollarValue = e.target.value ? parseFloat(e.target.value) : '';
                           // Store value in form as dollars (backend will convert to cents)
@@ -481,7 +483,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                         placeholder="0.00"
                         {...field}
                         // Convert cents from DB to dollars for display
-                        value={field.value ? (field.value / 100).toFixed(2) : ''}
+                        value={field.value ? (field.value).toFixed(2) : ''}
                         onChange={(e) => {
                           const dollarValue = e.target.value ? parseFloat(e.target.value) : '';
                           // Store value in form as dollars (backend will convert to cents)
@@ -934,7 +936,7 @@ export default function AdminDashboard() {
                             disabled={approveAuctionMutation.isPending}
                           >
                             {approveAuctionMutation.isPending && (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              <Loader2 className="mr-2 h-4 w-4animate-spin" />
                             )}
                             <CheckCircle2 className="mr-2 h-4 w-4" />
                             Approve
