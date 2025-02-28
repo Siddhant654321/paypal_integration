@@ -748,36 +748,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Profile not found" });
       }
 
-      if (!profile.email) {
-        return res.status(400).json({ 
-          message: "Profile email is required for Stripe Connect",
-          code: "MISSING_EMAIL"
-        });
-      }
+      // Create Stripe Connect account
+      const accountId = await SellerPaymentService.createSellerAccount(profile);
 
-      try {
-        // Create Stripe Connect account
-        const accountId = await SellerPaymentService.createSellerAccount(profile);
+      // Get onboarding link
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
 
-        // Get onboarding link
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
-
-        res.json({ url: onboardingUrl });
-      } catch (stripeError) {
-        console.error("Stripe error:", stripeError);
-        res.status(400).json({ 
-          message: "Failed to create Stripe account. Please try again later.",
-          error: stripeError instanceof Error ? stripeError.message : "Unknown error",
-          code: "STRIPE_ERROR"
-        });
-      }
+      res.json({ url: onboardingUrl });
     } catch (error) {
-      console.error("Error in seller connect:", error);
-      res.status(500).json({ 
-        message: "Internal server error while setting up Stripe Connect",
-        code: "SERVER_ERROR"
-      });
+      console.error("Error creating seller account:", error);
+      res.status(500).json({ message: "Failed to create seller account" });
     }
   });
 
