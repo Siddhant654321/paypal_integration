@@ -12,9 +12,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
+const INSURANCE_FEE = 800; // $8.00 in cents
 
 export class PaymentService {
-  static async createPaymentIntent(auctionId: number, buyerId: number): Promise<{
+  static async createPaymentIntent(
+    auctionId: number,
+    buyerId: number,
+    includeInsurance: boolean = false
+  ): Promise<{
     clientSecret: string;
     payment: InsertPayment;
   }> {
@@ -26,9 +31,11 @@ export class PaymentService {
       }
 
       // Calculate amounts
-      const totalAmount = auction.currentPrice;
-      const platformFee = Math.floor(totalAmount * PLATFORM_FEE_PERCENTAGE);
-      const sellerPayout = totalAmount - platformFee;
+      const baseAmount = auction.currentPrice;
+      const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
+      const totalAmount = baseAmount + insuranceFee;
+      const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
+      const sellerPayout = baseAmount - platformFee;
 
       // Create payment record
       const paymentData: InsertPayment = {
@@ -38,6 +45,7 @@ export class PaymentService {
         amount: totalAmount,
         platformFee,
         sellerPayout,
+        insuranceFee,
       };
 
       // Create Stripe PaymentIntent
@@ -48,6 +56,7 @@ export class PaymentService {
           auctionId: auctionId.toString(),
           buyerId: buyerId.toString(),
           sellerId: auction.sellerId.toString(),
+          includeInsurance: includeInsurance.toString(),
         },
       });
 

@@ -94,6 +94,7 @@ export const payments = pgTable("payments", {
   amount: integer("amount").notNull(),
   platformFee: integer("platform_fee").notNull(),
   sellerPayout: integer("seller_payout").notNull(),
+  insuranceFee: integer("insurance_fee").notNull().default(0),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   stripeTransferId: text("stripe_transfer_id"),
   status: text("status", {
@@ -151,7 +152,7 @@ export const insertBidSchema = createInsertSchema(bids).omit({
   timestamp: true,
 });
 
-// Create insert schema for payments
+// Update the payment schema to include insuranceFee
 export const insertPaymentSchema = createInsertSchema(payments)
   .omit({
     id: true,

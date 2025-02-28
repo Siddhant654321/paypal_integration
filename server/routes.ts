@@ -492,6 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const auctionId = parseInt(req.params.id);
+      const { includeInsurance = false } = req.body;
       const auction = await storage.getAuction(auctionId);
 
       if (!auction) {
@@ -508,10 +509,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only the winning bidder can pay" });
       }
 
-      // Create payment intent
+      // Create payment intent with insurance option
       const { clientSecret, payment } = await PaymentService.createPaymentIntent(
         auctionId,
-        req.user.id
+        req.user.id,
+        includeInsurance
       );
 
       res.json({ clientSecret, payment });
