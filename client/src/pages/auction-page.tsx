@@ -225,7 +225,12 @@ export default function AuctionPage() {
             <h1 className="text-3xl font-bold">{auction.title}</h1>
             <div className="flex gap-2 mt-2">
               <Badge>{auction.species}</Badge>
-              <Badge variant="outline">{auction.category}</Badge>
+              <Badge variant="outline">
+                {auction.category === "show" ? "Show Quality" : 
+                 auction.category === "purebred" ? "Purebred & Production" : 
+                 auction.category === "fun" ? "Fun & Mixed" : 
+                 auction.category}
+              </Badge>
               {getStatusBadge()}
               {auction.status === "active" && (
                 <Badge variant={auction.currentPrice >= auction.reservePrice ? "default" : "destructive"}>
