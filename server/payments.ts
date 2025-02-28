@@ -54,8 +54,6 @@ export class PaymentService {
         insuranceFee,
       };
 
-      log(`Creating Stripe PaymentIntent...`, "payments");
-
       // Create Stripe PaymentIntent
       const paymentIntent = await stripe.paymentIntents.create({
         amount: totalAmount,
@@ -94,6 +92,7 @@ export class PaymentService {
 
   static async handlePaymentSuccess(paymentIntentId: string): Promise<void> {
     try {
+      // Get payment details from database
       const payment = await storage.getPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
@@ -103,7 +102,7 @@ export class PaymentService {
       const transfer = await stripe.transfers.create({
         amount: payment.sellerPayout,
         currency: "usd",
-        destination: payment.sellerId.toString(),
+        destination: payment.sellerId.toString(), // Assuming seller has Stripe account connected
         transfer_group: `auction_${payment.auctionId}`,
       });
 
