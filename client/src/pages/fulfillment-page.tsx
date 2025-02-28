@@ -118,7 +118,7 @@ export default function FulfillmentPage() {
           </CardContent>
         </Card>
 
-        {!fulfillment ? (
+        {!fulfillment?.status || fulfillment.status === "pending" ? (
           <Card>
             <CardHeader>
               <CardTitle>Shipping Details</CardTitle>
@@ -137,7 +137,7 @@ export default function FulfillmentPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <p>Status: Fulfilled</p>
+                <p>Status: {fulfillment.status}</p>
                 <p>Shipping Carrier: {fulfillment.shippingCarrier}</p>
                 <p>Tracking Number: {fulfillment.trackingNumber}</p>
                 <p>Shipping Date: {new Date(fulfillment.shippingDate).toLocaleDateString()}</p>
