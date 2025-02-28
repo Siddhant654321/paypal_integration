@@ -2,6 +2,25 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Loader2, UserCircle } from "lucide-react";
+import { NotificationsMenu } from "./notifications";
+
+// Example notifications (this will be replaced with real data from the backend)
+const demoNotifications = [
+  {
+    id: "1",
+    type: "bid" as const,
+    message: "New bid on your Brahma chickens auction",
+    read: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "2",
+    type: "auction" as const,
+    message: "Your auction has been approved",
+    read: true,
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+  },
+];
 
 export default function NavBar() {
   const { user, logoutMutation } = useAuth();
@@ -17,6 +36,9 @@ export default function NavBar() {
         <div className="flex gap-4 items-center">
           {user ? (
             <>
+              {/* Add NotificationsMenu before user info */}
+              <NotificationsMenu notifications={demoNotifications} />
+
               <span className="text-accent-foreground">
                 Welcome, {user.username}!
               </span>
