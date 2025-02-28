@@ -460,11 +460,9 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                         step="0.01"
                         placeholder="0.00"
                         {...field}
-                        // Convert cents from DB to dollars for display
                         value={field.value ? (field.value).toFixed(2) : ''}
                         onChange={(e) => {
                           const dollarValue = e.target.value ? parseFloat(e.target.value) : '';
-                          // Store value in form as dollars (backend will convert to cents)
                           field.onChange(dollarValue);
                         }}
                       />
@@ -487,11 +485,9 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                         step="0.01"
                         placeholder="0.00"
                         {...field}
-                        // Convert cents from DB to dollars for display
                         value={field.value ? (field.value).toFixed(2) : ''}
                         onChange={(e) => {
                           const dollarValue = e.target.value ? parseFloat(e.target.value) : '';
-                          // Store value in form as dollars (backend will convert to cents)
                           field.onChange(dollarValue);
                         }}
                       />
