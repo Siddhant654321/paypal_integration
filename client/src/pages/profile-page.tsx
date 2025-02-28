@@ -25,6 +25,7 @@ import React from 'react';
 
 const defaultValues: InsertProfile = {
   fullName: "",
+  email: "",
   phoneNumber: "",
   address: "",
   city: "",
@@ -64,6 +65,7 @@ export default function ProfilePage() {
     if (profile) {
       form.reset({
         fullName: profile.fullName,
+        email: profile.email,
         phoneNumber: profile.phoneNumber,
         address: profile.address,
         city: profile.city,
@@ -173,6 +175,23 @@ export default function ProfilePage() {
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email Address</FormLabel>
+                  <FormControl>
+                    <Input type="email" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Your email address for notifications and communications
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
