@@ -66,21 +66,25 @@ export default function AuctionCard({ auction, showStatus }: Props) {
           </div>
         )}
       </CardContent>
-      <CardFooter className="p-4 pt-0 flex justify-between items-center">
-        <div>
-          <div className="font-semibold">${auction.currentPrice}</div>
-          <div className="text-sm text-muted-foreground">
-            {isActive
-              ? `Ends ${formatDistanceToNow(new Date(auction.endDate), {
-                  addSuffix: true,
-                })}`
-              : "Auction ended"}
+      <CardFooter className="p-4 pt-0 flex flex-col gap-2">
+        <div className="flex w-full justify-between items-center">
+          <div>
+            <div className="font-semibold">${auction.currentPrice}</div>
+            <div className="text-sm text-muted-foreground">
+              {isActive
+                ? `Ends ${formatDistanceToNow(new Date(auction.endDate), {
+                    addSuffix: true,
+                  })}`
+                : "Auction ended"}
+            </div>
           </div>
+          <Link href={`/auction/${auction.id}`}>
+            <Button variant="secondary">View Details</Button>
+          </Link>
         </div>
-        <Link href={`/auction/${auction.id}`}>
-          <Button variant="secondary">View Details</Button>
-        </Link>
-        {needsPayment && (
+        
+        {/* Always show Pay Now button for testing purposes if auction has ended */}
+        {auction.status === "ended" && (
           <Link href={`/auction/${auction.id}/pay`}>
             <Button size="sm" className="w-full" variant="default">
               <CreditCard className="mr-2 h-4 w-4" />
