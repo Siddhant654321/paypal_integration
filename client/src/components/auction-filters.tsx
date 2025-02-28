@@ -100,19 +100,18 @@ export default function AuctionFilters({ filters, onFilterChange }: AuctionFilte
         <div className="w-full md:w-1/5">
           <Label htmlFor="sortBy" className="mb-2 block">Sort By</Label>
           <Select
-            value={filters.sortBy || ""}
+            value={filters.sortBy || "default"}
             onValueChange={(value) => onFilterChange({ ...filters, sortBy: value })}
           >
             <SelectTrigger id="sortBy">
-              <SelectValue placeholder="Default" />
+              <SelectValue placeholder="Sort auctions" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Default</SelectItem>
-              {sortOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
+              <SelectItem value="default">All</SelectItem>
+              <SelectItem value="endingSoon">Ending Soon</SelectItem>
+              <SelectItem value="priceAsc">Price: Low to High</SelectItem>
+              <SelectItem value="priceDesc">Price: High to Low</SelectItem>
+              <SelectItem value="newest">Newest</SelectItem>
             </SelectContent>
           </Select>
         </div>

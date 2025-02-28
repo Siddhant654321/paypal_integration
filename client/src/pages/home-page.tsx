@@ -37,7 +37,7 @@ export default function HomePage() {
     }
     
     // Then sort based on the selected sort option
-    if (filters.sortBy) {
+    if (filters.sortBy && filters.sortBy !== 'default') {
       return [...filtered].sort((a, b) => {
         switch (filters.sortBy) {
           case 'endingSoon':
