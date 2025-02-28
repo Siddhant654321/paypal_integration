@@ -379,7 +379,7 @@ export default function AdminDashboard() {
   });
 
   const { data: approvedSellers, isLoading: isLoadingApproved } = useQuery<User[]>({
-    queryKey: ["/api/admin/users", { approved: true, role: "seller" }],
+    queryKey: ["/api/admin/users", { approved: true, role: ["seller", "seller_admin"] }],
   });
 
   const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery<Auction[]>({
@@ -453,8 +453,9 @@ export default function AdminDashboard() {
     },
   });
 
-  // Filter approved sellers for the approved tab
+  // Filter approved sellers for the approved tab (only include sellers and seller_admins)
   const filteredSellers = approvedSellers?.filter(seller =>
+    (seller.role === "seller" || seller.role === "seller_admin") && 
     seller.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
