@@ -2,10 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import AuctionCard from "@/components/auction-card";
 import AuctionFilters from "@/components/auction-filters";
 import { useState, useMemo } from "react";
-import { Auction } from "@shared/schema";
+import { Auction, User, Profile } from "@shared/schema";
 import { Loader2, Archive } from "lucide-react";
 import { formatPrice } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
+import { SellerShowcase } from "@/components/seller-showcase";
 
 export default function HomePage() {
   const [filters, setFilters] = useState({
@@ -17,12 +18,16 @@ export default function HomePage() {
 
   const [showArchives, setShowArchives] = useState(false);
 
-  const { data: auctions, isLoading } = useQuery<Auction[]>({
+  const { data: auctions, isLoading: isLoadingAuctions } = useQuery<Auction[]>({
     queryKey: [
       "/api/auctions",
       filters.species && `species=${filters.species}`,
       filters.category && `category=${filters.category}`,
     ].filter(Boolean),
+  });
+
+  const { data: activeSellers, isLoading: isLoadingSellers } = useQuery<(User & { profile: Profile, auctions: Auction[] })[]>({
+    queryKey: ["/api/sellers/active"],
   });
 
   // Function to sort and filter auctions based on user selection
@@ -89,7 +94,7 @@ export default function HomePage() {
       <div className="container mx-auto py-8">
         <AuctionFilters filters={filters} onFilterChange={setFilters} />
 
-        {isLoading ? (
+        {isLoadingAuctions ? (
           <div className="flex justify-center my-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
@@ -112,6 +117,18 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
+
+            {/* Featured Sellers Section */}
+            {activeSellers && activeSellers.length > 0 && (
+              <div className="mt-16">
+                <h2 className="text-2xl font-bold mb-6">Featured Sellers</h2>
+                <div className="space-y-8">
+                  {activeSellers.map((seller) => (
+                    <SellerShowcase key={seller.id} seller={seller} />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Archives Section */}
             <div className="mt-12">

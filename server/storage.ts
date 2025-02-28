@@ -338,19 +338,14 @@ export class DatabaseStorage implements IStorage {
   }): Promise<User[]> {
     try {
       let query = db.select().from(users);
-      const conditions = [];
 
       if (filters) {
         if (filters.approved !== undefined) {
-          conditions.push(eq(users.approved, filters.approved));
+          query = query.where(eq(users.approved, filters.approved));
         }
         if (filters.role) {
-          conditions.push(eq(users.role, filters.role.toLowerCase()));
+          query = query.where(eq(users.role, filters.role));
         }
-      }
-
-      if (conditions.length > 0) {
-        query = query.where(sql`${conditions[0]}${sql.join(conditions.slice(1), sql` AND `)}`);
       }
 
       log(`Fetching users with filters: ${JSON.stringify(filters)}`, "storage");

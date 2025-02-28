@@ -1256,6 +1256,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this new endpoint after the existing seller-related routes
+  app.get("/api/sellers/active", async (req, res) => {
+    try {
+      // Get approved sellers with profiles
+      const sellers = await storage.getUsers({ 
+        role: "seller",
+        approved: true 
+      });
+
+      // Get profiles and auctions for each seller
+      const sellersWithDetails = await Promise.all(
+        sellers.map(async (seller) => {
+          const profile = await storage.getProfile(seller.id);
+          const auctions = await storage.getAuctions({ 
+            sellerId: seller.id,
+            approved: true 
+          });
+
+          return {
+            ...seller,
+            profile,
+            auctions: auctions.filter(auction => 
+              auction.status === "active" || 
+              (auction.status === "ended" && auction.winningBidderId)
+            )
+          };
+        })
+      );
+
+      // Only return sellers who have profiles and active/successful auctions
+      const activeSellers = sellersWithDetails.filter(
+        seller => seller.profile && seller.auctions.length > 0
+      );
+
+      res.json(activeSellers);
+    } catch (error) {
+      console.error("Error fetching active sellers:", error);
+      res.status(500).json({ message: "Failed to fetch active sellers" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
