@@ -318,13 +318,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter out any undefined auctions and combine with bid data
       const bidsWithAuctions = bids.map(bid => {
         const auction = auctions.find(a => a?.id === bid.auctionId);
-        const isWinningBid = auction?.winningBidderId === req.user!.id;
-        return auction ? {
+        if (!auction) return null;
+
+        const isWinningBid = auction.winningBidderId === req.user!.id;
+        const requiresPayment = isWinningBid && 
+          auction.paymentStatus === "pending" &&
+          new Date() <= new Date(auction.paymentDueDate);
+
+        return {
           ...bid,
           auction,
           isWinningBid,
-          requiresPayment: isWinningBid && auction.paymentStatus === "pending",
-        } : null;
+          requiresPayment,
+        };
       }).filter(Boolean);
 
       res.json(bidsWithAuctions);
