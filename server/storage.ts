@@ -417,17 +417,37 @@ export class DatabaseStorage implements IStorage {
 
   async updateAuction(auctionId: number, data: Partial<InsertAuction>): Promise<Auction> {
     try {
-      // Validate category is one of the allowed values
-      if (data.category && !["show", "purebred", "fun"].includes(data.category)) {
-        throw new Error("Invalid category. Must be one of: show, purebred, fun");
+      // Create a clean update object
+      const updateData: any = {};
+
+      // Copy safe fields
+      if (data.title) updateData.title = data.title;
+      if (data.description) updateData.description = data.description;
+      if (data.species) updateData.species = data.species;
+      if (data.imageUrl) updateData.imageUrl = data.imageUrl;
+      if (data.images) updateData.images = data.images;
+      if (data.startPrice) updateData.startPrice = data.startPrice;
+      if (data.reservePrice) updateData.reservePrice = data.reservePrice;
+
+      // Handle dates
+      if (data.startDate) updateData.startDate = new Date(data.startDate);
+      if (data.endDate) updateData.endDate = new Date(data.endDate);
+
+      // Handle category with strict validation
+      if (data.category) {
+        // Validate category - ensure it's exactly one of the allowed values
+        if (!["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(data.category)) {
+          throw new Error("Invalid category. Must be one of: Show Quality, Purebred & Production, Fun & Mixed");
+        }
+        updateData.category = data.category;
       }
-      
+
       const [updatedAuction] = await db
         .update(auctions)
         .set({
-          ...data,
-          startDate: data.startDate ? new Date(data.startDate) : undefined,
-          endDate: data.endDate ? new Date(data.endDate) : undefined,
+          ...updateData,
+          startDate: updateData.startDate ? new Date(updateData.startDate) : undefined,
+          endDate: updateData.endDate ? new Date(updateData.endDate) : undefined,
         })
         .where(eq(auctions.id, auctionId))
         .returning();

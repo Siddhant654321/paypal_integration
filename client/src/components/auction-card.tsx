@@ -37,10 +37,7 @@ export default function AuctionCard({ auction, showStatus }: Props) {
         <div className="flex gap-2 mb-2">
           <Badge>{auction.species}</Badge>
           <Badge variant="outline">
-            {auction.category === "show" ? "Show Quality" : 
-             auction.category === "purebred" ? "Purebred & Production" : 
-             auction.category === "fun" ? "Fun & Mixed" : 
-             auction.category}
+            {auction.category}
           </Badge>
           {showStatus && (
             <Badge variant={auction.approved ? "default" : "secondary"}>

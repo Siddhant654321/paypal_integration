@@ -312,7 +312,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       description: auction.description,
       species: auction.species,
       // Ensure category is one of the allowed values
-      category: ["show", "purebred", "fun"].includes(auction.category) ? auction.category : "purebred",
+      category: ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(auction.category) ? auction.category : "Purebred & Production",
       startPrice: auction.startPrice,
       reservePrice: auction.reservePrice,
       startDate: new Date(auction.startDate).toISOString(),

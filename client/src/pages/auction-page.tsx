@@ -226,10 +226,7 @@ export default function AuctionPage() {
             <div className="flex gap-2 mt-2">
               <Badge>{auction.species}</Badge>
               <Badge variant="outline">
-                {auction.category === "show" ? "Show Quality" : 
-                 auction.category === "purebred" ? "Purebred & Production" : 
-                 auction.category === "fun" ? "Fun & Mixed" : 
-                 auction.category}
+                {auction.category}
               </Badge>
               {getStatusBadge()}
               {auction.status === "active" && (
