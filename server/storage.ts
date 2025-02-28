@@ -1,12 +1,14 @@
 import session from "express-session";
-import connectPg from "connect-pg-simple";
+import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { db } from "./db";
 import { users, auctions, bids, profiles, payments, payouts } from "@shared/schema";
 import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile, type Payment, type InsertPayment, type Payout, type InsertPayout } from "@shared/schema";
 import { eq, sql, desc } from "drizzle-orm";
+import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
 import { log } from "./vite";
 
+const connectPg = connectPgSimple;
 const PostgresSessionStore = connectPg(session);
 
 // Add these new methods to the IStorage interface
