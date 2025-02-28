@@ -190,25 +190,20 @@ export class DatabaseStorage implements IStorage {
   }): Promise<Auction[]> {
     try {
       let query = db.select().from(auctions);
-      const conditions = [];
 
       if (filters) {
         if (filters.species) {
-          conditions.push(eq(auctions.species, filters.species));
+          query = query.where(eq(auctions.species, filters.species));
         }
         if (filters.category) {
-          conditions.push(eq(auctions.category, filters.category));
+          query = query.where(eq(auctions.category, filters.category));
         }
         if (filters.approved !== undefined) {
-          conditions.push(eq(auctions.approved, filters.approved));
+          query = query.where(eq(auctions.approved, filters.approved));
         }
         if (filters.sellerId !== undefined) {
-          conditions.push(eq(auctions.sellerId, filters.sellerId));
+          query = query.where(eq(auctions.sellerId, filters.sellerId));
         }
-      }
-
-      if (conditions.length > 0) {
-        query = query.where(sql`${conditions[0]}${sql.join(conditions.slice(1), sql` AND `)}`);
       }
 
       const results = await query;
