@@ -3,6 +3,7 @@ import { storage } from "./storage";
 import { insertPaymentSchema, type InsertPayment } from "@shared/schema";
 import { log } from "./vite";
 
+// Verify Stripe secret key is available
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("Missing STRIPE_SECRET_KEY environment variable");
 }
@@ -24,6 +25,8 @@ export class PaymentService {
     payment: InsertPayment;
   }> {
     try {
+      log('Creating payment intent...', 'payments');
+
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
@@ -37,6 +40,8 @@ export class PaymentService {
       const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const sellerPayout = baseAmount - platformFee;
 
+      log(`Payment details: baseAmount=${baseAmount}, insuranceFee=${insuranceFee}, totalAmount=${totalAmount}`, 'payments');
+
       // Create payment record
       const paymentData: InsertPayment = {
         auctionId,
@@ -49,9 +54,11 @@ export class PaymentService {
       };
 
       // Create Stripe PaymentIntent
+      log('Creating Stripe PaymentIntent...', 'payments');
       const paymentIntent = await stripe.paymentIntents.create({
         amount: totalAmount,
         currency: "usd",
+        payment_method_types: ['card'],
         automatic_payment_methods: {
           enabled: true,
         },
@@ -62,6 +69,8 @@ export class PaymentService {
           includeInsurance: includeInsurance.toString(),
         },
       });
+
+      log(`PaymentIntent created: ${paymentIntent.id}`, 'payments');
 
       // Create payment record in database
       const payment = await storage.createPayment({
@@ -84,6 +93,7 @@ export class PaymentService {
 
   static async handlePaymentSuccess(paymentIntentId: string): Promise<void> {
     try {
+      log(`Processing successful payment: ${paymentIntentId}`, 'payments');
       const payment = await storage.getPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
@@ -104,6 +114,7 @@ export class PaymentService {
 
   static async handlePaymentFailure(paymentIntentId: string): Promise<void> {
     try {
+      log(`Processing failed payment: ${paymentIntentId}`, 'payments');
       const payment = await storage.getPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
