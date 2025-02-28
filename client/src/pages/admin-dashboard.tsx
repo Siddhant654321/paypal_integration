@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Search, Trash2, Edit } from "lucide-react";
+import { Loader2, CheckCircle2, Search, Trash2, Edit, Eye } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -52,7 +52,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import Link from "next/link";
+//import Link from "next/link";
 
 
 // Update the ViewBidsDialog component
@@ -480,10 +480,11 @@ export default function AdminDashboard() {
   //Filter completed auctions
   const completedAuctions = approvedAuctions?.filter(auction => new Date(auction.endDate) < new Date());
 
-  const filteredApprovedAuctions = activeAuctions?.filter(auction =>
-    auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-    auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase())
-  );
+  // Filter approved auctions to exclude completed ones
+  const filteredApprovedAuctions = approvedAuctions?.filter((auction) => {
+    const isEnded = new Date(auction.endDate) < new Date();
+    return auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) && !isEnded;
+  });
 
   return (
     <div className="container mx-auto py-8">
@@ -703,7 +704,7 @@ export default function AdminDashboard() {
                   Pending Approval ({pendingAuctions?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="approved">
-                  Active Auctions ({activeAuctions?.length || 0})
+                  Approved Auctions ({filteredApprovedAuctions?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="completed">
                   Completed Auctions ({completedAuctions?.length || 0})
@@ -861,49 +862,35 @@ export default function AdminDashboard() {
                     <p className="text-muted-foreground">No completed auctions found</p>
                   ) : (
                     <div className="space-y-2">
-                      {completedAuctions.map((auction) => (
-                        <div
-                          key={auction.id}
-                          className="flex flex-col gap-2 p-4 border rounded-lg"
-                        >
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              asChild
-                            >
-                              <Link href={`/auction/${auction.id}`}>View</Link>
-                            </Button>
-
-                            <EditAuctionDialog auction={auction} />
-
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this auction? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                      {completedAuctions
+                        .filter((auction) =>
+                          auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase())
+                        )
+                        .map((auction) => (
+                          <div
+                            key={auction.id}
+                            className="flex items-center justify-between p-4 border rounded-lg"
+                          >
+                            <div>
+                              <p className="font-medium">{auction.title}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Seller: {auction.seller?.username || "Unknown"}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                End Date: {new Date(auction.endDate).toLocaleDateString()}
+                              </p>
+                              <p className="text-sm font-medium text-green-600">
+                                Final Price: ${auction.currentPrice}
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="outline" asChild>
+                                <Redirect to={`/auction/${auction.id}`} />
+                                  <Eye className="h-4 w-4 mr-1" /> View
+                              </Button>
+                            </div>
                           </div>
-                          <AuctionCard auction={auction} />
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   )}
                 </div>
