@@ -74,11 +74,12 @@ export default function HomePage() {
       <div
         className="bg-cover bg-center h-64 relative"
         style={{
-          backgroundImage:
-            'url("https://images.unsplash.com/photo-1444858291040-58f756a3bdd6")',
+          backgroundImage: 'url("/images/hero-chicken.jpg")',
+          backgroundPosition: 'center',
+          backgroundSize: 'cover'
         }}
       >
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
           <h1 className="text-4xl font-bold text-white text-center">
             Pips 'n Chicks Auctions
           </h1>

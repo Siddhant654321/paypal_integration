@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Loader2, UserCircle, LineChart, Home, LayoutDashboard } from "lucide-react";
+import { UserCircle, LineChart, Home, LayoutDashboard } from "lucide-react";
 import { NotificationsMenu } from "./notifications";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
@@ -25,7 +25,7 @@ export default function NavBar() {
           <Link href="/">
             <div className="flex items-center gap-2">
               <img 
-                src="/images/logo.jpg"
+                src="/images/logo.png"
                 alt="Pips 'n Chicks"
                 className="h-10 w-auto object-contain"
               />
