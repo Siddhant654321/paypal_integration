@@ -313,8 +313,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       species: auction.species,
       // Ensure category is one of the allowed values
       category: ["show", "purebred", "fun"].includes(auction.category) ? auction.category : "purebred",
-      startPrice: auction.startPrice,
-      reservePrice: auction.reservePrice,
+      startPrice: auction.startPrice / 100, //Convert cents to dollars
+      reservePrice: auction.reservePrice / 100, //Convert cents to dollars
       startDate: new Date(auction.startDate).toISOString(),
       endDate: new Date(auction.endDate).toISOString(),
       imageUrl: auction.imageUrl || "",
@@ -330,6 +330,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
         category: ["show", "purebred", "fun"].includes(formData.category) ? formData.category : "purebred",
         startDate: new Date(formData.startDate).toISOString(),
         endDate: new Date(formData.endDate).toISOString(),
+        startPrice: formData.startPrice * 100, //Convert dollars to cents
+        reservePrice: formData.reservePrice * 100, //Convert dollars to cents
       };
       const res = await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, data);
       return res.json();
