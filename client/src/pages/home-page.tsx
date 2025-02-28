@@ -11,7 +11,7 @@ export default function HomePage() {
     species: "",
     category: "",
     searchTerm: "",
-    sortBy: "",
+    sortBy: "default",
   });
 
   const { data: auctions, isLoading } = useQuery<Auction[]>({
