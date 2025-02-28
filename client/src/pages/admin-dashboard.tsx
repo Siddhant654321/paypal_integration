@@ -310,7 +310,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       title: auction.title,
       description: auction.description,
       species: auction.species,
-      category: auction.category,
+      // Ensure category is one of the allowed values
+      category: ["show", "purebred", "fun"].includes(auction.category) ? auction.category : "purebred",
       startPrice: auction.startPrice,
       reservePrice: auction.reservePrice,
       startDate: new Date(auction.startDate).toISOString(),
@@ -324,6 +325,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
     mutationFn: async (formData: typeof form.getValues) => {
       const data = {
         ...formData,
+        // Ensure category is valid before sending
+        category: ["show", "purebred", "fun"].includes(formData.category) ? formData.category : "purebred",
         startDate: new Date(formData.startDate).toISOString(),
         endDate: new Date(formData.endDate).toISOString(),
       };
@@ -393,6 +396,48 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="species"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Species</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="show">Show Quality</SelectItem>
+                        <SelectItem value="purebred">Purebred & Production</SelectItem>
+                        <SelectItem value="fun">Fun & Mixed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField

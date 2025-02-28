@@ -417,6 +417,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateAuction(auctionId: number, data: Partial<InsertAuction>): Promise<Auction> {
     try {
+      // Validate category is one of the allowed values
+      if (data.category && !["show", "purebred", "fun"].includes(data.category)) {
+        throw new Error("Invalid category. Must be one of: show, purebred, fun");
+      }
+      
       const [updatedAuction] = await db
         .update(auctions)
         .set({
