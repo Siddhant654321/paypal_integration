@@ -6,9 +6,8 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 
 interface SellerCarouselProps {
@@ -33,26 +32,15 @@ export default function SellerCarousel({ sellers }: SellerCarouselProps) {
               <Card className="cursor-pointer hover:bg-accent/50 transition-colors">
                 <CardContent className="flex items-center gap-4 p-6">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage
-                      src={seller.profilePicture || undefined}
-                      alt={seller.username}
-                    />
                     <AvatarFallback>
                       {seller.username.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
                     <h3 className="font-semibold">{seller.username}</h3>
-                    {seller.businessName && (
-                      <p className="text-sm text-muted-foreground">
-                        {seller.businessName}
-                      </p>
-                    )}
-                    {seller.breedSpecialty && (
-                      <Badge variant="secondary" className="mt-1">
-                        {seller.breedSpecialty}
-                      </Badge>
-                    )}
+                    <p className="text-sm text-muted-foreground">
+                      {seller.email}
+                    </p>
                   </div>
                 </CardContent>
               </Card>
