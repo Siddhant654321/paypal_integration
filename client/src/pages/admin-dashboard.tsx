@@ -414,10 +414,27 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="species"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Species</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
+                    <FormLabel>Animal Species</FormLabel>
+                    <Select 
+                      value={field.value} 
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select species" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="chicken">Chicken</SelectItem>
+                        <SelectItem value="duck">Duck</SelectItem>
+                        <SelectItem value="goose">Goose</SelectItem>
+                        <SelectItem value="turkey">Turkey</SelectItem>
+                        <SelectItem value="guinea">Guinea Fowl</SelectItem>
+                        <SelectItem value="quail">Quail</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -925,7 +942,7 @@ export default function AdminDashboard() {
                     {pendingAuctions.map((auction) => (
                       <div
                         key={auction.id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
+                        className="flex items-center justifybetween p-4 border rounded-lg"
                       >
                         <div>
                           <p className="font-medium">{auction.title}</p>
