@@ -117,32 +117,25 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Buyer Request Section */}
-            {user && user.role === "buyer" && (
-              <div className="mt-16 flex flex-col items-center text-center">
-                <h2 className="text-2xl font-bold mb-4">Can't Find What You're Looking For?</h2>
-                <p className="text-muted-foreground mb-6 max-w-2xl">
-                  Create a buyer request to let sellers know what breeds or varieties you're interested in.
-                  Your request will be visible to all sellers and help them understand market demand.
-                </p>
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button className="gap-2">
-                      <Search className="h-4 w-4" />
-                      Create Buyer Request
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent className="w-[400px] sm:w-[540px]">
-                    <SheetHeader>
-                      <SheetTitle>Create a Buyer Request</SheetTitle>
-                    </SheetHeader>
-                    <div className="mt-6">
-                      <BuyerRequestForm />
-                    </div>
-                  </SheetContent>
-                </Sheet>
-              </div>
-            )}
+            {/* Buyer Request Button */}
+            <div className="mt-16 flex justify-center">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button size="lg" className="gap-2">
+                    <Search className="h-5 w-5" />
+                    Not seeing what you're looking for? Put a request out!
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="w-[400px] sm:w-[540px]">
+                  <SheetHeader>
+                    <SheetTitle>Create a Buyer Request</SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-6">
+                    <BuyerRequestForm />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
 
             {activeSellers && activeSellers.length > 0 && (
               <div className="mt-16">
