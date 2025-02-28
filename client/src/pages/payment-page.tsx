@@ -87,6 +87,19 @@ export default function PaymentPage() {
         }
         stripeRef.current = stripe;
         console.log("Stripe loaded successfully");
+        
+        const elements = stripe.elements({
+          clientSecret: paymentData.clientSecret,
+          appearance: { theme: 'stripe' }
+        });
+        
+        // Create and mount the Payment Element
+        const paymentElement = elements.create('payment');
+        if (paymentElementRef.current) {
+          paymentElement.mount(paymentElementRef.current);
+          elementsRef.current = elements;
+          setStripeReady(true);
+        }
 
         console.log("Creating Elements instance...");
         const elements = stripe.elements({
@@ -213,6 +226,50 @@ export default function PaymentPage() {
           <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
             <span>Winning bid amount</span>
             <span className="font-medium">${baseAmountDollars}</span>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="insurance"
+                checked={includeInsurance}
+                onCheckedChange={(checked) => 
+                  setIncludeInsurance(checked === true)
+                }
+              />
+              <label
+                htmlFor="insurance"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Add insurance (${insuranceAmountDollars})
+              </label>
+            </div>
+            
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="flex justify-between mb-2">
+                <span>Total</span>
+                <span className="font-bold">${totalAmountDollars}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div ref={paymentElementRef} className="mb-6" />
+              
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={!stripeReady || isProcessing}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>Pay ${totalAmountDollars}</>
+                )}
+              </Button>
+            </form>
           </div>
 
           <div className="flex items-center space-x-4 p-4 border rounded-lg">
