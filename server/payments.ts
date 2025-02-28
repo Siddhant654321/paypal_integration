@@ -54,18 +54,18 @@ export class PaymentService {
         insuranceFee,
       };
 
-      // Create Stripe PaymentIntent
+      // Create Stripe PaymentIntent with automatic payment methods
       const paymentIntent = await stripe.paymentIntents.create({
         amount: totalAmount,
         currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
         metadata: {
           auctionId: auctionId.toString(),
           buyerId: buyerId.toString(),
           sellerId: auction.sellerId.toString(),
           includeInsurance: includeInsurance.toString(),
-        },
-        automatic_payment_methods: {
-          enabled: true,
         },
       });
 
@@ -78,11 +78,11 @@ export class PaymentService {
       });
 
       // Update auction status
-      await storage.updateAuctionPaymentStatus(auctionId, "processing", buyerId);
+      await storage.updateAuctionPaymentStatus(auctionId, "processing");
 
       return {
         clientSecret: paymentIntent.client_secret!,
-        payment,
+        payment: paymentData,
       };
     } catch (error) {
       log(`Error creating payment intent: ${error}`, "payments");
@@ -92,24 +92,14 @@ export class PaymentService {
 
   static async handlePaymentSuccess(paymentIntentId: string): Promise<void> {
     try {
-      // Get payment details from database
       const payment = await storage.getPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
       }
 
-      // Create transfer to seller
-      const transfer = await stripe.transfers.create({
-        amount: payment.sellerPayout,
-        currency: "usd",
-        destination: payment.sellerId.toString(), // Assuming seller has Stripe account connected
-        transfer_group: `auction_${payment.auctionId}`,
-      });
-
-      // Update payment record with transfer details and status
+      // Update payment record with status
       await storage.updatePayment(payment.id, {
         status: "completed",
-        stripeTransferId: transfer.id,
       });
 
       // Update auction payment status

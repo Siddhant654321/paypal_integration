@@ -41,7 +41,6 @@ export default function PaymentPage() {
     enabled: !!auction,
   });
 
-  // Update payment when insurance option changes
   useEffect(() => {
     if (auction?.id) {
       fetch(`/api/auctions/${auction.id}/pay`, {
@@ -73,58 +72,61 @@ export default function PaymentPage() {
     let mounted = true;
 
     const initializeStripe = async () => {
-      if (!paymentData?.clientSecret) return;
+      if (!paymentData?.clientSecret) {
+        console.log("No client secret available yet");
+        return;
+      }
 
       try {
+        console.log("Loading Stripe...");
         const stripe = await stripePromise;
         if (!stripe) {
           throw new Error("Failed to load Stripe");
         }
 
+        console.log("Creating Elements instance...");
         const elements = stripe.elements({
           clientSecret: paymentData.clientSecret,
           appearance: {
             theme: 'stripe',
-            variables: {
-              colorPrimary: '#0F172A',
-            },
           },
         });
 
+        console.log("Creating card element...");
         const cardElement = elements.create('card');
 
-        // Mount the card element
+        // Mount Card Element
         const cardContainer = document.getElementById('card-element');
         if (cardContainer && mounted) {
+          console.log("Mounting card element...");
           cardElement.mount(cardContainer);
           cardElementRef.current = cardElement;
           setStripeReady(true);
+          console.log("Card element mounted successfully");
         }
 
-        // Add change listener for error handling
+        // Add event listener for card element changes
         cardElement.on('change', (event: any) => {
-          if (event.error && mounted) {
+          if (event.error) {
             toast({
               variant: "destructive",
               title: "Card Error",
               description: event.error.message,
             });
             setStripeReady(false);
-          } else if (mounted) {
+          } else {
             setStripeReady(true);
           }
         });
 
       } catch (error) {
-        console.error('Failed to initialize Stripe:', error);
-        if (mounted) {
-          toast({
-            variant: "destructive",
-            title: "Payment Setup Error",
-            description: "Failed to initialize payment form. Please try again.",
-          });
-          setStripeReady(false);
-        }
+        console.error("Error initializing Stripe:", error);
+        toast({
+          variant: "destructive",
+          title: "Payment Setup Error",
+          description: "Failed to initialize payment form. Please try again.",
+        });
+        setStripeReady(false);
       }
     };
 
@@ -136,7 +138,6 @@ export default function PaymentPage() {
         cardElementRef.current.destroy();
         cardElementRef.current = null;
       }
-      setStripeReady(false);
     };
   }, [paymentData?.clientSecret, toast]);
 
@@ -152,6 +153,7 @@ export default function PaymentPage() {
         throw new Error("Payment system not initialized");
       }
 
+      console.log("Confirming card payment...");
       const { error } = await stripe.confirmCardPayment(paymentData.clientSecret, {
         payment_method: {
           card: cardElementRef.current,
@@ -159,13 +161,13 @@ export default function PaymentPage() {
       });
 
       if (error) {
+        console.error("Payment error:", error);
         toast({
           variant: "destructive",
           title: "Payment Failed",
           description: error.message || "Your payment could not be processed.",
         });
       } else {
-        // Payment successful - redirect will happen automatically
         toast({
           title: "Payment Successful",
           description: "Your payment is being processed.",
