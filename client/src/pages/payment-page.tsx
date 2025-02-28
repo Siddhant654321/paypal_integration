@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
 // Initialize Stripe with the publishable key
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
 interface PaymentResponse {
   clientSecret: string;
@@ -61,7 +61,11 @@ export default function PaymentPage() {
 
       try {
         const stripe = await stripePromise;
-        if (!stripe) throw new Error("Failed to load Stripe");
+        if (!stripe) {
+          throw new Error("Failed to load Stripe - publishable key may be missing");
+        }
+
+        console.log("Stripe initialized successfully");
 
         const elements = stripe.elements({
           clientSecret: paymentData.clientSecret,
@@ -82,6 +86,17 @@ export default function PaymentPage() {
           cardElementRef.current = null;
           elementsRef.current = null;
         };
+
+        // Add event listener for card element changes
+        cardElement.on('change', (event) => {
+          if (event.error) {
+            toast({
+              variant: "destructive",
+              title: "Card Error",
+              description: event.error.message,
+            });
+          }
+        });
       } catch (error) {
         console.error("Error initializing Stripe:", error);
         toast({
@@ -109,16 +124,18 @@ export default function PaymentPage() {
         throw new Error("Payment cannot be processed at this time");
       }
 
+      console.log("Confirming card payment...");
       const { error, paymentIntent } = await stripe.confirmCardPayment(paymentData.clientSecret, {
         payment_method: {
           card: cardElement,
           billing_details: {
-            // You can add billing details here if needed
+            // Optional: You can add billing details here
           },
         },
       });
 
       if (error) {
+        console.error("Payment error:", error);
         toast({
           variant: "destructive",
           title: "Payment Failed",
