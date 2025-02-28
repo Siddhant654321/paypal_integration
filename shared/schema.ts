@@ -47,7 +47,7 @@ export const auctions = pgTable("auctions", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   species: text("species").notNull(),
-  category: text("category", { enum: ["quality", "production", "fun"] }).notNull(),
+  category: text("category", { enum: ["show", "purebred", "fun"] }).notNull(),
   imageUrl: text("image_url"),
   images: text("images").array().notNull().default([]),
   startPrice: integer("start_price").notNull(),

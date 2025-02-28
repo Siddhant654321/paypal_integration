@@ -45,7 +45,7 @@ export default function NewAuction() {
       title: "",
       description: "",
       species: "",
-      category: "quality",
+      category: "show", // Default to "show" category
       startPrice: 0,
       reservePrice: 0,
       startDate: `${new Date().toISOString().split("T")[0]}T00:00`,
@@ -63,7 +63,12 @@ export default function NewAuction() {
       // Append all form fields
       Object.keys(auctionData).forEach(key => {
         if (key !== 'files' && key !== 'images') {
-          formData.append(key, auctionData[key].toString());
+          // Convert prices to cents.  This assumes the API expects cents.  Adjust as needed.
+          if (key === 'startPrice' || key === 'reservePrice') {
+            formData.append(key, (auctionData[key] * 100).toString());
+          } else {
+            formData.append(key, auctionData[key].toString());
+          }
         }
       });
 
@@ -226,7 +231,7 @@ export default function NewAuction() {
                       {...field} 
                       type="number" 
                       min="1" 
-                      onChange={(e) => field.onChange(Number(e.target.value))}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value))} //changed to parse float
                     />
                   </FormControl>
                   <FormMessage />
@@ -245,7 +250,7 @@ export default function NewAuction() {
                       {...field} 
                       type="number" 
                       min={form.watch('startPrice')} 
-                      onChange={(e) => field.onChange(Number(e.target.value))}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value))} //changed to parse float
                     />
                   </FormControl>
                   <FormMessage />
@@ -264,25 +269,13 @@ export default function NewAuction() {
                   <div className="flex gap-2">
                     <FormControl>
                       <Input
-                        type="date"
+                        type="datetime-local"
                         {...field}
-                        min={new Date().toISOString().split("T")[0]}
-                        onChange={(e) => {
-                          const date = e.target.value;
-                          const time = form.getValues("startTime") || "00:00";
-                          field.onChange(`${date}T${time}`);
-                        }}
-                        value={field.value ? field.value.split("T")[0] : ""}
+                        min={new Date().toISOString().split("T")[0] + "T00:00"}
+                        
                       />
                     </FormControl>
-                    <Input
-                      type="time"
-                      value={field.value ? field.value.split("T")[1]?.substring(0, 5) : ""}
-                      onChange={(e) => {
-                        const date = form.getValues("startDate")?.split("T")[0] || new Date().toISOString().split("T")[0];
-                        field.onChange(`${date}T${e.target.value}`);
-                      }}
-                    />
+                    
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -298,28 +291,13 @@ export default function NewAuction() {
                   <div className="flex gap-2">
                     <FormControl>
                       <Input
-                        type="date"
+                        type="datetime-local"
                         {...field}
-                        min={
-                          (form.getValues("startDate")?.split("T")[0]) ||
-                          new Date().toISOString().split("T")[0]
-                        }
-                        onChange={(e) => {
-                          const date = e.target.value;
-                          const time = form.getValues("endTime") || "23:59";
-                          field.onChange(`${date}T${time}`);
-                        }}
-                        value={field.value ? field.value.split("T")[0] : ""}
+                        min={form.watch("startDate")}
+                        
                       />
                     </FormControl>
-                    <Input
-                      type="time"
-                      value={field.value ? field.value.split("T")[1]?.substring(0, 5) : ""}
-                      onChange={(e) => {
-                        const date = form.getValues("endDate")?.split("T")[0] || new Date().toISOString().split("T")[0];
-                        field.onChange(`${date}T${e.target.value}`);
-                      }}
-                    />
+                    
                   </div>
                   <FormMessage />
                 </FormItem>

@@ -322,27 +322,9 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Start Date and Time</FormLabel>
-                    <div className="flex gap-2">
-                      <FormControl>
-                        <Input 
-                          type="date" 
-                          value={field.value ? field.value.split("T")[0] : ""}
-                          onChange={(e) => {
-                            const date = e.target.value;
-                            const time = field.value ? field.value.split("T")[1]?.substring(0, 5) : "00:00";
-                            field.onChange(`${date}T${time}`);
-                          }}
-                        />
-                      </FormControl>
-                      <Input 
-                        type="time"
-                        value={field.value ? field.value.split("T")[1]?.substring(0, 5) : ""}
-                        onChange={(e) => {
-                          const date = field.value?.split("T")[0] || new Date().toISOString().split("T")[0];
-                          field.onChange(`${date}T${e.target.value}`);
-                        }}
-                      />
-                    </div>
+                    <FormControl>
+                      <Input type="datetime-local" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -354,27 +336,9 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>End Date and Time</FormLabel>
-                    <div className="flex gap-2">
-                      <FormControl>
-                        <Input 
-                          type="date" 
-                          value={field.value ? field.value.split("T")[0] : ""}
-                          onChange={(e) => {
-                            const date = e.target.value;
-                            const time = field.value ? field.value.split("T")[1]?.substring(0, 5) : "23:59";
-                            field.onChange(`${date}T${time}`);
-                          }}
-                        />
-                      </FormControl>
-                      <Input 
-                        type="time"
-                        value={field.value ? field.value.split("T")[1]?.substring(0, 5) : ""}
-                        onChange={(e) => {
-                          const date = field.value?.split("T")[0] || new Date().toISOString().split("T")[0];
-                          field.onChange(`${date}T${e.target.value}`);
-                        }}
-                      />
-                    </div>
+                    <FormControl>
+                      <Input type="datetime-local" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
