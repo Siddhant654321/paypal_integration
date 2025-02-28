@@ -13,7 +13,7 @@ if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16",
+  apiVersion: "2025-02-24.acacia",
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
@@ -132,7 +132,7 @@ export class PaymentService {
       // Update auction payment status
       await storage.updateAuctionPaymentStatus(payment.auctionId, "completed");
 
-      // Create payout for seller - Assuming SellerPaymentService exists
+      // Create payout for seller
       await SellerPaymentService.createPayout(
         payment.id,
         payment.sellerId,

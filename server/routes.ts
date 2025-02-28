@@ -10,7 +10,7 @@ import { upload, handleFileUpload } from "./uploads";
 import { PaymentService } from "./payments";
 import { buffer } from "micro";
 import Stripe from "stripe";
-import {SellerPaymentService} from "./seller-payments"; // Fix import path
+import {SellerPaymentService} from "./seller-payments";
 
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
