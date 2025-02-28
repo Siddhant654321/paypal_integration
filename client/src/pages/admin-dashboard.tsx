@@ -360,6 +360,11 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+          <Edit className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit Auction</DialogTitle>
