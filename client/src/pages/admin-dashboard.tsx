@@ -453,8 +453,14 @@ export default function AdminDashboard() {
     },
   });
 
+  // Filter approved sellers for the approved tab
   const filteredSellers = approvedSellers?.filter(seller =>
     seller.username.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Make sure pendingUsers only contains sellers that are not approved
+  const realPendingUsers = pendingUsers?.filter(user => 
+    user.role === "seller" && !user.approved
   );
 
   const filteredApprovedAuctions = approvedAuctions?.filter(auction =>
@@ -488,11 +494,11 @@ export default function AdminDashboard() {
                   <div className="flex justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
-                ) : !pendingUsers?.length ? (
+                ) : !realPendingUsers?.length ? (
                   <p className="text-muted-foreground">No pending sellers</p>
                 ) : (
                   <div className="space-y-4">
-                    {pendingUsers.map((user) => (
+                    {realPendingUsers.map((user) => (
                       <div
                         key={user.id}
                         className="flex items-center justify-between p-4 border rounded-lg"
