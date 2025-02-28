@@ -575,7 +575,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
   );
 }
 
-function AdminDashboard() {
+export default function AdminDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
