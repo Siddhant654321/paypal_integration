@@ -10,6 +10,7 @@ import { upload, handleFileUpload } from "./uploads";
 import { PaymentService } from "./payments";
 import { buffer } from "micro";
 import Stripe from "stripe";
+import {SellerPaymentService} from "./seller-payments"; // Fix import path
 
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -495,7 +496,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!req.user) {
-        return res.status(401).json({ 
+        return res.status(401).json({
           message: "Unauthorized - Please log in again",
           code: "AUTH_REQUIRED"
         });
@@ -511,7 +512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify this user won the auction
       if (auction.winningBidderId !== req.user.id) {
-        return res.status(403).json({ 
+        return res.status(403).json({
           message: "Only the winning bidder can pay",
           code: "NOT_WINNER"
         });
@@ -531,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ sessionId, payment });
     } catch (error) {
       console.error("Payment creation error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to create payment session",
         details: error instanceof Error ? error.message : "Unknown error",
         code: "PAYMENT_CREATION_FAILED"
@@ -543,15 +544,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
     try {
       const { sessionId } = req.params;
-      
+
       // Initialize Stripe with the secret key
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
         apiVersion: "2023-10-16",
       });
-      
+
       // Retrieve the checkout session from Stripe
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      
+
       // Return the URL for client-side redirect
       res.json({ url: session.url });
     } catch (error) {
@@ -731,6 +732,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error processing seller decision:", error);
       res.status(500).json({ message: "Failed to process seller decision" });
+    }
+  });
+
+  // Seller onboarding and payout routes
+  app.post("/api/seller/connect", requireAuth, requireProfile, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Get seller's profile
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      // Create Stripe Connect account
+      const accountId = await SellerPaymentService.createSellerAccount(profile);
+
+      // Get onboarding link
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
+
+      res.json({ url: onboardingUrl });
+    } catch (error) {
+      console.error("Error creating seller account:", error);
+      res.status(500).json({ message: "Failed to create seller account" });
+    }
+  });
+
+  app.get("/api/seller/status", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.json({ status: "not_started" });
+      }
+
+      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
+      res.json({ status });
+    } catch (error) {
+      console.error("Error checking seller status:", error);
+      res.status(500).json({ message: "Failed to check seller status" });
+    }
+  });
+
+  app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(404).json({ message: "Stripe account not found" });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const onboardingUrl = await SellerPaymentService.getOnboardingLink(
+        profile.stripeAccountId,
+        baseUrl
+      );
+
+      res.json({ url: onboardingUrl });
+    } catch (error) {
+      console.error("Error refreshing onboarding link:", error);
+      res.status(500).json({ message: "Failed to refresh onboarding link" });
+    }
+  });
+
+  app.get("/api/seller/payouts", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const payouts = await storage.getPayoutsBySeller(req.user.id);
+      res.json(payouts);
+    } catch (error) {
+      console.error("Error fetching payouts:", error);
+      res.status(500).json({ message: "Failed to fetch payouts" });
     }
   });
 

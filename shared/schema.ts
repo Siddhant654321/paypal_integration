@@ -15,6 +15,7 @@ export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().unique(),
   fullName: text("full_name").notNull(),
+  email: text("email").notNull(),
   phoneNumber: text("phone_number").notNull(),
   address: text("address").notNull(),
   city: text("city").notNull(),
@@ -27,27 +28,18 @@ export const profiles = pgTable("profiles", {
   businessName: text("business_name"),
   breedSpecialty: text("breed_specialty"),
   npipNumber: text("npip_number"),
+  // Stripe Connect fields
+  stripeAccountId: text("stripe_account_id"),
+  stripeAccountStatus: text("stripe_account_status", {
+    enum: ["pending", "verified", "rejected"]
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Create insert schema for profile
-export const insertProfileSchema = createInsertSchema(profiles)
-  .omit({ id: true, userId: true, createdAt: true, updatedAt: true })
-  .extend({
-    fullName: z.string().min(2, "Full name must be at least 2 characters"),
-    phoneNumber: z.string().regex(/^\+?[\d\s-()]{10,}$/, "Invalid phone number format"),
-    address: z.string().min(5, "Address must be at least 5 characters"),
-    city: z.string().min(2, "City must be at least 2 characters"),
-    state: z.string().min(2, "State must be at least 2 characters"),
-    zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, "Invalid ZIP code format"),
-    bio: z.string().optional(),
-    isPublicBio: z.boolean().default(true),
-    profilePicture: z.string().optional(),
-    businessName: z.string().optional(),
-    breedSpecialty: z.string().optional(),
-    npipNumber: z.string().optional(),
-  });
+// Update user decisions enum
+const sellerDecisionEnum = z.enum(["accept", "void"]);
+type SellerDecision = z.infer<typeof sellerDecisionEnum>;
 
 export const auctions = pgTable("auctions", {
   id: serial("id").primaryKey(),
@@ -58,9 +50,9 @@ export const auctions = pgTable("auctions", {
   category: text("category", { enum: ["quality", "production", "fun"] }).notNull(),
   imageUrl: text("image_url"),
   images: text("images").array().notNull().default([]),
-  startPrice: integer("start_price").notNull(), // Amount in cents
-  reservePrice: integer("reserve_price").notNull(), // Amount in cents
-  currentPrice: integer("current_price").notNull(), // Amount in cents
+  startPrice: integer("start_price").notNull(),
+  reservePrice: integer("reserve_price").notNull(),
+  currentPrice: integer("current_price").notNull(),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   approved: boolean("approved").notNull().default(false),
@@ -74,7 +66,7 @@ export const auctions = pgTable("auctions", {
   winningBidderId: integer("winning_bidder_id"),
   sellerDecision: text("seller_decision", {
     enum: ["accept", "void"],
-  }).default(null),
+  }),
   reserveMet: boolean("reserve_met").notNull().default(false),
 });
 
@@ -104,19 +96,52 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  role: true,
+export const payouts = pgTable("payouts", {
+  id: serial("id").primaryKey(),
+  sellerId: integer("seller_id").notNull(),
+  paymentId: integer("payment_id").notNull(),
+  amount: integer("amount").notNull(),
+  stripeTransferId: text("stripe_transfer_id"),
+  status: text("status", {
+    enum: ["pending", "processing", "completed", "failed"]
+  }).notNull().default("pending"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Update the auction schema with price validation
+// Create insert schema for profile
+export const insertProfileSchema = createInsertSchema(profiles)
+  .omit({
+    id: true,
+    userId: true,
+    stripeAccountId: true,
+    stripeAccountStatus: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    fullName: z.string().min(2, "Full name must be at least 2 characters"),
+    email: z.string().email(),
+    phoneNumber: z.string().regex(/^\+?[\d\s-()]{10,}$/, "Invalid phone number format"),
+    address: z.string().min(5, "Address must be at least 5 characters"),
+    city: z.string().min(2, "City must be at least 2 characters"),
+    state: z.string().min(2, "State must be at least 2 characters"),
+    zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, "Invalid ZIP code format"),
+    bio: z.string().optional(),
+    isPublicBio: z.boolean().default(true),
+    profilePicture: z.string().optional(),
+    businessName: z.string().optional(),
+    breedSpecialty: z.string().optional(),
+    npipNumber: z.string().optional(),
+  });
+
+// Create insert schema for auction
 export const insertAuctionSchema = createInsertSchema(auctions)
   .omit({
     id: true,
+    sellerId: true,
     approved: true,
     currentPrice: true,
-    sellerId: true,
     paymentStatus: true,
     paymentDueDate: true,
     winningBidderId: true,
@@ -169,6 +194,21 @@ export const insertPaymentSchema = createInsertSchema(payments)
     updatedAt: true,
   });
 
+// Create insert schema for payouts
+export const insertPayoutSchema = createInsertSchema(payouts).omit({
+  id: true,
+  stripeTransferId: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
+  role: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Auction = typeof auctions.$inferSelect;
@@ -179,3 +219,5 @@ export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payout = typeof payouts.$inferSelect;
+export type InsertPayout = z.infer<typeof insertPayoutSchema>;

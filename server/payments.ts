@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { storage } from "./storage";
 import { insertPaymentSchema, type InsertPayment } from "@shared/schema";
+import { SellerPaymentService } from "./seller-payments";
 
 // Verify Stripe secret key is available and in test mode
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -11,7 +12,6 @@ if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
   throw new Error("Stripe secret key must be a test mode key (starts with sk_test_)");
 }
 
-// Initialize Stripe with explicit API version
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2023-10-16",
 });
@@ -131,6 +131,13 @@ export class PaymentService {
 
       // Update auction payment status
       await storage.updateAuctionPaymentStatus(payment.auctionId, "completed");
+
+      // Create payout for seller - Assuming SellerPaymentService exists
+      await SellerPaymentService.createPayout(
+        payment.id,
+        payment.sellerId,
+        payment.sellerPayout
+      );
     } catch (error) {
       console.error("Error handling payment success:", error);
       throw error;
@@ -155,5 +162,13 @@ export class PaymentService {
       console.error("Error handling payment failure:", error);
       throw error;
     }
+  }
+}
+
+// Placeholder for SellerPaymentService -  Replace with actual implementation
+class SellerPaymentService {
+  static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
+    console.log(`Creating payout for seller ${sellerId} for payment ${paymentId}, amount: ${amount}`);
+    // Add your actual payout logic here.  This might involve another API call or database interaction.
   }
 }

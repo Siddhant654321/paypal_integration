@@ -2,9 +2,9 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 import { db } from "./db";
-import { users, auctions, bids, profiles, payments } from "@shared/schema";
-import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile, type Payment, type InsertPayment } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { users, auctions, bids, profiles, payments, payouts } from "@shared/schema";
+import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile, type Payment, type InsertPayment, type Payout, type InsertPayout } from "@shared/schema";
+import { eq, sql, desc } from "drizzle-orm";
 import { log } from "./vite";
 
 const PostgresSessionStore = connectPg(session);
@@ -57,6 +57,14 @@ export interface IStorage {
   getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined>;
   updatePayment(id: number, data: Partial<Payment>): Promise<Payment>;
   updateAuctionPaymentStatus(auctionId: number, status: string, winningBidderId?: number): Promise<void>;
+
+  // Payout operations
+  createPayout(payout: InsertPayout & { stripeTransferId: string }): Promise<Payout>;
+  getPayoutsBySeller(sellerId: number): Promise<Payout[]>;
+  updatePayoutStatus(id: number, status: string): Promise<Payout>;
+
+  // Profile operations with Stripe Connect fields
+  updateProfileStripeAccount(userId: number, stripeAccountId: string, status: string): Promise<Profile>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -500,6 +508,73 @@ export class DatabaseStorage implements IStorage {
         .where(eq(auctions.id, auctionId));
     } catch (error) {
       log(`Error updating auction payment status ${auctionId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async createPayout(payout: InsertPayout & { stripeTransferId: string }): Promise<Payout> {
+    try {
+      const [newPayout] = await db
+        .insert(payouts)
+        .values({
+          ...payout,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+      return newPayout;
+    } catch (error) {
+      console.error("Error creating payout:", error);
+      throw error;
+    }
+  }
+
+  async getPayoutsBySeller(sellerId: number): Promise<Payout[]> {
+    try {
+      return await db
+        .select()
+        .from(payouts)
+        .where(eq(payouts.sellerId, sellerId))
+        .orderBy(desc(payouts.createdAt));
+    } catch (error) {
+      console.error("Error getting payouts for seller:", error);
+      throw error;
+    }
+  }
+
+  async updatePayoutStatus(id: number, status: string): Promise<Payout> {
+    try {
+      const [payout] = await db
+        .update(payouts)
+        .set({
+          status,
+          updatedAt: new Date(),
+        })
+        .where(eq(payouts.id, id))
+        .returning();
+      if (!payout) throw new Error("Payout not found");
+      return payout;
+    } catch (error) {
+      console.error("Error updating payout status:", error);
+      throw error;
+    }
+  }
+
+  async updateProfileStripeAccount(userId: number, stripeAccountId: string, status: string): Promise<Profile> {
+    try {
+      const [profile] = await db
+        .update(profiles)
+        .set({
+          stripeAccountId,
+          stripeAccountStatus: status,
+          updatedAt: new Date(),
+        })
+        .where(eq(profiles.userId, userId))
+        .returning();
+      if (!profile) throw new Error("Profile not found");
+      return profile;
+    } catch (error) {
+      console.error("Error updating profile Stripe account:", error);
       throw error;
     }
   }
