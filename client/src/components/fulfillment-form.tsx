@@ -46,84 +46,104 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className="space-y-4"
+        className="space-y-6"
       >
-        <FormField
-          control={form.control}
-          name="shippingCarrier"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Shipping Carrier</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="USPS, FedEx, UPS, etc." />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="space-y-4">
+          <FormField
+            control={form.control}
+            name="shippingCarrier"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center gap-1">
+                  Shipping Carrier
+                  <span className="text-red-500">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="USPS, FedEx, UPS, etc." />
+                </FormControl>
+                <FormDescription>
+                  Enter the carrier that will deliver the package
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="trackingNumber"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tracking Number</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="Enter tracking number" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="trackingNumber"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center gap-1">
+                  Tracking Number
+                  <span className="text-red-500">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Enter tracking number" />
+                </FormControl>
+                <FormDescription>
+                  The tracking number provided by the shipping carrier
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="shippingDate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Shipping Date</FormLabel>
-              <FormControl>
-                <Input type="date" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="shippingDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center gap-1">
+                  Shipping Date
+                  <span className="text-red-500">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormDescription>
+                  The date the package was or will be shipped
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="estimatedDeliveryDate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Estimated Delivery Date (Optional)</FormLabel>
-              <FormControl>
-                <Input 
-                  type="date" 
-                  {...field} 
-                  value={field.value || ''} 
-                />
-              </FormControl>
-              <FormDescription>
-                If provided by the shipping carrier
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="estimatedDeliveryDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Estimated Delivery Date (Optional)</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="date" 
+                    {...field} 
+                    value={field.value || ''} 
+                  />
+                </FormControl>
+                <FormDescription>
+                  If provided by the shipping carrier
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="additionalNotes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Additional Notes (Optional)</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="Any special handling instructions or notes" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="additionalNotes"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Additional Notes (Optional)</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Any special handling instructions or notes" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <Button
           type="submit"
