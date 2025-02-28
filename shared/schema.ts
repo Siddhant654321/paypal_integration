@@ -180,11 +180,11 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     description: z.string().min(20, "Description must be at least 20 characters"),
     startPrice: z
       .number()
-      .min(100, "Start price must be at least $1.00")
+      .min(0.01, "Start price must be at least $0.01")
       .transform((price) => Math.round(price * 100)), // Convert dollars to cents
     reservePrice: z
       .number()
-      .min(100, "Reserve price must be at least $1.00")
+      .min(0.01, "Reserve price must be at least $0.01")
       .transform((price) => Math.round(price * 100)), // Convert dollars to cents
     startDate: z.string().transform((str) => {
       // Make sure we have a full ISO string with time
