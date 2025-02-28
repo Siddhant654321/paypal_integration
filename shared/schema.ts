@@ -26,6 +26,11 @@ export const profiles = pgTable("profiles", {
   bio: text("bio"),
   isPublicBio: boolean("is_public_bio").notNull().default(true),
   profilePicture: text("profile_picture"),
+  // Notification preferences
+  emailBidNotifications: boolean("email_bid_notifications").notNull().default(true),
+  emailAuctionNotifications: boolean("email_auction_notifications").notNull().default(true),
+  emailPaymentNotifications: boolean("email_payment_notifications").notNull().default(true),
+  emailAdminNotifications: boolean("email_admin_notifications").notNull().default(true),
   // Seller specific fields
   businessName: text("business_name"),
   breedSpecialty: text("breed_specialty"),
@@ -111,7 +116,7 @@ export const payouts = pgTable("payouts", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Create insert schema for profile
+// Update insertProfileSchema to include notification preferences
 export const insertProfileSchema = createInsertSchema(profiles)
   .omit({
     id: true,
@@ -135,6 +140,11 @@ export const insertProfileSchema = createInsertSchema(profiles)
     businessName: z.string().optional(),
     breedSpecialty: z.string().optional(),
     npipNumber: z.string().optional(),
+    // Add notification preferences to schema
+    emailBidNotifications: z.boolean().default(true),
+    emailAuctionNotifications: z.boolean().default(true),
+    emailPaymentNotifications: z.boolean().default(true),
+    emailAdminNotifications: z.boolean().default(true),
   });
 
 // Create insert schema for auction
