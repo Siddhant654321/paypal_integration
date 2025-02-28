@@ -742,22 +742,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      // Get STRIPE_PUBLISHABLE_KEY from environment
-      const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY;
+      // Get publishable key (make sure it's using the correct env var name)
+      const stripePublishableKey = process.env.VITE_STRIPE_PUBLISHABLE_KEY;
       if (!stripePublishableKey) {
         console.error("Missing Stripe publishable key");
         return res.status(500).json({ message: "Server configuration error" });
       }
 
+      console.log("Stripe Connect request initiated. PublishableKey available:", !!stripePublishableKey);
+
       // Check if user already has a Stripe account
       const existingProfile = await storage.getProfile(req.user.id);
       if (existingProfile?.stripeAccountId) {
+        console.log("User already has Stripe account:", existingProfile.stripeAccountId);
+        
         // Get onboarding link for existing account
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         const onboardingUrl = await SellerPaymentService.getOnboardingLink(
           existingProfile.stripeAccountId,
           baseUrl
         );
+        
         return res.json({ 
           url: onboardingUrl,
           accountId: existingProfile.stripeAccountId,
@@ -771,6 +776,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Profile not found" });
       }
 
+      console.log("Creating new Stripe account for user:", req.user.id);
+      
       // Create Stripe account
       const accountId = await SellerPaymentService.createSellerAccount(profile);
 
@@ -778,10 +785,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
 
-      res.json({ url: onboardingUrl, accountId, publishableKey: stripePublishableKey });
+      console.log("Onboarding URL generated:", onboardingUrl);
+      
+      res.json({ 
+        url: onboardingUrl, 
+        accountId, 
+        publishableKey: stripePublishableKey 
+      });
     } catch (error) {
       console.error("Error creating seller account:", error);
-      res.status(500).json({ message: "Failed to create seller account" });
+      res.status(500).json({ 
+        message: "Failed to create seller account", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
     }
   });
 

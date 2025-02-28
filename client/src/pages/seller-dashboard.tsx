@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Added useEffect import
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
@@ -58,14 +58,20 @@ export default function SellerDashboard() {
 
       const data = await response.json();
       console.log("Received Stripe data:", data);
-      
+
+      return data;
+    },
+    onSuccess: (data) => {
+      // For embedded onboarding, either use the accountId and publishableKey to set up Stripe Elements
+      // or directly redirect to the onboarding URL
+      console.log("Stripe Connect response:", data);
       if (data.url) {
-        // For now, still use the redirect flow until we fully implement embedded onboarding
         window.location.href = data.url;
-      } else {
-        throw new Error('No onboarding URL received');
       }
     },
+    onError: (error) => {
+      console.error("Stripe Connect error:", error);
+    }
   });
 
   // Load Stripe.js for embedded onboarding (if needed)

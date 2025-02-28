@@ -47,15 +47,15 @@ export class SellerPaymentService {
     try {
       console.log("Creating onboarding link for account:", accountId);
 
-      // Create an account link with type=account_onboarding
+      // Create an account link with type=account_onboarding following Connect embedded onboarding flow
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        refresh_url: `${baseUrl}/seller/onboarding/refresh`,
-        return_url: `${baseUrl}/seller/onboarding/complete`,
+        refresh_url: `${baseUrl}/seller/dashboard?refresh_onboarding=true`,
+        return_url: `${baseUrl}/seller/dashboard?onboarding_complete=true`,
         type: 'account_onboarding',
       });
 
-      console.log("Onboarding link created");
+      console.log("Onboarding link created:", accountLink.url);
       return accountLink.url;
     } catch (error) {
       console.error("Error creating onboarding link:", error);
