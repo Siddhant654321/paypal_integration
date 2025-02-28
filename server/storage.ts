@@ -417,36 +417,18 @@ export class DatabaseStorage implements IStorage {
 
   async updateAuction(auctionId: number, data: Partial<InsertAuction>): Promise<Auction> {
     try {
-      // Create a clean update object
-      const updateData: any = {};
-      
-      // Copy safe fields
-      if (data.title) updateData.title = data.title;
-      if (data.description) updateData.description = data.description;
-      if (data.species) updateData.species = data.species;
-      if (data.imageUrl) updateData.imageUrl = data.imageUrl;
-      if (data.images) updateData.images = data.images;
-      if (data.startPrice) updateData.startPrice = data.startPrice;
-      if (data.reservePrice) updateData.reservePrice = data.reservePrice;
-      
-      // Handle dates
-      if (data.startDate) updateData.startDate = new Date(data.startDate);
-      if (data.endDate) updateData.endDate = new Date(data.endDate);
-      
-      // Handle category with strict validation
-      if (data.category) {
-        // Validate category - ensure it's exactly one of the allowed values
-        if (!["show", "purebred", "fun"].includes(data.category)) {
-          throw new Error("Invalid category. Must be one of: show, purebred, fun");
-        }
-        updateData.category = data.category;
+      // Validate category is one of the allowed values
+      if (data.category && !["show", "purebred", "fun"].includes(data.category)) {
+        throw new Error("Invalid category. Must be one of: show, purebred, fun");
       }
-      
-      log(`Updating auction ${auctionId} with validated data: ${JSON.stringify(updateData)}`, "storage");
       
       const [updatedAuction] = await db
         .update(auctions)
-        .set(updateData)
+        .set({
+          ...data,
+          startDate: data.startDate ? new Date(data.startDate) : undefined,
+          endDate: data.endDate ? new Date(data.endDate) : undefined,
+        })
         .where(eq(auctions.id, auctionId))
         .returning();
 
