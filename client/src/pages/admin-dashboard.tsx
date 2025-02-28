@@ -955,7 +955,8 @@ export default function AdminDashboard() {
                                 <AlertDialogTitle>Delete Auction</AlertDialogTitle>
                                 <AlertDialogDescription>
                                   Are you sure you want to delete this auction? This action cannot be undone.
-                                </AlertDialogDescription                              </AlertDialogHeader>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
