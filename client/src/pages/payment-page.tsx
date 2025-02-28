@@ -29,6 +29,7 @@ export default function PaymentPage() {
   const { toast } = useToast();
   const INSURANCE_FEE = 800; // $8.00 in cents
   const cardElementRef = useRef(null);
+  const elementsRef = useRef(null);
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
     queryKey: [`/api/auctions/${params?.id}`],
@@ -53,53 +54,67 @@ export default function PaymentPage() {
   }, [includeInsurance, auction?.id, refetchPayment]);
 
   useEffect(() => {
-    let stripe;
-    let elements;
-    let card;
+    let cleanup = () => {};
 
     const initializeStripe = async () => {
       if (!paymentData?.clientSecret) return;
 
-      stripe = await stripePromise;
-      if (!stripe) return;
+      try {
+        const stripe = await stripePromise;
+        if (!stripe) throw new Error("Failed to load Stripe");
 
-      elements = stripe.elements({
-        clientSecret: paymentData.clientSecret,
-        appearance: {
-          theme: 'stripe',
-        },
-      });
+        const elements = stripe.elements({
+          clientSecret: paymentData.clientSecret,
+          appearance: {
+            theme: 'stripe',
+          },
+        });
 
-      if (cardElementRef.current) {
-        card = elements.create('card');
-        card.mount('#card-element');
-        cardElementRef.current = card;
+        const cardElement = elements.create('card');
+        cardElement.mount('#card-element');
+
+        // Store references
+        cardElementRef.current = cardElement;
+        elementsRef.current = elements;
+
+        cleanup = () => {
+          cardElement.destroy();
+          cardElementRef.current = null;
+          elementsRef.current = null;
+        };
+      } catch (error) {
+        console.error("Error initializing Stripe:", error);
+        toast({
+          variant: "destructive",
+          title: "Payment Setup Error",
+          description: "Failed to initialize payment form. Please try again.",
+        });
       }
     };
 
     initializeStripe();
-
-    return () => {
-      if (cardElementRef.current) {
-        cardElementRef.current.destroy();
-        cardElementRef.current = null;
-      }
-    };
-  }, [paymentData?.clientSecret]);
+    return () => cleanup();
+  }, [paymentData?.clientSecret, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessing) return;
     setIsProcessing(true);
 
     try {
       const stripe = await stripePromise;
-      if (!stripe || !paymentData?.clientSecret || !cardElementRef.current) {
+      const cardElement = cardElementRef.current;
+
+      if (!stripe || !cardElement || !paymentData?.clientSecret) {
         throw new Error("Payment cannot be processed at this time");
       }
 
-      const { error } = await stripe.confirmCardPayment(paymentData.clientSecret, {
+      const { error, paymentIntent } = await stripe.confirmCardPayment(paymentData.clientSecret, {
         payment_method: {
-          card: cardElementRef.current,
+          card: cardElement,
+          billing_details: {
+            // You can add billing details here if needed
+          },
         },
       });
 
@@ -109,11 +124,12 @@ export default function PaymentPage() {
           title: "Payment Failed",
           description: error.message || "Your payment could not be processed.",
         });
-      } else {
+      } else if (paymentIntent.status === 'succeeded') {
         toast({
           title: "Payment Successful",
           description: "Your payment has been processed successfully.",
         });
+        // Optionally redirect to a success page or auction page
       }
     } catch (err) {
       console.error("Payment error:", err);
@@ -192,7 +208,7 @@ export default function PaymentPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="p-4 border rounded-lg">
-              <div id="card-element" className="min-h-[40px]" ref={cardElementRef} />
+              <div id="card-element" className="min-h-[40px]" />
             </div>
 
             <Button 
