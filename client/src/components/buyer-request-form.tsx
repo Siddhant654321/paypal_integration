@@ -6,17 +6,29 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
+
+const SPECIES_OPTIONS = [
+  "Chickens",
+  "Ducks",
+  "Geese",
+  "Turkeys",
+  "Guinea Fowl",
+  "Quail",
+  "Pheasants",
+  "Pigeons",
+  "Other"
+];
 
 export function BuyerRequestForm() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -24,7 +36,7 @@ export function BuyerRequestForm() {
     resolver: zodResolver(insertBuyerRequestSchema),
     defaultValues: {
       title: "",
-      breedVariety: "",
+      species: "",
       description: "",
     },
   });
@@ -42,18 +54,35 @@ export function BuyerRequestForm() {
         description: "Your request has been created successfully.",
       });
       form.reset();
-      setIsOpen(false);
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to create request. Please try again.",
-        variant: "destructive",
-      });
+    onError: (error) => {
+      if (error.message === "Unauthorized") {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in or create an account to submit a request.",
+          variant: "destructive",
+        });
+        navigate("/auth");
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to create request. Please try again.",
+          variant: "destructive",
+        });
+      }
     },
   });
 
   function onSubmit(data: InsertBuyerRequest) {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in or create an account to submit a request.",
+        variant: "destructive",
+      });
+      navigate("/auth");
+      return;
+    }
     createRequest.mutate(data);
   }
 
@@ -79,15 +108,26 @@ export function BuyerRequestForm() {
 
         <FormField
           control={form.control}
-          name="breedVariety"
+          name="species"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Breed/Variety</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., Silkie Bantam" {...field} />
-              </FormControl>
+              <FormLabel>Species</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a species" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {SPECIES_OPTIONS.map((species) => (
+                    <SelectItem key={species} value={species.toLowerCase()}>
+                      {species}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormDescription>
-                Specify the breed or variety you're interested in
+                Select the type of poultry you're interested in
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -108,77 +148,6 @@ export function BuyerRequestForm() {
               </FormControl>
               <FormDescription>
                 Include details about quantity, age, color preferences, etc.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="budget"
-          render={({ field: { value, onChange, ...field } }) => (
-            <FormItem>
-              <FormLabel>Budget (Optional)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  {...field}
-                  value={value === undefined ? "" : value / 100}
-                  onChange={(e) => {
-                    const value = e.target.value ? parseFloat(e.target.value) : undefined;
-                    onChange(value);
-                  }}
-                />
-              </FormControl>
-              <FormDescription>
-                Your maximum budget per bird (in dollars)
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="desiredDate"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Desired Date (Optional)</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-[240px] pl-3 text-left font-normal",
-                        !field.value && "text-muted-foreground"
-                      )}
-                    >
-                      {field.value ? (
-                        format(new Date(field.value), "PPP")
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={field.value ? new Date(field.value) : undefined}
-                    onSelect={(date) => field.onChange(date?.toISOString())}
-                    disabled={(date) =>
-                      date < new Date() || date > new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-                    }
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-              <FormDescription>
-                When you need the birds by (within the next year)
               </FormDescription>
               <FormMessage />
             </FormItem>

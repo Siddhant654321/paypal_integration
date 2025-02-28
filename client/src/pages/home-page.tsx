@@ -105,7 +105,25 @@ export default function HomePage() {
         ) : (
           <>
             <div>
-              <h2 className="text-2xl font-bold mb-4">Active Auctions</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold">Active Auctions</h2>
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button size="sm" variant="outline" className="gap-2">
+                      <Search className="h-4 w-4" />
+                      Not seeing what you're looking for? Put a request out!
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent className="w-[400px] sm:w-[540px]">
+                    <SheetHeader>
+                      <SheetTitle>Create a Buyer Request</SheetTitle>
+                    </SheetHeader>
+                    <div className="mt-6">
+                      <BuyerRequestForm />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
               <div className="mt-4 mb-2 text-sm text-muted-foreground">
                 Showing {activeAuctions.length} active {activeAuctions.length === 1 ? "auction" : "auctions"}
                 {filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
@@ -115,26 +133,6 @@ export default function HomePage() {
                   <AuctionCard key={auction.id} auction={auction} />
                 ))}
               </div>
-            </div>
-
-            {/* Buyer Request Button */}
-            <div className="mt-16 flex justify-center">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button size="lg" className="gap-2">
-                    <Search className="h-5 w-5" />
-                    Not seeing what you're looking for? Put a request out!
-                  </Button>
-                </SheetTrigger>
-                <SheetContent className="w-[400px] sm:w-[540px]">
-                  <SheetHeader>
-                    <SheetTitle>Create a Buyer Request</SheetTitle>
-                  </SheetHeader>
-                  <div className="mt-6">
-                    <BuyerRequestForm />
-                  </div>
-                </SheetContent>
-              </Sheet>
             </div>
 
             {activeSellers && activeSellers.length > 0 && (
