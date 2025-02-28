@@ -58,9 +58,9 @@ export const auctions = pgTable("auctions", {
   category: text("category", { enum: ["quality", "production", "fun"] }).notNull(),
   imageUrl: text("image_url"),
   images: text("images").array().notNull().default([]),
-  startPrice: integer("start_price").notNull(),
-  reservePrice: integer("reserve_price").notNull(),
-  currentPrice: integer("current_price").notNull(),
+  startPrice: integer("start_price").notNull(), // Amount in cents
+  reservePrice: integer("reserve_price").notNull(), // Amount in cents
+  currentPrice: integer("current_price").notNull(), // Amount in cents
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   approved: boolean("approved").notNull().default(false),
@@ -110,7 +110,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   role: true,
 });
 
-// Enhanced auction schema with additional validations
+// Update the auction schema with price validation
 export const insertAuctionSchema = createInsertSchema(auctions)
   .omit({
     id: true,
@@ -127,8 +127,14 @@ export const insertAuctionSchema = createInsertSchema(auctions)
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),
     description: z.string().min(20, "Description must be at least 20 characters"),
-    startPrice: z.number().min(1, "Start price must be at least 1"),
-    reservePrice: z.number().min(1, "Reserve price must be at least 1"),
+    startPrice: z
+      .number()
+      .min(100, "Start price must be at least $1.00")
+      .transform((price) => Math.round(price * 100)), // Convert dollars to cents
+    reservePrice: z
+      .number()
+      .min(100, "Reserve price must be at least $1.00")
+      .transform((price) => Math.round(price * 100)), // Convert dollars to cents
     startDate: z.string().transform((str) => new Date(str)),
     endDate: z.string().transform((str) => new Date(str)),
     imageUrl: z.string().optional(),
