@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useLocation } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Loader2, Shield } from "lucide-react";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 // Verify Stripe key is available and in test mode
 if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
@@ -26,6 +27,8 @@ export default function PaymentPage() {
   const [includeInsurance, setIncludeInsurance] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const INSURANCE_FEE = 800; // $8.00 in cents
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
@@ -35,10 +38,20 @@ export default function PaymentPage() {
   const handlePayment = async () => {
     if (isProcessing || !auction?.id) return;
 
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "Please log in to proceed with payment.",
+      });
+      setLocation('/auth');
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
-      console.log('Creating checkout session...');
+      // Create checkout session
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -47,35 +60,36 @@ export default function PaymentPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create payment session');
+        const errorData = await response.json();
+        if (errorData.code === "AUTH_REQUIRED") {
+          setLocation('/auth');
+          throw new Error("Please log in to proceed with payment");
+        }
+        throw new Error(errorData.message || 'Failed to create payment session');
       }
 
       const { sessionId } = await response.json();
-      console.log('Got session ID:', sessionId);
 
+      // Initialize Stripe and redirect to checkout
       const stripe = await stripePromise;
       if (!stripe) {
         throw new Error("Could not initialize Stripe");
       }
 
-      console.log('Redirecting to Stripe Checkout...');
       const { error } = await stripe.redirectToCheckout({
-        sessionId: sessionId
+        sessionId
       });
 
       if (error) {
-        console.error('Stripe redirect error:', error);
         throw error;
       }
     } catch (err) {
-      console.error("Payment error:", err);
+      console.error('Payment error:', err);
       toast({
         variant: "destructive",
         title: "Payment Error",
         description: err instanceof Error ? err.message : "Could not process your payment. Please try again.",
       });
-    } finally {
       setIsProcessing(false);
     }
   };

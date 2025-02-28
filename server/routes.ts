@@ -487,8 +487,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add these new routes in the registerRoutes function
   app.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
     try {
+      // Log authentication state
+      console.log('Payment request authentication:', {
+        isAuthenticated: req.isAuthenticated(),
+        userId: req.user?.id,
+        session: req.session
+      });
+
       if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
+        return res.status(401).json({ 
+          message: "Unauthorized - Please log in again",
+          code: "AUTH_REQUIRED"
+        });
       }
 
       const auctionId = parseInt(req.params.id);
@@ -501,7 +511,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify this user won the auction
       if (auction.winningBidderId !== req.user.id) {
-        return res.status(403).json({ message: "Only the winning bidder can pay" });
+        return res.status(403).json({ 
+          message: "Only the winning bidder can pay",
+          code: "NOT_WINNER"
+        });
       }
 
       // Get the base URL from the request
@@ -520,7 +533,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Payment creation error:", error);
       res.status(500).json({ 
         message: "Failed to create payment session",
-        details: error instanceof Error ? error.message : "Unknown error"
+        details: error instanceof Error ? error.message : "Unknown error",
+        code: "PAYMENT_CREATION_FAILED"
       });
     }
   });

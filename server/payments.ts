@@ -11,8 +11,9 @@ if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
   throw new Error("Stripe secret key must be a test mode key (starts with sk_test_)");
 }
 
+// Initialize Stripe with explicit API version
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16"
+  apiVersion: "2023-10-16",
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
@@ -53,9 +54,8 @@ export class PaymentService {
         insuranceFee,
       };
 
-      // Create Stripe Checkout Session
+      // Create Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
         mode: 'payment',
         line_items: [
           {
@@ -105,7 +105,14 @@ export class PaymentService {
         payment: paymentData,
       };
     } catch (error) {
-      console.error("Payment creation error:", error);
+      console.error("Stripe session creation error:", error);
+      if (error instanceof Stripe.errors.StripeError) {
+        console.error("Stripe API Error:", {
+          type: error.type,
+          code: error.code,
+          message: error.message
+        });
+      }
       throw error;
     }
   }
