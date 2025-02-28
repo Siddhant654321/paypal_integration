@@ -445,15 +445,22 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="startPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Price</FormLabel>
+                    <FormLabel>Start Price ($)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        value={field.value}
-                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                      <Input 
+                        type="number" 
+                        step="0.01"
+                        min="1"
+                        {...field} 
+                        onChange={(e) => {
+                          // Use parseFloat to handle decimal values
+                          field.onChange(parseFloat(e.target.value));
+                        }}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Enter amount in dollars (min $1.00)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -464,15 +471,22 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="reservePrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Reserve Price</FormLabel>
+                    <FormLabel>Reserve Price ($)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        value={field.value}
-                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                      <Input 
+                        type="number" 
+                        step="0.01"
+                        min="1"
+                        {...field} 
+                        onChange={(e) => {
+                          // Use parseFloat to handle decimal values
+                          field.onChange(parseFloat(e.target.value));
+                        }}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Enter amount in dollars (min $1.00)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -941,8 +955,7 @@ export default function AdminDashboard() {
                                 <AlertDialogTitle>Delete Auction</AlertDialogTitle>
                                 <AlertDialogDescription>
                                   Are you sure you want to delete this auction? This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
+                                </AlertDialogDescription                              </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
