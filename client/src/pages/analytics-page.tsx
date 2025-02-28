@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trophy } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -12,6 +12,7 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { formatPrice } from "@/utils/formatters";
 
 interface MarketStats {
   averagePrices: {
@@ -19,11 +20,18 @@ interface MarketStats {
     averagePrice: number;
   }[];
   activeAuctions: number;
-  recentSales: {
-    title: string;
-    price: number;
-    date: string;
-  }[];
+  topPerformers: {
+    seller: {
+      name: string;
+      total: number;
+      auctionsWon: number;
+    } | null;
+    buyer: {
+      name: string;
+      total: number;
+      auctionsWon: number;
+    } | null;
+  };
   priceHistory: {
     date: string;
     averagePrice: number;
@@ -64,34 +72,52 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Price Trends */}
+        {/* Top Performers Card */}
         <Card>
           <CardHeader>
-            <CardTitle>Price Trends</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+              Top Performers (Last 30 Days)
+            </CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={marketStats?.priceHistory || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date"
-                  tickFormatter={(value) => new Date(value).toLocaleDateString()}
-                />
-                <YAxis 
-                  tickFormatter={(value) => `$${value}`}
-                />
-                <Tooltip 
-                  formatter={(value) => [`$${value}`, "Average Price"]}
-                  labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="averagePrice"
-                  stroke="#8884d8"
-                  name="Average Price"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Top Seller */}
+              <div className="space-y-2">
+                <h3 className="font-semibold">Top Seller</h3>
+                {marketStats?.topPerformers.seller ? (
+                  <div className="bg-muted p-3 rounded-lg">
+                    <div className="font-medium">{marketStats.topPerformers.seller.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Total Sales: {formatPrice(marketStats.topPerformers.seller.total)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Auctions Completed: {marketStats.topPerformers.seller.auctionsWon}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No sales data available</div>
+                )}
+              </div>
+
+              {/* Top Buyer */}
+              <div className="space-y-2">
+                <h3 className="font-semibold">Top Buyer</h3>
+                {marketStats?.topPerformers.buyer ? (
+                  <div className="bg-muted p-3 rounded-lg">
+                    <div className="font-medium">{marketStats.topPerformers.buyer.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Total Spent: {formatPrice(marketStats.topPerformers.buyer.total)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Auctions Won: {marketStats.topPerformers.buyer.auctionsWon}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No purchase data available</div>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -105,9 +131,9 @@ export default function AnalyticsPage() {
               <BarChart data={marketStats?.averagePrices || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="species" />
-                <YAxis tickFormatter={(value) => `$${value}`} />
+                <YAxis tickFormatter={(value) => formatPrice(value)} />
                 <Tooltip 
-                  formatter={(value) => [`$${value}`, "Average Price"]}
+                  formatter={(value) => [formatPrice(value as number), "Average Price"]}
                 />
                 <Bar dataKey="averagePrice" fill="#8884d8" />
               </BarChart>
@@ -130,31 +156,6 @@ export default function AnalyticsPage() {
                 <Bar dataKey="count" fill="#82ca9d" />
               </BarChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Recent Sales */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Recent Sales</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {marketStats?.recentSales.map((sale, index) => (
-                <div
-                  key={index}
-                  className="flex justify-between items-center p-4 border rounded-lg"
-                >
-                  <div>
-                    <p className="font-medium">{sale.title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(sale.date).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <p className="font-bold">${sale.price}</p>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
       </div>
