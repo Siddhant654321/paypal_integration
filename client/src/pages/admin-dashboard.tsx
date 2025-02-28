@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Search, Trash2, Edit, Eye } from "lucide-react";
+import { Loader2, CheckCircle2, Search, Trash2, Edit } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -52,8 +52,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-//import Link from "next/link";
-
 
 // Update the ViewBidsDialog component
 function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctionTitle: string }) {
@@ -371,7 +369,6 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [auctionSearchTerm, setAuctionSearchTerm] = useState("");
   const [buyerSearchTerm, setBuyerSearchTerm] = useState(""); // Added buyer search term state
-  const [completedAuctionSearchTerm, setCompletedAuctionSearchTerm] = useState("");
 
   // Redirect if not an admin
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
@@ -398,21 +395,8 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/users", { role: "buyer" }],
   });
 
-  const { data: completedAuctions, isLoading: isLoadingCompletedAuctions } = useQuery<Auction[]>({
-    queryKey: ["/api/auctions", { completed: true }],
-  });
-
-
   const filteredBuyers = buyers?.filter(buyer =>
     buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase())
-  );
-
-  const filteredApprovedAuctions = approvedAuctions?.filter(auction =>
-    auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase())
-  );
-
-  const filteredCompletedAuctions = completedAuctions?.filter(auction =>
-    auction.title.toLowerCase().includes(completedAuctionSearchTerm.toLowerCase())
   );
 
   const approveAuctionMutation = useMutation({
@@ -488,17 +472,10 @@ export default function AdminDashboard() {
     user.role === "seller" && !user.approved
   );
 
-  // Filter approved auctions to show only active ones
-  const activeAuctions = approvedAuctions?.filter(auction => new Date(auction.endDate) > new Date());
-
-  //Filter completed auctions
-  const completedAuctions = approvedAuctions?.filter(auction => new Date(auction.endDate) < new Date());
-
-  // Filter approved auctions to exclude completed ones
-  const filteredApprovedAuctions = approvedAuctions?.filter((auction) => {
-    const isEnded = new Date(auction.endDate) < new Date();
-    return auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) && !isEnded;
-  });
+  const filteredApprovedAuctions = approvedAuctions?.filter(auction =>
+    auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+    auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase())
+  );
 
   return (
     <div className="container mx-auto py-8">
@@ -518,9 +495,6 @@ export default function AdminDashboard() {
                 </TabsTrigger>
                 <TabsTrigger value="approved">
                   Approved Sellers ({filteredSellers?.length || 0})
-                </TabsTrigger>
-                <TabsTrigger value="buyers">
-                  Buyers ({filteredBuyers?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
@@ -720,9 +694,6 @@ export default function AdminDashboard() {
                 <TabsTrigger value="approved">
                   Approved Auctions ({filteredApprovedAuctions?.length || 0})
                 </TabsTrigger>
-                <TabsTrigger value="completed">
-                  Completed Auctions ({completedAuctions?.length || 0})
-                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="pending">
@@ -801,7 +772,7 @@ export default function AdminDashboard() {
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search active auctions..."
+                      placeholder="Search auctions..."
                       value={auctionSearchTerm}
                       onChange={(e) => setAuctionSearchTerm(e.target.value)}
                       className="pl-10"
@@ -812,11 +783,11 @@ export default function AdminDashboard() {
                     <div className="flex justify-center">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-                  ) : !activeAuctions?.length ? (
-                    <p className="text-muted-foreground">No active auctions found</p>
+                  ) : !filteredApprovedAuctions?.length ? (
+                    <p className="text-muted-foreground">No auctions found</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {activeAuctions.map((auction) => (
+                      {filteredApprovedAuctions.map((auction) => (
                         <div key={auction.id} className="relative">
                           <div className="absolute top-2 right-2 z-10 flex gap-2">
                             <EditAuctionDialog auction={auction} />
@@ -849,47 +820,6 @@ export default function AdminDashboard() {
                             </AlertDialog>
                           </div>
                           <AuctionCard auction={auction} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="completed">
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search completed auctions..."
-                      value={completedAuctionSearchTerm}
-                      onChange={(e) => setCompletedAuctionSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-
-                  {isLoadingCompletedAuctions ? (
-                    <div className="flex justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                  ) : !filteredCompletedAuctions?.length ? (
-                    <p className="text-muted-foreground">No completed auctions found</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredCompletedAuctions.map((auction) => (
-                        <div
-                          key={auction.id}
-                          className="flex items-center justify-between p-4 border rounded-lg"
-                        >
-                          <div>
-                            <p className="font-medium">{auction.title}</p>
-                            <p className="text-sm text-muted-foreground">
-                              Seller: {auction.seller?.username}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              End Date: {new Date(auction.endDate).toLocaleDateString()}
-                            </p>
-                          </div>
                         </div>
                       ))}
                     </div>
