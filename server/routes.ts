@@ -157,6 +157,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("Image URLs created:", imageUrls);
       }
 
+      // Map legacy categories to new format if present
+      if (parsedData.category) {
+        const categoryMap = {
+          "show": "Show Quality",
+          "purebred": "Purebred & Production",
+          "fun": "Fun & Mixed"
+        };
+
+        if (categoryMap[parsedData.category]) {
+          parsedData.category = categoryMap[parsedData.category];
+          console.log(`Mapped category from ${req.body.category} to ${parsedData.category}`);
+        }
+      }
+
       // Set the seller ID, current price, and image URLs
       const newAuction = {
         ...parsedData,
@@ -521,7 +535,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
-      const updatedAuction = await storage.updateAuction(auctionId, req.body);
+      const data = req.body;
+
+      // Map legacy categories to new format if present
+      if (data.category) {
+        const categoryMap = {
+          "show": "Show Quality",
+          "purebred": "Purebred & Production",
+          "fun": "Fun & Mixed"
+        };
+
+        if (categoryMap[data.category]) {
+          data.category = categoryMap[data.category];
+          console.log(`Mapped category from ${req.body.category} to ${data.category}`);
+        }
+      }
+
+      const updatedAuction = await storage.updateAuction(auctionId, data);
       res.json(updatedAuction);
     } catch (error) {
       console.error("Error updating auction:", error);

@@ -435,11 +435,25 @@ export class DatabaseStorage implements IStorage {
 
       // Handle category with strict validation
       if (data.category) {
-        // Validate category - ensure it's exactly one of the allowed values
-        if (!["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(data.category)) {
+        // Map old category values to new ones
+        const categoryMap = {
+          "show": "Show Quality",
+          "purebred": "Purebred & Production", 
+          "fun": "Fun & Mixed",
+          // Already include the new values too
+          "Show Quality": "Show Quality",
+          "Purebred & Production": "Purebred & Production",
+          "Fun & Mixed": "Fun & Mixed"
+        };
+        
+        // Convert and validate category
+        const mappedCategory = categoryMap[data.category];
+        if (!mappedCategory) {
           throw new Error("Invalid category. Must be one of: Show Quality, Purebred & Production, Fun & Mixed");
         }
-        updateData.category = data.category;
+        
+        updateData.category = mappedCategory;
+        log(`Mapped category '${data.category}' to '${mappedCategory}'`, "storage");
       }
 
       const [updatedAuction] = await db
