@@ -277,7 +277,6 @@ export default function SellerDashboard() {
       <Tabs defaultValue="myAuctions">
         <TabsList className="w-full">
           <TabsTrigger value="myAuctions">My Auctions</TabsTrigger>
-          <TabsTrigger value="biddingOn">Bidding On ({biddingOn?.length || 0})</TabsTrigger>
           <TabsTrigger value="payouts">
             <DollarSign className="w-4 h-4 mr-2" />
             Payouts
@@ -341,25 +340,6 @@ export default function SellerDashboard() {
           )}
         </TabsContent>
 
-        <TabsContent value="biddingOn">
-          {isLoadingBids ? (
-            <div className="text-center">Loading auctions you're bidding on...</div>
-          ) : !filteredBiddingOn?.length ? (
-            <div className="text-center text-muted-foreground">
-              You haven't placed any bids yet.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredBiddingOn.map((auction) => (
-                <AuctionCard 
-                  key={auction.id} 
-                  auction={auction}
-                  showStatus={true}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
 
         <TabsContent value="payouts">
           {renderStripeConnectStatus()}
