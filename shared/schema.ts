@@ -269,6 +269,7 @@ export const buyerRequests = pgTable("buyer_requests", {
   buyerId: integer("buyer_id").notNull(),
   title: text("title").notNull(),
   species: text("species").notNull(),
+  category: text("category").notNull(),
   description: text("description").notNull(),
   status: text("status", {
     enum: ["open", "fulfilled", "closed"]
@@ -291,6 +292,10 @@ export const insertBuyerRequestSchema = createInsertSchema(buyerRequests)
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),
     species: z.string().min(2, "Species must be at least 2 characters"),
+    category: z.string().refine(
+      (val) => ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(val),
+      "Invalid category"
+    ),
     description: z.string().min(20, "Description must be at least 20 characters"),
   });
 

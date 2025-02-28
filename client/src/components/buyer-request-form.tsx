@@ -15,15 +15,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 
 const SPECIES_OPTIONS = [
-  "Chickens",
-  "Ducks",
-  "Geese",
-  "Turkeys",
-  "Guinea Fowl",
+  "Bantam",
+  "Standard",
+  "Waterfowl",
   "Quail",
-  "Pheasants",
-  "Pigeons",
-  "Other"
+  "Other",
+];
+
+const CATEGORY_OPTIONS = [
+  "Show Quality",
+  "Purebred & Production",
+  "Fun & Mixed",
 ];
 
 export function BuyerRequestForm() {
@@ -37,6 +39,7 @@ export function BuyerRequestForm() {
     defaultValues: {
       title: "",
       species: "",
+      category: "",
       description: "",
     },
   });
@@ -96,7 +99,7 @@ export function BuyerRequestForm() {
             <FormItem>
               <FormLabel>Title</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Looking for Silkie Bantams" {...field} />
+                <Input placeholder="e.g., Looking for Silver Laced Wyandottes" {...field} />
               </FormControl>
               <FormDescription>
                 A brief title describing what you're looking for
@@ -128,6 +131,34 @@ export function BuyerRequestForm() {
               </Select>
               <FormDescription>
                 Select the type of poultry you're interested in
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="category"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Category</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Select the quality category you're looking for
               </FormDescription>
               <FormMessage />
             </FormItem>
