@@ -53,6 +53,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import React, { useEffect } from "react";
+
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -323,20 +325,30 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
     },
   });
 
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>, field: any) => {
+    const value = e.target.value;
+    const parsedValue = parseFloat(value);
+    if (!isNaN(parsedValue)) {
+      field.onChange(parsedValue);
+    } else {
+      field.onChange("");
+    }
+  };
+
+
   const updateAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
       // Map form data to API format
       const mappedData = {
         ...data,
         // Explicitly convert price values to numbers and from dollars to cents
-        startPrice: data.startPrice * 100,
-        reservePrice: data.reservePrice * 100,
+        startPrice: Number(data.startPrice) * 100,
+        reservePrice: Number(data.reservePrice) * 100,
         // Ensure dates are properly formatted
         startDate: new Date(data.startDate),
         endDate: new Date(data.endDate),
       };
 
-      console.log("Mapped category from", data.category, "to", mappedData.category);
       console.log("Setting startPrice to", mappedData.startPrice, "(" + typeof mappedData.startPrice + ")");
       console.log("Setting reservePrice to", mappedData.reservePrice, "(" + typeof mappedData.reservePrice + ")");
 
@@ -347,21 +359,27 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
         },
         body: JSON.stringify(mappedData),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to update auction');
       }
-      
+
       return await response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Invalidate all related queries to ensure data refresh
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
-      toast({
-        title: "Success",
-        description: "Auction has been updated",
-      });
+
+      // Close the dialog
       setOpen(false);
+
+      // Show success toast
+      toast({
+        title: "Auction updated",
+        description: `Successfully updated "${data.title}" with new prices: Start $${data.startPrice/100}, Reserve $${data.reservePrice/100}`,
+        variant: "success",
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -469,18 +487,15 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                     <FormLabel>Start Price ($)</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
+                        type="text"
                         placeholder="0.00"
-                        {...field}
-                        value={field.value ? (field.value).toFixed(2) : ''}
-                        onChange={(e) => {
-                          const dollarValue = e.target.value ? parseFloat(e.target.value) : '';
-                          field.onChange(dollarValue);
-                        }}
+                        value={field.value}
+                        onChange={(e) => handlePriceChange(e, field)}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Current: ${(auction.startPrice / 100).toFixed(2)}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -494,18 +509,15 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                     <FormLabel>Reserve Price ($)</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
+                        type="text"
                         placeholder="0.00"
-                        {...field}
-                        value={field.value ? (field.value).toFixed(2) : ''}
-                        onChange={(e) => {
-                          const dollarValue = e.target.value ? parseFloat(e.target.value) : '';
-                          field.onChange(dollarValue);
-                        }}
+                        value={field.value}
+                        onChange={(e) => handlePriceChange(e, field)}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Current: ${(auction.reservePrice / 100).toFixed(2)}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -938,7 +950,7 @@ export default function AdminDashboard() {
                         className="flex items-center justify-between p-4 border rounded-lg"
                       >
                         <div>
-                          <p className="font-medium">{auction.title}</p>
+                          <<p className="font-medium">{auction.title}</p>
                           <div className="flex gap-2 mt-1">
                             <Badge>{auction.species}</Badge>
                             <Badge variant="outline">{auction.category}</Badge>
