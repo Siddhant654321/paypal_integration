@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
-// Initialize Stripe
+// Initialize Stripe with the publishable key
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 interface PaymentResponse {
@@ -33,10 +33,23 @@ export default function PaymentPage() {
     queryKey: [`/api/auctions/${params?.id}`],
   });
 
-  const { data: paymentData, isLoading: isLoadingPayment } = useQuery<PaymentResponse>({
+  const { data: paymentData, isLoading: isLoadingPayment, refetch: refetchPayment } = useQuery<PaymentResponse>({
     queryKey: [`/api/auctions/${params?.id}/pay`],
     enabled: !!auction?.id,
   });
+
+  // Refetch payment data when insurance option changes
+  useEffect(() => {
+    if (auction?.id) {
+      fetch(`/api/auctions/${auction.id}/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ includeInsurance })
+      }).then(() => refetchPayment());
+    }
+  }, [includeInsurance, auction?.id, refetchPayment]);
 
   useEffect(() => {
     const initializeStripe = async () => {
@@ -99,8 +112,10 @@ export default function PaymentPage() {
     }
   };
 
-  const totalAmount = auction?.currentPrice || 0;
-  const totalWithInsurance = includeInsurance ? totalAmount + INSURANCE_FEE : totalAmount;
+  // Convert cents to dollars for display
+  const totalInDollars = auction ? auction.currentPrice / 100 : 0;
+  const insuranceInDollars = INSURANCE_FEE / 100;
+  const totalWithInsurance = includeInsurance ? totalInDollars + insuranceInDollars : totalInDollars;
 
   if (isLoadingAuction || isLoadingPayment) {
     return (
@@ -137,7 +152,7 @@ export default function PaymentPage() {
           </div>
           <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
             <span>Winning bid amount</span>
-            <span className="font-medium">${auction.currentPrice}</span>
+            <span className="font-medium">${totalInDollars.toFixed(2)}</span>
           </div>
 
           <div className="flex items-center space-x-4 p-4 border rounded-lg">
@@ -157,7 +172,7 @@ export default function PaymentPage() {
 
           <div className="text-2xl font-bold flex justify-between items-center">
             <span>Total Amount:</span>
-            <span>${(totalWithInsurance / 100).toFixed(2)}</span>
+            <span>${totalWithInsurance.toFixed(2)}</span>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
