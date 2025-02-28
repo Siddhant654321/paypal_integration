@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { Auction } from "@shared/schema";
+import { Auction, Bid } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { Search, CreditCard } from "lucide-react";
 import { useState } from "react";
@@ -9,12 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 
-type BidWithAuction = {
-  id: number;
-  auctionId: number;
-  bidderId: number;
-  amount: number;
-  timestamp: Date;
+type BidWithAuction = Bid & {
   auction: Auction;
   isWinningBid: boolean;
   requiresPayment: boolean;
@@ -62,7 +57,7 @@ export default function BuyerDashboard() {
                   <Badge variant="secondary">You won!</Badge>
                   {bid.requiresPayment && (
                     <Link href={`/auction/${bid.auction.id}/pay`}>
-                      <Button size="sm" variant="default" className="bg-primary text-primary-foreground hover:bg-primary/90">
+                      <Button size="sm">
                         <CreditCard className="h-4 w-4 mr-2" />
                         Pay Now
                       </Button>
