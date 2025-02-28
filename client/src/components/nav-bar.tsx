@@ -23,9 +23,13 @@ export default function NavBar() {
         {/* Left section - Brand and main navigation */}
         <div className="flex items-center gap-4">
           <Link href="/">
-            <h2 className="text-2xl font-bold text-accent-foreground cursor-pointer">
-              Pips 'n Chicks
-            </h2>
+            <div className="flex items-center gap-2">
+              <img 
+                src="/images/logo.jpg"
+                alt="Pips 'n Chicks"
+                className="h-10 w-auto object-contain"
+              />
+            </div>
           </Link>
 
           <Link href="/">

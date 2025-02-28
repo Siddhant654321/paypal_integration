@@ -184,18 +184,19 @@ export default function AuthPage() {
       <div
         className="hidden lg:block bg-cover bg-center"
         style={{
-          backgroundImage:
-            'url("https://images.unsplash.com/photo-1484557985045-edf25e08da73")',
+          backgroundImage: 'url("/images/speckled-chicken.jpg")',
+          backgroundPosition: 'center',
+          backgroundSize: 'cover'
         }}
       >
-        <div className="h-full w-full bg-black/50 p-8 flex items-center justify-center">
+        <div className="h-full w-full bg-black/30 backdrop-blur-[2px] p-8 flex items-center justify-center">
           <div className="max-w-md text-white">
             <h1 className="text-4xl font-bold mb-4">
-              Your Premier Poultry Auction Platform
+              Premium Poultry Auctions
             </h1>
             <p className="text-lg">
-              Connect with trusted sellers, find quality birds and hatching eggs,
-              and grow your flock with confidence.
+              Connect with trusted breeders, find quality birds and hatching eggs,
+              and grow your collection with confidence.
             </p>
           </div>
         </div>
