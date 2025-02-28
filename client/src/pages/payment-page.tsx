@@ -3,7 +3,7 @@ import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Loader2, Shield } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -29,9 +29,6 @@ export default function PaymentPage() {
   const [stripeReady, setStripeReady] = useState(false);
   const { toast } = useToast();
   const INSURANCE_FEE = 800; // $8.00 in cents
-  const paymentElementRef = useRef<HTMLDivElement>(null);
-  const stripeRef = useRef<any>(null);
-  const elementsRef = useRef<any>(null);
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
     queryKey: [`/api/auctions/${params?.id}`],
@@ -70,25 +67,18 @@ export default function PaymentPage() {
     }
   }, [includeInsurance, auction?.id, refetchPayment, toast]);
 
+  // Initialize Stripe Elements
   useEffect(() => {
-    let cleanup = () => {};
+    let mounted = true;
+    let paymentElement: any = null;
 
     const initializeStripe = async () => {
-      if (!paymentData?.clientSecret) {
-        console.log("No client secret available yet");
-        return;
-      }
+      if (!paymentData?.clientSecret) return;
 
       try {
-        console.log("Loading Stripe...");
         const stripe = await stripePromise;
-        if (!stripe) {
-          throw new Error("Failed to load Stripe");
-        }
-        stripeRef.current = stripe;
-        console.log("Stripe loaded successfully");
+        if (!stripe || !mounted) return;
 
-        console.log("Creating Elements instance...");
         const elements = stripe.elements({
           clientSecret: paymentData.clientSecret,
           appearance: {
@@ -98,61 +88,54 @@ export default function PaymentPage() {
             },
           },
         });
-        elementsRef.current = elements;
 
-        console.log("Creating and mounting Payment Element...");
-        const paymentElement = elements.create('payment');
-        if (paymentElementRef.current) {
-          paymentElement.mount(paymentElementRef.current);
+        paymentElement = elements.create('payment');
+        const container = document.getElementById('payment-element');
+        if (container) {
+          paymentElement.mount(container);
           setStripeReady(true);
-          console.log("Payment Element mounted successfully");
         }
-
-        cleanup = () => {
-          console.log("Cleaning up Stripe elements...");
-          paymentElement.destroy();
-          elementsRef.current = null;
-          stripeRef.current = null;
-          setStripeReady(false);
-        };
       } catch (error) {
-        console.error("Stripe initialization error:", error);
+        console.error('Failed to initialize Stripe:', error);
         toast({
           variant: "destructive",
           title: "Payment Setup Error",
           description: "Failed to initialize payment form. Please refresh and try again.",
         });
-        setStripeReady(false);
       }
     };
 
     initializeStripe();
-    return () => cleanup();
+
+    return () => {
+      mounted = false;
+      if (paymentElement) {
+        paymentElement.destroy();
+      }
+      setStripeReady(false);
+    };
   }, [paymentData?.clientSecret, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isProcessing || !stripeReady) return;
+    if (!stripeReady || isProcessing) return;
+
     setIsProcessing(true);
 
     try {
-      const stripe = stripeRef.current;
-      const elements = elementsRef.current;
-
-      if (!stripe || !elements) {
+      const stripe = await stripePromise;
+      if (!stripe || !paymentData?.clientSecret) {
         throw new Error("Payment system not initialized");
       }
 
-      console.log("Confirming payment...");
       const { error } = await stripe.confirmPayment({
-        elements,
+        clientSecret: paymentData.clientSecret,
         confirmParams: {
           return_url: `${window.location.origin}/auction/${auction?.id}`,
         },
       });
 
       if (error) {
-        console.error("Payment error:", error);
         toast({
           variant: "destructive",
           title: "Payment Failed",
@@ -161,7 +144,7 @@ export default function PaymentPage() {
       }
       // Success will redirect to return_url
     } catch (err) {
-      console.error("Payment submission error:", err);
+      console.error("Payment error:", err);
       toast({
         variant: "destructive",
         title: "Payment Error",
@@ -188,7 +171,7 @@ export default function PaymentPage() {
     );
   }
 
-  // Convert cents to dollars for display only
+  // Convert cents to dollars for display
   const baseAmountDollars = (auction.currentPrice / 100).toFixed(2);
   const insuranceAmountDollars = (INSURANCE_FEE / 100).toFixed(2);
   const totalAmountDollars = ((auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)) / 100).toFixed(2);
@@ -237,14 +220,14 @@ export default function PaymentPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="p-4 border rounded-lg min-h-[200px]">
-              <div ref={paymentElementRef} className="min-h-[40px]" />
+              <div id="payment-element" className="min-h-[40px]" />
             </div>
 
             <Button 
               type="submit" 
               className="w-full" 
               size="lg"
-              disabled={isProcessing || !stripeReady}
+              disabled={!stripeReady || isProcessing}
             >
               {isProcessing ? (
                 <Loader2 className="h-5 w-5 mr-2 animate-spin" />
