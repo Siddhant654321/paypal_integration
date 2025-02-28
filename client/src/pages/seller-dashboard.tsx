@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
+import { formatPrice } from '../utils/formatters';
 import { apiRequest } from "@/lib/queryClient";
 
 export default function SellerDashboard() {
@@ -61,7 +62,7 @@ export default function SellerDashboard() {
     const script = document.createElement('script');
     script.src = 'https://js.stripe.com/v3/';
     script.async = true;
-    
+
     script.onload = () => {
       setStripeLoaded(true);
       try {
@@ -73,13 +74,13 @@ export default function SellerDashboard() {
         console.error("Error initializing Stripe:", err);
       }
     };
-    
+
     script.onerror = (error) => {
       console.error("Error loading Stripe.js script:", error);
     };
-    
+
     document.body.appendChild(script);
-    
+
     // Cleanup function
     return () => {
       if (script && script.parentNode) {
@@ -111,11 +112,11 @@ export default function SellerDashboard() {
         // Parse response data
         const data = await response.json();
         console.log("Received Stripe data:", data);
-        
+
         if (!data.url) {
           throw new Error('No Stripe onboarding URL received from server');
         }
-        
+
         return data;
       } catch (err) {
         console.error("Stripe Connect request failed:", err);
@@ -395,7 +396,7 @@ export default function SellerDashboard() {
                           {formatDistanceToNow(new Date(payout.createdAt), { addSuffix: true })}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {formatCurrency(payout.amount)}
+                          {formatPrice(payout.amount)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize

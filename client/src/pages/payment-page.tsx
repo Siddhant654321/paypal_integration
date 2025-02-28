@@ -171,7 +171,7 @@ export default function PaymentPage() {
 
           <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
             <span>Winning bid amount</span>
-            <span className="font-medium">${baseAmountDollars}</span>
+            <span className="font-medium">{baseAmountDollars}</span>
           </div>
 
           <div className="flex items-center space-x-4 p-4 border rounded-lg">
@@ -179,7 +179,7 @@ export default function PaymentPage() {
             <div className="flex-1">
               <Label htmlFor="insurance">Shipping Insurance</Label>
               <p className="text-sm text-muted-foreground">
-                Add ${insuranceAmountDollars} insurance to protect against shipping issues
+                Add {insuranceAmountDollars} insurance to protect against shipping issues
               </p>
             </div>
             <Switch
@@ -191,7 +191,7 @@ export default function PaymentPage() {
 
           <div className="text-2xl font-bold flex justify-between items-center">
             <span>Total Amount:</span>
-            <span>${totalAmountDollars}</span>
+            <span>{totalAmountDollars}</span>
           </div>
 
           {error && (
