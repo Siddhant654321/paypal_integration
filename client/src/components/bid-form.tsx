@@ -65,7 +65,7 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const bidAmount = Math.round(parseFloat(amount) * 100);
+    const bidAmount = parseInt(amount);
     if (isNaN(bidAmount) || bidAmount <= currentPrice) {
       toast({
         title: "Invalid bid amount",
@@ -84,11 +84,10 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
         <Input
           id="bid-amount"
           type="number"
-          step="0.01"
-          min={(currentPrice / 100) + 0.01}
+          min={currentPrice + 1}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          placeholder={`Enter amount higher than ${formatPrice(currentPrice)}`}
+          placeholder={`Enter amount higher than $${currentPrice}`}
           required
         />
       </div>
