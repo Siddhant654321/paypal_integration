@@ -324,16 +324,24 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (formData: any) => { //Added any type to avoid type error in the formData
+      console.log("Updating auction with data:", formData);
       const data = {
-        ...formData,
-        // Ensure category is valid before sending
+        title: formData.title,
+        description: formData.description,
+        species: formData.species,
         category: ["show", "purebred", "fun"].includes(formData.category) ? formData.category : "purebred",
+        startPrice: Math.round(formData.startPrice * 100), //Convert dollars to cents and ensure integer
+        reservePrice: Math.round(formData.reservePrice * 100), //Convert dollars to cents and ensure integer
         startDate: new Date(formData.startDate).toISOString(),
         endDate: new Date(formData.endDate).toISOString(),
-        startPrice: formData.startPrice * 100, //Convert dollars to cents
-        reservePrice: formData.reservePrice * 100, //Convert dollars to cents
+        imageUrl: formData.imageUrl || "",
       };
+      console.log("Transformed data:", data);
       const res = await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, data);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to update auction");
+      }
       return res.json();
     },
     onSuccess: () => {
