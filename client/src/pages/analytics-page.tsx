@@ -13,6 +13,7 @@ import {
   Bar,
 } from "recharts";
 import { formatPrice } from "@/utils/formatters";
+import { BuyerRequestList } from "@/components/buyer-request-list";
 
 interface MarketStats {
   averagePrices: {
@@ -158,6 +159,15 @@ export default function AnalyticsPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Market Demand Section */}
+      <div className="mt-12">
+        <h2 className="text-2xl font-bold mb-6">Market Demand</h2>
+        <p className="text-muted-foreground mb-8">
+          Current buyer requests and market demand for specific breeds and varieties
+        </p>
+        <BuyerRequestList />
       </div>
     </div>
   );

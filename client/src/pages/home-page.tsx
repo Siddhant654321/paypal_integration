@@ -3,12 +3,16 @@ import AuctionCard from "@/components/auction-card";
 import AuctionFilters from "@/components/auction-filters";
 import { useState, useMemo } from "react";
 import { Auction, User, Profile } from "@shared/schema";
-import { Loader2, Archive } from "lucide-react";
+import { Loader2, Archive, Search } from "lucide-react";
 import { formatPrice } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { SellerShowcase } from "@/components/seller-showcase";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { BuyerRequestForm } from "@/components/buyer-request-form";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function HomePage() {
+  const { user } = useAuth();
   const [filters, setFilters] = useState({
     species: "",
     category: "",
@@ -38,8 +42,8 @@ export default function HomePage() {
 
     if (filters.searchTerm) {
       const searchTerm = filters.searchTerm.toLowerCase();
-      filtered = auctions.filter(auction => 
-        auction.title.toLowerCase().includes(searchTerm) || 
+      filtered = auctions.filter(auction =>
+        auction.title.toLowerCase().includes(searchTerm) ||
         auction.description.toLowerCase().includes(searchTerm)
       );
     }
@@ -112,6 +116,33 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
+
+            {/* Buyer Request Section */}
+            {user && user.role === "buyer" && (
+              <div className="mt-16 flex flex-col items-center text-center">
+                <h2 className="text-2xl font-bold mb-4">Can't Find What You're Looking For?</h2>
+                <p className="text-muted-foreground mb-6 max-w-2xl">
+                  Create a buyer request to let sellers know what breeds or varieties you're interested in.
+                  Your request will be visible to all sellers and help them understand market demand.
+                </p>
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button className="gap-2">
+                      <Search className="h-4 w-4" />
+                      Create Buyer Request
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent className="w-[400px] sm:w-[540px]">
+                    <SheetHeader>
+                      <SheetTitle>Create a Buyer Request</SheetTitle>
+                    </SheetHeader>
+                    <div className="mt-6">
+                      <BuyerRequestForm />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
+            )}
 
             {activeSellers && activeSellers.length > 0 && (
               <div className="mt-16">
