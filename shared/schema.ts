@@ -264,6 +264,45 @@ export const insertFulfillmentSchema = createInsertSchema(fulfillments)
   });
 
 
+// Add buyer requests table
+export const buyerRequests = pgTable("buyer_requests", {
+  id: serial("id").primaryKey(),
+  buyerId: integer("buyer_id").notNull(),
+  title: text("title").notNull(),
+  breedVariety: text("breed_variety").notNull(),
+  description: text("description").notNull(),
+  status: text("status", {
+    enum: ["open", "fulfilled", "closed"]
+  }).notNull().default("open"),
+  budget: integer("budget"),  // Optional budget in cents
+  desiredDate: timestamp("desired_date"),  // Optional desired fulfillment date
+  views: integer("views").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Add insert schema for buyer requests
+export const insertBuyerRequestSchema = createInsertSchema(buyerRequests)
+  .omit({
+    id: true,
+    buyerId: true,
+    views: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    title: z.string().min(5, "Title must be at least 5 characters"),
+    breedVariety: z.string().min(2, "Breed/variety name must be at least 2 characters"),
+    description: z.string().min(20, "Description must be at least 20 characters"),
+    budget: z.number().optional().transform(price => price ? Math.round(price * 100) : undefined),
+    desiredDate: z.string().optional().transform(str => str ? new Date(str) : undefined),
+  });
+
+// Add types for buyer requests
+export type BuyerRequest = typeof buyerRequests.$inferSelect;
+export type InsertBuyerRequest = z.infer<typeof insertBuyerRequestSchema>;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Auction = typeof auctions.$inferSelect;

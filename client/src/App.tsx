@@ -17,6 +17,7 @@ import PaymentPage from "@/pages/payment-page";
 import AnalyticsPage from "@/pages/analytics-page";
 import FulfillmentPage from "@/pages/fulfillment-page";
 import SellerProfilePage from "@/pages/seller-profile";
+import BuyerRequestsPage from "@/pages/buyer-requests";
 
 function Router() {
   return (
@@ -32,6 +33,7 @@ function Router() {
         <Route path="/seller/fulfill/:id" component={FulfillmentPage} />
         <Route path="/seller/:id" component={SellerProfilePage} />
         <Route path="/buyer/dashboard" component={BuyerDashboard} />
+        <Route path="/buyer-requests" component={BuyerRequestsPage} />
         <Route path="/seller/new-auction" component={NewAuction} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/analytics" component={AnalyticsPage} />

@@ -2,8 +2,8 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { db } from "./db";
-import { users, auctions, bids, profiles, payments, payouts, fulfillments } from "@shared/schema";
-import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile, type Payment, type InsertPayment, type Payout, type InsertPayout, type Fulfillment, type InsertFulfillment } from "@shared/schema";
+import { users, auctions, bids, profiles, payments, payouts, fulfillments, buyerRequests } from "@shared/schema";
+import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile, type Payment, type InsertPayment, type Payout, type InsertPayout, type Fulfillment, type InsertFulfillment, type BuyerRequest, type InsertBuyerRequest } from "@shared/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
 import { log } from "./vite";
@@ -76,6 +76,16 @@ export interface IStorage {
     auction: Auction;
   } | undefined>;
   updateAuctionFulfillmentStatus(auctionId: number, fulfilled: boolean): Promise<void>;
+
+  // Buyer request operations
+  createBuyerRequest(request: InsertBuyerRequest & { buyerId: number }): Promise<BuyerRequest>;
+  getBuyerRequest(id: number): Promise<BuyerRequest | undefined>;
+  getBuyerRequests(filters?: {
+    status?: string;
+    buyerId?: number;
+  }): Promise<BuyerRequest[]>;
+  updateBuyerRequestStatus(id: number, status: string): Promise<BuyerRequest>;
+  incrementBuyerRequestViews(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -466,7 +476,7 @@ export class DatabaseStorage implements IStorage {
         // Map old category values to new ones
         const categoryMap = {
           "show": "Show Quality",
-          "purebred": "Purebred & Production", 
+          "purebred": "Purebred & Production",
           "fun": "Fun & Mixed",
           // Already include the new values too
           "Show Quality": "Show Quality",
@@ -727,6 +737,92 @@ export class DatabaseStorage implements IStorage {
         .where(eq(auctions.id, auctionId));
     } catch (error) {
       console.error("Error updating auction fulfillment status:", error);
+      throw error;
+    }
+  }
+
+  async createBuyerRequest(request: InsertBuyerRequest & { buyerId: number }): Promise<BuyerRequest> {
+    try {
+      const [newRequest] = await db
+        .insert(buyerRequests)
+        .values({
+          ...request,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+      return newRequest;
+    } catch (error) {
+      log(`Error creating buyer request: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async getBuyerRequest(id: number): Promise<BuyerRequest | undefined> {
+    try {
+      const [request] = await db
+        .select()
+        .from(buyerRequests)
+        .where(eq(buyerRequests.id, id));
+      return request;
+    } catch (error) {
+      log(`Error getting buyer request ${id}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async getBuyerRequests(filters?: {
+    status?: string;
+    buyerId?: number;
+  }): Promise<BuyerRequest[]> {
+    try {
+      let query = db.select().from(buyerRequests);
+
+      if (filters) {
+        if (filters.status) {
+          query = query.where(eq(buyerRequests.status, filters.status));
+        }
+        if (filters.buyerId !== undefined) {
+          query = query.where(eq(buyerRequests.buyerId, filters.buyerId));
+        }
+      }
+
+      const results = await query.orderBy(desc(buyerRequests.createdAt));
+      return results;
+    } catch (error) {
+      log(`Error getting buyer requests: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async updateBuyerRequestStatus(id: number, status: string): Promise<BuyerRequest> {
+    try {
+      const [request] = await db
+        .update(buyerRequests)
+        .set({
+          status,
+          updatedAt: new Date(),
+        })
+        .where(eq(buyerRequests.id, id))
+        .returning();
+      if (!request) throw new Error("Buyer request not found");
+      return request;
+    } catch (error) {
+      log(`Error updating buyer request status ${id}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async incrementBuyerRequestViews(id: number): Promise<void> {
+    try {
+      await db
+        .update(buyerRequests)
+        .set({
+          views: sql`${buyerRequests.views} + 1`,
+        })
+        .where(eq(buyerRequests.id, id));
+    } catch (error) {
+      log(`Error incrementing buyer request views ${id}: ${error}`, "storage");
       throw error;
     }
   }

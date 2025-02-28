@@ -582,7 +582,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add these new endpoints in the registerRoutes function
+  // Add these buyer request endpoints to the routes
+  app.post("/api/buyer-requests", requireAuth, requireProfile, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const requestData = insertBuyerRequestSchema.parse(req.body);
+      const buyerRequest = await storage.createBuyerRequest({
+        ...requestData,
+        buyerId: req.user.id,
+      });
+
+      res.status(201).json(buyerRequest);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({
+          message: "Invalid request data",
+          errors: error.errors,
+        });
+      } else {
+        console.error("Error creating buyer request:", error);
+        res.status(500).json({ message: "Failed to create buyer request" });
+      }
+    }
+  });
+
+  app.get("/api/buyer-requests", async (req, res) => {
+    try {
+      const filters = {
+        status: req.query.status as string | undefined,
+        buyerId: req.query.buyerId ? parseInt(req.query.buyerId as string) : undefined,
+      };
+
+      const requests = await storage.getBuyerRequests(filters);
+
+      // Get buyer profiles for each request
+      const requestsWithProfiles = await Promise.all(
+        requests.map(async (request) => {
+          const buyerProfile = await storage.getProfile(request.buyerId);
+          return { ...request, buyerProfile };
+        })
+      );
+
+      res.json(requestsWithProfiles);
+    } catch (error) {
+      console.error("Error fetching buyer requests:", error);
+      res.status(500).json({ message: "Failed to fetch buyer requests" });
+    }
+  });
+
+  app.get("/api/buyer-requests/:id", async (req, res) => {
+    try {
+      const request = await storage.getBuyerRequest(parseInt(req.params.id));
+      if (!request) {
+        return res.status(404).json({ message: "Buyer request not found" });
+      }
+
+      // Increment views
+      await storage.incrementBuyerRequestViews(request.id);
+
+      // Get buyer profile
+      const buyerProfile = await storage.getProfile(request.buyerId);
+      res.json({ ...request, buyerProfile });
+    } catch (error) {
+      console.error("Error fetching buyer request:", error);
+      res.status(500).json({ message: "Failed to fetch buyer request" });
+    }
+  });
+
+  app.patch("/api/buyer-requests/:id/status", requireAuth, async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const { status } = req.body;
+
+      if (!status || !["open", "fulfilled", "closed"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+
+      const request = await storage.getBuyerRequest(requestId);
+      if (!request) {
+        return res.status(404).json({ message: "Buyer request not found" });
+      }
+
+      // Only allow buyer or admin to update status
+      if (req.user!.id !== request.buyerId && req.user!.role !== "admin") {
+        return res.status(403).json({ message: "Not authorized to update this request" });
+      }
+
+      const updatedRequest = await storage.updateBuyerRequestStatus(requestId, status);
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Error updating buyer request status:", error);
+      res.status(500).json({ message: "Failed to update buyer request status" });
+    }
+  });
+
   app.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
     try {
       // Log authentication state
