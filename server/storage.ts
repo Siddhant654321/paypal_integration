@@ -337,7 +337,13 @@ export class DatabaseStorage implements IStorage {
     role?: string;
   }): Promise<User[]> {
     try {
-      let query = db.select().from(users);
+      let query = db
+        .select({
+          user: users,
+          profile: profiles,
+        })
+        .from(users)
+        .leftJoin(profiles, eq(users.id, profiles.userId));
 
       if (filters) {
         if (filters.approved !== undefined) {
@@ -348,10 +354,11 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      log(`Fetching users with filters: ${JSON.stringify(filters)}`, "storage");
       const results = await query;
-      log(`Retrieved ${results.length} users`, "storage");
-      return results;
+      const formattedUsers = results.map(({ user }) => user);
+
+      log(`Retrieved ${formattedUsers.length} users with filters: ${JSON.stringify(filters)}`, "storage");
+      return formattedUsers;
     } catch (error) {
       log(`Error getting users: ${error}`, "storage");
       throw error;

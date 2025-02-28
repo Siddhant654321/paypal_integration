@@ -1,8 +1,9 @@
 import { Profile, Auction, User } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Store, MapPin, Award } from "lucide-react";
+import { Store, MapPin, Award, User as UserIcon } from "lucide-react";
 import AuctionCard from "./auction-card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface SellerShowcaseProps {
   seller: User & {
@@ -26,20 +27,31 @@ export function SellerShowcase({ seller }: SellerShowcaseProps) {
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between">
-            <div>
-              <CardTitle className="text-xl">
-                <div className="flex items-center gap-2">
-                  <Store className="h-5 w-5" />
-                  {seller.profile.businessName || "Anonymous Seller"}
-                </div>
-              </CardTitle>
-              <CardDescription className="mt-2">
-                {seller.profile.isPublicBio && seller.profile.bio ? (
-                  <p className="line-clamp-2">{seller.profile.bio}</p>
-                ) : (
-                  "Premium poultry seller"
-                )}
-              </CardDescription>
+            <div className="flex items-start gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarImage 
+                  src={seller.profile.profilePicture} 
+                  alt={seller.profile.businessName || seller.username} 
+                />
+                <AvatarFallback>
+                  <UserIcon className="h-8 w-8" />
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <CardTitle className="text-xl">
+                  <div className="flex items-center gap-2">
+                    <Store className="h-5 w-5" />
+                    {seller.profile.businessName || "Anonymous Seller"}
+                  </div>
+                </CardTitle>
+                <CardDescription className="mt-2">
+                  {seller.profile.isPublicBio && seller.profile.bio ? (
+                    <p className="line-clamp-2">{seller.profile.bio}</p>
+                  ) : (
+                    "Premium poultry seller"
+                  )}
+                </CardDescription>
+              </div>
             </div>
             {successfulAuctions > 0 && (
               <Badge variant="secondary" className="flex items-center gap-1">
