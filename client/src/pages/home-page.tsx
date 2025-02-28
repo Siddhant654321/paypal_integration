@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import AuctionCard from "@/components/auction-card";
 import AuctionFilters from "@/components/auction-filters";
-import SellerCarousel from "@/components/seller-carousel";
 import { useState, useMemo } from "react";
-import { Auction, User } from "@shared/schema";
+import { Auction } from "@shared/schema";
 import { Loader2, Archive } from "lucide-react";
 import { formatPrice } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
@@ -24,12 +23,6 @@ export default function HomePage() {
       filters.species && `species=${filters.species}`,
       filters.category && `category=${filters.category}`,
     ].filter(Boolean),
-  });
-
-  // Query for active sellers
-  const { data: activeSellers } = useQuery<User[]>({
-    queryKey: ["/api/sellers/active"],
-    enabled: !!auctions,
   });
 
   // Function to sort and filter auctions based on user selection
@@ -93,14 +86,6 @@ export default function HomePage() {
       </div>
 
       <div className="container mx-auto py-8">
-        {/* Featured Sellers Section */}
-        {activeSellers && activeSellers.length > 0 && (
-          <div className="mb-12">
-            <h2 className="text-2xl font-bold mb-6">Featured Sellers</h2>
-            <SellerCarousel sellers={activeSellers} />
-          </div>
-        )}
-
         <AuctionFilters filters={filters} onFilterChange={setFilters} />
 
         {isLoading ? (
