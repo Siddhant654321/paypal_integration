@@ -127,11 +127,6 @@ export default function PaymentPage() {
     }
   };
 
-  // Convert cents to dollars for display
-  const baseAmountDollars = auction?.currentPrice ? auction.currentPrice / 100 : 0;
-  const insuranceAmountDollars = INSURANCE_FEE / 100;
-  const totalAmountDollars = baseAmountDollars + (includeInsurance ? insuranceAmountDollars : 0);
-
   if (isLoadingAuction || isLoadingPayment) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -147,6 +142,11 @@ export default function PaymentPage() {
       </div>
     );
   }
+
+  // Convert amounts to dollars for display only
+  const baseAmountDollars = (auction.currentPrice / 100).toFixed(2);
+  const insuranceAmountDollars = (INSURANCE_FEE / 100).toFixed(2);
+  const totalAmountDollars = ((auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)) / 100).toFixed(2);
 
   return (
     <div className="container mx-auto py-8">
@@ -167,7 +167,7 @@ export default function PaymentPage() {
           </div>
           <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
             <span>Winning bid amount</span>
-            <span className="font-medium">${baseAmountDollars.toFixed(2)}</span>
+            <span className="font-medium">${baseAmountDollars}</span>
           </div>
 
           <div className="flex items-center space-x-4 p-4 border rounded-lg">
@@ -175,7 +175,7 @@ export default function PaymentPage() {
             <div className="flex-1">
               <Label htmlFor="insurance">Shipping Insurance</Label>
               <p className="text-sm text-muted-foreground">
-                Add ${insuranceAmountDollars.toFixed(2)} insurance to protect against shipping issues
+                Add ${insuranceAmountDollars} insurance to protect against shipping issues
               </p>
             </div>
             <Switch
@@ -187,7 +187,7 @@ export default function PaymentPage() {
 
           <div className="text-2xl font-bold flex justify-between items-center">
             <span>Total Amount:</span>
-            <span>${totalAmountDollars.toFixed(2)}</span>
+            <span>${totalAmountDollars}</span>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
