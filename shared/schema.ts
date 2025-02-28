@@ -54,7 +54,7 @@ export const auctions = pgTable("auctions", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   species: text("species").notNull(),
-  category: text("category", { enum: ["Show Quality", "Purebred & Production", "Fun & Mixed"] }).notNull(),
+  category: text("category").notNull(),  // Remove enum constraint to allow flexibility
   imageUrl: text("image_url"),
   images: text("images").array().notNull().default([]),
   startPrice: integer("start_price").notNull(),
