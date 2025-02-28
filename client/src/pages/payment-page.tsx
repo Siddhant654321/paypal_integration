@@ -102,17 +102,19 @@ export default function PaymentPage() {
       }
 
       console.log("Redirecting to Stripe checkout...");
-      // Use proper Stripe redirect method
-      const { error } = await stripe.redirectToCheckout({
-        sessionId: sessionId
-      });
       
-      if (error) {
-        console.error("Stripe redirect error:", error);
-        throw error;
-      }
+      // Set up for the iframe environment (Replit)
+      // Create a form and submit it to open in a new tab instead of using redirectToCheckout
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = 'https://checkout.stripe.com/pay/' + sessionId;
+      form.target = '_blank'; // Open in new tab
       
-      // Show success message since we can't redirect back automatically
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+      
+      // Show success message
       toast({
         title: "Checkout opened in new tab",
         description: "Complete your payment in the new tab. You'll be redirected back after payment."
