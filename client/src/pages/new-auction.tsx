@@ -230,8 +230,10 @@ export default function NewAuction() {
                     <Input 
                       {...field} 
                       type="number" 
+                      step="0.01"
                       min="1" 
-                      onChange={(e) => field.onChange(parseFloat(e.target.value))} //changed to parse float
+                      placeholder="0.00"
+                      onChange={(e) => field.onChange(parseFloat(e.target.value))} 
                     />
                   </FormControl>
                   <FormMessage />
@@ -249,8 +251,10 @@ export default function NewAuction() {
                     <Input 
                       {...field} 
                       type="number" 
+                      step="0.01"
                       min={form.watch('startPrice')} 
-                      onChange={(e) => field.onChange(parseFloat(e.target.value))} //changed to parse float
+                      placeholder="0.00"
+                      onChange={(e) => field.onChange(parseFloat(e.target.value))} 
                     />
                   </FormControl>
                   <FormMessage />
@@ -272,10 +276,10 @@ export default function NewAuction() {
                         type="datetime-local"
                         {...field}
                         min={new Date().toISOString().split("T")[0] + "T00:00"}
-                        
+
                       />
                     </FormControl>
-                    
+
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -294,10 +298,10 @@ export default function NewAuction() {
                         type="datetime-local"
                         {...field}
                         min={form.watch("startDate")}
-                        
+
                       />
                     </FormControl>
-                    
+
                   </div>
                   <FormMessage />
                 </FormItem>
