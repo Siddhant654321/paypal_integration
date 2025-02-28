@@ -1,17 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
-import { useRoute, Link } from "wouter";
-import { Auction } from "@shared/schema";
+import React, { useEffect, useRef, useState } from "react";
+import { useQuery } from "@/lib/use-query";
+import { useRoute } from "@/lib/use-route";
+import { Auction } from "@/shared/schema";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CreditCard, Loader2, Shield } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
-import { loadStripe } from "@stripe/stripe-js";
+import { Loader2, CreditCard, Shield } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
 
-// Initialize Stripe with the publishable key
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+// Load Stripe
+import { loadStripe } from "@stripe/stripe-js";
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
 
 interface PaymentResponse {
   clientSecret: string;
@@ -42,43 +42,39 @@ export default function PaymentPage() {
     enabled: !!auction,
   });
 
-  // Refetch payment data when insurance option changes
+  // Update payment intent when insurance changes
   useEffect(() => {
-    if (auction?.id) {
-      fetch(`/api/auctions/${auction.id}/pay`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ includeInsurance })
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Failed to update payment details');
-        }
-        return refetchPayment();
-      })
-      .catch(error => {
-        console.error('Error updating payment:', error);
-        toast({
-          variant: "destructive",
-          title: "Payment Update Error",
-          description: "Failed to update payment details. Please try again.",
+    if (!auction || !paymentData) return;
+
+    const updatePaymentIntent = async () => {
+      try {
+        await fetch(`/api/auctions/${auction.id}/pay`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ includeInsurance }),
         });
-      });
-    }
-  }, [includeInsurance, auction?.id, refetchPayment, toast]);
-
-  useEffect(() => {
-    let cleanup = () => {};
-
-    const initializeStripe = async () => {
-      if (!paymentData?.clientSecret) {
-        console.log("No client secret available yet");
-        return;
+        refetchPayment();
+      } catch (error) {
+        console.error("Error updating payment intent:", error);
       }
+    };
 
+    updatePaymentIntent();
+  }, [includeInsurance, auction?.id, refetchPayment]);
+
+  // Format amounts for display
+  const formatAmount = (amount: number) => (amount / 100).toFixed(2);
+  const totalAmountDollars = paymentData ? formatAmount(paymentData.payment.amount) : "0.00";
+  const platformFeeDollars = paymentData ? formatAmount(paymentData.payment.platformFee) : "0.00";
+  const sellerPayoutDollars = paymentData ? formatAmount(paymentData.payment.sellerPayout) : "0.00";
+  const insuranceAmountDollars = formatAmount(INSURANCE_FEE);
+
+  // Initialize Stripe
+  useEffect(() => {
+    if (!paymentData?.clientSecret) return;
+
+    let cleanup = () => {};
+    const initializeStripe = async () => {
       try {
         console.log("Loading Stripe...");
         const stripe = await stripePromise;
@@ -87,7 +83,7 @@ export default function PaymentPage() {
         }
         stripeRef.current = stripe;
         console.log("Stripe loaded successfully");
-        
+
         console.log("Creating Elements instance...");
         const elements = stripe.elements({
           clientSecret: paymentData.clientSecret,
@@ -180,92 +176,59 @@ export default function PaymentPage() {
     );
   }
 
-  if (!auction) {
-    return (
-      <div className="flex justify-center items-center min-h-screen text-muted-foreground">
-        Auction not found
-      </div>
-    );
-  }
-
-  // Convert cents to dollars for display only
-  const baseAmountDollars = (auction.currentPrice / 100).toFixed(2);
-  const insuranceAmountDollars = (INSURANCE_FEE / 100).toFixed(2);
-  const totalAmountDollars = ((auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)) / 100).toFixed(2);
-
   return (
-    <div className="container mx-auto py-8">
-      <Link href={`/auction/${auction.id}`}>
-        <Button variant="ghost" className="mb-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Auction
-        </Button>
-      </Link>
-
-      <Card className="max-w-lg mx-auto">
-        <CardHeader>
-          <CardTitle>Complete Payment</CardTitle>
+    <div className="container max-w-3xl py-8">
+      <Card className="border-2 border-muted shadow-lg">
+        <CardHeader className="border-b bg-muted/50">
+          <CardTitle>Complete Your Purchase</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="text-lg font-medium">
-            {auction.title}
-          </div>
-          <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
-            <span>Winning bid amount</span>
-            <span className="font-medium">${baseAmountDollars}</span>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="p-4 bg-muted rounded-lg">
-              <div className="flex justify-between mb-2">
-                <span>Total</span>
-                <span className="font-bold">${totalAmountDollars}</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmit}>
-              <div ref={paymentElementRef} className="mb-6" />
-              
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={!stripeReady || isProcessing}
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>Pay ${totalAmountDollars}</>
-                )}
-              </Button>
-            </form>
-          </div>
-
-          <div className="flex items-center space-x-4 p-4 border rounded-lg">
-            <Shield className="h-5 w-5 text-primary" />
-            <div className="flex-1">
-              <Label htmlFor="insurance">Shipping Insurance</Label>
-              <p className="text-sm text-muted-foreground">
-                Add ${insuranceAmountDollars} insurance to protect against shipping issues
-              </p>
-            </div>
-            <Switch
-              id="insurance"
-              checked={includeInsurance}
-              onCheckedChange={setIncludeInsurance}
-            />
-          </div>
-
-          <div className="text-2xl font-bold flex justify-between items-center">
-            <span>Total Amount:</span>
-            <span>${totalAmountDollars}</span>
+        <CardContent className="p-6 space-y-6">
+          <div className="space-y-1">
+            <h3 className="text-lg font-medium">{auction?.title}</h3>
+            <p className="text-sm text-muted-foreground">
+              Winning bid: ${auction?.currentPrice ? (auction.currentPrice / 100).toFixed(2) : "0.00"}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="p-4 border rounded-lg min-h-[200px]">
               <div ref={paymentElementRef} className="min-h-[40px]" />
+            </div>
+
+            <div className="flex items-center space-x-4 p-4 border rounded-lg">
+              <Shield className="h-5 w-5 text-primary" />
+              <div className="flex-1">
+                <Label htmlFor="insurance">Shipping Insurance</Label>
+                <p className="text-sm text-muted-foreground">
+                  Add ${insuranceAmountDollars} insurance to protect against shipping issues
+                </p>
+              </div>
+              <Switch
+                id="insurance"
+                checked={includeInsurance}
+                onCheckedChange={setIncludeInsurance}
+              />
+            </div>
+
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="flex justify-between mb-2">
+                <span>Base Amount</span>
+                <span>${auction?.currentPrice ? (auction.currentPrice / 100).toFixed(2) : "0.00"}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span>Platform Fee</span>
+                <span>${platformFeeDollars}</span>
+              </div>
+              {includeInsurance && (
+                <div className="flex justify-between mb-2">
+                  <span>Insurance</span>
+                  <span>${insuranceAmountDollars}</span>
+                </div>
+              )}
+              <div className="border-t mt-2 pt-2 flex justify-between font-bold">
+                <span>Total</span>
+                <span>${totalAmountDollars}</span>
+              </div>
             </div>
 
             <Button 
@@ -279,7 +242,7 @@ export default function PaymentPage() {
               ) : (
                 <CreditCard className="h-5 w-5 mr-2" />
               )}
-              {isProcessing ? "Processing..." : "Pay Now"}
+              {isProcessing ? "Processing..." : `Pay $${totalAmountDollars}`}
             </Button>
           </form>
         </CardContent>
