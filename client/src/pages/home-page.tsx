@@ -25,7 +25,7 @@ export default function HomePage() {
   // Function to sort and filter auctions based on user selection
   const displayedAuctions = useMemo(() => {
     if (!auctions) return [];
-    
+
     // First filter by search term if provided
     let filtered = auctions;
     if (filters.searchTerm) {
@@ -35,7 +35,7 @@ export default function HomePage() {
         auction.description.toLowerCase().includes(searchTerm)
       );
     }
-    
+
     // Then sort based on the selected sort option
     if (filters.sortBy && filters.sortBy !== 'default') {
       return [...filtered].sort((a, b) => {
@@ -53,7 +53,7 @@ export default function HomePage() {
         }
       });
     }
-    
+
     return filtered;
   }, [auctions, filters.searchTerm, filters.sortBy]);
 
