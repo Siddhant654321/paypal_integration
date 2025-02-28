@@ -1,9 +1,10 @@
 import { Profile, Auction, User } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Store, MapPin, Award, User as UserIcon } from "lucide-react";
-import AuctionCard from "./auction-card";
+import { Store, MapPin, Award, User as UserIcon, ArrowRight } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 
 interface SellerShowcaseProps {
   seller: User & {
@@ -13,89 +14,68 @@ interface SellerShowcaseProps {
 }
 
 export function SellerShowcase({ seller }: SellerShowcaseProps) {
-  // Get the most recent successful auctions
   const successfulAuctions = seller.auctions
     .filter(auction => auction.status === "ended" && auction.winningBidderId)
     .length;
 
-  // Get active auctions
   const activeAuctions = seller.auctions
     .filter(auction => auction.status === "active" && auction.approved);
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-4">
-              <Avatar className="h-16 w-16">
-                <AvatarImage 
-                  src={seller.profile.profilePicture} 
-                  alt={seller.profile.businessName || seller.username} 
-                />
-                <AvatarFallback>
-                  <UserIcon className="h-8 w-8" />
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <CardTitle className="text-xl">
-                  <div className="flex items-center gap-2">
-                    <Store className="h-5 w-5" />
-                    {seller.profile.businessName || "Anonymous Seller"}
-                  </div>
-                </CardTitle>
-                <CardDescription className="mt-2">
-                  {seller.profile.isPublicBio && seller.profile.bio ? (
-                    <p className="line-clamp-2">{seller.profile.bio}</p>
-                  ) : (
-                    "Premium poultry seller"
-                  )}
-                </CardDescription>
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-12 w-12">
+            <AvatarImage 
+              src={seller.profile.profilePicture || ""} 
+              alt={seller.profile.businessName || seller.username} 
+            />
+            <AvatarFallback>
+              <UserIcon className="h-6 w-6" />
+            </AvatarFallback>
+          </Avatar>
+          <div className="space-y-1">
+            <CardTitle className="text-lg">
+              <div className="flex items-center gap-2">
+                <Store className="h-4 w-4" />
+                {seller.profile.businessName || seller.username}
               </div>
-            </div>
-            {successfulAuctions > 0 && (
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <Award className="h-3 w-3" />
-                {successfulAuctions} Successful {successfulAuctions === 1 ? 'Sale' : 'Sales'}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+            </CardTitle>
             {seller.profile.state && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <MapPin className="h-4 w-4" />
-                <span>Located in {seller.profile.state}</span>
-              </div>
-            )}
-
-            {seller.profile.breedSpecialty && (
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Breed Specialty</p>
-                <p className="text-sm text-muted-foreground">
-                  {seller.profile.breedSpecialty}
-                </p>
-              </div>
-            )}
-
-            {activeAuctions.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium">Current Auctions</h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {activeAuctions.map(auction => (
-                    <AuctionCard 
-                      key={auction.id} 
-                      auction={auction}
-                      compact={true}
-                    />
-                  ))}
-                </div>
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                <span>{seller.profile.state}</span>
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+        {successfulAuctions > 0 && (
+          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+            <Award className="h-3 w-3" />
+            {successfulAuctions} Successful {successfulAuctions === 1 ? 'Sale' : 'Sales'}
+          </Badge>
+        )}
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {seller.profile.breedSpecialty && (
+            <p className="text-sm text-muted-foreground">
+              Specializes in {seller.profile.breedSpecialty}
+            </p>
+          )}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {activeAuctions.length} Active {activeAuctions.length === 1 ? 'Auction' : 'Auctions'}
+            </p>
+            <Link href={`/seller/${seller.id}`}>
+              <Button variant="ghost" size="sm" className="font-medium">
+                View Profile
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

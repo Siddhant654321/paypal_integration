@@ -1297,6 +1297,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this new endpoint for fetching individual seller data
+  app.get("/api/sellers/:id", async (req, res) => {
+    try {
+      const sellerId = parseInt(req.params.id);
+
+      // Get the seller's user data
+      const seller = await storage.getUser(sellerId);
+      if (!seller) {
+        return res.status(404).json({ message: "Seller not found" });
+      }
+
+      // Get the seller's profile
+      const profile = await storage.getProfile(sellerId);
+      if (!profile) {
+        return res.status(404).json({ message: "Seller profile not found" });
+      }
+
+      // Get the seller's auctions
+      const auctions = await storage.getAuctions({ 
+        sellerId: sellerId,
+        approved: true 
+      });
+
+      // Combine all the data
+      res.json({
+        ...seller,
+        profile,
+        auctions
+      });
+    } catch (error) {
+      console.error("Error fetching seller:", error);
+      res.status(500).json({ message: "Failed to fetch seller data" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -30,14 +30,12 @@ export default function HomePage() {
     queryKey: ["/api/sellers/active"],
   });
 
-  // Function to sort and filter auctions based on user selection
   const { activeAuctions, completedAuctions } = useMemo(() => {
     if (!auctions) return { activeAuctions: [], completedAuctions: [] };
 
     const now = new Date();
     let filtered = auctions;
 
-    // First filter by search term if provided
     if (filters.searchTerm) {
       const searchTerm = filters.searchTerm.toLowerCase();
       filtered = auctions.filter(auction => 
@@ -46,11 +44,9 @@ export default function HomePage() {
       );
     }
 
-    // Split into active and completed
     const active = filtered.filter(auction => new Date(auction.endDate) > now);
     const completed = filtered.filter(auction => new Date(auction.endDate) <= now);
 
-    // Then sort based on the selected sort option
     if (filters.sortBy && filters.sortBy !== 'default') {
       const sortFn = (a: Auction, b: Auction) => {
         switch (filters.sortBy) {
@@ -104,7 +100,6 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            {/* Active Auctions Section */}
             <div>
               <h2 className="text-2xl font-bold mb-4">Active Auctions</h2>
               <div className="mt-4 mb-2 text-sm text-muted-foreground">
@@ -118,11 +113,10 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Featured Sellers Section */}
             {activeSellers && activeSellers.length > 0 && (
               <div className="mt-16">
                 <h2 className="text-2xl font-bold mb-6">Featured Sellers</h2>
-                <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {activeSellers.map((seller) => (
                     <SellerShowcase key={seller.id} seller={seller} />
                   ))}
@@ -130,7 +124,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Archives Section */}
             <div className="mt-12">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Archives</h2>
