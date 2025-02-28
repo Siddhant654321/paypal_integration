@@ -103,10 +103,26 @@ export default function PaymentPage() {
 
       console.log("Redirecting to Stripe checkout...");
       
-      // Use a direct URL to open the Stripe checkout page with the session ID
-      // This format works with Stripe's security requirements and CloudFront
+      // Create a more robust checkout URL using the proper format for Stripe Checkout
       const checkoutUrl = `https://checkout.stripe.com/c/pay/${sessionId}`;
-      window.open(checkoutUrl, '_blank');
+      
+      // Use a direct window.location.href assignment to force a full navigation
+      // This is more reliable than window.open() in some browsers
+      const checkoutWindow = window.open(checkoutUrl, '_blank');
+      
+      // Fallback in case window.open is blocked
+      if (!checkoutWindow || checkoutWindow.closed || typeof checkoutWindow.closed === 'undefined') {
+        console.log("Popup blocked, trying direct link...");
+        // Create a clickable link as fallback
+        const link = document.createElement('a');
+        link.href = checkoutUrl;
+        link.target = '_blank';
+        link.textContent = 'Click here to open Stripe checkout';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
       
       // Show success message
       toast({
@@ -115,12 +131,6 @@ export default function PaymentPage() {
       });
       
       setIsProcessing(false);
-      return; // Skip the error check below since we're not using redirectToCheckout
-
-      if (error) {
-        console.error("Stripe redirect error:", error);
-        throw error;
-      }
     } catch (err) {
       console.error('Payment error:', err);
       const errorMessage = err instanceof Error ? err.message : "Could not process your payment. Please try again.";
