@@ -616,27 +616,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stripe webhook handling
+  // Update the webhook handling section
   app.post("/api/webhooks/stripe", async (req, res) => {
     const sig = req.headers["stripe-signature"];
     const rawBody = await buffer(req);
 
     try {
+      console.log("Received Stripe webhook event");
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-        apiVersion: "2025-02-24.acacia",
+        apiVersion: "2023-10-16",
       });
+
       const event = stripe.webhooks.constructEvent(
         rawBody,
         sig as string,
         process.env.STRIPE_WEBHOOK_SECRET!
       );
 
+      console.log("Webhook event type:", event.type);
+
       switch (event.type) {
-        case "payment_intent.succeeded":
-          await PaymentService.handlePaymentSuccess(event.data.object.id);
+        case "checkout.session.completed":
+          const session = event.data.object;
+          console.log("Processing completed checkout session:", session.id);
+
+          // Update payment and auction status
+          await storage.updatePaymentBySessionId(session.id, {
+            status: "completed",
+            stripePaymentIntentId: session.payment_intent as string,
+          });
+
+          // Find and update the associated auction
+          const payment = await storage.getPaymentBySessionId(session.id);
+          if (payment) {
+            console.log("Updating auction status for payment:", payment.id);
+            await storage.updateAuction(payment.auctionId, {
+              paymentStatus: "completed",
+            });
+          }
           break;
+
         case "payment_intent.payment_failed":
-          await PaymentService.handlePaymentFailure(event.data.object.id);
+          const failedIntent = event.data.object;
+          console.log("Processing failed payment:", failedIntent.id);
+
+          await storage.updatePaymentByIntentId(failedIntent.id, {
+            status: "failed",
+          });
           break;
       }
 
