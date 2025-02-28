@@ -3,7 +3,6 @@ import { storage } from "./storage";
 import { insertPaymentSchema, type InsertPayment } from "@shared/schema";
 import { log } from "./vite";
 
-// Verify Stripe secret key is available
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("Missing STRIPE_SECRET_KEY environment variable");
 }
@@ -16,16 +15,16 @@ const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
 export class PaymentService {
-  static async createPaymentIntent(
+  static async createCheckoutSession(
     auctionId: number,
     buyerId: number,
     includeInsurance: boolean = false
   ): Promise<{
-    clientSecret: string;
+    sessionId: string;
     payment: InsertPayment;
   }> {
     try {
-      log('Creating payment intent...', 'payments');
+      log('Creating checkout session...', 'payments');
 
       // Get auction details
       const auction = await storage.getAuction(auctionId);
@@ -40,8 +39,6 @@ export class PaymentService {
       const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const sellerPayout = baseAmount - platformFee;
 
-      log(`Payment details: baseAmount=${baseAmount}, insuranceFee=${insuranceFee}, totalAmount=${totalAmount}`, 'payments');
-
       // Create payment record
       const paymentData: InsertPayment = {
         auctionId,
@@ -53,40 +50,59 @@ export class PaymentService {
         insuranceFee,
       };
 
-      // Create Stripe PaymentIntent
-      log('Creating Stripe PaymentIntent...', 'payments');
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: totalAmount,
-        currency: "usd",
+      // Create Stripe Checkout Session
+      const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
-        automatic_payment_methods: {
-          enabled: true,
-        },
+        mode: 'payment',
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: auction.title,
+                description: `Auction Payment - ${auction.species}`,
+              },
+              unit_amount: baseAmount,
+            },
+            quantity: 1,
+          },
+          ...(includeInsurance ? [{
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'Shipping Insurance',
+                description: 'Insurance coverage for shipping',
+              },
+              unit_amount: INSURANCE_FEE,
+            },
+            quantity: 1,
+          }] : []),
+        ],
         metadata: {
           auctionId: auctionId.toString(),
           buyerId: buyerId.toString(),
           sellerId: auction.sellerId.toString(),
           includeInsurance: includeInsurance.toString(),
         },
+        success_url: `${process.env.APP_URL}/auction/${auctionId}?payment=success`,
+        cancel_url: `${process.env.APP_URL}/auction/${auctionId}?payment=cancelled`,
       });
-
-      log(`PaymentIntent created: ${paymentIntent.id}`, 'payments');
 
       // Create payment record in database
       const payment = await storage.createPayment({
         ...paymentData,
-        stripePaymentIntentId: paymentIntent.id,
+        stripePaymentIntentId: session.payment_intent as string,
       });
 
       // Update auction status
       await storage.updateAuctionPaymentStatus(auctionId, "processing");
 
       return {
-        clientSecret: paymentIntent.client_secret!,
+        sessionId: session.id,
         payment: paymentData,
       };
     } catch (error) {
-      log(`Error creating payment intent: ${error}`, "payments");
+      log(`Error creating checkout session: ${error}`, "payments");
       throw error;
     }
   }

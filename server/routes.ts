@@ -504,14 +504,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only the winning bidder can pay" });
       }
 
-      // Create payment intent with insurance option
-      const { clientSecret, payment } = await PaymentService.createPaymentIntent(
+      // Create Stripe Checkout session
+      const { sessionId, payment } = await PaymentService.createCheckoutSession(
         auctionId,
         req.user.id,
         includeInsurance
       );
 
-      res.json({ clientSecret, payment });
+      res.json({ sessionId, payment });
     } catch (error) {
       console.error("Payment creation error:", error);
       res.status(500).json({ message: "Failed to create payment" });
