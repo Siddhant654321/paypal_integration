@@ -12,18 +12,17 @@ import {
 
 // Filter options
 const speciesOptions = [
-  { value: "crustacean", label: "Crustacean" },
-  { value: "fish", label: "Fish" },
-  { value: "coral", label: "Coral" },
-  { value: "invertebrate", label: "Invertebrate" },
-  { value: "plant", label: "Plant" },
+  { value: "waterfowl", label: "Waterfowl" },
+  { value: "bantam", label: "Bantam" },
+  { value: "standard", label: "Standard" },
+  { value: "quail", label: "Quail" },
+  { value: "other", label: "All Other" },
 ];
 
 const categoryOptions = [
-  { value: "livestock", label: "Livestock" },
-  { value: "equipment", label: "Equipment" },
-  { value: "supply", label: "Supply" },
-  { value: "decoration", label: "Decoration" },
+  { value: "show", label: "Show Quality" },
+  { value: "purebred", label: "Purebred & Production" },
+  { value: "fun", label: "Fun & Mixed" },
 ];
 
 const sortOptions = [

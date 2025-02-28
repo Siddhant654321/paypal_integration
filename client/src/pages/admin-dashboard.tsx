@@ -274,9 +274,9 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                     <FormLabel>Category</FormLabel>
                     <FormControl>
                       <select {...field} className="form-select block w-full">
-                        <option value="quality">Quality</option>
-                        <option value="production">Production</option>
-                        <option value="fun">Fun</option>
+                        <option value="show">Show Quality</option>
+                        <option value="purebred">Purebred & Production</option>
+                        <option value="fun">Fun & Mixed</option>
                       </select>
                     </FormControl>
                     <FormMessage />

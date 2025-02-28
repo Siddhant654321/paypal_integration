@@ -165,11 +165,11 @@ export default function NewAuction() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="chicken">Chicken</SelectItem>
-                      <SelectItem value="duck">Duck</SelectItem>
-                      <SelectItem value="turkey">Turkey</SelectItem>
+                      <SelectItem value="waterfowl">Waterfowl</SelectItem>
+                      <SelectItem value="bantam">Bantam</SelectItem>
+                      <SelectItem value="standard">Standard</SelectItem>
                       <SelectItem value="quail">Quail</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="other">All Other</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -193,9 +193,9 @@ export default function NewAuction() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="quality">Show Quality/Purebred</SelectItem>
-                      <SelectItem value="production">Production/Mixed</SelectItem>
-                      <SelectItem value="fun">Fun/Hobby</SelectItem>
+                      <SelectItem value="show">Show Quality</SelectItem>
+                      <SelectItem value="purebred">Purebred & Production</SelectItem>
+                      <SelectItem value="fun">Fun & Mixed</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
