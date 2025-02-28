@@ -25,7 +25,7 @@ export default function AuctionCard({ auction, showStatus }: Props) {
     <Card className="overflow-hidden">
       <div className="aspect-square w-full overflow-hidden">
         <img
-          src={auction.imageUrl || (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ? auction.images[0] : 'https://images.unsplash.com/photo-1569396116180-210c182bedb8?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1769&q=80')}
+          src={auction.imageUrl || (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ? auction.images[0] : '')}
           alt={auction.title}
           className="w-full h-full object-cover"
           onError={(e) => {

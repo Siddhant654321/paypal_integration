@@ -63,14 +63,13 @@ export default function HomePage() {
         className="bg-cover bg-center h-64 relative"
         style={{
           backgroundImage:
-            'url("https://images.unsplash.com/photo-1548550024-c2fe2f4f8955?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1770&q=80")',
+            'url("https://images.unsplash.com/photo-1444858291040-58f756a3bdd6")',
         }}
       >
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
           <h1 className="text-4xl font-bold text-white text-center">
-            Poultry Auctions
+            Pips 'n Chicks Auctions
           </h1>
-          <p className="text-xl text-white text-center mb-4">Buy and Sell Poultry. Simplified.</p>
         </div>
       </div>
 
