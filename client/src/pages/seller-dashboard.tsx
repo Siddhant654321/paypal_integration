@@ -123,7 +123,10 @@ export default function SellerDashboard() {
               This allows us to securely transfer payments to your bank account.
             </p>
             <Button 
-              onClick={() => connectWithStripeMutation.mutate()}
+              onClick={() => {
+                console.log("Connecting with Stripe...");
+                connectWithStripeMutation.mutate();
+              }}
               disabled={connectWithStripeMutation.isPending}
             >
               {connectWithStripeMutation.isPending ? (

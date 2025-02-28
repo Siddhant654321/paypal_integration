@@ -5,6 +5,14 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
+// Check for required Stripe environment variables
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error("ERROR: Missing STRIPE_SECRET_KEY environment variable");
+}
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  console.warn("WARNING: Missing STRIPE_WEBHOOK_SECRET environment variable");
+}
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
