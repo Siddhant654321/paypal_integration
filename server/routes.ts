@@ -440,7 +440,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add these new routes in the admin section of registerRoutes
+  // Add new admin profile route
+  app.get("/api/admin/profiles/:userId", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const profile = await storage.getProfile(userId);
+
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      // Get user's bids if they're a buyer
+      const user = await storage.getUser(userId);
+      if (user?.role === "buyer") {
+        const bids = await storage.getBidsByUser(userId);
+        return res.json({ ...profile, bids });
+      }
+
+      // Get user's auctions if they're a seller
+      if (user?.role === "seller" || user?.role === "seller_admin") {
+        const auctions = await storage.getAuctions({ sellerId: userId });
+        return res.json({ ...profile, auctions });
+      }
+
+      res.json(profile);
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+
+  // Add routes for getting user's bids and auctions
+  app.get("/api/admin/users/:userId/bids", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const bids = await storage.getBidsByUser(userId);
+      res.json(bids);
+    } catch (error) {
+      console.error("Error fetching user bids:", error);
+      res.status(500).json({ message: "Failed to fetch user bids" });
+    }
+  });
+
+  app.get("/api/admin/users/:userId/auctions", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const auctions = await storage.getAuctions({ sellerId: userId });
+      res.json(auctions);
+    } catch (error) {
+      console.error("Error fetching user auctions:", error);
+      res.status(500).json({ message: "Failed to fetch user auctions" });
+    }
+  });
+
   // Admin profile management
   app.delete("/api/admin/profiles/:userId", requireAdmin, async (req, res) => {
     try {
@@ -814,7 +866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         accountId, 
         publishableKey: stripePublishableKey 
       });
-    } catch (error) {
+    }catch (error) {
       console.error("Error creating seller account:", error);
       res.status(500).json({ 
         message: "Failed to create seller account", 
