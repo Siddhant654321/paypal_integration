@@ -862,7 +862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get onboarding link
       const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
 
-      console.log(""Onboarding URL generated:", onboardingUrl);
+      console.log("Onboarding URL generated:", onboardingUrl);
 
       res.json({
         url: onboardingUrl,
@@ -1136,6 +1136,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const fulfillment = await storage.createFulfillment(fulfillmentData);
 
+      // Email notifications temporarily disabled for testing
+      /*
       // Get winner user and send notification
       const winner = await storage.getUser(auction.winningBidderId);
       if (winner) {
@@ -1147,6 +1149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           estimatedDeliveryDate: fulfillmentData.estimatedDeliveryDate?.toISOString(),
         });
       }
+      */
 
       res.status(201).json(fulfillment);
     } catch (error) {
