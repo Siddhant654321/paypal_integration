@@ -41,9 +41,10 @@ export default function SellerDashboard() {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/api/seller/connect", {
-        method: "POST",
-      });
+      const response = await apiRequest("/api/seller/connect");  // Fix: Remove invalid method parameter
+      if (!response.ok) {
+        throw new Error('Failed to connect with Stripe');
+      }
       const data = await response.json();
       // Redirect to Stripe Connect onboarding
       window.location.href = data.url;
@@ -53,9 +54,10 @@ export default function SellerDashboard() {
   // Refresh onboarding link mutation
   const refreshOnboardingMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/api/seller/onboarding/refresh", {
-        method: "POST",
-      });
+      const response = await apiRequest("/api/seller/onboarding/refresh");  // Fix: Remove invalid method parameter
+      if (!response.ok) {
+        throw new Error('Failed to refresh onboarding link');
+      }
       const data = await response.json();
       window.location.href = data.url;
     },
