@@ -103,25 +103,15 @@ export default function PaymentPage() {
 
       console.log("Redirecting to Stripe checkout...");
       
-      // Create a more robust checkout URL using the proper format for Stripe Checkout
-      const checkoutUrl = `https://checkout.stripe.com/c/pay/${sessionId}`;
+      // Use Stripe's official redirectToCheckout method which handles all the URL formatting
+      const result = await stripe.redirectToCheckout({
+        sessionId: sessionId
+      });
       
-      // Use a direct window.location.href assignment to force a full navigation
-      // This is more reliable than window.open() in some browsers
-      const checkoutWindow = window.open(checkoutUrl, '_blank');
-      
-      // Fallback in case window.open is blocked
-      if (!checkoutWindow || checkoutWindow.closed || typeof checkoutWindow.closed === 'undefined') {
-        console.log("Popup blocked, trying direct link...");
-        // Create a clickable link as fallback
-        const link = document.createElement('a');
-        link.href = checkoutUrl;
-        link.target = '_blank';
-        link.textContent = 'Click here to open Stripe checkout';
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+      // Handle any errors from redirectToCheckout
+      if (result.error) {
+        console.error('Stripe redirect error:', result.error);
+        throw new Error(result.error.message);
       }
       
       // Show success message
