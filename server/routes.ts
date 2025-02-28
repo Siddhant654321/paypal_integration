@@ -1011,17 +1011,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         topBuyer.userId ? storage.getProfile(topBuyer.userId) : null,
       ]);
 
+      // Calculate price history (average price by month)
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+      const monthlyPrices = allAuctions
+        .filter(auction => new Date(auction.endDate) >= sixMonthsAgo)
+        .reduce((acc, auction) => {
+          const monthKey = new Date(auction.endDate).toISOString().slice(0, 7);
+          if (!acc[monthKey]) {
+            acc[monthKey] = { total: 0, count: 0 };
+          }
+          acc[monthKey].total += auction.currentPrice;
+          acc[monthKey].count += 1;
+          return acc;
+        }, {} as Record<string, { total: number; count: number }>);
+
+      const priceHistory = Object.entries(monthlyPrices)
+        .map(([date, data]) => ({
+          date: `${date}-01`,  // First day of each month
+          averagePrice: Math.round(data.total / data.count)
+        }))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // Calculate popular categories
+      const categoryCount = allAuctions.reduce((acc, auction) => {
+        acc[auction.category] = (acc[auction.category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const popularCategories = Object.entries(categoryCount)
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => b.count - a.count);
+
       res.json({
         averagePrices,
         activeAuctions,
         topPerformers: {
           seller: topSellerProfile ? {
-            name: topSellerProfile.fullName,  // Changed from name to fullName
+            name: topSellerProfile.fullName,
             total: topSeller.total,
             auctionsWon: topSeller.count
           } : null,
           buyer: topBuyerProfile ? {
-            name: topBuyerProfile.fullName,  // Changed from name to fullName
+            name: topBuyerProfile.fullName,
             total: topBuyer.total,
             auctionsWon: topBuyer.count
           } : null
