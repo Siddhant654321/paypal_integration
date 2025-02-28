@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Loader2, UserCircle } from "lucide-react";
+import { Loader2, UserCircle, LineChart } from "lucide-react";
 import { NotificationsMenu } from "./notifications";
 import { useState } from "react";
 
@@ -43,6 +43,14 @@ export default function NavBar() {
           </h2>
         </Link>
         <div className="flex gap-4 items-center">
+          {/* Analytics link - always visible */}
+          <Link href="/analytics">
+            <Button variant="secondary" className="flex items-center gap-2">
+              <LineChart className="h-4 w-4" />
+              Market Analytics
+            </Button>
+          </Link>
+
           {user ? (
             <>
               {/* Add NotificationsMenu before user info */}
