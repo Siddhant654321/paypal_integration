@@ -6,9 +6,11 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  email: text("email").notNull(),
   role: text("role", { enum: ["buyer", "seller", "admin", "seller_admin"] }).notNull(),
   approved: boolean("approved").notNull().default(false),
   hasProfile: boolean("has_profile").notNull().default(false),
+  emailNotificationsEnabled: boolean("email_notifications_enabled").notNull().default(true),
 });
 
 export const profiles = pgTable("profiles", {
@@ -211,11 +213,16 @@ export const insertPayoutSchema = createInsertSchema(payouts).omit({
   updatedAt: true,
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  role: true,
-});
+export const insertUserSchema = createInsertSchema(users)
+  .pick({
+    username: true,
+    password: true,
+    role: true,
+    email: true,
+  })
+  .extend({
+    email: z.string().email("Invalid email format"),
+  });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;

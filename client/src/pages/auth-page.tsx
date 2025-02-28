@@ -38,6 +38,7 @@ export default function AuthPage() {
     defaultValues: {
       username: "",
       password: "",
+      email: "",
       role: "buyer" as const,
     },
   });
@@ -115,6 +116,20 @@ export default function AuthPage() {
                       {...registerForm.register("username")}
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-email">Email</Label>
+                    <Input
+                      id="reg-email"
+                      type="email"
+                      {...registerForm.register("email")}
+                      required
+                    />
+                    {registerForm.formState.errors.email && (
+                      <p className="text-sm text-red-500">
+                        {registerForm.formState.errors.email.message}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="reg-password">Password</Label>
