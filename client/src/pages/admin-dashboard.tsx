@@ -53,6 +53,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import axios from 'axios'; //Import axios
+
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -324,21 +326,23 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
   });
 
   const updateAuctionMutation = useMutation({
-    mutationFn: async (data: any) => { //Added any type to avoid type error in the formData
-      // Convert dollar amounts to cents before sending to the server
-      const updatedData = {
+    mutationFn: async (data: any) => {
+      // Map form data to API format
+      const mappedData = {
         ...data,
-        // Ensure category is valid before sending
-        category: ["show", "purebred", "fun"].includes(data.category) ? data.category : "purebred",
-        startDate: new Date(data.startDate).toISOString(),
-        endDate: new Date(data.endDate).toISOString(),
-        startPrice: Math.round(Number(data.startPrice) * 100),
-        reservePrice: Math.round(Number(data.reservePrice) * 100),
+        // Explicitly convert price values to numbers and from dollars to cents
+        startPrice: data.startPrice * 100,
+        reservePrice: data.reservePrice * 100,
+        // Ensure dates are properly formatted
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
       };
 
-      console.log("Updating auction with data:", updatedData);
-      const res = await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, updatedData);
-      return res.json();
+      console.log("Mapped category from", data.category, "to", mappedData.category);
+      console.log("Setting startPrice to", mappedData.startPrice, "(" + typeof mappedData.startPrice + ")");
+      console.log("Setting reservePrice to", mappedData.reservePrice, "(" + typeof mappedData.reservePrice + ")");
+
+      return await axios.patch(`/api/admin/auctions/${auction.id}`, mappedData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
