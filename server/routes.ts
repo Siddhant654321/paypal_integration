@@ -494,6 +494,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auctionId = parseInt(req.params.id);
       const { includeInsurance = false } = req.body;
 
+      log(`Creating payment session for auction ${auctionId} with insurance: ${includeInsurance}`, 'payments');
+
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
@@ -504,17 +506,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only the winning bidder can pay" });
       }
 
-      // Create Stripe Checkout session
+      // Get the base URL from the request
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      log(`Creating checkout session with baseUrl: ${baseUrl}`, 'payments');
+
+      // Create Stripe Checkout session with base URL
       const { sessionId, payment } = await PaymentService.createCheckoutSession(
         auctionId,
         req.user.id,
-        includeInsurance
+        includeInsurance,
+        baseUrl
       );
 
+      log(`Successfully created checkout session: ${sessionId}`, 'payments');
       res.json({ sessionId, payment });
     } catch (error) {
       console.error("Payment creation error:", error);
-      res.status(500).json({ message: "Failed to create payment" });
+      res.status(500).json({ 
+        message: "Failed to create payment session",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
@@ -694,4 +705,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   return httpServer;
+}
+
+const log = (message: string, context: string = 'general') => {
+  console.log(`[${context}] ${message}`);
 }

@@ -3,7 +3,7 @@ import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Loader2, Shield } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -40,52 +40,57 @@ export default function PaymentPage() {
 
   const { data: paymentData, refetch: refetchPayment } = useQuery<PaymentResponse>({
     queryKey: [`/api/auctions/${params?.id}/pay`],
-    enabled: !!auction,
+    enabled: false, // Don't fetch automatically
   });
 
-  // Handle insurance toggle
-  useEffect(() => {
-    if (!auction?.id) return;
+  // Initialize payment session
+  const initializePayment = async () => {
+    try {
+      const response = await fetch(`/api/auctions/${params?.id}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ includeInsurance })
+      });
 
-    const updatePayment = async () => {
-      try {
-        const response = await fetch(`/api/auctions/${auction.id}/pay`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ includeInsurance })
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to update payment details');
-        }
-
-        await refetchPayment();
-      } catch (error) {
-        console.error('Payment update error:', error);
-        toast({
-          variant: "destructive",
-          title: "Update Failed",
-          description: "Could not update payment details. Please try again.",
-        });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to initialize payment');
       }
-    };
 
-    updatePayment();
-  }, [includeInsurance, auction?.id, refetchPayment, toast]);
+      await refetchPayment();
+    } catch (error) {
+      console.error('Payment initialization error:', error);
+      toast({
+        variant: "destructive",
+        title: "Payment Setup Failed",
+        description: error instanceof Error ? error.message : "Could not setup payment. Please try again.",
+      });
+    }
+  };
 
+  // Handle insurance toggle
+  const handleInsuranceToggle = async (checked: boolean) => {
+    setIncludeInsurance(checked);
+    await initializePayment();
+  };
+
+  // Handle payment submission
   const handlePayment = async () => {
-    if (isProcessing || !paymentData?.sessionId) return;
+    if (isProcessing || !auction?.id) return;
 
     setIsProcessing(true);
 
     try {
+      // First initialize/update the payment session
+      await initializePayment();
+
+      // Then redirect to Stripe Checkout
       const stripe = await stripePromise;
-      if (!stripe) {
-        throw new Error("Could not initialize payment");
+      if (!stripe || !paymentData?.sessionId) {
+        throw new Error("Payment system not initialized");
       }
 
-      // Redirect to Stripe Checkout
       const { error } = await stripe.redirectToCheckout({
         sessionId: paymentData.sessionId,
       });
@@ -107,7 +112,7 @@ export default function PaymentPage() {
   if (isLoadingAuction || !auction) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -150,7 +155,7 @@ export default function PaymentPage() {
             <Switch
               id="insurance"
               checked={includeInsurance}
-              onCheckedChange={setIncludeInsurance}
+              onCheckedChange={handleInsuranceToggle}
             />
           </div>
 
@@ -163,7 +168,7 @@ export default function PaymentPage() {
             onClick={handlePayment}
             className="w-full" 
             size="lg"
-            disabled={isProcessing || !paymentData?.sessionId}
+            disabled={isProcessing}
           >
             {isProcessing ? (
               <Loader2 className="h-5 w-5 mr-2 animate-spin" />

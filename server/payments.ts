@@ -18,7 +18,8 @@ export class PaymentService {
   static async createCheckoutSession(
     auctionId: number,
     buyerId: number,
-    includeInsurance: boolean = false
+    includeInsurance: boolean = false,
+    baseUrl: string // Add baseUrl parameter
   ): Promise<{
     sessionId: string;
     payment: InsertPayment;
@@ -84,8 +85,8 @@ export class PaymentService {
           sellerId: auction.sellerId.toString(),
           includeInsurance: includeInsurance.toString(),
         },
-        success_url: `${process.env.APP_URL}/auction/${auctionId}?payment=success`,
-        cancel_url: `${process.env.APP_URL}/auction/${auctionId}?payment=cancelled`,
+        success_url: `${baseUrl}/auction/${auctionId}?payment=success`,
+        cancel_url: `${baseUrl}/auction/${auctionId}?payment=cancelled`,
       });
 
       // Create payment record in database
