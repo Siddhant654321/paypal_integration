@@ -368,6 +368,7 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [auctionSearchTerm, setAuctionSearchTerm] = useState("");
+  const [buyerSearchTerm, setBuyerSearchTerm] = useState(""); // Added buyer search term state
 
   // Redirect if not an admin
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
@@ -390,6 +391,13 @@ export default function AdminDashboard() {
     queryKey: ["/api/auctions", { approved: true }],
   });
 
+  const { data: buyers, isLoading: isLoadingBuyers } = useQuery<User[]>({ // Added buyers query
+    queryKey: ["/api/admin/users", { role: "buyer" }],
+  });
+
+  const filteredBuyers = buyers?.filter(buyer =>
+    buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase())
+  );
 
   const approveAuctionMutation = useMutation({
     mutationFn: async (auctionId: number) => {
@@ -483,10 +491,10 @@ export default function AdminDashboard() {
             <Tabs defaultValue="pending">
               <TabsList className="w-full">
                 <TabsTrigger value="pending">
-                  Pending Approval ({pendingUsers?.length || 0})
+                  Pending Approval ({realPendingUsers?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="approved">
-                  Approved Sellers ({approvedSellers?.length || 0})
+                  Approved Sellers ({filteredSellers?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
@@ -603,6 +611,71 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </TabsContent>
+
+              <TabsContent value="buyers">
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search buyers..."
+                      value={buyerSearchTerm}
+                      onChange={(e) => setBuyerSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  {isLoadingBuyers ? (
+                    <div className="flex justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : !filteredBuyers?.length ? (
+                    <p className="text-muted-foreground">No buyers found</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredBuyers.map((buyer) => (
+                        <div
+                          key={buyer.id}
+                          className="flex items-center justify-between p-4 border rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">{buyer.username}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {buyer.email || "No email provided"}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            {buyer.hasProfile && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="destructive" size="sm">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Profile</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this buyer's profile? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deleteProfileMutation.mutate(buyer.id)}
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
@@ -619,7 +692,7 @@ export default function AdminDashboard() {
                   Pending Approval ({pendingAuctions?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="approved">
-                  Approved Auctions ({approvedAuctions?.length || 0})
+                  Approved Auctions ({filteredApprovedAuctions?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
