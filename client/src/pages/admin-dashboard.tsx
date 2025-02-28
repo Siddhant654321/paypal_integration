@@ -53,8 +53,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import axios from 'axios'; //Import axios
-
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -342,7 +340,19 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       console.log("Setting startPrice to", mappedData.startPrice, "(" + typeof mappedData.startPrice + ")");
       console.log("Setting reservePrice to", mappedData.reservePrice, "(" + typeof mappedData.reservePrice + ")");
 
-      return await axios.patch(`/api/admin/auctions/${auction.id}`, mappedData);
+      const response = await fetch(`/api/admin/auctions/${auction.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(mappedData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update auction');
+      }
+      
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
