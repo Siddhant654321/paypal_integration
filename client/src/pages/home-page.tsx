@@ -3,8 +3,9 @@ import AuctionCard from "@/components/auction-card";
 import AuctionFilters from "@/components/auction-filters";
 import { useState, useMemo } from "react";
 import { Auction } from "@shared/schema";
-import { Loader2 } from "lucide-react";
-import { formatToUSD } from "@/utils/formatters";
+import { Loader2, Archive } from "lucide-react";
+import { formatPrice } from "@/utils/formatters";
+import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   const [filters, setFilters] = useState({
@@ -13,6 +14,8 @@ export default function HomePage() {
     searchTerm: "",
     sortBy: "default",
   });
+
+  const [showArchives, setShowArchives] = useState(false);
 
   const { data: auctions, isLoading } = useQuery<Auction[]>({
     queryKey: [
@@ -23,11 +26,13 @@ export default function HomePage() {
   });
 
   // Function to sort and filter auctions based on user selection
-  const displayedAuctions = useMemo(() => {
-    if (!auctions) return [];
+  const { activeAuctions, completedAuctions } = useMemo(() => {
+    if (!auctions) return { activeAuctions: [], completedAuctions: [] };
+
+    const now = new Date();
+    let filtered = auctions;
 
     // First filter by search term if provided
-    let filtered = auctions;
     if (filters.searchTerm) {
       const searchTerm = filters.searchTerm.toLowerCase();
       filtered = auctions.filter(auction => 
@@ -36,9 +41,13 @@ export default function HomePage() {
       );
     }
 
+    // Split into active and completed
+    const active = filtered.filter(auction => new Date(auction.endDate) > now);
+    const completed = filtered.filter(auction => new Date(auction.endDate) <= now);
+
     // Then sort based on the selected sort option
     if (filters.sortBy && filters.sortBy !== 'default') {
-      return [...filtered].sort((a, b) => {
+      const sortFn = (a: Auction, b: Auction) => {
         switch (filters.sortBy) {
           case 'endingSoon':
             return new Date(a.endDate).getTime() - new Date(b.endDate).getTime();
@@ -51,10 +60,13 @@ export default function HomePage() {
           default:
             return 0;
         }
-      });
+      };
+
+      active.sort(sortFn);
+      completed.sort(sortFn);
     }
 
-    return filtered;
+    return { activeAuctions: active, completedAuctions: completed };
   }, [auctions, filters.searchTerm, filters.sortBy]);
 
   return (
@@ -80,20 +92,53 @@ export default function HomePage() {
           <div className="flex justify-center my-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : !displayedAuctions?.length ? (
+        ) : !activeAuctions?.length && !completedAuctions?.length ? (
           <div className="text-center my-8 text-muted-foreground">
             No auctions found{filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
           </div>
         ) : (
           <>
-            <div className="mt-4 mb-2 text-sm text-muted-foreground">
-              Showing {displayedAuctions.length} {displayedAuctions.length === 1 ? "auction" : "auctions"}
-              {filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
+            {/* Active Auctions Section */}
+            <div>
+              <h2 className="text-2xl font-bold mb-4">Active Auctions</h2>
+              <div className="mt-4 mb-2 text-sm text-muted-foreground">
+                Showing {activeAuctions.length} active {activeAuctions.length === 1 ? "auction" : "auctions"}
+                {filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-2">
+                {activeAuctions.map((auction) => (
+                  <AuctionCard key={auction.id} auction={auction} />
+                ))}
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-2">
-              {displayedAuctions.map((auction) => (
-                <AuctionCard key={auction.id} auction={auction} />
-              ))}
+
+            {/* Archives Section */}
+            <div className="mt-12">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold">Archives</h2>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowArchives(!showArchives)}
+                  className="flex items-center gap-2"
+                >
+                  <Archive className="h-4 w-4" />
+                  {showArchives ? "Hide Archives" : "Show Archives"}
+                </Button>
+              </div>
+
+              {showArchives && (
+                <>
+                  <div className="mt-4 mb-2 text-sm text-muted-foreground">
+                    Showing {completedAuctions.length} completed {completedAuctions.length === 1 ? "auction" : "auctions"}
+                    {filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-2">
+                    {completedAuctions.map((auction) => (
+                      <AuctionCard key={auction.id} auction={auction} />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </>
         )}
