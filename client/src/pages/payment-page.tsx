@@ -10,9 +10,13 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
-// Verify Stripe key is available
+// Verify Stripe key is available and in test mode
 if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
   throw new Error('Stripe publishable key is missing');
+}
+
+if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY.startsWith('pk_test_')) {
+  throw new Error('Stripe publishable key must be a test mode key (starts with pk_test_)');
 }
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
@@ -34,7 +38,7 @@ export default function PaymentPage() {
     setIsProcessing(true);
 
     try {
-      // Create checkout session
+      console.log('Creating checkout session...');
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -48,18 +52,20 @@ export default function PaymentPage() {
       }
 
       const { sessionId } = await response.json();
+      console.log('Got session ID:', sessionId);
 
-      // Redirect to Stripe Checkout
       const stripe = await stripePromise;
       if (!stripe) {
         throw new Error("Could not initialize Stripe");
       }
 
+      console.log('Redirecting to Stripe Checkout...');
       const { error } = await stripe.redirectToCheckout({
         sessionId: sessionId
       });
 
       if (error) {
+        console.error('Stripe redirect error:', error);
         throw error;
       }
     } catch (err) {

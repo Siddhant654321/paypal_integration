@@ -2,8 +2,13 @@ import Stripe from "stripe";
 import { storage } from "./storage";
 import { insertPaymentSchema, type InsertPayment } from "@shared/schema";
 
+// Verify Stripe secret key is available and in test mode
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("Missing STRIPE_SECRET_KEY environment variable");
+}
+
+if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
+  throw new Error("Stripe secret key must be a test mode key (starts with sk_test_)");
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -107,7 +112,6 @@ export class PaymentService {
 
   static async handlePaymentSuccess(paymentIntentId: string): Promise<void> {
     try {
-      log(`Processing successful payment: ${paymentIntentId}`, 'payments');
       const payment = await storage.getPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
@@ -121,14 +125,13 @@ export class PaymentService {
       // Update auction payment status
       await storage.updateAuctionPaymentStatus(payment.auctionId, "completed");
     } catch (error) {
-      log(`Error handling payment success: ${error}`, "payments");
+      console.error("Error handling payment success:", error);
       throw error;
     }
   }
 
   static async handlePaymentFailure(paymentIntentId: string): Promise<void> {
     try {
-      log(`Processing failed payment: ${paymentIntentId}`, 'payments');
       const payment = await storage.getPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
@@ -142,7 +145,7 @@ export class PaymentService {
       // Update auction payment status
       await storage.updateAuctionPaymentStatus(payment.auctionId, "failed");
     } catch (error) {
-      log(`Error handling payment failure: ${error}`, "payments");
+      console.error("Error handling payment failure:", error);
       throw error;
     }
   }
