@@ -2,11 +2,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Auction, Payout } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, DollarSign } from "lucide-react";
+import { Plus, Search, DollarSign, Package } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect, useMemo } from "react"; 
+import { useState, useEffect } from "react"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
 import { formatPrice } from '../utils/formatters';
@@ -171,6 +171,8 @@ export default function SellerDashboard() {
 
   const pendingAuctions = filteredAuctions?.filter(auction => !auction.approved);
   const approvedAuctions = filteredAuctions?.filter(auction => auction.approved);
+  const endedAuctions = filteredAuctions?.filter(auction => auction.status === "ended" || auction.status === "fulfilled");
+
 
   // Format currency helper
   const formatCurrency = (amount: number) => {
@@ -252,6 +254,26 @@ export default function SellerDashboard() {
     }
   };
 
+  const renderAuctionCard = (auction: Auction) => (
+    <div key={auction.id} className="space-y-2">
+      <AuctionCard 
+        auction={auction}
+        showStatus={true}
+      />
+      {auction.status === "ended" && auction.winningBidderId && (
+        <Link href={`/seller/fulfill/${auction.id}`}>
+          <Button 
+            className="w-full"
+            variant={auction.status === "fulfilled" ? "outline" : "default"}
+          >
+            <Package className="h-4 w-4 mr-2" />
+            {auction.status === "fulfilled" ? "View Fulfillment" : "Fulfill Order"}
+          </Button>
+        </Link>
+      )}
+    </div>
+  );
+
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
@@ -299,6 +321,9 @@ export default function SellerDashboard() {
                 <TabsTrigger value="pending">
                   Pending Approval ({pendingAuctions?.length || 0})
                 </TabsTrigger>
+                <TabsTrigger value="ended">
+                  Ended Auctions ({endedAuctions?.length || 0})
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="approved">
@@ -308,13 +333,7 @@ export default function SellerDashboard() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {approvedAuctions.map((auction) => (
-                      <AuctionCard 
-                        key={auction.id} 
-                        auction={auction}
-                        showStatus={true}
-                      />
-                    ))}
+                    {approvedAuctions.map(renderAuctionCard)}
                   </div>
                 )}
               </TabsContent>
@@ -326,13 +345,19 @@ export default function SellerDashboard() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {pendingAuctions.map((auction) => (
-                      <AuctionCard 
-                        key={auction.id} 
-                        auction={auction}
-                        showStatus={true}
-                      />
-                    ))}
+                    {pendingAuctions.map(renderAuctionCard)}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="ended">
+                {!endedAuctions?.length ? (
+                  <div className="text-center text-muted-foreground">
+                    No ended auctions found
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {endedAuctions.map(renderAuctionCard)}
                   </div>
                 )}
               </TabsContent>

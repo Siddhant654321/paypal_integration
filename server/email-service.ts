@@ -38,6 +38,29 @@ const emailTemplates = {
       <p>Log in to your account to view the transaction details.</p>
     `,
   }),
+  fulfillment: (data: { 
+    auctionTitle: string; 
+    shippingCarrier: string;
+    trackingNumber: string;
+    shippingDate: string;
+    estimatedDeliveryDate?: string;
+  }) => ({
+    subject: `Shipping Update: ${data.auctionTitle}`,
+    html: `
+      <h2>Your Item Has Been Shipped!</h2>
+      <p>The seller has shipped your item from auction "${data.auctionTitle}".</p>
+      <p><strong>Shipping Details:</strong></p>
+      <ul>
+        <li>Carrier: ${data.shippingCarrier}</li>
+        <li>Tracking Number: ${data.trackingNumber}</li>
+        <li>Shipped On: ${new Date(data.shippingDate).toLocaleDateString()}</li>
+        ${data.estimatedDeliveryDate ? 
+          `<li>Estimated Delivery: ${new Date(data.estimatedDeliveryDate).toLocaleDateString()}</li>` 
+          : ''}
+      </ul>
+      <p>Log in to your account to view more details.</p>
+    `,
+  }),
 };
 
 // Types for email notification data
@@ -46,6 +69,13 @@ type EmailNotificationData = {
   auction: { auctionTitle: string; status: string };
   payment: { amount: number; status: string };
   admin: { message: string };
+  fulfillment: {
+    auctionTitle: string;
+    shippingCarrier: string;
+    trackingNumber: string;
+    shippingDate: string;
+    estimatedDeliveryDate?: string;
+  };
 };
 
 export class EmailService {

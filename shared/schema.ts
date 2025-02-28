@@ -64,7 +64,7 @@ export const auctions = pgTable("auctions", {
   endDate: timestamp("end_date").notNull(),
   approved: boolean("approved").notNull().default(false),
   status: text("status", {
-    enum: ["active", "ended", "pending_seller_decision", "voided"],
+    enum: ["active", "ended", "pending_seller_decision", "voided", "pending_fulfillment", "fulfilled"],
   }).notNull().default("active"),
   paymentStatus: text("payment_status", {
     enum: ["pending", "processing", "completed", "failed"],
@@ -75,6 +75,7 @@ export const auctions = pgTable("auctions", {
     enum: ["accept", "void"],
   }),
   reserveMet: boolean("reserve_met").notNull().default(false),
+  fulfillmentRequired: boolean("fulfillment_required").notNull().default(false),
 });
 
 export const bids = pgTable("bids", {
@@ -116,7 +117,19 @@ export const payouts = pgTable("payouts", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Update insertProfileSchema to include notification preferences
+// Add new fulfillment table
+export const fulfillments = pgTable("fulfillments", {
+  id: serial("id").primaryKey(),
+  auctionId: integer("auction_id").notNull().unique(),
+  shippingCarrier: text("shipping_carrier").notNull(),
+  trackingNumber: text("tracking_number").notNull(),
+  shippingDate: timestamp("shipping_date").notNull(),
+  estimatedDeliveryDate: timestamp("estimated_delivery_date"),
+  additionalNotes: text("additional_notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const insertProfileSchema = createInsertSchema(profiles)
   .omit({
     id: true,
@@ -160,6 +173,7 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     status: true,
     sellerDecision: true,
     reserveMet: true,
+    fulfillmentRequired:true
   })
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),
@@ -234,6 +248,22 @@ export const insertUserSchema = createInsertSchema(users)
     email: z.string().email("Invalid email format"),
   });
 
+// Add fulfillment schema
+export const insertFulfillmentSchema = createInsertSchema(fulfillments)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    shippingCarrier: z.string().min(2, "Shipping carrier is required"),
+    trackingNumber: z.string().min(5, "Valid tracking number is required"),
+    shippingDate: z.string().transform(str => new Date(str)),
+    estimatedDeliveryDate: z.string().optional().transform(str => str ? new Date(str) : undefined),
+    additionalNotes: z.string().optional(),
+  });
+
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Auction = typeof auctions.$inferSelect;
@@ -246,3 +276,5 @@ export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payout = typeof payouts.$inferSelect;
 export type InsertPayout = z.infer<typeof insertPayoutSchema>;
+export type Fulfillment = typeof fulfillments.$inferSelect;
+export type InsertFulfillment = z.infer<typeof insertFulfillmentSchema>;

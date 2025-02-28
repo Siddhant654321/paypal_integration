@@ -11,6 +11,9 @@ import { PaymentService } from "./payments";
 import { buffer } from "micro";
 import Stripe from "stripe";
 import {SellerPaymentService} from "./seller-payments";
+import {insertFulfillmentSchema} from "@shared/schema"; // Assuming this schema is defined elsewhere
+import { EmailService } from "./email"; // Assuming this service is defined elsewhere
+
 
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -537,7 +540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add these new routes in the registerRoutes function
+  // Add these new endpoints in the registerRoutes function
   app.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
     try {
       // Log authentication state
@@ -859,7 +862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get onboarding link
       const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
 
-      console.log("Onboarding URL generated:", onboardingUrl);
+      console.log(""Onboarding URL generated:", onboardingUrl);
 
       res.json({
         url: onboardingUrl,
@@ -1065,6 +1068,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching market statistics:", error);
       res.status(500).json({ message: "Failed to fetch market statistics" });
+    }
+  });
+
+  // Get winner details for seller
+  app.get("/api/auctions/:id/winner", requireAuth, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const auction = await storage.getAuction(auctionId);
+
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Verify this is the seller
+      if (auction.sellerId !== req.user!.id) {
+        return res.status(403).json({ message: "Only the seller can view winner details" });
+      }
+
+      // Verify auction is ended and has a winner
+      if (auction.status !== "ended" || !auction.winningBidderId) {
+        return res.status(400).json({ message: "Auction must be ended and have a winner" });
+      }
+
+      const winnerDetails = await storage.getWinnerDetails(auctionId);
+      if (!winnerDetails) {
+        return res.status(404).json({ message: "Winner details not found" });
+      }
+
+      res.json(winnerDetails);
+    } catch (error) {
+      console.error("Error getting winner details:", error);
+      res.status(500).json({ message: "Failed to get winner details" });
+    }
+  });
+
+  // Submit fulfillment details
+  app.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const auction = await storage.getAuction(auctionId);
+
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Verify this is the seller
+      if (auction.sellerId !== req.user!.id) {
+        return res.status(403).json({ message: "Only the seller can fulfill the auction" });
+      }
+
+      // Verify auction is ended and has a winner
+      if (auction.status !== "ended" || !auction.winningBidderId) {
+        return res.status(400).json({ message: "Auction must be ended and have a winner" });
+      }
+
+      // Verify payment is completed
+      if (auction.paymentStatus !== "completed") {
+        return res.status(400).json({ message: "Payment must be completed before fulfillment" });
+      }
+
+      // Validate and create fulfillment
+      const fulfillmentData = insertFulfillmentSchema.parse({
+        ...req.body,
+        auctionId,
+      });
+
+      const fulfillment = await storage.createFulfillment(fulfillmentData);
+
+      // Get winner user and send notification
+      const winner = await storage.getUser(auction.winningBidderId);
+      if (winner) {
+        await EmailService.sendNotification('fulfillment', winner, {
+          auctionTitle: auction.title,
+          shippingCarrier: fulfillmentData.shippingCarrier,
+          trackingNumber: fulfillmentData.trackingNumber,
+          shippingDate: fulfillmentData.shippingDate.toISOString(),
+          estimatedDeliveryDate: fulfillmentData.estimatedDeliveryDate?.toISOString(),
+        });
+      }
+
+      res.status(201).json(fulfillment);
+    } catch (error) {
+      console.error("Error fulfilling auction:", error);
+      if (error instanceof ZodError) {
+        res.status(400).json({
+          message: "Invalid fulfillment data",
+          errors: error.errors,
+        });
+      } else {
+        res.status(500).json({ message: "Failed to fulfill auction" });
+      }
+    }
+  });
+
+  // Get fulfillment status
+  app.get("/api/auctions/:id/fulfillment", requireAuth, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const auction = await storage.getAuction(auctionId);
+
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Only allow winner or seller to view fulfillment status
+      if (req.user!.id !== auction.winningBidderId && req.user!.id !== auction.sellerId) {
+        return res.status(403).json({ message: "Unauthorized to view fulfillment status" });
+      }
+
+      const fulfillment = await storage.getFulfillment(auctionId);
+      res.json(fulfillment || { status: "pending" });
+    } catch (error) {
+      console.error("Error getting fulfillment status:", error);
+      res.status(500).json({ message: "Failed to get fulfillment status" });
     }
   });
 

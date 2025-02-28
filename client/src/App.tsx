@@ -15,6 +15,7 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import ProfilePage from "@/pages/profile-page";
 import PaymentPage from "@/pages/payment-page";
 import AnalyticsPage from "@/pages/analytics-page";
+import FulfillmentPage from "@/pages/fulfillment-page";
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function Router() {
         <Route path="/auction/:id" component={AuctionPage} />
         <Route path="/auction/:id/pay" component={PaymentPage} />
         <Route path="/seller/dashboard" component={SellerDashboard} />
+        <Route path="/seller/fulfill/:id" component={FulfillmentPage} />
         <Route path="/buyer/dashboard" component={BuyerDashboard} />
         <Route path="/seller/new-auction" component={NewAuction} />
         <Route path="/admin" component={AdminDashboard} />

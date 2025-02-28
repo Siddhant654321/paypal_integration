@@ -2,8 +2,8 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { db } from "./db";
-import { users, auctions, bids, profiles, payments, payouts } from "@shared/schema";
-import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile, type Payment, type InsertPayment, type Payout, type InsertPayout } from "@shared/schema";
+import { users, auctions, bids, profiles, payments, payouts, fulfillments } from "@shared/schema";
+import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile, type Payment, type InsertPayment, type Payout, type InsertPayout, type Fulfillment, type InsertFulfillment } from "@shared/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
 import { log } from "./vite";
@@ -67,6 +67,15 @@ export interface IStorage {
 
   // Profile operations with Stripe Connect fields
   updateProfileStripeAccount(userId: number, stripeAccountId: string, status: string): Promise<Profile>;
+
+  // Fulfillment operations
+  createFulfillment(fulfillment: InsertFulfillment): Promise<Fulfillment>;
+  getFulfillment(auctionId: number): Promise<Fulfillment | undefined>;
+  getWinnerDetails(auctionId: number): Promise<{
+    profile: Profile;
+    auction: Auction;
+  } | undefined>;
+  updateAuctionFulfillmentStatus(auctionId: number, fulfilled: boolean): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -577,6 +586,80 @@ export class DatabaseStorage implements IStorage {
       return profile;
     } catch (error) {
       console.error("Error updating profile Stripe account:", error);
+      throw error;
+    }
+  }
+
+  async createFulfillment(fulfillment: InsertFulfillment): Promise<Fulfillment> {
+    try {
+      const [newFulfillment] = await db
+        .insert(fulfillments)
+        .values({
+          ...fulfillment,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      // Update auction status
+      await this.updateAuctionFulfillmentStatus(fulfillment.auctionId, true);
+
+      return newFulfillment;
+    } catch (error) {
+      console.error("Error creating fulfillment:", error);
+      throw error;
+    }
+  }
+
+  async getFulfillment(auctionId: number): Promise<Fulfillment | undefined> {
+    try {
+      const [fulfillment] = await db
+        .select()
+        .from(fulfillments)
+        .where(eq(fulfillments.auctionId, auctionId));
+      return fulfillment;
+    } catch (error) {
+      console.error("Error getting fulfillment:", error);
+      throw error;
+    }
+  }
+
+  async getWinnerDetails(auctionId: number): Promise<{
+    profile: Profile;
+    auction: Auction;
+  } | undefined> {
+    try {
+      const auction = await this.getAuction(auctionId);
+      if (!auction?.winningBidderId) {
+        return undefined;
+      }
+
+      const winnerProfile = await this.getProfile(auction.winningBidderId);
+      if (!winnerProfile) {
+        return undefined;
+      }
+
+      return {
+        profile: winnerProfile,
+        auction,
+      };
+    } catch (error) {
+      console.error("Error getting winner details:", error);
+      throw error;
+    }
+  }
+
+  async updateAuctionFulfillmentStatus(auctionId: number, fulfilled: boolean): Promise<void> {
+    try {
+      await db
+        .update(auctions)
+        .set({
+          status: fulfilled ? "fulfilled" : "pending_fulfillment",
+          fulfillmentRequired: true,
+        })
+        .where(eq(auctions.id, auctionId));
+    } catch (error) {
+      console.error("Error updating auction fulfillment status:", error);
       throw error;
     }
   }
