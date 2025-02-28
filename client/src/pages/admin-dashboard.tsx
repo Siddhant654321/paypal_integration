@@ -52,6 +52,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import Link from "next/link";
+
 
 // Update the ViewBidsDialog component
 function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctionTitle: string }) {
@@ -472,7 +474,13 @@ export default function AdminDashboard() {
     user.role === "seller" && !user.approved
   );
 
-  const filteredApprovedAuctions = approvedAuctions?.filter(auction =>
+  // Filter approved auctions to show only active ones
+  const activeAuctions = approvedAuctions?.filter(auction => new Date(auction.endDate) > new Date());
+
+  //Filter completed auctions
+  const completedAuctions = approvedAuctions?.filter(auction => new Date(auction.endDate) < new Date());
+
+  const filteredApprovedAuctions = activeAuctions?.filter(auction =>
     auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
     auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase())
   );
@@ -495,6 +503,9 @@ export default function AdminDashboard() {
                 </TabsTrigger>
                 <TabsTrigger value="approved">
                   Approved Sellers ({filteredSellers?.length || 0})
+                </TabsTrigger>
+                <TabsTrigger value="buyers">
+                  Buyers ({filteredBuyers?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
@@ -692,7 +703,10 @@ export default function AdminDashboard() {
                   Pending Approval ({pendingAuctions?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="approved">
-                  Approved Auctions ({filteredApprovedAuctions?.length || 0})
+                  Active Auctions ({activeAuctions?.length || 0})
+                </TabsTrigger>
+                <TabsTrigger value="completed">
+                  Completed Auctions ({completedAuctions?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
@@ -772,7 +786,7 @@ export default function AdminDashboard() {
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search auctions..."
+                      placeholder="Search active auctions..."
                       value={auctionSearchTerm}
                       onChange={(e) => setAuctionSearchTerm(e.target.value)}
                       className="pl-10"
@@ -783,11 +797,11 @@ export default function AdminDashboard() {
                     <div className="flex justify-center">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-                  ) : !filteredApprovedAuctions?.length ? (
-                    <p className="text-muted-foreground">No auctions found</p>
+                  ) : !activeAuctions?.length ? (
+                    <p className="text-muted-foreground">No active auctions found</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {filteredApprovedAuctions.map((auction) => (
+                      {activeAuctions.map((auction) => (
                         <div key={auction.id} className="relative">
                           <div className="absolute top-2 right-2 z-10 flex gap-2">
                             <EditAuctionDialog auction={auction} />
@@ -795,6 +809,74 @@ export default function AdminDashboard() {
                               auctionId={auction.id}
                               auctionTitle={auction.title}
                             />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                          <AuctionCard auction={auction} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="completed">
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search completed auctions..."
+                      value={auctionSearchTerm}
+                      onChange={(e) => setAuctionSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  {isLoadingApprovedAuctions ? (
+                    <div className="flex justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : !completedAuctions?.length ? (
+                    <p className="text-muted-foreground">No completed auctions found</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {completedAuctions.map((auction) => (
+                        <div
+                          key={auction.id}
+                          className="flex flex-col gap-2 p-4 border rounded-lg"
+                        >
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              asChild
+                            >
+                              <Link href={`/auction/${auction.id}`}>View</Link>
+                            </Button>
+
+                            <EditAuctionDialog auction={auction} />
+
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="destructive" size="sm">
