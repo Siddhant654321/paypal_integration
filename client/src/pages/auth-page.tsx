@@ -185,14 +185,17 @@ export default function AuthPage() {
         className="hidden lg:block bg-cover bg-center"
         style={{
           backgroundImage:
-            'url("https://images.unsplash.com/photo-1484557985045-edf25e08da73")',
+            'url("https://images.unsplash.com/photo-1569396116180-210c182bedb8?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1769&q=80")',
         }}
       >
         <div className="h-full w-full bg-black/50 p-8 flex items-center justify-center">
           <div className="max-w-md text-white">
             <h1 className="text-4xl font-bold mb-4">
-              Your Premier Poultry Auction Platform
+              Poultry Auctions
             </h1>
+            <p className="text-2xl mb-4">
+              Buy and Sell Poultry. Simplified.
+            </p>
             <p className="text-lg">
               Connect with trusted sellers, find quality birds and hatching eggs,
               and grow your flock with confidence.

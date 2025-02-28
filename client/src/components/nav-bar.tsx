@@ -38,9 +38,10 @@ export default function NavBar() {
     <div className="bg-accent p-4">
       <div className="container mx-auto flex justify-between items-center">
         <Link href="/">
-          <h2 className="text-2xl font-bold text-accent-foreground cursor-pointer">
-            Pips 'n Chicks
-          </h2>
+          <div className="flex flex-col">
+            <span className="font-bold text-2xl">Poultry Auctions</span>
+            <span className="text-sm text-accent-foreground">Buy and Sell Poultry. Simplified.</span>
+          </div>
         </Link>
         <div className="flex gap-4 items-center">
           {user ? (
