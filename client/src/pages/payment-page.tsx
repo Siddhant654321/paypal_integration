@@ -17,16 +17,6 @@ if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
-interface PaymentResponse {
-  sessionId: string;
-  payment: {
-    amount: number;
-    platformFee: number;
-    sellerPayout: number;
-    insuranceFee: number;
-  };
-}
-
 export default function PaymentPage() {
   const [, params] = useRoute("/auction/:id/pay");
   const [includeInsurance, setIncludeInsurance] = useState(false);
@@ -38,15 +28,14 @@ export default function PaymentPage() {
     queryKey: [`/api/auctions/${params?.id}`],
   });
 
-  const { data: paymentData, refetch: refetchPayment } = useQuery<PaymentResponse>({
-    queryKey: [`/api/auctions/${params?.id}/pay`],
-    enabled: false, // Don't fetch automatically
-  });
+  const handlePayment = async () => {
+    if (isProcessing || !auction?.id) return;
 
-  // Initialize payment session
-  const initializePayment = async () => {
+    setIsProcessing(true);
+
     try {
-      const response = await fetch(`/api/auctions/${params?.id}/pay`, {
+      // Create checkout session
+      const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -54,45 +43,20 @@ export default function PaymentPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to initialize payment');
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create payment session');
       }
 
-      await refetchPayment();
-    } catch (error) {
-      console.error('Payment initialization error:', error);
-      toast({
-        variant: "destructive",
-        title: "Payment Setup Failed",
-        description: error instanceof Error ? error.message : "Could not setup payment. Please try again.",
-      });
-    }
-  };
+      const { sessionId } = await response.json();
 
-  // Handle insurance toggle
-  const handleInsuranceToggle = async (checked: boolean) => {
-    setIncludeInsurance(checked);
-    await initializePayment();
-  };
-
-  // Handle payment submission
-  const handlePayment = async () => {
-    if (isProcessing || !auction?.id) return;
-
-    setIsProcessing(true);
-
-    try {
-      // First initialize/update the payment session
-      await initializePayment();
-
-      // Then redirect to Stripe Checkout
+      // Redirect to Stripe Checkout
       const stripe = await stripePromise;
-      if (!stripe || !paymentData?.sessionId) {
-        throw new Error("Payment system not initialized");
+      if (!stripe) {
+        throw new Error("Could not initialize Stripe");
       }
 
       const { error } = await stripe.redirectToCheckout({
-        sessionId: paymentData.sessionId,
+        sessionId: sessionId
       });
 
       if (error) {
@@ -103,8 +67,9 @@ export default function PaymentPage() {
       toast({
         variant: "destructive",
         title: "Payment Error",
-        description: "Could not process your payment. Please try again.",
+        description: err instanceof Error ? err.message : "Could not process your payment. Please try again.",
       });
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -155,7 +120,7 @@ export default function PaymentPage() {
             <Switch
               id="insurance"
               checked={includeInsurance}
-              onCheckedChange={handleInsuranceToggle}
+              onCheckedChange={setIncludeInsurance}
             />
           </div>
 

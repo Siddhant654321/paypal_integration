@@ -494,8 +494,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auctionId = parseInt(req.params.id);
       const { includeInsurance = false } = req.body;
 
-      log(`Creating payment session for auction ${auctionId} with insurance: ${includeInsurance}`, 'payments');
-
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
@@ -508,9 +506,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get the base URL from the request
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-      log(`Creating checkout session with baseUrl: ${baseUrl}`, 'payments');
 
-      // Create Stripe Checkout session with base URL
+      // Create Stripe Checkout session
       const { sessionId, payment } = await PaymentService.createCheckoutSession(
         auctionId,
         req.user.id,
@@ -518,7 +515,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         baseUrl
       );
 
-      log(`Successfully created checkout session: ${sessionId}`, 'payments');
       res.json({ sessionId, payment });
     } catch (error) {
       console.error("Payment creation error:", error);

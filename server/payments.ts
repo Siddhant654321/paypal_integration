@@ -1,14 +1,13 @@
 import Stripe from "stripe";
 import { storage } from "./storage";
 import { insertPaymentSchema, type InsertPayment } from "@shared/schema";
-import { log } from "./vite";
 
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("Missing STRIPE_SECRET_KEY environment variable");
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-02-24.acacia",
+  apiVersion: "2023-10-16"
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
@@ -19,14 +18,12 @@ export class PaymentService {
     auctionId: number,
     buyerId: number,
     includeInsurance: boolean = false,
-    baseUrl: string // Add baseUrl parameter
+    baseUrl: string
   ): Promise<{
     sessionId: string;
     payment: InsertPayment;
   }> {
     try {
-      log('Creating checkout session...', 'payments');
-
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
@@ -103,7 +100,7 @@ export class PaymentService {
         payment: paymentData,
       };
     } catch (error) {
-      log(`Error creating checkout session: ${error}`, "payments");
+      console.error("Payment creation error:", error);
       throw error;
     }
   }
