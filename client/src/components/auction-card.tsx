@@ -84,8 +84,8 @@ export default function AuctionCard({ auction, showStatus }: Props) {
           </Link>
         </div>
 
-        {/* Always show Pay Now button for testing purposes if auction has ended */}
-        {auction.status === "ended" && (
+        {/* Only show Pay Now button to the auction winner */}
+        {auction.status === "ended" && isWinningBidder && needsPayment && (
           <Link href={`/auction/${auction.id}/pay`}>
             <Button size="sm" className="w-full" variant="default">
               <CreditCard className="mr-2 h-4 w-4" />
