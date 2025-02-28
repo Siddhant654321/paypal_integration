@@ -323,7 +323,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
   });
 
   const updateAuctionMutation = useMutation({
-    mutationFn: async (formData: typeof form.getValues) => {
+    mutationFn: async (formData: any) => { //Added any type to avoid type error in the formData
       const data = {
         ...formData,
         // Ensure category is valid before sending
