@@ -216,22 +216,6 @@ export default function PaymentPage() {
           </div>
           
           <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="insurance"
-                checked={includeInsurance}
-                onCheckedChange={(checked) => 
-                  setIncludeInsurance(checked === true)
-                }
-              />
-              <label
-                htmlFor="insurance"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Add insurance (${insuranceAmountDollars})
-              </label>
-            </div>
-            
             <div className="p-4 bg-muted rounded-lg">
               <div className="flex justify-between mb-2">
                 <span>Total</span>
