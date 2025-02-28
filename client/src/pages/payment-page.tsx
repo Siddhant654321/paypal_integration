@@ -3,15 +3,15 @@ import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Loader2, Shield } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
-// Initialize Stripe with the publishable key
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+// Initialize Stripe
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 interface PaymentResponse {
   clientSecret: string;
@@ -27,106 +27,107 @@ export default function PaymentPage() {
   const [, params] = useRoute("/auction/:id/pay");
   const [includeInsurance, setIncludeInsurance] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [stripeReady, setStripeReady] = useState(false);
+  const [isFormReady, setIsFormReady] = useState(false);
   const { toast } = useToast();
   const INSURANCE_FEE = 800; // $8.00 in cents
-  const cardElementRef = useRef<any>(null);
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
     queryKey: [`/api/auctions/${params?.id}`],
   });
 
-  const { data: paymentData, isLoading: isLoadingPayment, refetch: refetchPayment } = useQuery<PaymentResponse>({
+  const { data: paymentData, refetch: refetchPayment } = useQuery<PaymentResponse>({
     queryKey: [`/api/auctions/${params?.id}/pay`],
     enabled: !!auction,
   });
 
   useEffect(() => {
-    if (auction?.id) {
-      fetch(`/api/auctions/${auction.id}/pay`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ includeInsurance })
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Failed to update payment details');
-        }
-        return refetchPayment();
-      })
-      .catch(error => {
-        console.error('Error updating payment:', error);
-        toast({
-          variant: "destructive",
-          title: "Payment Update Error",
-          description: "Failed to update payment details. Please try again.",
-        });
+    if (!auction?.id) return;
+
+    fetch(`/api/auctions/${auction.id}/pay`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({ includeInsurance })
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to update payment details');
+      }
+      return refetchPayment();
+    })
+    .catch(error => {
+      console.error('Error updating payment:', error);
+      toast({
+        variant: "destructive",
+        title: "Payment Update Error",
+        description: "Failed to update payment details. Please try again.",
       });
-    }
+    });
   }, [includeInsurance, auction?.id, refetchPayment, toast]);
 
   useEffect(() => {
     let mounted = true;
+    let stripeElement: any = null;
 
     const initializeStripe = async () => {
-      if (!paymentData?.clientSecret) {
-        console.log("No client secret available yet");
-        return;
-      }
+      if (!paymentData?.clientSecret) return;
 
       try {
-        console.log("Loading Stripe...");
         const stripe = await stripePromise;
-        if (!stripe) {
-          throw new Error("Failed to load Stripe");
-        }
+        if (!stripe || !mounted) return;
 
-        console.log("Creating Elements instance...");
         const elements = stripe.elements({
           clientSecret: paymentData.clientSecret,
           appearance: {
             theme: 'stripe',
+            variables: {
+              colorPrimary: '#0F172A',
+            },
           },
         });
 
-        console.log("Creating card element...");
-        const cardElement = elements.create('card');
+        const paymentElement = elements.create('payment');
+        stripeElement = elements;
 
-        // Mount Card Element
-        const cardContainer = document.getElementById('card-element');
-        if (cardContainer && mounted) {
-          console.log("Mounting card element...");
-          cardElement.mount(cardContainer);
-          cardElementRef.current = cardElement;
-          setStripeReady(true);
-          console.log("Card element mounted successfully");
+        const container = document.getElementById('payment-element');
+        if (container && mounted) {
+          paymentElement.mount(container);
+          setIsFormReady(true);
         }
 
-        // Add event listener for card element changes
-        cardElement.on('change', (event: any) => {
-          if (event.error) {
-            toast({
-              variant: "destructive",
-              title: "Card Error",
-              description: event.error.message,
-            });
-            setStripeReady(false);
-          } else {
-            setStripeReady(true);
+        // Listen for form ready state
+        paymentElement.on('ready', () => {
+          if (mounted) {
+            setIsFormReady(true);
+          }
+        });
+
+        // Listen for form errors
+        paymentElement.on('change', (event: any) => {
+          if (mounted) {
+            setIsFormReady(!event.error);
+            if (event.error) {
+              toast({
+                variant: "destructive",
+                title: "Payment Form Error",
+                description: event.error.message,
+              });
+            }
           }
         });
 
       } catch (error) {
-        console.error("Error initializing Stripe:", error);
-        toast({
-          variant: "destructive",
-          title: "Payment Setup Error",
-          description: "Failed to initialize payment form. Please try again.",
-        });
-        setStripeReady(false);
+        console.error('Failed to initialize Stripe:', error);
+        if (mounted) {
+          setIsFormReady(false);
+          toast({
+            variant: "destructive",
+            title: "Payment Setup Error",
+            description: "Failed to initialize payment form. Please try again.",
+          });
+        }
       }
     };
 
@@ -134,45 +135,46 @@ export default function PaymentPage() {
 
     return () => {
       mounted = false;
-      if (cardElementRef.current) {
-        cardElementRef.current.destroy();
-        cardElementRef.current = null;
+      if (stripeElement) {
+        const element = stripeElement.getElement('payment');
+        if (element) {
+          element.destroy();
+        }
       }
+      setIsFormReady(false);
     };
   }, [paymentData?.clientSecret, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripeReady || isProcessing) return;
+    if (!isFormReady || isProcessing || !paymentData?.clientSecret) return;
 
     setIsProcessing(true);
 
     try {
       const stripe = await stripePromise;
-      if (!stripe || !cardElementRef.current || !paymentData?.clientSecret) {
-        throw new Error("Payment system not initialized");
+      if (!stripe) {
+        throw new Error("Unable to process payment");
       }
 
-      console.log("Confirming card payment...");
-      const { error } = await stripe.confirmCardPayment(paymentData.clientSecret, {
-        payment_method: {
-          card: cardElementRef.current,
+      const { error } = await stripe.confirmPayment({
+        clientSecret: paymentData.clientSecret,
+        elements: stripe.elements({
+          clientSecret: paymentData.clientSecret,
+        }),
+        confirmParams: {
+          return_url: `${window.location.origin}/auction/${auction?.id}`,
         },
       });
 
       if (error) {
-        console.error("Payment error:", error);
         toast({
           variant: "destructive",
           title: "Payment Failed",
           description: error.message || "Your payment could not be processed.",
         });
-      } else {
-        toast({
-          title: "Payment Successful",
-          description: "Your payment is being processed.",
-        });
       }
+      // Success will redirect to return_url
     } catch (err) {
       console.error("Payment error:", err);
       toast({
@@ -185,7 +187,7 @@ export default function PaymentPage() {
     }
   };
 
-  if (isLoadingAuction || isLoadingPayment) {
+  if (isLoadingAuction) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -201,7 +203,6 @@ export default function PaymentPage() {
     );
   }
 
-  // Convert cents to dollars for display
   const baseAmountDollars = (auction.currentPrice / 100).toFixed(2);
   const insuranceAmountDollars = (INSURANCE_FEE / 100).toFixed(2);
   const totalAmountDollars = ((auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)) / 100).toFixed(2);
@@ -250,15 +251,15 @@ export default function PaymentPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="p-4 border rounded-lg">
-              <div id="card-element" className="min-h-[40px]" />
+            <div className="p-4 border rounded-lg min-h-[200px]">
+              <div id="payment-element" />
             </div>
 
             <Button 
               type="submit" 
               className="w-full" 
               size="lg"
-              disabled={!stripeReady || isProcessing}
+              disabled={!isFormReady || isProcessing}
             >
               {isProcessing ? (
                 <Loader2 className="h-5 w-5 mr-2 animate-spin" />
