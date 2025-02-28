@@ -798,8 +798,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stripePublishableKey = process.env.VITE_STRIPE_PUBLISHABLE_KEY;
       if (!stripePublishableKey) {
         console.error("Missing Stripe publishable key");
-        return res.status(500).json({ 
-          message: "Server configuration error", 
+        return res.status(500).json({
+          message: "Server configuration error",
           details: "Missing Stripe publishable key"
         });
       }
@@ -809,8 +809,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate protocol and host
       if (!req.protocol || !req.get('host')) {
         console.error("Missing protocol or host in request:", { protocol: req.protocol, host: req.get('host') });
-        return res.status(500).json({ 
-          message: "Invalid server configuration", 
+        return res.status(500).json({
+          message: "Invalid server configuration",
           details: "Could not determine server URL"
         });
       }
@@ -831,15 +831,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             baseUrl
           );
 
-          return res.json({ 
+          return res.json({
             url: onboardingUrl,
             accountId: existingProfile.stripeAccountId,
-            publishableKey: stripePublishableKey 
+            publishableKey: stripePublishableKey
           });
         } catch (linkError) {
           console.error("Failed to create onboarding link:", linkError);
-          return res.status(500).json({ 
-            message: "Failed to create Stripe onboarding link", 
+          return res.status(500).json({
+            message: "Failed to create Stripe onboarding link",
             error: linkError instanceof Error ? linkError.message : "Unknown error"
           });
         }
@@ -861,16 +861,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("Onboarding URL generated:", onboardingUrl);
 
-      res.json({ 
-        url: onboardingUrl, 
-        accountId, 
-        publishableKey: stripePublishableKey 
+      res.json({
+        url: onboardingUrl,
+        accountId,
+        publishableKey: stripePublishableKey
       });
-    }catch (error) {
+    } catch (error) {
       console.error("Error creating seller account:", error);
-      res.status(500).json({ 
-        message: "Failed to create seller account", 
-        error: error instanceof Error ? error.message : "Unknown error" 
+      res.status(500).json({
+        message: "Failed to create seller account",
+        error: error instanceof Error ? error.message : "Unknown error"
       });
     }
   });
@@ -929,6 +929,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching payouts:", error);
       res.status(500).json({ message: "Failed to fetch payouts" });
+    }
+  });
+
+  // Add this new analytics endpoint to the registerRoutes function
+  app.get("/api/analytics/market-stats", async (req, res) => {
+    try {
+      // Get all approved auctions
+      const allAuctions = await storage.getAuctions({ approved: true });
+
+      // Count active auctions (not ended and approved)
+      const now = new Date();
+      const activeAuctions = allAuctions.filter(auction =>
+        new Date(auction.endDate) > now && auction.approved
+      ).length;
+
+      // Calculate average prices by species
+      const speciesPrices = allAuctions.reduce((acc, auction) => {
+        if (!acc[auction.species]) {
+          acc[auction.species] = { total: 0, count: 0 };
+        }
+        acc[auction.species].total += auction.currentPrice;
+        acc[auction.species].count += 1;
+        return acc;
+      }, {} as Record<string, { total: number; count: number }>);
+
+      const averagePrices = Object.entries(speciesPrices).map(([species, data]) => ({
+        species,
+        averagePrice: Math.round(data.total / data.count)
+      }));
+
+      // Get recent sales (ended auctions with winners)
+      const recentSales = allAuctions
+        .filter(auction => auction.winningBidderId && auction.paymentStatus === 'completed')
+        .sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())
+        .slice(0, 5)
+        .map(auction => ({
+          title: auction.title,
+          price: auction.currentPrice,
+          date: auction.endDate
+        }));
+
+      // Calculate price history (average price by month)
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+      const monthlyPrices = allAuctions
+        .filter(auction => new Date(auction.endDate) >= sixMonthsAgo)
+        .reduce((acc, auction) => {
+          const monthKey = new Date(auction.endDate).toISOString().slice(0, 7);
+          if (!acc[monthKey]) {
+            acc[monthKey] = { total: 0, count: 0 };
+          }
+          acc[monthKey].total += auction.currentPrice;
+          acc[monthKey].count += 1;
+          return acc;
+        }, {} as Record<string, { total: number; count: number }>);
+
+      const priceHistory = Object.entries(monthlyPrices)
+        .map(([date, data]) => ({
+          date: `${date}-01`,  // First day of each month
+          averagePrice: Math.round(data.total / data.count)
+        }))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // Calculate popular categories
+      const categoryCount = allAuctions.reduce((acc, auction) => {
+        acc[auction.category] = (acc[auction.category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const popularCategories = Object.entries(categoryCount)
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => b.count - a.count);
+
+      res.json({
+        averagePrices,
+        activeAuctions,
+        recentSales,
+        priceHistory,
+        popularCategories
+      });
+    } catch (error) {
+      console.error("Error fetching market statistics:", error);
+      res.status(500).json({ message: "Failed to fetch market statistics" });
     }
   });
 

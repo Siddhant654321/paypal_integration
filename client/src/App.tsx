@@ -14,6 +14,7 @@ import NewAuction from "@/pages/new-auction";
 import AdminDashboard from "@/pages/admin-dashboard";
 import ProfilePage from "@/pages/profile-page";
 import PaymentPage from "@/pages/payment-page";
+import AnalyticsPage from "@/pages/analytics-page";
 
 function Router() {
   return (
@@ -29,6 +30,7 @@ function Router() {
         <Route path="/buyer/dashboard" component={BuyerDashboard} />
         <Route path="/seller/new-auction" component={NewAuction} />
         <Route path="/admin" component={AdminDashboard} />
+        <Route path="/analytics" component={AnalyticsPage} />
         <Route component={NotFound} />
       </Switch>
     </div>
