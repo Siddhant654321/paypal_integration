@@ -230,8 +230,14 @@ export default function NewAuction() {
                     <Input 
                       {...field} 
                       type="number" 
-                      min="1" 
-                      onChange={(e) => field.onChange(parseFloat(e.target.value))} //changed to parse float
+                      min="0.01"
+                      step="0.01"
+                      placeholder="0.00"
+                      onChange={(e) => {
+                        const value = e.target.value ? parseFloat(e.target.value) : '';
+                        field.onChange(value);
+                      }}
+                      value={field.value === '' ? '' : field.value}
                     />
                   </FormControl>
                   <FormMessage />
@@ -248,9 +254,15 @@ export default function NewAuction() {
                   <FormControl>
                     <Input 
                       {...field} 
-                      type="number" 
-                      min={form.watch('startPrice')} 
-                      onChange={(e) => field.onChange(parseFloat(e.target.value))} //changed to parse float
+                      type="number"
+                      min={form.watch('startPrice') || 0.01}
+                      step="0.01"
+                      placeholder="0.00"
+                      onChange={(e) => {
+                        const value = e.target.value ? parseFloat(e.target.value) : '';
+                        field.onChange(value);
+                      }}
+                      value={field.value === '' ? '' : field.value}
                     />
                   </FormControl>
                   <FormMessage />

@@ -445,13 +445,21 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="startPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Price</FormLabel>
+                    <FormLabel>Start Price ($)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="0.00"
                         {...field}
-                        value={field.value}
-                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                        // Convert cents from DB to dollars for display
+                        value={field.value ? (field.value / 100).toFixed(2) : ''}
+                        onChange={(e) => {
+                          const dollarValue = e.target.value ? parseFloat(e.target.value) : '';
+                          // Store value in form as dollars (backend will convert to cents)
+                          field.onChange(dollarValue);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
@@ -464,13 +472,21 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 name="reservePrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Reserve Price</FormLabel>
+                    <FormLabel>Reserve Price ($)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="0.00"
                         {...field}
-                        value={field.value}
-                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                        // Convert cents from DB to dollars for display
+                        value={field.value ? (field.value / 100).toFixed(2) : ''}
+                        onChange={(e) => {
+                          const dollarValue = e.target.value ? parseFloat(e.target.value) : '';
+                          // Store value in form as dollars (backend will convert to cents)
+                          field.onChange(dollarValue);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />

@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { formatPrice } from "../utils/formatters"; // Added import
+import { formatPrice } from "../utils/formatters";
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
@@ -247,10 +247,10 @@ export default function AuctionPage() {
               <span>{timeLeft}</span>
             </div>
             <div className="text-lg">
-              Current bid: <span className="font-bold">{formatPrice(auction.currentPrice)}</span> {/* Updated */}
+              Current bid: <span className="font-bold">{formatPrice(auction.currentPrice)}</span> 
             </div>
             <div className="text-sm text-muted-foreground">
-              Starting price: {formatPrice(auction.startPrice)} {/* Updated */}
+              Starting price: {formatPrice(auction.startPrice)} 
             </div>
           </div>
 
@@ -263,7 +263,7 @@ export default function AuctionPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Auction Decision Required</AlertDialogTitle>
                   <AlertDialogDescription>
-                    The reserve price was not met. The highest bid was {formatPrice(auction.currentPrice)}. {/* Updated */}
+                    The reserve price was not met. The highest bid was {formatPrice(auction.currentPrice)}. 
                     Would you like to accept this bid or void the auction?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -306,7 +306,7 @@ export default function AuctionPage() {
                     className="flex justify-between items-center p-3 bg-muted rounded-lg"
                   >
                     <div>
-                      <span className="font-medium">{formatPrice(bid.amount)}</span> {/* Updated */}
+                      <span className="font-medium">{formatPrice(bid.amount)}</span> 
                       {bid.bidderId === user?.id && (
                         <Badge variant="outline" className="ml-2">Your Bid</Badge>
                       )}

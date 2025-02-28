@@ -125,6 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Convert string values to appropriate types and ensure required fields
       const parsedData = {
         ...auctionData,
+        // Convert price from dollars to cents (if it's already a number, no need for conversion in validation)
         startPrice: Number(auctionData.startPrice || 0),
         reservePrice: Number(auctionData.reservePrice || 0),
         startDate: auctionData.startDate || new Date().toISOString(),
@@ -132,6 +133,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Initialize images array if not present
         images: Array.isArray(auctionData.images) ? auctionData.images : [],
       };
+      
+      console.log("Parsed auction data (before validation):", {
+        ...parsedData,
+        startPrice: parsedData.startPrice,
+        reservePrice: parsedData.reservePrice
+      });
 
       console.log("Parsed auction data for validation:", parsedData);
 
@@ -232,10 +239,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Auction has already ended" });
       }
 
-      // Convert amount to number if it's a string
-      const amount = typeof req.body.amount === 'string'
-        ? parseInt(req.body.amount)
-        : req.body.amount;
+      // Convert amount to number if it's a string (and ensure it's in cents)
+      let amount;
+      if (typeof req.body.amount === 'string') {
+        // If input is a string that might be a dollar amount (e.g. "10.50")
+        amount = Math.round(parseFloat(req.body.amount) * 100);
+      } else {
+        // If input is already a number, ensure it's in cents
+        amount = req.body.amount;
+      }
 
       if (isNaN(amount)) {
         return res.status(400).json({ message: "Bid amount must be a valid number" });
@@ -243,7 +255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (amount <= auction.currentPrice) {
         return res.status(400).json({
-          message: `Bid must be higher than current price of $${auction.currentPrice}`
+          message: `Bid must be higher than current price of $${(auction.currentPrice / 100).toFixed(2)}`
         });
       }
 

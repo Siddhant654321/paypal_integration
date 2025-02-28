@@ -72,7 +72,7 @@ export default function AuctionCard({ auction, showStatus }: Props) {
       <CardFooter className="p-4 pt-0 flex flex-col gap-2">
         <div className="flex w-full justify-between items-center">
           <div>
-            <div className="font-semibold">{formatPrice(auction.currentPrice)}</div>
+            <div className="font-semibold">${(auction.currentPrice / 100).toFixed(2)}</div>
             <div className="text-sm text-muted-foreground">
               {isActive
                 ? `Ends ${formatDistanceToNow(new Date(auction.endDate), {
