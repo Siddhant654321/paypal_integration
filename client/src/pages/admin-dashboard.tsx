@@ -371,6 +371,7 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [auctionSearchTerm, setAuctionSearchTerm] = useState("");
   const [buyerSearchTerm, setBuyerSearchTerm] = useState(""); // Added buyer search term state
+  const [completedAuctionSearchTerm, setCompletedAuctionSearchTerm] = useState("");
 
   // Redirect if not an admin
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
@@ -397,8 +398,21 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/users", { role: "buyer" }],
   });
 
+  const { data: completedAuctions, isLoading: isLoadingCompletedAuctions } = useQuery<Auction[]>({
+    queryKey: ["/api/auctions", { completed: true }],
+  });
+
+
   const filteredBuyers = buyers?.filter(buyer =>
     buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase())
+  );
+
+  const filteredApprovedAuctions = approvedAuctions?.filter(auction =>
+    auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase())
+  );
+
+  const filteredCompletedAuctions = completedAuctions?.filter(auction =>
+    auction.title.toLowerCase().includes(completedAuctionSearchTerm.toLowerCase())
   );
 
   const approveAuctionMutation = useMutation({
@@ -848,49 +862,36 @@ export default function AdminDashboard() {
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Search completed auctions..."
-                      value={auctionSearchTerm}
-                      onChange={(e) => setAuctionSearchTerm(e.target.value)}
+                      value={completedAuctionSearchTerm}
+                      onChange={(e) => setCompletedAuctionSearchTerm(e.target.value)}
                       className="pl-10"
                     />
                   </div>
 
-                  {isLoadingApprovedAuctions ? (
+                  {isLoadingCompletedAuctions ? (
                     <div className="flex justify-center">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-                  ) : !completedAuctions?.length ? (
+                  ) : !filteredCompletedAuctions?.length ? (
                     <p className="text-muted-foreground">No completed auctions found</p>
                   ) : (
                     <div className="space-y-2">
-                      {completedAuctions
-                        .filter((auction) =>
-                          auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase())
-                        )
-                        .map((auction) => (
-                          <div
-                            key={auction.id}
-                            className="flex items-center justify-between p-4 border rounded-lg"
-                          >
-                            <div>
-                              <p className="font-medium">{auction.title}</p>
-                              <p className="text-sm text-muted-foreground">
-                                Seller: {auction.seller?.username || "Unknown"}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                End Date: {new Date(auction.endDate).toLocaleDateString()}
-                              </p>
-                              <p className="text-sm font-medium text-green-600">
-                                Final Price: ${auction.currentPrice}
-                              </p>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline" asChild>
-                                <Redirect to={`/auction/${auction.id}`} />
-                                  <Eye className="h-4 w-4 mr-1" /> View
-                              </Button>
-                            </div>
+                      {filteredCompletedAuctions.map((auction) => (
+                        <div
+                          key={auction.id}
+                          className="flex items-center justify-between p-4 border rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">{auction.title}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Seller: {auction.seller?.username}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              End Date: {new Date(auction.endDate).toLocaleDateString()}
+                            </p>
                           </div>
-                        ))}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
