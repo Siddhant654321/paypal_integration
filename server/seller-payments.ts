@@ -14,20 +14,20 @@ export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<string> {
     try {
       console.log("Creating Stripe Connect account for seller:", profile.userId);
+      console.log("Profile data:", {
+        email: profile.email,
+        businessName: profile.businessName,
+        fullName: profile.fullName
+      });
 
-      // Create Stripe Connect account
+      // Create Stripe Connect account with minimal required fields
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US',
         email: profile.email,
-        business_type: 'individual',
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
-        },
-        business_profile: {
-          name: profile.businessName || profile.fullName,
-          url: process.env.APP_URL ? `${process.env.APP_URL}/seller/${profile.userId}` : undefined,
         },
       });
 
@@ -39,25 +39,40 @@ export class SellerPaymentService {
       return account.id;
     } catch (error) {
       console.error("Error creating seller account:", error);
+      if (error instanceof Stripe.errors.StripeError) {
+        console.error("Stripe error details:", {
+          type: error.type,
+          code: error.code,
+          message: error.message
+        });
+      }
       throw error;
     }
   }
 
   static async getOnboardingLink(accountId: string, baseUrl: string): Promise<string> {
     try {
-      console.log("Creating onboarding link for account:", accountId);
+      console.log("Creating onboarding link for account:", accountId, "baseUrl:", baseUrl);
 
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
         refresh_url: `${baseUrl}/seller/onboarding/refresh`,
         return_url: `${baseUrl}/seller/onboarding/complete`,
         type: 'account_onboarding',
+        collect: 'eventually_due',
       });
 
-      console.log("Onboarding link created");
+      console.log("Onboarding link created:", accountLink.url);
       return accountLink.url;
     } catch (error) {
       console.error("Error creating onboarding link:", error);
+      if (error instanceof Stripe.errors.StripeError) {
+        console.error("Stripe error details:", {
+          type: error.type,
+          code: error.code,
+          message: error.message
+        });
+      }
       throw error;
     }
   }
@@ -101,6 +116,11 @@ export class SellerPaymentService {
       console.log("Checking account status for:", accountId);
 
       const account = await stripe.accounts.retrieve(accountId);
+      console.log("Account status:", {
+        charges_enabled: account.charges_enabled,
+        payouts_enabled: account.payouts_enabled,
+        requirements: account.requirements
+      });
 
       if (account.charges_enabled && account.payouts_enabled) {
         return "verified";
@@ -111,6 +131,13 @@ export class SellerPaymentService {
       return "pending";
     } catch (error) {
       console.error("Error checking account status:", error);
+      if (error instanceof Stripe.errors.StripeError) {
+        console.error("Stripe error details:", {
+          type: error.type,
+          code: error.code,
+          message: error.message
+        });
+      }
       throw error;
     }
   }
