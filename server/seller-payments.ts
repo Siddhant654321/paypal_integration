@@ -47,6 +47,7 @@ export class SellerPaymentService {
     try {
       console.log("Creating onboarding link for account:", accountId);
 
+      // Create an account link with type=account_onboarding
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
         refresh_url: `${baseUrl}/seller/onboarding/refresh`,
@@ -58,6 +59,29 @@ export class SellerPaymentService {
       return accountLink.url;
     } catch (error) {
       console.error("Error creating onboarding link:", error);
+      throw error;
+    }
+  }
+  
+  static async createSetupIntent(accountId: string): Promise<string> {
+    try {
+      console.log("Creating setup intent for account:", accountId);
+      
+      // Get account capabilities to determine if we need to collect payments or just identity
+      const account = await stripe.accounts.retrieve(accountId);
+      
+      // Create a setup intent for the connected account
+      const setupIntent = await stripe.setupIntents.create({
+        payment_method_types: ['card'],
+        usage: 'off_session',
+      }, {
+        stripeAccount: accountId,
+      });
+      
+      console.log("Setup intent created");
+      return setupIntent.client_secret as string;
+    } catch (error) {
+      console.error("Error creating setup intent:", error);
       throw error;
     }
   }

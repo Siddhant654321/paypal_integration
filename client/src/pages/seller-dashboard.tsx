@@ -41,6 +41,7 @@ export default function SellerDashboard() {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
+      console.log("Starting Stripe connect mutation");
       const response = await fetch('/api/seller/connect', {
         method: 'POST',
         headers: {
@@ -51,17 +52,33 @@ export default function SellerDashboard() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error("Stripe connect error:", errorData);
         throw new Error(errorData.message || 'Failed to connect with Stripe');
       }
 
       const data = await response.json();
+      console.log("Received Stripe data:", data);
+      
       if (data.url) {
+        // For now, still use the redirect flow until we fully implement embedded onboarding
         window.location.href = data.url;
       } else {
         throw new Error('No onboarding URL received');
       }
     },
   });
+
+  // Load Stripe.js for embedded onboarding (if needed)
+  useEffect(() => {
+    const loadStripe = async () => {
+      const stripeJs = document.createElement('script');
+      stripeJs.src = 'https://js.stripe.com/v3/';
+      stripeJs.async = true;
+      document.body.appendChild(stripeJs);
+    };
+
+    loadStripe();
+  }, []);
 
   // Refresh onboarding link mutation
   const refreshOnboardingMutation = useMutation({
