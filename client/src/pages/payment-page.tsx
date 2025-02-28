@@ -1,3 +1,4 @@
+
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link, useLocation } from "wouter";
 import { Auction } from "@shared/schema";
@@ -51,6 +52,7 @@ export default function PaymentPage() {
     setIsProcessing(true);
 
     try {
+      console.log("Creating checkout session...");
       // Create checkout session
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
@@ -69,6 +71,7 @@ export default function PaymentPage() {
       }
 
       const { sessionId } = await response.json();
+      console.log("Got session ID:", sessionId);
 
       // Initialize Stripe and redirect to checkout
       const stripe = await stripePromise;
@@ -76,11 +79,13 @@ export default function PaymentPage() {
         throw new Error("Could not initialize Stripe");
       }
 
+      console.log("Redirecting to Stripe checkout...");
       const { error } = await stripe.redirectToCheckout({
         sessionId
       });
 
       if (error) {
+        console.error("Stripe redirect error:", error);
         throw error;
       }
     } catch (err) {
