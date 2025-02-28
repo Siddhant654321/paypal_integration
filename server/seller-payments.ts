@@ -6,10 +6,6 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("Missing STRIPE_SECRET_KEY environment variable");
 }
 
-if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
-  throw new Error("Stripe secret key must be a test mode key (starts with sk_test_)");
-}
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-02-24.acacia"
 });
@@ -17,6 +13,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<string> {
     try {
+      console.log("Creating Stripe Connect account for seller:", profile.userId);
+
       // Create Stripe Connect account
       const account = await stripe.accounts.create({
         type: 'express',
@@ -29,9 +27,11 @@ export class SellerPaymentService {
         },
         business_profile: {
           name: profile.businessName || profile.fullName,
-          url: `${process.env.APP_URL}/seller/${profile.userId}`,
+          url: process.env.APP_URL ? `${process.env.APP_URL}/seller/${profile.userId}` : undefined,
         },
       });
+
+      console.log("Stripe Connect account created:", account.id);
 
       // Update profile with Stripe account ID
       await storage.updateProfileStripeAccount(profile.userId, account.id, "pending");
@@ -45,6 +45,8 @@ export class SellerPaymentService {
 
   static async getOnboardingLink(accountId: string, baseUrl: string): Promise<string> {
     try {
+      console.log("Creating onboarding link for account:", accountId);
+
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
         refresh_url: `${baseUrl}/seller/onboarding/refresh`,
@@ -52,6 +54,7 @@ export class SellerPaymentService {
         type: 'account_onboarding',
       });
 
+      console.log("Onboarding link created");
       return accountLink.url;
     } catch (error) {
       console.error("Error creating onboarding link:", error);
@@ -61,6 +64,8 @@ export class SellerPaymentService {
 
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
+      console.log("Creating payout for seller:", sellerId, "amount:", amount);
+
       // Get seller's Stripe account ID
       const profile = await storage.getProfile(sellerId);
       if (!profile?.stripeAccountId) {
@@ -75,11 +80,14 @@ export class SellerPaymentService {
         transfer_group: `payment_${paymentId}`,
       });
 
+      console.log("Transfer created:", transfer.id);
+
       // Create payout record
       await storage.createPayout({
         sellerId,
         paymentId,
         amount,
+        status: 'pending',
         stripeTransferId: transfer.id,
       });
     } catch (error) {
@@ -90,6 +98,8 @@ export class SellerPaymentService {
 
   static async getAccountStatus(accountId: string): Promise<"pending" | "verified" | "rejected"> {
     try {
+      console.log("Checking account status for:", accountId);
+
       const account = await stripe.accounts.retrieve(accountId);
 
       if (account.charges_enabled && account.payouts_enabled) {

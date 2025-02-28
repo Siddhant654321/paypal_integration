@@ -41,25 +41,50 @@ export default function SellerDashboard() {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/api/seller/connect");  // Fix: Remove invalid method parameter
+      const response = await fetch('/api/seller/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
       if (!response.ok) {
-        throw new Error('Failed to connect with Stripe');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to connect with Stripe');
       }
+
       const data = await response.json();
-      // Redirect to Stripe Connect onboarding
-      window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No onboarding URL received');
+      }
     },
   });
 
   // Refresh onboarding link mutation
   const refreshOnboardingMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/api/seller/onboarding/refresh");  // Fix: Remove invalid method parameter
+      const response = await fetch('/api/seller/onboarding/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
       if (!response.ok) {
-        throw new Error('Failed to refresh onboarding link');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to refresh onboarding link');
       }
+
       const data = await response.json();
-      window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No onboarding URL received');
+      }
     },
   });
 
