@@ -53,6 +53,151 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
+  const { toast } = useToast();
+
+  const { data: profile, isLoading: isLoadingProfile } = useQuery({
+    queryKey: ["/api/admin/profiles", userId],
+    queryFn: () => fetch(`/api/admin/profiles/${userId}`).then(res => {
+      if (!res.ok) throw new Error("Failed to fetch profile");
+      return res.json();
+    }),
+  });
+
+  const { data: bids, isLoading: isLoadingBids } = useQuery({
+    queryKey: ["/api/admin/user-bids", userId],
+    queryFn: () => fetch(`/api/admin/users/${userId}/bids`).then(res => {
+      if (!res.ok) throw new Error("Failed to fetch bids");
+      return res.json();
+    }),
+    enabled: role === "buyer",
+  });
+
+  const { data: auctions, isLoading: isLoadingAuctions } = useQuery({
+    queryKey: ["/api/admin/user-auctions", userId],
+    queryFn: () => fetch(`/api/admin/users/${userId}/auctions`).then(res => {
+      if (!res.ok) throw new Error("Failed to fetch auctions");
+      return res.json();
+    }),
+    enabled: role === "seller" || role === "seller_admin",
+  });
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>User Profile: {username}</DialogTitle>
+          <DialogDescription>
+            View detailed information about this user
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoadingProfile ? (
+          <div className="flex justify-center p-4">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        ) : !profile ? (
+          <p className="text-muted-foreground">No profile information found</p>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h3 className="font-semibold mb-2">Contact Information</h3>
+                <div className="space-y-2">
+                  <p><span className="font-medium">Full Name:</span> {profile.fullName}</p>
+                  <p><span className="font-medium">Email:</span> {profile.email}</p>
+                  <p><span className="font-medium">Phone:</span> {profile.phoneNumber}</p>
+                </div>
+              </div>
+              <div>
+                <h3 className="font-semibold mb-2">Address</h3>
+                <div className="space-y-2">
+                  <p>{profile.address}</p>
+                  <p>{profile.city}, {profile.state} {profile.zipCode}</p>
+                  <p>{profile.country}</p>
+                </div>
+              </div>
+            </div>
+
+            {(role === "seller" || role === "seller_admin") && (
+              <div>
+                <h3 className="font-semibold mb-2">Business Information</h3>
+                <div className="space-y-2">
+                  <p><span className="font-medium">Business Name:</span> {profile.businessName}</p>
+                  <p><span className="font-medium">Breed Specialty:</span> {profile.breedSpecialty}</p>
+                  <p><span className="font-medium">NPIP Number:</span> {profile.npipNumber}</p>
+                </div>
+              </div>
+            )}
+
+            {role === "buyer" && (
+              <div>
+                <h3 className="font-semibold mb-4">Bid History</h3>
+                {isLoadingBids ? (
+                  <div className="flex justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : !bids?.length ? (
+                  <p className="text-muted-foreground">No bids found</p>
+                ) : (
+                  <div className="space-y-2">
+                    {bids.map((bid) => (
+                      <div key={bid.id} className="p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">${bid.amount}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(bid.timestamp).toLocaleString()}
+                            </p>
+                          </div>
+                          <Badge>{bid.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(role === "seller" || role === "seller_admin") && (
+              <div>
+                <h3 className="font-semibold mb-4">Auctions</h3>
+                {isLoadingAuctions ? (
+                  <div className="flex justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : !auctions?.length ? (
+                  <p className="text-muted-foreground">No auctions found</p>
+                ) : (
+                  <div className="space-y-2">
+                    {auctions.map((auction) => (
+                      <div key={auction.id} className="p-3 border rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">{auction.title}</p>
+                            <div className="flex gap-2 mt-1">
+                              <Badge>{auction.species}</Badge>
+                              <Badge variant="outline">{auction.category}</Badge>
+                            </div>
+                          </div>
+                          <ViewBidsDialog
+                            auctionId={auction.id}
+                            auctionTitle={auction.title}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Update the ViewBidsDialog component
 function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctionTitle: string }) {
   const { toast } = useToast();
@@ -157,7 +302,6 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
   );
 }
 
-// Keep EditAuctionDialog component the same...
 function EditAuctionDialog({ auction }: { auction: Auction }) {
   const { toast } = useToast();
   const form = useForm({
@@ -380,13 +524,12 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [auctionSearchTerm, setAuctionSearchTerm] = useState("");
   const [buyerSearchTerm, setBuyerSearchTerm] = useState("");
+  const [selectedUser, setSelectedUser] = useState<{ id: number; username: string; role: string } | null>(null);
 
-  // Redirect if not an admin
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
   }
 
-  // Existing queries
   const { data: pendingUsers, isLoading: isLoadingPending } = useQuery<User[]>({
     queryKey: ["/api/admin/users", { approved: false, role: "seller" }],
   });
@@ -407,22 +550,18 @@ export default function AdminDashboard() {
     queryKey: ["/api/auctions", { approved: true }],
   });
 
-  // Filter buyers based on search term
   const filteredBuyers = buyers?.filter((buyer) =>
     buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase()) ||
     buyer.email?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
   );
 
-  // Filter sellers
   const filteredSellers = approvedSellers?.filter((seller) =>
     (seller.role === "seller" || seller.role === "seller_admin") &&
     seller.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Make sure pendingUsers only contains sellers that are not approved
   const realPendingUsers = pendingUsers?.filter((user) => user.role === "seller" && !user.approved);
 
-  // Separate active and completed auctions
   const now = new Date();
   const filteredActiveAuctions = approvedAuctions?.filter((auction) =>
     new Date(auction.endDate) > now &&
@@ -523,7 +662,6 @@ export default function AdminDashboard() {
                 </TabsTrigger>
               </TabsList>
 
-              {/* Keep existing pending tab content */}
               <TabsContent value="pending">
                 {isLoadingPending ? (
                   <div className="flex justify-center">
@@ -539,8 +677,13 @@ export default function AdminDashboard() {
                         className="flex items-center justify-between p-4 border rounded-lg"
                       >
                         <div>
-                          <p className="font-medium">{user.username}</p>
-                          <Badge variant="secondary">{user.role}</Badge>
+                          <button
+                            className="font-medium hover:underline"
+                            onClick={() => setSelectedUser({ id: user.id, username: user.username, role: user.role })}
+                          >
+                            {user.username}
+                          </button>
+                          <Badge variant="outline">{user.role}</Badge>
                         </div>
                         <div className="flex gap-2">
                           {user.hasProfile && (
@@ -575,7 +718,6 @@ export default function AdminDashboard() {
                 )}
               </TabsContent>
 
-              {/* Keep existing approved sellers tab content */}
               <TabsContent value="sellers">
                 <div className="space-y-4">
                   <div className="relative">
@@ -602,7 +744,12 @@ export default function AdminDashboard() {
                           className="flex items-center justify-between p-4 border rounded-lg"
                         >
                           <div>
-                            <p className="font-medium">{seller.username}</p>
+                            <button
+                              className="font-medium hover:underline"
+                              onClick={() => setSelectedUser({ id: seller.id, username: seller.username, role: seller.role })}
+                            >
+                              {seller.username}
+                            </button>
                             <Badge variant="outline">{seller.role}</Badge>
                           </div>
                           <div className="flex gap-2">
@@ -639,7 +786,6 @@ export default function AdminDashboard() {
                 </div>
               </TabsContent>
 
-              {/* Add buyers tab content */}
               <TabsContent value="buyers">
                 <div className="space-y-4">
                   <div className="relative">
@@ -666,7 +812,12 @@ export default function AdminDashboard() {
                           className="flex items-center justify-between p-4 border rounded-lg"
                         >
                           <div>
-                            <p className="font-medium">{buyer.username}</p>
+                            <button
+                              className="font-medium hover:underline"
+                              onClick={() => setSelectedUser({ id: buyer.id, username: buyer.username, role: buyer.role })}
+                            >
+                              {buyer.username}
+                            </button>
                             <p className="text-sm text-muted-foreground">
                               {buyer.email || "No email provided"}
                             </p>
@@ -727,7 +878,6 @@ export default function AdminDashboard() {
                 </TabsTrigger>
               </TabsList>
 
-              {/* Keep existing pending auctions tab content */}
               <TabsContent value="pending">
                 {isLoadingPendingAuctions ? (
                   <div className="flex justify-center">
@@ -799,7 +949,6 @@ export default function AdminDashboard() {
                 )}
               </TabsContent>
 
-              {/* Update active auctions tab content */}
               <TabsContent value="active">
                 <div className="space-y-4">
                   <div className="relative">
@@ -860,7 +1009,6 @@ export default function AdminDashboard() {
                 </div>
               </TabsContent>
 
-              {/* Add completed auctions tab content */}
               <TabsContent value="completed">
                 <div className="space-y-4">
                   <div className="relative">
@@ -923,6 +1071,14 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+      {selectedUser && (
+        <UserProfileDialog
+          userId={selectedUser.id}
+          username={selectedUser.username}
+          role={selectedUser.role}
+          onClose={() => setSelectedUser(null)}
+        />
+      )}
     </div>
   );
 }
