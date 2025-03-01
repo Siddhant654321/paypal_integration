@@ -715,6 +715,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to update auction" });
     }
   });
+  
+  // Admin endpoint for managing auction photos
+  app.post("/api/admin/auctions/:id/photos", requireAdmin, upload.array('images', 5), async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      
+      // Check if auction exists
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+      
+      // Handle image uploads
+      const uploadedFiles = req.files as Express.Multer.File[];
+      if (!uploadedFiles || uploadedFiles.length === 0) {
+        return res.status(400).json({ message: "No files uploaded" });
+      }
+      
+      // Generate URLs for uploaded images
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const imageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
+      
+      // Get existing images and append new ones
+      const existingImages = Array.isArray(auction.images) ? auction.images : [];
+      const updatedImages = [...existingImages, ...imageUrls];
+      
+      // Update auction with new images
+      const updatedAuction = await storage.updateAuction(auctionId, {
+        images: updatedImages,
+        imageUrl: updatedImages[0] || auction.imageUrl // Set first image as primary if available
+      });
+      
+      res.status(200).json({
+        message: "Photos added successfully",
+        auction: updatedAuction
+      });
+    } catch (error) {
+      console.error("Error adding auction photos:", error);
+      res.status(500).json({ message: "Failed to add photos to auction" });
+    }
+  });
+  
+  // Admin endpoint for deleting a specific auction photo
+  app.delete("/api/admin/auctions/:id/photos/:photoIndex", requireAdmin, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const photoIndex = parseInt(req.params.photoIndex);
+      
+      // Check if auction exists
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+      
+      // Validate that the auction has images and the index is valid
+      if (!Array.isArray(auction.images) || auction.images.length === 0) {
+        return res.status(400).json({ message: "Auction has no images" });
+      }
+      
+      if (photoIndex < 0 || photoIndex >= auction.images.length) {
+        return res.status(400).json({ message: "Invalid photo index" });
+      }
+      
+      // Remove the image at the specified index
+      const updatedImages = [...auction.images];
+      updatedImages.splice(photoIndex, 1);
+      
+      // Update the auction
+      const updatedAuction = await storage.updateAuction(auctionId, {
+        images: updatedImages,
+        imageUrl: updatedImages.length > 0 ? updatedImages[0] : "" // Update primary image if needed
+      });
+      
+      res.status(200).json({
+        message: "Photo deleted successfully",
+        auction: updatedAuction
+      });
+    } catch (error) {
+      console.error("Error deleting auction photo:", error);
+      res.status(500).json({ message: "Failed to delete auction photo" });
+    }
+  });
 
   // Admin bid management
   app.delete("/api/admin/bids/:id", requireAdmin, async (req, res) => {

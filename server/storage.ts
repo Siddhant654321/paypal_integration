@@ -311,6 +311,12 @@ export class DatabaseStorage implements IStorage {
 
   async updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction> {
     try {
+      // First get the current auction data
+      const currentAuction = await this.getAuction(auctionId);
+      if (!currentAuction) {
+        throw new Error(`Auction with id ${auctionId} not found`);
+      }
+      
       // Ensure dates are properly formatted
       const formattedData = { ...data };
       
@@ -336,13 +342,36 @@ export class DatabaseStorage implements IStorage {
         formattedData.currentPrice = Number(formattedData.currentPrice);
       }
       
+      // If startPrice is updated but currentPrice is not, and there are no bids yet,
+      // update currentPrice to match startPrice
+      if (formattedData.startPrice !== undefined && formattedData.currentPrice === undefined) {
+        // Only update currentPrice if it currently equals the old startPrice (no bids yet)
+        if (currentAuction.currentPrice === currentAuction.startPrice) {
+          formattedData.currentPrice = formattedData.startPrice;
+        }
+      }
+      
+      // Handle images properly
+      if (formattedData.images) {
+        // Ensure images is always an array
+        if (!Array.isArray(formattedData.images)) {
+          formattedData.images = [formattedData.images];
+        }
+        
+        // If imageUrl is not specified, use the first image as the primary image
+        if (!formattedData.imageUrl && formattedData.images.length > 0) {
+          formattedData.imageUrl = formattedData.images[0];
+        }
+      }
+      
       log(`Updating auction ${auctionId} with formatted data:`, JSON.stringify({
         title: formattedData.title,
         startDate: formattedData.startDate,
         endDate: formattedData.endDate,
         startPrice: formattedData.startPrice,
         reservePrice: formattedData.reservePrice,
-        currentPrice: formattedData.currentPrice
+        currentPrice: formattedData.currentPrice,
+        images: Array.isArray(formattedData.images) ? `${formattedData.images.length} images` : formattedData.images
       }));
       
       const [auction] = await db
