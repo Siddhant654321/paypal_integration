@@ -9,8 +9,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
 
 interface Notification {
   id: string;
@@ -20,29 +18,13 @@ interface Notification {
   createdAt: string;
 }
 
-export function NotificationsMenu() {
-  // Fetch notifications
-  const { data: notifications = [] } = useQuery<Notification[]>({
-    queryKey: ["/api/notifications"],
-    // Refresh every minute
-    refetchInterval: 60000,
-  });
-
-  // Mark all as read mutation
-  const markAllReadMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/notifications/mark-all-read", {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to mark notifications as read");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    },
-  });
-
+export function NotificationsMenu({ 
+  notifications = [],
+  onMarkAllRead
+}: { 
+  notifications?: Notification[];
+  onMarkAllRead?: () => void;
+}) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
@@ -66,7 +48,7 @@ export function NotificationsMenu() {
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => markAllReadMutation.mutate()}
+              onClick={() => onMarkAllRead?.()}
               className="text-xs hover:bg-accent"
             >
               Mark all as read

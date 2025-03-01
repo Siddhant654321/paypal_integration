@@ -41,20 +41,14 @@ export class NotificationService {
   static async notifyBid(
     userId: number,
     auctionTitle: string,
-    bidAmount: number,
-    type: 'new_bid' | 'outbid'
+    bidAmount: number
   ): Promise<void> {
-    const title = type === 'new_bid' ? "New Bid Received" : "You've Been Outbid";
-    const message = type === 'new_bid' 
-      ? `A new bid of $${bidAmount} has been placed on your auction "${auctionTitle}"`
-      : `Someone has placed a higher bid of $${bidAmount} on "${auctionTitle}"`;
-
     return this.createNotificationAndSendEmail(
       userId,
       {
         type: "bid",
-        title,
-        message,
+        title: "New Bid Received",
+        message: `A new bid of $${bidAmount} has been placed on your auction "${auctionTitle}"`,
       },
       {
         type: "bid",
@@ -110,23 +104,45 @@ export class NotificationService {
     );
   }
 
-  static async notifyAuctionReminder(
+  static async notifyFulfillment(
     userId: number,
-    auctionTitle: string,
-    hoursRemaining: number
+    fulfillmentData: {
+      auctionTitle: string;
+      shippingCarrier: string;
+      trackingNumber: string;
+      shippingDate: string;
+      estimatedDeliveryDate?: string;
+    }
   ): Promise<void> {
     return this.createNotificationAndSendEmail(
       userId,
       {
-        type: "auction",
-        title: "Auction Ending Soon",
-        message: `Your auction "${auctionTitle}" will end in ${hoursRemaining} ${hoursRemaining === 1 ? 'hour' : 'hours'}`,
+        type: "fulfillment",
+        title: "Shipping Update",
+        message: `Your item from auction "${fulfillmentData.auctionTitle}" has been shipped`,
       },
       {
-        type: "auction",
+        type: "fulfillment",
+        data: fulfillmentData,
+      }
+    );
+  }
+
+  static async notifyAdmin(
+    userId: number,
+    message: string
+  ): Promise<void> {
+    return this.createNotificationAndSendEmail(
+      userId,
+      {
+        type: "admin",
+        title: "Administrative Notice",
+        message,
+      },
+      {
+        type: "admin",
         data: {
-          auctionTitle,
-          hoursRemaining,
+          message,
         },
       }
     );
