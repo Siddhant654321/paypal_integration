@@ -871,8 +871,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized to view payment status" });
       }
 
-      res.json({
-        status: auction.paymentStatus,
+      res.json({        status: auction.paymentStatus,
         dueDate: auction.paymentDueDate,
       });
     } catch (error) {
@@ -912,11 +911,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Profile not found. Please complete your profile first." });
       }
 
-      const accountId = await SellerPaymentService.createSellerAccount(profile);
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
+      const { accountId, clientSecret } = await SellerPaymentService.createSellerAccount(profile);
 
-      res.json({ url: onboardingUrl });
+      res.json({ accountId, clientSecret });
     } catch (error) {
       console.error("Error creating Stripe Connect account:", error);
       res.status(500).json({ 
@@ -975,13 +972,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "No Stripe account found" });
       }
 
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const onboardingUrl = await SellerPaymentService.getOnboardingLink(profile.stripeAccountId, baseUrl);
+      const clientSecret = await SellerPaymentService.refreshAccountSession(profile.stripeAccountId);
 
-      res.json({ url: onboardingUrl });
+      res.json({ clientSecret });
     } catch (error) {
-      console.error("Error refreshing onboarding link:", error);
-      res.status(500).json({ message: "Failed to refresh onboarding link" });
+      console.error("Error refreshing onboarding:", error);
+      res.status(500).json({ message: "Failed to refresh onboarding" });
     }
   });
 

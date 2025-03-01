@@ -29,44 +29,30 @@ interface StripeStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
 }
 
-// Create a wrapper component for Stripe Connect onboarding
-const StripeOnboardingForm = ({ onComplete }: { onComplete: () => void }) => {
-  useEffect(() => {
-    // Load Stripe Connect script
-    const script = document.createElement('script');
-    script.src = 'https://js.stripe.com/connect-js/v1/';
-    script.async = true;
-
-    script.onload = () => {
-      if (window.StripeConnect) {
-        const connect = window.StripeConnect({
-          clientId: import.meta.env.VITE_STRIPE_CLIENT_ID,
-          appearance: {
-            theme: 'flat',
-          },
-        });
-
-        connect.mount('#stripe-connect-mount');
-      }
+// Declare Stripe Connect types
+declare global {
+  interface Window {
+    StripeConnect?: {
+      EmbeddedComponents: {
+        mount: (options: {
+          clientSecret: string;
+          appearance?: {
+            theme: 'flat' | 'stripe' | 'night';
+            variables?: Record<string, string>;
+          };
+          onComplete: () => void;
+        }) => void;
+      };
     };
-
-    document.body.appendChild(script);
-
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
-
-  return (
-    <div id="stripe-connect-mount" className="w-full min-h-[600px]" />
-  );
-};
+  }
+}
 
 const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -91,14 +77,22 @@ const SellerDashboard = () => {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      setShowOnboarding(true);
       const response = await apiRequest('/api/seller/connect', { 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         }
       });
+
+      if (!response?.clientSecret) {
+        throw new Error('No client secret received');
+      }
+
       return response;
+    },
+    onSuccess: (data) => {
+      setClientSecret(data.clientSecret);
+      setShowOnboarding(true);
     },
     onError: (error: Error) => {
       setShowOnboarding(false);
@@ -109,6 +103,36 @@ const SellerDashboard = () => {
       });
     }
   });
+
+  // Effect to load Stripe Connect script and mount components
+  useEffect(() => {
+    if (!showOnboarding || !clientSecret) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://connect.stripe.com/connect-js/v1';
+    script.async = true;
+
+    script.onload = () => {
+      if (window.StripeConnect?.EmbeddedComponents) {
+        window.StripeConnect.EmbeddedComponents.mount({
+          clientSecret,
+          appearance: {
+            theme: 'flat',
+          },
+          onComplete: () => {
+            setShowOnboarding(false);
+            window.location.reload();
+          },
+        });
+      }
+    };
+
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, [showOnboarding, clientSecret]);
 
   // Safe filtering functions
   const safeFilter = (auction: Auction) => {
@@ -124,21 +148,20 @@ const SellerDashboard = () => {
   const approvedAuctions = filteredAuctions.filter(auction => auction.approved);
   const endedAuctions = filteredAuctions.filter(auction => auction.status === "ended");
 
-  // Render Stripe Connect status and onboarding
-  const renderStripeConnect = () => {
-    if (stripeStatusLoading) {
-      return (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Loading account status...</CardTitle>
-          </CardHeader>
-        </Card>
-      );
-    }
+  // Loading state
+  if (auctionsLoading || payoutsLoading) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="text-center">Loading your dashboard...</div>
+      </div>
+    );
+  }
 
-    if (showOnboarding) {
-      return (
-        <Card className="mb-6">
+  // Render Stripe Connect onboarding form
+  if (showOnboarding && clientSecret) {
+    return (
+      <div className="container mx-auto py-8">
+        <Card>
           <CardHeader>
             <CardTitle>Complete Your Account Setup</CardTitle>
             <CardDescription>
@@ -146,11 +169,21 @@ const SellerDashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <StripeOnboardingForm onComplete={() => {
-              setShowOnboarding(false);
-              window.location.reload();
-            }} />
+            <div id="stripe-connect-components" className="w-full min-h-[600px]" />
           </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render Stripe Connect status and onboarding (rest of the original code)
+  const renderStripeConnect = () => {
+    if (stripeStatusLoading) {
+      return (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Loading account status...</CardTitle>
+          </CardHeader>
         </Card>
       );
     }
@@ -256,14 +289,6 @@ const SellerDashboard = () => {
     }
   };
 
-  // Loading state
-  if (auctionsLoading || payoutsLoading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="text-center">Loading your dashboard...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto py-8">

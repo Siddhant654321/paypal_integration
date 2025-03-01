@@ -11,9 +11,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 export class SellerPaymentService {
-  static async createSellerAccount(profile: Profile): Promise<string> {
+  static async createSellerAccount(profile: Profile): Promise<{ accountId: string; clientSecret: string }> {
     try {
-      // Create Stripe Connect account with more detailed settings
+      // Create Stripe Connect account
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US',
@@ -29,20 +29,43 @@ export class SellerPaymentService {
         },
       });
 
-      // Create an account session for embedded onboarding
-      const accountSession = await stripe.accountSessions.create({
+      // Create an account session for embedded components
+      const session = await stripe.accountSessions.create({
         account: account.id,
         components: {
           account_onboarding: { enabled: true },
+          payment_details: { enabled: true },
+          payout_settings: { enabled: true },
         },
       });
 
       // Update profile with Stripe account ID
       await storage.updateProfileStripeAccount(profile.userId, account.id, "pending");
 
-      return accountSession.client_secret;
+      return {
+        accountId: account.id,
+        clientSecret: session.client_secret,
+      };
     } catch (error) {
       console.error("Error creating seller account:", error);
+      throw error;
+    }
+  }
+
+  static async refreshAccountSession(accountId: string): Promise<string> {
+    try {
+      const session = await stripe.accountSessions.create({
+        account: accountId,
+        components: {
+          account_onboarding: { enabled: true },
+          payment_details: { enabled: true },
+          payout_settings: { enabled: true },
+        },
+      });
+
+      return session.client_secret;
+    } catch (error) {
+      console.error("Error refreshing account session:", error);
       throw error;
     }
   }
