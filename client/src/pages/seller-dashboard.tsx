@@ -53,7 +53,6 @@ const SellerDashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [onboardingError, setOnboardingError] = useState<string | null>(null);
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -80,6 +79,9 @@ const SellerDashboard = () => {
     mutationFn: async () => {
       const response = await apiRequest('/api/seller/connect', { 
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
 
       if (!response?.clientSecret) {
@@ -91,42 +93,11 @@ const SellerDashboard = () => {
     onSuccess: (data) => {
       setClientSecret(data.clientSecret);
       setShowOnboarding(true);
-      setOnboardingError(null);
     },
     onError: (error: Error) => {
       setShowOnboarding(false);
-      setOnboardingError(error.message);
       toast({
         title: "Error connecting to Stripe",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  });
-
-  // Refresh onboarding mutation
-  const refreshOnboardingMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('/api/seller/onboarding/refresh', { 
-        method: 'POST',
-      });
-
-      if (!response?.clientSecret) {
-        throw new Error('No client secret received');
-      }
-
-      return response;
-    },
-    onSuccess: (data) => {
-      setClientSecret(data.clientSecret);
-      setShowOnboarding(true);
-      setOnboardingError(null);
-    },
-    onError: (error: Error) => {
-      setShowOnboarding(false);
-      setOnboardingError(error.message);
-      toast({
-        title: "Error refreshing onboarding",
         description: error.message,
         variant: "destructive",
       });
@@ -137,66 +108,29 @@ const SellerDashboard = () => {
   useEffect(() => {
     if (!showOnboarding || !clientSecret) return;
 
-    let scriptElement: HTMLScriptElement | null = null;
-    let cleanupTimeout: NodeJS.Timeout;
+    const script = document.createElement('script');
+    script.src = 'https://connect.stripe.com/connect-js/v1';
+    script.async = true;
 
-    const loadStripeConnect = () => {
-      // Create and load the script
-      scriptElement = document.createElement('script');
-      scriptElement.src = 'https://connect.stripe.com/connect-js/v1';
-      scriptElement.async = true;
-
-      scriptElement.onload = () => {
-        if (window.StripeConnect?.EmbeddedComponents) {
-          try {
-            window.StripeConnect.EmbeddedComponents.mount({
-              clientSecret: clientSecret,
-              appearance: {
-                theme: 'flat',
-                variables: {
-                  colorPrimary: '#0099ff',
-                  colorBackground: '#ffffff',
-                  colorText: '#1a1f36',
-                  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-                  borderRadius: '8px',
-                }
-              },
-              onComplete: () => {
-                setShowOnboarding(false);
-                window.location.reload();
-              },
-            });
-          } catch (error) {
-            console.error('Error mounting Stripe Connect:', error);
-            setOnboardingError('Failed to load the onboarding form. Please try again.');
+    script.onload = () => {
+      if (window.StripeConnect?.EmbeddedComponents) {
+        window.StripeConnect.EmbeddedComponents.mount({
+          clientSecret,
+          appearance: {
+            theme: 'flat',
+          },
+          onComplete: () => {
             setShowOnboarding(false);
-          }
-        }
-      };
-
-      scriptElement.onerror = () => {
-        setOnboardingError('Failed to load Stripe Connect. Please try again.');
-        setShowOnboarding(false);
-      };
-
-      document.body.appendChild(scriptElement);
+            window.location.reload();
+          },
+        });
+      }
     };
 
-    // Set a timeout to detect if the script fails to load
-    cleanupTimeout = setTimeout(() => {
-      if (!window.StripeConnect) {
-        setOnboardingError('Failed to load Stripe Connect. Please try again.');
-        setShowOnboarding(false);
-      }
-    }, 10000); // 10 second timeout
-
-    loadStripeConnect();
+    document.body.appendChild(script);
 
     return () => {
-      clearTimeout(cleanupTimeout);
-      if (scriptElement && scriptElement.parentNode) {
-        scriptElement.parentNode.removeChild(scriptElement);
-      }
+      document.body.removeChild(script);
     };
   }, [showOnboarding, clientSecret]);
 
@@ -235,23 +169,126 @@ const SellerDashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div id="stripe-connect-mount" className="w-full min-h-[600px]" />
-            {onboardingError && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{onboardingError}</AlertDescription>
-              </Alert>
-            )}
+            <div id="stripe-connect-components" className="w-full min-h-[600px]" />
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const handleRetryVerification = () => {
-    refreshOnboardingMutation.mutate();
+  // Render Stripe Connect status and onboarding (rest of the original code)
+  const renderStripeConnect = () => {
+    if (stripeStatusLoading) {
+      return (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Loading account status...</CardTitle>
+          </CardHeader>
+        </Card>
+      );
+    }
+
+    switch (stripeStatus?.status) {
+      case "not_started":
+        return (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Set Up Your Seller Account</CardTitle>
+              <CardDescription>
+                Before you can receive payments, you need to set up your account.
+                This is a secure process that allows us to send your earnings directly to your bank account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border p-4 space-y-2">
+                <h4 className="font-medium">What you'll need:</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li>Personal identification (driver's license or passport)</li>
+                  <li>Your bank account information</li>
+                  <li>Your business information (if applicable)</li>
+                </ul>
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => connectWithStripeMutation.mutate()}
+                disabled={connectWithStripeMutation.isPending}
+              >
+                {connectWithStripeMutation.isPending ? (
+                  "Setting up..."
+                ) : (
+                  <>
+                    Set Up Payments Account
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        );
+
+      case "pending":
+        return (
+          <Card className="mb-6 border-yellow-200">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <AlertCircle className="mr-2 h-5 w-5 text-yellow-500" />
+                Complete Your Account Setup
+              </CardTitle>
+              <CardDescription>
+                Please complete all required information to finish setting up your account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                className="w-full"
+                onClick={() => setShowOnboarding(true)}
+              >
+                Continue Setup
+              </Button>
+            </CardContent>
+          </Card>
+        );
+
+      case "verified":
+        return (
+          <Alert className="mb-6 border-green-200 bg-green-50">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <AlertTitle className="text-green-800">Account Connected</AlertTitle>
+            <AlertDescription className="text-green-700">
+              Your account is verified and ready to receive payments.
+            </AlertDescription>
+          </Alert>
+        );
+
+      case "rejected":
+        return (
+          <Card className="mb-6 border-red-200">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <XCircle className="mr-2 h-5 w-5 text-red-500" />
+                Account Verification Failed
+              </CardTitle>
+              <CardDescription>
+                There was an issue verifying your account. Please complete all required information.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                className="w-full"
+                onClick={() => setShowOnboarding(true)}
+                variant="destructive"
+              >
+                Complete Required Information
+              </Button>
+            </CardContent>
+          </Card>
+        );
+
+      default:
+        return null;
+    }
   };
+
 
   return (
     <div className="container mx-auto py-8">
@@ -265,99 +302,7 @@ const SellerDashboard = () => {
         </Link>
       </div>
 
-      {/* Stripe Connect Status */}
-      {stripeStatusLoading ? (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Loading account status...</CardTitle>
-          </CardHeader>
-        </Card>
-      ) : stripeStatus?.status === "not_started" ? (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Set Up Your Seller Account</CardTitle>
-            <CardDescription>
-              Before you can receive payments, you need to set up your account.
-              This is a secure process that allows us to send your earnings directly to your bank account.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-lg border p-4 space-y-2">
-              <h4 className="font-medium">What you'll need:</h4>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>Personal identification (driver's license or passport)</li>
-                <li>Your bank account information</li>
-                <li>Your business information (if applicable)</li>
-              </ul>
-            </div>
-            <Button
-              className="w-full"
-              onClick={() => connectWithStripeMutation.mutate()}
-              disabled={connectWithStripeMutation.isPending}
-            >
-              {connectWithStripeMutation.isPending ? (
-                "Setting up..."
-              ) : (
-                <>
-                  Set Up Payments Account
-                  <ExternalLink className="ml-2 h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : stripeStatus?.status === "pending" ? (
-        <Card className="mb-6 border-yellow-200">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <AlertCircle className="mr-2 h-5 w-5 text-yellow-500" />
-              Complete Your Account Setup
-            </CardTitle>
-            <CardDescription>
-              Please complete all required information to finish setting up your account.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              className="w-full"
-              onClick={handleRetryVerification}
-              disabled={refreshOnboardingMutation.isPending}
-            >
-              {refreshOnboardingMutation.isPending ? "Loading..." : "Continue Setup"}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : stripeStatus?.status === "verified" ? (
-        <Alert className="mb-6 border-green-200 bg-green-50">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertTitle className="text-green-800">Account Connected</AlertTitle>
-          <AlertDescription className="text-green-700">
-            Your account is verified and ready to receive payments.
-          </AlertDescription>
-        </Alert>
-      ) : stripeStatus?.status === "rejected" ? (
-        <Card className="mb-6 border-red-200">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <XCircle className="mr-2 h-5 w-5 text-red-500" />
-              Account Verification Failed
-            </CardTitle>
-            <CardDescription>
-              There was an issue verifying your account. Please complete all required information.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              className="w-full"
-              onClick={handleRetryVerification}
-              disabled={refreshOnboardingMutation.isPending}
-              variant="destructive"
-            >
-              {refreshOnboardingMutation.isPending ? "Processing..." : "Complete Required Information"}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
+      {renderStripeConnect()}
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -442,7 +387,7 @@ const SellerDashboard = () => {
                             <span>{formatPrice(payout.amount)}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>Date: {new Date(payout.createdAt).toLocaleDateString()}</span>
+                            <span>Date: {new Date(payout.created * 1000).toLocaleDateString()}</span>
                             <span>Status: {payout.status}</span>
                           </div>
                         </div>
