@@ -46,16 +46,13 @@ const requireProfile = async (req: any, res: any, next: any) => {
 
   // For sellers and seller_admin, check profile status
   const isSeller = req.user.role === "seller" || req.user.role === "seller_admin";
-  if (isSeller) {
-    // For sellers without a profile, return an error
-    if (!hasProfile) {
-      console.log("[PROFILE CHECK] Seller missing required profile");
-      return res.status(403).json({ message: "Profile completion required" });
-    }
-    console.log("[PROFILE CHECK] Seller profile verified");
+  if (isSeller && !hasProfile) {
+    console.log("[PROFILE CHECK] Seller missing required profile");
+    return res.status(403).json({ message: "Profile completion required" });
   }
 
   // Profile exists or not required, proceed
+  console.log("[PROFILE CHECK] Access granted");
   next();
 };
 
