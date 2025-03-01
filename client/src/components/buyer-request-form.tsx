@@ -45,10 +45,13 @@ export function BuyerRequestForm() {
   });
 
   const createRequest = useMutation({
-    mutationFn: (data: InsertBuyerRequest) =>
+    mutationFn: async (data: InsertBuyerRequest) =>
       apiRequest("/api/buyer-requests", {
         method: "POST",
-        body: JSON.stringify(data),
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/buyer-requests"] });
@@ -173,12 +176,12 @@ export function BuyerRequestForm() {
               <FormLabel>Description</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="Describe what you're looking for, including any specific requirements..."
+                  placeholder="Describe what you're looking for..."
                   {...field}
                 />
               </FormControl>
               <FormDescription>
-                Include details about quantity, age, color preferences, etc.
+                Include any specific details about what you're looking for
               </FormDescription>
               <FormMessage />
             </FormItem>
