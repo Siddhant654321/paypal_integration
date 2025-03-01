@@ -17,6 +17,7 @@ import PaymentPage from "@/pages/payment-page";
 import AnalyticsPage from "@/pages/analytics-page";
 import FulfillmentPage from "@/pages/fulfillment-page";
 import SellerProfilePage from "@/pages/seller-profile";
+import BuyerRequestPage from "@/pages/buyer-request-page";
 
 function Router() {
   return (
@@ -35,6 +36,7 @@ function Router() {
         <Route path="/seller/new-auction" component={NewAuction} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/analytics" component={AnalyticsPage} />
+        <Route path="/buyer-requests/:id" component={BuyerRequestPage} />
         <Route component={NotFound} />
       </Switch>
     </div>

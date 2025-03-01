@@ -2,8 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type BuyerRequest, type Profile } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, DollarSign, Eye, Clock } from "lucide-react";
-import { formatPrice } from "@/utils/formatters";
+import { Calendar, Eye, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -55,7 +54,7 @@ export function BuyerRequestList() {
                 <div className="space-y-1">
                   <CardTitle>{request.title}</CardTitle>
                   <CardDescription>
-                    Looking for {request.breedVariety}
+                    Looking for {request.species} - {request.category}
                   </CardDescription>
                 </div>
                 <Badge variant={request.status === "open" ? "default" : "secondary"}>
@@ -66,32 +65,17 @@ export function BuyerRequestList() {
             <CardContent>
               <div className="space-y-4">
                 <p className="text-sm line-clamp-2">{request.description}</p>
-                
+
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center">
-                      <Avatar className="h-6 w-6 mr-2">
-                        <AvatarImage src={request.buyerProfile.profilePicture || ""} />
-                        <AvatarFallback>{request.buyerProfile.fullName?.[0]}</AvatarFallback>
-                      </Avatar>
-                      <span>{request.buyerProfile.fullName || "Anonymous"}</span>
-                    </div>
-                    
-                    {request.budget && (
-                      <div className="flex items-center gap-1">
-                        <DollarSign className="h-4 w-4" />
-                        <span>Budget: {formatPrice(request.budget)}</span>
-                      </div>
-                    )}
+                  <div className="flex items-center">
+                    <Avatar className="h-6 w-6 mr-2">
+                      <AvatarImage src={request.buyerProfile.profilePicture || ""} />
+                      <AvatarFallback>{request.buyerProfile.fullName?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <span>{request.buyerProfile.fullName || "Anonymous"}</span>
                   </div>
-                  
+
                   <div className="flex items-center space-x-4">
-                    {request.desiredDate && (
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        <span>Needed by {format(new Date(request.desiredDate), "MMM d, yyyy")}</span>
-                      </div>
-                    )}
                     <div className="flex items-center gap-1">
                       <Eye className="h-4 w-4" />
                       <span>{request.views} views</span>

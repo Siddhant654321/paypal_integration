@@ -11,7 +11,6 @@ import { useForm } from "react-hook-form";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -28,7 +27,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
 
 const SPECIES_OPTIONS = ["bantam", "standard", "waterfowl", "quail", "other"];
 
@@ -38,7 +36,7 @@ const CATEGORY_OPTIONS = [
   "Fun & Mixed",
 ];
 
-export function BuyerRequestForm() {
+export function BuyerRequestForm({ onClose }: { onClose?: () => void }) {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -56,40 +54,25 @@ export function BuyerRequestForm() {
 
   const createRequest = useMutation({
     mutationFn: async (data: InsertBuyerRequest) => {
-      console.log("Submitting buyer request with data:", data);
-      try {
-        const response = await fetch("/api/buyer-requests", {
-          method: "POST",
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify(data)
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: "Failed to create request" }));
-          console.error("Server error response:", errorData);
-          throw new Error(errorData.message || "Failed to create request");
-        }
-        
-        const result = await response.json();
-        console.log("Buyer request creation response:", result);
-        return result;
-      } catch (error) {
-        console.error("Error creating buyer request:", error);
-        throw error;
-      }
+      const response = await apiRequest("POST", "/api/buyer-requests", {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+      return response.json();
     },
     onSuccess: () => {
-      console.log("Successfully created buyer request");
       queryClient.invalidateQueries({ queryKey: ["/api/buyer-requests"] });
       toast({
         title: "Request Created",
         description: "Your request has been created successfully.",
       });
       form.reset();
-      navigate("/buyer-requests");
+      if (onClose) {
+        onClose();
+      }
     },
     onError: (error: any) => {
       console.error("Mutation error:", error);
@@ -102,11 +85,9 @@ export function BuyerRequestForm() {
         });
         navigate("/auth");
       } else {
-        // Show more detailed error if available
-        const errorMessage = error.message || "Failed to create request";
         toast({
           title: "Error Creating Request",
-          description: errorMessage + ". Please try again.",
+          description: error.message || "Failed to create request",
           variant: "destructive",
         });
       }
@@ -126,21 +107,6 @@ export function BuyerRequestForm() {
       return;
     }
 
-    // Make sure species is using the correct format
-    if (data.species) {
-      data.species = data.species.toLowerCase();
-    }
-
-    // Add proper validation for required fields
-    if (!data.title || !data.species || !data.category || !data.description) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     createRequest.mutate(data);
   }
 
@@ -154,32 +120,8 @@ export function BuyerRequestForm() {
             <FormItem>
               <FormLabel>Title</FormLabel>
               <FormControl>
-                <Input placeholder="E.g., Looking for Show Quality Bantam Chickens" {...field} />
+                <Input placeholder="e.g., Looking for Silver Laced Wyandottes" {...field} />
               </FormControl>
-              <FormDescription>
-                A brief title describing what you're looking for
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Textarea 
-                  placeholder="Describe what you're looking for in detail" 
-                  className="min-h-[120px]" 
-                  {...field} 
-                />
-              </FormControl>
-              <FormDescription>
-                Provide details about what you're looking for
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -205,9 +147,6 @@ export function BuyerRequestForm() {
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>
-                The type of animal you're looking for
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -233,6 +172,23 @@ export function BuyerRequestForm() {
                   ))}
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Describe what you're looking for..." 
+                  {...field} 
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}
