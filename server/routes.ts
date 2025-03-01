@@ -284,7 +284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
         console.log("[NOTIFICATION] Seller notification sent successfully");
 
-        // If there was a previous highest bidder, notify them that they've been outbid
+        // Get previous bids to notify outbid user
         const previousBids = await storage.getBidsForAuction(auction.id);
         if (previousBids.length > 1) {
           // Sort by amount in descending order to get the second highest bid
@@ -867,13 +867,707 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Webhook event type:", event.type);
 
       switch (event.type) {
-        case "checkout.session.completed":
+        case "checkout.session.completed": {
           const session = event.data.object;
           console.log("Processing completed checkout session:", session.id);
 
           // Update payment and auction status
           await storage.updatePaymentBySessionId(session.id, {
-            status:"completed",
+            status: "completed",
+            stripePaymentIntentId: session.payment_intent as string,
+          });
+
+          // Find andupdate the associated auction
+          const payment = await storage.getPaymentBySessionId(session.id);
+          if (payment) {
+            console.log("Updating auction status for payment:", payment.id);
+            await storage.updateAuction(payment.auctionId, {
+              paymentStatus: "completed",
+            });
+          }
+          break;
+        }
+
+        case "payment_intent.payment_failed": {
+          const failedIntent = event.data.object;
+          console.log("Processing failed payment:", failedIntent.id);
+
+          await storage.updatePaymentByIntentId(failedIntent.id, {
+            status: "failed",
+          });
+          break;
+        }
+      }
+
+      res.json({ received: true });
+    } catch (error) {
+      console.error("Webhook error:", error);
+      res.status(400).json({ message: "Webhook error" });
+    }
+  });
+
+  // Fix the bid route notifications
+  app.post("/api/auctions/:id/bid", requireAuth, requireProfile, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const auctionId = parseInt(req.params.id);
+      console.log(`[BID] Processing new bid for auction ${auctionId} from user ${req.user.id}`);
+
+      if (isNaN(auctionId)) {
+        return res.status(400).json({ message: "Invalid auction ID" });
+      }
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Don't allow sellers to bid on their own auctions
+      if (auction.sellerId === req.user.id) {
+        return res.status(403).json({ message: "You cannot bid on your own auction" });
+      }
+
+      // Convert amount to number if it's a string (and ensure it's in cents)
+      let amount;
+      if (typeof req.body.amount === 'string') {
+        amount = Math.round(parseFloat(req.body.amount) * 100);
+      } else {
+        amount = req.body.amount;
+      }
+
+      if (isNaN(amount)) {
+        return res.status(400).json({ message: "Bid amount must be a valid number" });
+      }
+
+      if (amount <= auction.currentPrice) {
+        return res.status(400).json({
+          message: `Bid must be higher than current price of $${(auction.currentPrice / 100).toFixed(2)}`
+        });
+      }
+
+      console.log(`[BID] Amount validated: $${amount/100} for auction "${auction.title}"`);
+
+      const bidData = {
+        auctionId: auction.id,
+        bidderId: req.user.id,
+        amount: amount,
+      };
+
+      console.log("[BID] Creating bid with data:", bidData);
+      const bid = await storage.createBid(bidData);
+      console.log("[BID] Bid created successfully:", bid);
+
+      // Send notification to the seller about the new bid
+      try {
+        console.log("[NOTIFICATION] Attempting to send notifications for new bid");
+        const { NotificationService } = await import('./notification-service');
+
+        console.log("[NOTIFICATION] Notifying seller:", {
+          sellerId: auction.sellerId,
+          auctionTitle: auction.title,
+          amount: amount
+        });
+
+        await NotificationService.notifyNewBid(
+          auction.sellerId,
+          auction.title,
+          amount
+        );
+        console.log("[NOTIFICATION] Seller notification sent successfully");
+
+        // Get previous bids to notify outbid user
+        const previousBids = await storage.getBidsForAuction(auction.id);
+        if (previousBids.length > 1) {
+          // Sort by amount in descending order to get the second highest bid
+          const sortedBids = previousBids.sort((a, b) => b.amount - a.amount);
+          const secondHighestBid = sortedBids[1];
+
+          // Only notify if it's a different bidder
+          if (secondHighestBid.bidderId !== req.user.id) {
+            console.log("[NOTIFICATION] Notifying previous bidder:", {
+              bidderId: secondHighestBid.bidderId,
+              auctionTitle: auction.title,
+              newAmount: amount
+            });
+
+            await NotificationService.notifyOutbid(
+              secondHighestBid.bidderId,
+              auction.title,
+              amount
+            );
+            console.log("[NOTIFICATION] Previous bidder notification sent successfully");
+          }
+        }
+      } catch (notifyError) {
+        console.error("[NOTIFICATION] Failed to send bid notification:", notifyError);
+        console.error("[NOTIFICATION] Full error details:", {
+          error: notifyError,
+          stack: notifyError.stack,
+          bid: bid,
+          auction: auction
+        });
+      }
+
+      res.status(201).json(bid);
+    } catch (error) {
+      console.error("[BID] Error:", error);
+      if (error instanceof ZodError) {
+        res.status(400).json({
+          message: "Invalid bid data",
+          errors: error.errors
+        });
+      } else {
+        res.status(500).json({
+          message: "Failed to place bid",
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  });
+
+  // Update the single auction endpoint to include seller profile
+  app.get("/api/auctions/:id", async (req, res) => {
+    try {
+      const auction = await storage.getAuction(parseInt(req.params.id));
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Get the seller's profile
+      const sellerProfile = await storage.getProfile(auction.sellerId);
+      res.json({ ...auction, sellerProfile });
+    } catch (error) {
+      console.error("Error fetching auction:", error);
+      res.status(500).json({ message: "Failed to fetch auction" });
+    }
+  });
+
+  // Add auction bids endpoint
+  app.get("/api/auctions/:id/bids", async (req, res) => {
+    try {
+      const bids = await storage.getBidsForAuction(parseInt(req.params.id));
+      res.json(bids);
+    } catch (error) {
+      console.error("Error fetching bids:", error);
+      res.status(500).json({ message: "Failed to fetch bids" });
+    }
+  });
+
+  // Add this new endpoint for admin bid management
+  app.get("/api/admin/bids", requireAdmin, async (req, res) => {
+    try {
+      const auctionId = req.query.auctionId ? parseInt(req.query.auctionId as string) : undefined;
+
+      // If auctionId is provided, get bids for that auction
+      // Otherwise, return an error as we should always specify an auction
+      if (!auctionId) {
+        return res.status(400).json({ message: "Auction ID is required" });
+      }
+
+      const bids = await storage.getBidsForAuction(auctionId);
+      res.json(bids);
+    } catch (error) {
+      console.error("Error fetching bids:", error);
+      res.status(500).json({ message: "Failed to fetch bids" });
+    }
+  });
+
+  // Update the user bids endpoint to include payment information
+  app.get("/api/user/bids", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Get all bids by the user with their corresponding auctions
+      const bids = await storage.getBidsByUser(req.user.id);
+
+      // Get all auctions for these bids
+      const auctions = await Promise.all(
+        bids.map(bid => storage.getAuction(bid.auctionId))
+      );
+
+      // Filter out any undefined auctions and combine with bid data
+      const bidsWithAuctions = bids.map(bid => {
+        const auction = auctions.find(a => a?.id === bid.auctionId);
+        const isWinningBid = auction?.winningBidderId === req.user!.id;
+        return auction ? {
+          ...bid,
+          auction,
+          isWinningBid,
+          requiresPayment: isWinningBid && auction.paymentStatus === "pending",
+        } : null;
+      }).filter(Boolean);
+
+      res.json(bidsWithAuctions);
+    } catch (error) {
+      console.error("Error fetching user bids:", error);
+      res.status(500).json({ message: "Failed to fetch user bids" });
+    }
+  });
+
+
+
+  // Profile routes
+  app.post("/api/profile", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profileData = insertProfileSchema.parse(req.body);
+
+      // Check if profile exists
+      const existingProfile = await storage.getProfile(req.user.id);
+
+      let profile;
+      if (existingProfile) {
+        // Update existing profile
+        profile = await storage.updateProfile(req.user.id, profileData);
+      } else {
+        // Create new profile
+        profile = await storage.createProfile({
+          ...profileData,
+          userId: req.user.id,
+        });
+      }
+
+      res.status(201).json(profile);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        res.status(400).json({
+          message: "Invalid profile data",
+          errors: error.errors,
+        });
+      } else {
+        console.error("Error saving profile:", error);
+        res.status(500).json({ message: "Failed to save profile" });
+      }
+    }
+  });
+
+  app.get("/api/profile", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      res.json(profile);
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+
+  // Admin routes
+  app.get("/api/admin/auctions", requireAdmin, async (req, res) => {
+    try {
+      const auctions = await storage.getAuctions({ approved: false });
+      res.json(auctions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch pending auctions" });
+    }
+  });
+
+  app.post("/api/admin/auctions/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const auction = await storage.approveAuction(parseInt(req.params.id));
+      res.json(auction);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to approve auction" });
+    }
+  });
+
+  app.post("/api/admin/users/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const user = await storage.approveUser(parseInt(req.params.id));
+      res.json(user);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to approve user" });
+    }
+  });
+
+  // File upload endpoint
+  app.post("/api/upload", requireAuth, upload.array('files', 5), handleFileUpload);
+
+  // Get all users for admin (with filters)
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const filters = {
+        approved: req.query.approved === 'true' ? true :
+          req.query.approved === 'false' ? false : undefined,
+        role: req.query.role as string | undefined
+      };
+      console.log("Fetching users with filters:", filters);
+      const users = await storage.getUsers(filters);
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // Add new admin profile route
+  app.get("/api/admin/profiles/:userId", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const profile = await storage.getProfile(userId);
+
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      // Get user's bids if they're a buyer
+      const user = await storage.getUser(userId);
+      if (user?.role === "buyer") {
+        const bids = await storage.getBidsByUser(userId);
+        return res.json({ ...profile, bids });
+      }
+
+      // Get user's auctions if they're a seller
+      if (user?.role === "seller" || user?.role === "seller_admin") {
+        const auctions = await storage.getAuctions({ sellerId: userId });
+        return res.json({ ...profile, auctions });
+      }
+
+      res.json(profile);
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+
+  // Add routes for getting user's bids and auctions
+  app.get("/api/admin/users/:userId/bids", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const bids = await storage.getBidsByUser(userId);
+      res.json(bids);
+    } catch (error) {
+      console.error("Error fetching user bids:", error);
+      res.status(500).json({ message: "Failed to fetch user bids" });
+    }
+  });
+
+  app.get("/api/admin/users/:userId/auctions", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const auctions = await storage.getAuctions({ sellerId: userId });
+      res.json(auctions);
+    } catch (error) {
+      console.error("Error fetching user auctions:", error);
+      res.status(500).json({ message: "Failed to fetch user auctions" });
+    }
+  });
+
+  // Admin profile management
+  app.delete("/api/admin/profiles/:userId", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteProfile(parseInt(req.params.userId));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting profile:", error);
+      res.status(500).json({ message: "Failed to delete profile" });
+    }
+  });
+
+  // Admin auction management
+  app.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteAuction(parseInt(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting auction:", error);
+      res.status(500).json({ message: "Failed to delete auction" });
+    }
+  });
+
+  app.patch("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const data = req.body;
+
+      // Map legacy categories to new format if present
+      if (data.category) {
+        const categoryMap = {
+          "show": "Show Quality",
+          "purebred": "Purebred & Production",
+          "fun": "Fun & Mixed"
+        };
+
+        if (categoryMap[data.category]) {
+          data.category = categoryMap[data.category];
+          console.log(`Mapped category from ${req.body.category} to ${data.category}`);
+        }
+      }
+
+      const updatedAuction = await storage.updateAuction(auctionId, data);
+      res.json(updatedAuction);
+    } catch (error) {
+      console.error("Error updating auction:", error);
+      res.status(500).json({ message: "Failed to update auction" });
+    }
+  });
+
+  // Admin bid management
+  app.delete("/api/admin/bids/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteBid(parseInt(req.params.id));
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting bid:", error);
+      res.status(500).json({ message: "Failed to delete bid" });
+    }
+  });
+
+  // Update the buyer request endpoint
+  app.post("/api/buyer-requests", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      console.log("Creating buyer request with data:", {
+        ...req.body,
+        buyerId: req.user.id
+      });
+
+      try {
+        const requestData = insertBuyerRequestSchema.parse(req.body);
+        console.log("Validated request data:", requestData);
+
+        const buyerRequest = await storage.createBuyerRequest({
+          ...requestData,
+          buyerId: req.user.id,
+        });
+
+        console.log("Successfully created buyer request:", buyerRequest);
+        res.status(201).json(buyerRequest);
+      } catch (error) {
+        console.error("Validation or creation error:", error);
+        if (error instanceof ZodError) {
+          return res.status(400).json({
+            message: "Invalid request data",
+            errors: error.errors,
+          });
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error("Error creating buyer request:", error);
+      res.status(500).json({ 
+        message: "Failed to create buyer request",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/buyer-requests", async (req, res) => {
+    try {
+      const filters = {
+        status: req.query.status as string | undefined,
+        buyerId: req.query.buyerId ? parseInt(req.query.buyerId as string) : undefined,
+      };
+
+      const requests = await storage.getBuyerRequests(filters);
+
+      // Get buyer profiles for each request
+      const requestsWithProfiles = await Promise.all(
+        requests.map(async (request) => {
+          const buyerProfile = await storage.getProfile(request.buyerId);
+          return { ...request, buyerProfile };
+        })
+      );
+
+      res.json(requestsWithProfiles);
+    } catch (error) {
+      console.error("Error fetching buyer requests:", error);
+      res.status(500).json({ message: "Failed to fetch buyer requests" });
+    }
+  });
+
+  app.get("/api/buyer-requests/:id", async (req, res) => {
+    try {
+      const request = await storage.getBuyerRequest(parseInt(req.params.id));
+      if (!request) {
+        return res.status(404).json({ message: "Buyer request not found" });
+      }
+
+      // Increment views
+      await storage.incrementBuyerRequestViews(request.id);
+
+      // Get buyer profile
+      const buyerProfile = await storage.getProfile(request.buyerId);
+      res.json({ ...request, buyerProfile });
+    } catch (error) {
+      console.error("Error fetching buyer request:", error);
+      res.status(500).json({ message: "Failed to fetch buyer request" });
+    }
+  });
+
+  app.patch("/api/buyer-requests/:id/status", requireAuth, async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const { status } = req.body;
+
+      if (!status || !["open", "fulfilled", "closed"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+
+      const request = await storage.getBuyerRequest(requestId);
+      if (!request) {
+        return res.status(404).json({ message: "Buyer request not found" });
+      }
+
+      // Only allow buyer or admin to update status
+      if (req.user!.id !== request.buyerId && req.user!.role !== "admin") {
+        return res.status(403).json({ message: "Not authorized to update this request" });
+      }
+
+      const updatedRequest = await storage.updateBuyerRequestStatus(requestId, status);
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Error updating buyer request status:", error);
+      res.status(500).json({ message: "Failed to update buyer request status" });
+    }
+  });
+
+  // Add admin delete route for buyer requests
+  app.delete("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      await storage.deleteBuyerRequest(requestId);
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting buyer request:", error);
+      res.status(500).json({ message: "Failed to delete buyer request" });
+    }
+  });
+
+  // Add admin update route for buyer requests
+  app.patch("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const data = req.body;
+
+      const updatedRequest = await storage.updateBuyerRequest(requestId, data);
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Error updating buyer request:", error);
+      res.status(500).json({ message: "Failed to update buyer request" });
+    }
+  });
+
+  app.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
+    try {
+      // Log authentication state
+      console.log('Payment request authentication:', {
+        isAuthenticated: req.isAuthenticated(),
+        userId: req.user?.id,
+        session: req.session
+      });
+
+      if (!req.user) {
+        return res.status(401).json({
+          message: "Unauthorized - Please log in again",
+          code: "AUTH_REQUIRED"
+        });
+      }
+
+      const auctionId = parseInt(req.params.id);
+      const { includeInsurance = false } = req.body;
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Verify this user won the auction
+      if (auction.winningBidderId !== req.user.id) {
+        return res.status(403).json({
+          message: "Only the winning bidder can pay",
+          code: "NOT_WINNER"
+        });
+      }
+
+      // Get the base URL from the request
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+      // Create Stripe Checkout session
+      const { sessionId, payment } = await PaymentService.createCheckoutSession(
+        auctionId,
+        req.user.id,
+        includeInsurance,
+        baseUrl
+      );
+
+      res.json({ sessionId, payment });
+    } catch (error) {
+      console.error("Payment creation error:", error);
+      res.status(500).json({
+        message: "Failed to create payment session",
+        details: error instanceof Error ? error.message : "Unknown error",
+        code: "PAYMENT_CREATION_FAILED"
+      });
+    }
+  });
+
+  // Endpoint to retrieve a checkout session URL
+  app.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+
+      // Initialize Stripe with the secret key
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+        apiVersion: "2023-10-16",
+      });
+
+      // Retrieve the checkout session from Stripe
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      // Return the URL for client-side redirect
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error retrieving checkout session:", error);
+      res.status(500).json({ message: "Failed to retrieve checkout session" });
+    }
+  });
+
+  // Update the webhook handling section
+  app.post("/api/webhooks/stripe", async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    const rawBody = await buffer(req);
+
+    try {
+      console.log("Received Stripe webhook event");
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+        apiVersion: "2023-10-16",
+      });
+
+      const event = stripe.webhooks.constructEvent(
+        rawBody,
+        sig as string,
+        process.env.STRIPE_WEBHOOK_SECRET!
+      );
+
+      console.log("Webhook event type:", event.type);
+
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object;
+          console.log("Processing completed checkout session:", session.id);
+
+          // Update payment and auction status
+          await storage.updatePaymentBySessionId(session.id, {
+            status: "completed",
             stripePaymentIntentId: session.payment_intent as string,
           });
 
@@ -884,10 +1578,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateAuction(payment.auctionId, {
               paymentStatus: "completed",
             });
-          }          }
+          }
           break;
+        }
 
-        case "payment_intent.payment_failed":
+        case "payment_intent.payment_failed": {
           const failedIntent = event.data.object;
           console.log("Processing failed payment:", failedIntent.id);
 
@@ -895,6 +1590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: "failed",
           });
           break;
+        }
       }
 
       res.json({ received: true });
