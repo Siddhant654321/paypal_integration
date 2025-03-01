@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Auction, Payout } from "@shared/schema";
+import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, DollarSign, Package, ExternalLink, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
 import { Link, Redirect } from "wouter";
@@ -24,7 +24,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { StripeConnect } from "@/components/StripeConnect";
 
 interface StripeStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
@@ -44,8 +43,6 @@ const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState<"pending" | "active" | "ended">("active");
-  //Removed: const [stripeConnectUrl, setStripeConnectUrl] = useState<string | null>(null);
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -57,18 +54,10 @@ const SellerDashboard = () => {
     select: (data) => data || [],
   });
 
-  const { data: payouts, isLoading: payoutsLoading } = useQuery<Payout[]>({
-    queryKey: ["/api/seller/payouts"],
-    select: (data) => data || [],
-  });
-
-  const stripeStatusQuery = useQuery<StripeStatus>({
+  const { data: stripeStatus, isLoading: stripeStatusLoading } = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
     retry: false,
   });
-
-  const { data: stripeStatus } = stripeStatusQuery;
-  const { isLoading: stripeStatusLoading } = stripeStatusQuery;
 
   const { data: balance } = useQuery<Balance>({
     queryKey: ["/api/seller/balance"],
@@ -83,68 +72,22 @@ const SellerDashboard = () => {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      try {
-        console.log("Starting Stripe Connect process...");
-        const response = await fetch("/api/seller/connect", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("Error response from server:", errorData);
-          throw new Error(errorData.message || "Failed to connect with Stripe");
+      const response = await apiRequest('/api/seller/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         }
-        
-        const data = await response.json();
-        console.log("Full Stripe Connect response:", data);
-        
-        // Try to get the URL from different possible properties
-        let url = data.url;
-        
-        if (!url && data.accountLink && data.accountLink.url) {
-          url = data.accountLink.url;
-        }
-        
-        if (!url) {
-          // If no direct URL, try to get it from the onboarding link
-          try {
-            const refreshResponse = await fetch("/api/seller/onboarding/refresh", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ accountId: data.accountId }),
-            });
-            
-            if (refreshResponse.ok) {
-              const refreshData = await refreshResponse.json();
-              console.log("Refresh response:", refreshData);
-              url = refreshData.url;
-            }
-          } catch (refreshError) {
-            console.error("Error getting refresh URL:", refreshError);
-          }
-        }
-        
-        if (!url) {
-          console.error("Could not obtain URL from response:", data);
-          throw new Error('No URL received from Stripe Connect');
-        }
-        
-        console.log("Using Stripe redirect URL:", url);
-        return url;
-      } catch (error) {
-        console.error("Stripe Connect error:", error);
-        throw error;
+      });
+
+      if (!response?.url) {
+        throw new Error('No onboarding URL received');
       }
+
+      return response;
     },
-    onSuccess: (url) => {
-      console.log("Redirecting to Stripe URL:", url);
-      // Directly redirect to Stripe's hosted onboarding
-      window.location.href = url;
+    onSuccess: (data) => {
+      // Redirect to Stripe's hosted onboarding
+      window.location.href = data.url;
     },
     onError: (error: Error) => {
       toast({
@@ -154,6 +97,18 @@ const SellerDashboard = () => {
       });
     }
   });
+
+  // Handle return from Stripe onboarding
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get('success');
+    const refresh = params.get('refresh');
+
+    if (success === 'true' || refresh === 'true') {
+      // Clean up URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   // Safe filtering functions
   const safeFilter = (auction: Auction) => {
@@ -168,30 +123,6 @@ const SellerDashboard = () => {
   const pendingAuctions = filteredAuctions.filter(auction => !auction.approved);
   const approvedAuctions = filteredAuctions.filter(auction => auction.approved);
   const endedAuctions = filteredAuctions.filter(auction => auction.status === "ended");
-
-  // Handle redirect URL if available
-  useEffect(() => {
-    // Get the URL search params
-    const searchParams = new URLSearchParams(window.location.search);
-    const success = searchParams.get('success');
-    const refresh = searchParams.get('refresh');
-
-    // If the user was redirected back with a success parameter
-    if (success === 'true') {
-      // Clear the search params
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // Refresh the stripe status
-      stripeStatusQuery.refetch();
-    }
-
-    // If the user was redirected back with a refresh parameter
-    if (refresh === 'true') {
-      // Clear the search params
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // Retry the connect with stripe action
-      connectWithStripeMutation.mutate();
-    }
-  }, []);
 
   // Render account status section
   const renderAccountStatus = () => {
@@ -353,7 +284,7 @@ const SellerDashboard = () => {
   };
 
   // Loading state
-  if (auctionsLoading || payoutsLoading || stripeStatusLoading) {
+  if (auctionsLoading) {
     return (
       <div className="container mx-auto py-8">
         <div className="text-center">Loading your dashboard...</div>
@@ -445,26 +376,9 @@ const SellerDashboard = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {payouts.length === 0 ? (
-                    <div className="text-center text-muted-foreground">
-                      No payouts found. Completed payments will appear here.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {payouts.map(payout => (
-                        <div key={payout.id} className="border rounded p-4">
-                          <div className="flex justify-between">
-                            <span>Payout ID: {payout.id}</span>
-                            <span>{formatPrice(payout.amount)}</span>
-                          </div>
-                          <div className="flex justify-between text-sm text-muted-foreground">
-                            <span>{new Date(payout.created * 1000).toLocaleDateString()}</span>
-                            <span className="capitalize">{payout.status}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="text-center text-muted-foreground">
+                    No payouts found yet. Completed payments will appear here.
+                  </div>
                 </CardContent>
               </Card>
             </div>

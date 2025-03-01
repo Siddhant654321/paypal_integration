@@ -7,11 +7,11 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16"
+  apiVersion: "2025-02-24.acacia"
 });
 
 export class SellerPaymentService {
-  static async createSellerAccount(profile: Profile): Promise<{ accountId: string; clientSecret: string }> {
+  static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
       // Create a Connect Express account
       const account = await stripe.accounts.create({
@@ -27,16 +27,9 @@ export class SellerPaymentService {
           product_description: "Poultry and hatching eggs auction sales",
           mcc: "0742", // Veterinary Services, which includes animal breeding
         },
-        settings: {
-          payouts: {
-            schedule: {
-              interval: 'manual'
-            }
-          }
-        }
       });
 
-      // Create account link for onboarding
+      // Create an account link for onboarding
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
         refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
@@ -50,10 +43,25 @@ export class SellerPaymentService {
       return {
         accountId: account.id,
         url: accountLink.url,
-        clientSecret: null, // Adding this for API compatibility
       };
     } catch (error) {
       console.error("Error creating seller account:", error);
+      throw error;
+    }
+  }
+
+  static async refreshOnboarding(accountId: string): Promise<string> {
+    try {
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
+        return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
+        type: 'account_onboarding',
+      });
+
+      return accountLink.url;
+    } catch (error) {
+      console.error("Error refreshing onboarding:", error);
       throw error;
     }
   }
@@ -115,38 +123,6 @@ export class SellerPaymentService {
     }
   }
 
-  static async getOnboardingLink(accountId: string, baseUrl: string): Promise<string> {
-    try {
-      const accountLink = await stripe.accountLinks.create({
-        account: accountId,
-        refresh_url: `${baseUrl}/seller-dashboard?refresh=true`,
-        return_url: `${baseUrl}/seller-dashboard?success=true`,
-        type: 'account_onboarding',
-      });
-
-      return accountLink.url;
-    } catch (error) {
-      console.error("Error creating onboarding link:", error);
-      throw error;
-    }
-  }
-  
-  static async refreshAccountSession(accountId: string): Promise<string> {
-    try {
-      // This is similar to getOnboardingLink but specifically for refreshing sessions
-      const accountLink = await stripe.accountLinks.create({
-        account: accountId,
-        refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
-        return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
-        type: 'account_onboarding',
-      });
-
-      return accountLink.url;
-    } catch (error) {
-      console.error("Error refreshing account session:", error);
-      throw error;
-    }
-  }
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
       const profile = await storage.getProfile(sellerId);
