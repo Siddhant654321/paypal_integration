@@ -6,11 +6,12 @@ import { Plus, Search, DollarSign, Package } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react"; 
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
 import { formatPrice } from '../utils/formatters';
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SellerDashboard() {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ export default function SellerDashboard() {
   const queryClient = useQueryClient();
   const [stripeLoaded, setStripeLoaded] = useState(false);
   const [stripeInstance, setStripeInstance] = useState<any>(null);
+  const { toast } = useToast();
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -32,8 +34,19 @@ export default function SellerDashboard() {
     queryKey: ["/api/user/bids"],
   });
 
-  const { data: payouts, isLoading: isLoadingPayouts } = useQuery<Payout[]>({
+  const { data: payouts, isLoading: isLoadingPayouts, error: payoutsError } = useQuery<Payout[]>({
     queryKey: ["/api/seller/payouts"],
+    onError: (error) => {
+      console.error("Error fetching payouts:", error);
+      // Don't show error toast for missing table
+      if (!(error instanceof Error) || !error.message.includes("relation \"payouts\" does not exist")) {
+        toast({
+          title: "Error",
+          description: "Failed to load payout information",
+          variant: "destructive",
+        });
+      }
+    }
   });
 
   // Get Stripe Connect status
@@ -160,21 +173,22 @@ export default function SellerDashboard() {
   });
 
   const filteredAuctions = auctions?.filter(auction =>
-    auction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    auction.description.toLowerCase().includes(searchTerm.toLowerCase())
+    auction.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    auction.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    true // Include items without title/description
   );
 
   const filteredBiddingOn = biddingOn?.filter(auction =>
-    auction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    auction.description.toLowerCase().includes(searchTerm.toLowerCase())
+    auction.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    auction.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    true // Include items without title/description
   );
 
   const pendingAuctions = filteredAuctions?.filter(auction => !auction.approved);
   const approvedAuctions = filteredAuctions?.filter(auction => auction.approved);
-  const endedAuctions = filteredAuctions?.filter(auction => auction.status === "ended" || auction.status === "fulfilled");
+  const endedAuctions = filteredAuctions?.filter(auction => auction.status === "ended");
 
 
-  // Format currency helper
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -182,7 +196,6 @@ export default function SellerDashboard() {
     }).format(amount / 100);
   };
 
-  // Render Stripe Connect status and actions
   const renderStripeConnectStatus = () => {
     if (!stripeStatus) return null;
 
@@ -195,7 +208,7 @@ export default function SellerDashboard() {
               To receive payouts from your auctions, you'll need to connect your Stripe account.
               This allows us to securely transfer payments to your bank account.
             </p>
-            <Button 
+            <Button
               onClick={() => {
                 console.log("Connecting with Stripe...");
                 connectWithStripeMutation.mutate();
@@ -218,7 +231,7 @@ export default function SellerDashboard() {
             <p className="text-muted-foreground mb-4">
               You've started the Stripe connection process, but there are still some steps to complete.
             </p>
-            <Button 
+            <Button
               onClick={() => refreshOnboardingMutation.mutate()}
               disabled={refreshOnboardingMutation.isPending}
             >
@@ -243,7 +256,7 @@ export default function SellerDashboard() {
             <p className="text-muted-foreground mb-4">
               There was an issue verifying your Stripe account. Please try again or contact support.
             </p>
-            <Button 
+            <Button
               onClick={() => connectWithStripeMutation.mutate()}
               disabled={connectWithStripeMutation.isPending}
             >
@@ -256,7 +269,7 @@ export default function SellerDashboard() {
 
   const renderAuctionCard = (auction: Auction) => (
     <div key={auction.id} className="space-y-2">
-      <AuctionCard 
+      <AuctionCard
         auction={auction}
         showStatus={true}
       />
@@ -268,7 +281,7 @@ export default function SellerDashboard() {
             </div>
           ) : (
             <Link href={`/seller/fulfill/${auction.id}`}>
-              <Button 
+              <Button
                 className="w-full"
                 variant={auction.status === "fulfilled" ? "outline" : "default"}
               >
@@ -378,6 +391,10 @@ export default function SellerDashboard() {
           {renderStripeConnectStatus()}
           {isLoadingPayouts ? (
             <div className="text-center">Loading your payouts...</div>
+          ) : payoutsError ? (
+            <div className="text-center text-muted-foreground">
+              Payouts feature is not available at this time.
+            </div>
           ) : !payouts?.length ? (
             <div className="text-center text-muted-foreground">
               No payouts found. Completed auction payments will appear here.
