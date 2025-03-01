@@ -25,7 +25,8 @@ const requireProfile = async (req: any, res: any, next: any) => {
     userId: req.user?.id,
     role: req.user?.role,
     username: req.user?.username,
-    isAuthenticated: req.isAuthenticated()
+    isAuthenticated: req.isAuthenticated(),
+    hasProfile: req.user?.hasProfile
   });
 
   // For buyers, no profile is required
@@ -35,10 +36,18 @@ const requireProfile = async (req: any, res: any, next: any) => {
   }
 
   // For sellers and seller_admin, check profile status
+  const profile = await storage.getProfile(req.user.id);
   const isSeller = req.user.role === "seller" || req.user.role === "seller_admin";
-  if (isSeller && !req.user.hasProfile) {
+
+  if (isSeller && !profile) {
     console.log("[PROFILE CHECK] Seller missing required profile");
     return res.status(403).json({ message: "Profile completion required" });
+  }
+
+  // Update user's hasProfile flag
+  if (profile && !req.user.hasProfile) {
+    await storage.updateUser(req.user.id, { hasProfile: true });
+    req.user.hasProfile = true;
   }
 
   // Profile exists or not required, proceed
@@ -84,13 +93,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Enhanced logging for debugging
       const userId = typeof req.user.id === 'string' ? parseInt(req.user.id, 10) : req.user.id;
       console.log("[AUCTION CREATE] Full user details:", {
-        user: {
-          id: req.user.id,
-          role: req.user.role,
-          username: req.user.username,
-          approved: req.user.approved,
-          has_profile: req.user.has_profile
-        },
+        user: req.user,
         userId,
         isAuthenticated: req.isAuthenticated()
       });
@@ -102,7 +105,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if seller has required profile
-      if (!req.user.has_profile) {
+      const profile = await storage.getProfile(userId);
+      if (!profile) {
         console.log("[AUCTION CREATE] Seller missing required profile");
         return res.status(403).json({ message: "Profile completion required" });
       }
@@ -841,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/buyer-requests/:id/status", requireAuth, async (req, res) => {
+  app.patch("/api/buyer-requests/:id/status", requireAuth, async (req, res) =>{
     try {
       const requestId = parseInt(req.params.id);
       const { status } = req.body;
@@ -1718,7 +1722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(schedule);
     } catch (error) {
       console.error("Error getting payout schedule:", error);
-      res.status(500).json({ message: "Failed to get payout schedule" });
+      res.status(500).json({ message: "Failed to get payoutschedule" });
     }
   });
 
