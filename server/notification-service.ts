@@ -129,4 +129,58 @@ export class NotificationService {
       }
     );
   }
+
+  static async notifyAuctionOneHourRemaining(
+    userId: number,
+    auctionTitle: string,
+    endTime: Date
+  ): Promise<void> {
+    log(`Notifying user ${userId} about auction "${auctionTitle}" ending in one hour`);
+    return this.createNotification(
+      userId,
+      {
+        type: "auction",
+        title: "Auction Ending Soon",
+        message: `The auction "${auctionTitle}" will end in one hour at ${endTime.toLocaleTimeString()}`,
+      }
+    );
+  }
+
+  static async notifyAuctionComplete(
+    userId: number,
+    auctionTitle: string,
+    isWinner: boolean,
+    finalPrice: number,
+    isSeller: boolean = false
+  ): Promise<void> {
+    let title: string;
+    let message: string;
+
+    if (isSeller) {
+      title = "Auction Completed";
+      message = `Your auction "${auctionTitle}" has ended with a final price of $${(finalPrice/100).toFixed(2)}`;
+    } else if (isWinner) {
+      title = "Congratulations! You Won";
+      message = `You won the auction "${auctionTitle}" with a final bid of $${(finalPrice/100).toFixed(2)}`;
+    } else {
+      title = "Auction Ended";
+      message = `The auction "${auctionTitle}" has ended. The winning bid was $${(finalPrice/100).toFixed(2)}`;
+    }
+
+    log(`Notifying user ${userId} about auction completion`, {
+      auctionTitle,
+      isWinner,
+      isSeller,
+      finalPrice
+    });
+
+    return this.createNotification(
+      userId,
+      {
+        type: "auction",
+        title,
+        message,
+      }
+    );
+  }
 }

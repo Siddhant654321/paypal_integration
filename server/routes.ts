@@ -13,6 +13,7 @@ import Stripe from "stripe";
 import {SellerPaymentService} from "./seller-payments";
 import {insertFulfillmentSchema} from "@shared/schema"; 
 import { EmailService } from "./email"; 
+import { AuctionService } from "./auction-service";
 
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -2571,6 +2572,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch top performers" });
     }
   });
+
+  // Set up periodic checks for auction notifications
+  const NOTIFICATION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
+  
+  setInterval(async () => {
+    try {
+      await AuctionService.checkAndNotifyEndingAuctions();
+      await AuctionService.checkAndNotifyCompletedAuctions();
+    } catch (error) {
+      console.error("Error in auction notification check:", error);
+    }
+  }, NOTIFICATION_CHECK_INTERVAL);
 
   const httpServer = createServer(app);
   return httpServer;
