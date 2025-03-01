@@ -44,7 +44,8 @@ const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"pending" | "active" | "ended">("active");
+  const [stripeConnectUrl, setStripeConnectUrl] = useState<string | null>(null);
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -93,12 +94,10 @@ const SellerDashboard = () => {
         throw new Error('No URL received from Stripe Connect');
       }
 
-      return response;
+      return response.url; // Return only the URL
     },
-    onSuccess: (data) => {
-      // The data.url contains the onboarding URL we should redirect to
-      console.log("Got Stripe Connect URL:", data.url);
-      window.location.href = data.url;
+    onSuccess: (url) => {
+      setStripeConnectUrl(url); // Set the URL in state
     },
     onError: (error: Error) => {
       toast({
@@ -429,6 +428,11 @@ const SellerDashboard = () => {
           )}
         </TabsContent>
       </Tabs>
+      {stripeConnectUrl && (
+        <a href={stripeConnectUrl} target="_blank" rel="noopener noreferrer">
+          Go to Stripe Connect
+        </a>
+      )}
     </div>
   );
 };
