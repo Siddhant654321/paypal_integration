@@ -61,10 +61,13 @@ const SellerDashboard = () => {
     select: (data) => data || [],
   });
 
-  const { data: stripeStatus, isLoading: stripeStatusLoading } = useQuery<StripeStatus>({
+  const stripeStatusQuery = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
     retry: false,
   });
+
+  const { data: stripeStatus } = stripeStatusQuery;
+  const { isLoading: stripeStatusLoading } = stripeStatusQuery;
 
   const { data: balance } = useQuery<Balance>({
     queryKey: ["/api/seller/balance"],
@@ -86,14 +89,14 @@ const SellerDashboard = () => {
         }
       });
 
-      if (!response?.clientSecret) {
-        throw new Error('No client secret received');
+      if (!response?.url) {
+        throw new Error('No URL received from Stripe Connect');
       }
 
       return response;
     },
     onSuccess: (data) => {
-      setClientSecret(data.clientSecret);
+      //setClientSecret(data.clientSecret); //Not needed anymore
     },
     onError: (error: Error) => {
       toast({
@@ -124,7 +127,7 @@ const SellerDashboard = () => {
     const searchParams = new URLSearchParams(window.location.search);
     const success = searchParams.get('success');
     const refresh = searchParams.get('refresh');
-    
+
     // If the user was redirected back with a success parameter
     if (success === 'true') {
       // Clear the search params
@@ -132,7 +135,7 @@ const SellerDashboard = () => {
       // Refresh the stripe status
       stripeStatusQuery.refetch();
     }
-    
+
     // If the user was redirected back with a refresh parameter
     if (refresh === 'true') {
       // Clear the search params
@@ -302,7 +305,7 @@ const SellerDashboard = () => {
   };
 
   // Loading state
-  if (auctionsLoading || payoutsLoading) {
+  if (auctionsLoading || payoutsLoading || stripeStatusLoading) {
     return (
       <div className="container mx-auto py-8">
         <div className="text-center">Loading your dashboard...</div>
