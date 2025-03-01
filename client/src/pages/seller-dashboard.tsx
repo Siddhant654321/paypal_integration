@@ -112,7 +112,15 @@ const SellerDashboard = () => {
       }
     },
     onSuccess: (data) => {
-      window.location.href = data;
+      console.log("Successfully got Stripe Connect URL:", data.substring(0, 30) + "...");
+      // Open the URL in a new tab instead of redirecting
+      window.open(data, '_blank', 'noopener,noreferrer');
+      
+      // Show success message
+      toast({
+        title: "Stripe Connect",
+        description: "Stripe onboarding page opened in a new tab. Please complete the setup there.",
+      });
     },
     onError: (error: Error) => {
       toast({
