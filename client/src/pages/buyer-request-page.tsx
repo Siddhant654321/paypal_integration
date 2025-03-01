@@ -40,13 +40,19 @@ export default function BuyerRequestPage() {
   });
 
   const handleFulfill = () => {
-    // Navigate to new auction form with pre-filled data
     navigate(`/seller/new-auction?fulfill=${id}`);
   };
 
   // Check if user is an approved seller
-  const isApprovedSeller = user?.role === "seller" && user.approved;
-  const isAdmin = user?.role === "admin" || user?.role === "seller_admin";
+  const isApprovedSeller = user && user.role === "seller" && user.approved === true;
+  const isAdmin = user && (user.role === "admin" || user.role === "seller_admin");
+
+  console.log("User role and approval status:", {
+    userRole: user?.role,
+    isApproved: user?.approved,
+    isApprovedSeller,
+    isAdmin
+  });
 
   if (isLoading) {
     return (
@@ -82,7 +88,7 @@ export default function BuyerRequestPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isApprovedSeller && (
+              {isApprovedSeller && request.status === "open" && (
                 <Button onClick={handleFulfill}>
                   Fulfill Request
                 </Button>
@@ -103,8 +109,9 @@ export default function BuyerRequestPage() {
         <CardContent>
           <div className="space-y-4">
             <p className="text-lg">{request.description}</p>
-            <div className="text-sm text-muted-foreground">
-              Posted {format(new Date(request.createdAt), "MMM d, yyyy")}
+            <div className="flex justify-between items-center text-sm text-muted-foreground">
+              <span>Posted {format(new Date(request.createdAt), "MMM d, yyyy")}</span>
+              <span>Status: {request.status}</span>
             </div>
           </div>
         </CardContent>
