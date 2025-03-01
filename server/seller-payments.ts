@@ -68,7 +68,7 @@ export class SellerPaymentService {
 
   static async getAccountStatus(accountId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
     try {
-      if (!accountId || typeof accountId !== 'string' || accountId.trim() === '') {
+      if (!accountId) {
         return "not_started";
       }
 

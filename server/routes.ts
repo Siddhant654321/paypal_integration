@@ -872,8 +872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({        status: auction.paymentStatus,
-        dueDate: auction.paymentDueDate,
-      });
+        dueDate: auction.paymentDueDate,      });
     } catch (error) {
       consoleerror("Error fetching payment status:", error);
       res.status(500).json({ message: "Failed to fetch payment status" });
@@ -922,6 +921,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Failed to create Stripe Connect account",
         error: error instanceof Error ? error.message : "Unknown error"
       });
+    }
+  });
+
+  app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(404).json({ message: "No Stripe account found" });
+      }
+
+      const url = await SellerPaymentService.refreshOnboarding(profile.stripeAccountId);
+      res.json({ url });
+    } catch (error) {
+      console.error("Error refreshing onboarding:", error);
+      res.status(500).json({ message: "Failed to refresh onboarding" });
     }
   });
 
@@ -1558,13 +1576,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       console.log("Getting onboarding link with base URL:", baseUrl);
       
+
       const onboardingUrl = await SellerPaymentService.getOnboardingLink(
         profile.stripeAccountId,
         baseUrl
       );
       
+
       console.log("Generated onboarding URL:", onboardingUrl);
       
+
       res.json({ url: onboardingUrl });
     } catch (error) {
       console.error("Error refreshing onboarding link:", error);

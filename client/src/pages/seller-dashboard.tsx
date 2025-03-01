@@ -89,7 +89,7 @@ const SellerDashboard = () => {
         throw new Error(error.message || 'Failed to connect with Stripe');
       }
 
-      const data = await response.json() as StripeConnectResponse;
+      const data = await response.json();
       if (!data.url) {
         throw new Error('No onboarding URL received');
       }
@@ -116,7 +116,7 @@ const SellerDashboard = () => {
     const refresh = params.get('refresh');
 
     if (success === 'true' || refresh === 'true') {
-      // Clean up URL parameters and reload the page
+      // Clean up URL parameters and reload to update status
       window.history.replaceState({}, document.title, window.location.pathname);
       window.location.reload();
     }
