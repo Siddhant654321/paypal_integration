@@ -56,13 +56,15 @@ export class SellerPaymentService {
         refresh_url: `${cleanBaseUrl}/#/seller/dashboard?refresh_onboarding=true`,
         return_url: `${cleanBaseUrl}/#/seller/dashboard?onboarding_complete=true`,
         type: 'account_onboarding',
+        collect: 'eventually_due',  // Ensures all required information is collected
       });
 
       if (!accountLink.url) {
         throw new Error('Stripe did not return a valid onboarding URL');
       }
       
-      console.log("Generated onboarding URL with return path:", `${cleanBaseUrl}/#/seller/dashboard`);
+      console.log("Generated onboarding URL:", accountLink.url);
+      console.log("With return path:", `${cleanBaseUrl}/#/seller/dashboard`);
       return accountLink.url;
     } catch (error) {
       console.error("Error creating onboarding link:", error);

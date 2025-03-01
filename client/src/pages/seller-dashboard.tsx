@@ -148,21 +148,46 @@ const SellerDashboard = () => {
   // Refresh onboarding mutation
   const refreshOnboardingMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('/api/seller/onboarding/refresh', { method: 'POST' });
-      if (!response?.url) {
-        throw new Error('No onboarding URL received');
-      }
-      return response;
-    },
-    onSuccess: (data) => {
-      if (data.url) {
+      console.log("Refreshing Stripe onboarding link...");
+      try {
+        const response = await fetch('/api/seller/onboarding/refresh', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Refresh onboarding error:", {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          });
+          throw new Error(`Failed to refresh onboarding: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("Refresh onboarding response:", data);
+
+        if (!data?.url) {
+          throw new Error('No onboarding URL received');
+        }
+
+        // Redirect to Stripe onboarding URL
         window.location.href = data.url;
+        return data;
+      } catch (err) {
+        console.error("Fetch error:", err);
+        throw err;
       }
     },
-    onError: (error: Error) => {
+    onError: (error) => {
+      console.error("Error refreshing onboarding:", error);
       toast({
-        title: "Error refreshing onboarding",
-        description: error.message,
+        title: "Error",
+        description: "Failed to refresh onboarding link. Please try again.",
         variant: "destructive",
       });
     }
