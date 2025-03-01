@@ -90,9 +90,9 @@ const SellerDashboard = () => {
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
       console.log("Connecting with Stripe...");
-      try {
-        const response = await fetch('/api/seller/connect', {
-          method: 'POST',
+      
+      const response = await fetch('/api/seller/connect', {
+        method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
@@ -119,10 +119,6 @@ const SellerDashboard = () => {
         // Redirect to Stripe onboarding URL
         window.location.href = data.url;
         return data;
-      } catch (err) {
-        console.error("Fetch error:", err);
-        throw err;
-      }
     },
     onError: (error: any) => {
       console.error("Error connecting with Stripe:", error);
@@ -654,11 +650,11 @@ const SellerDashboard = () => {
                     description: "Please complete all required information in the Stripe form",
                     variant: "default",
                   });
-                  refreshOnboardingMutation.mutate();
+                  connectWithStripeMutation.mutate();
                 }} 
-                disabled={refreshOnboardingMutation.isPending}
+                disabled={connectWithStripeMutation.isPending}
               >
-                {refreshOnboardingMutation.isPending ? "Loading..." : "Try Again"}
+                {connectWithStripeMutation.isPending ? "Loading..." : "Try Again"}
               </Button>
             </div>
           )}

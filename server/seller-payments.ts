@@ -15,7 +15,7 @@ export class SellerPaymentService {
     try {
       console.log("Creating Stripe Connect account for seller:", profile.userId);
 
-      // Create Stripe Connect account
+      // Create Stripe Connect account with more detailed settings
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US',
@@ -27,7 +27,7 @@ export class SellerPaymentService {
         },
         business_profile: {
           name: profile.businessName || profile.fullName,
-          url: process.env.APP_URL ? `${process.env.APP_URL}/seller/${profile.userId}` : undefined,
+          url: process.env.APP_URL ? `${process.env.APP_URL}/seller/${profile.userId}` : 'https://example.com',
         },
       });
 
@@ -56,12 +56,14 @@ export class SellerPaymentService {
         refresh_url: `${cleanBaseUrl}/#/seller/dashboard?refresh_onboarding=true`,
         return_url: `${cleanBaseUrl}/#/seller/dashboard?onboarding_complete=true`,
         type: 'account_onboarding',
-        collect: 'eventually_due',  // Ensures all required information is collected
+        collect: 'currently_due',  // Focus on collecting currently due requirements first
       });
 
       if (!accountLink.url) {
         throw new Error('Stripe did not return a valid onboarding URL');
       }
+      
+      console.log("Generated Stripe onboarding URL successfully");
       
       console.log("Generated onboarding URL:", accountLink.url);
       console.log("With return path:", `${cleanBaseUrl}/#/seller/dashboard`);
