@@ -871,8 +871,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized to view payment status" });
       }
 
-      res.json({        status: auction.paymentStatus,
-        dueDate: auction.paymentDueDate,      });
+      res.json({        status: auction.paymentStatus,        dueDate: auction.paymentDueDate,      });
     } catch (error) {
       consoleerror("Error fetching paymentstatus:", error);
       res.status(500).json({ message: "Failed to fetch payment status" });
@@ -1053,7 +1052,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this new analytics endpoint to the registerRoutes function
+  // Add this new route after the existing /api/sellers/status route
+  app.get("/api/sellers/active", async (req, res) => {
+    try {
+      // Get all approved sellers
+      const sellers = await storage.getUsers({ 
+        role: "seller",
+        approved: true 
+      });
+
+      // Get profiles and recent auctions for each seller
+      const sellersWithDetails = await Promise.all(
+        sellers.map(async (seller) => {
+          const profile = await storage.getProfile(seller.id);
+          const auctions = await storage.getAuctions({ 
+            sellerId: seller.id,
+            approved: true
+          });
+
+          return {
+            ...seller,
+            profile,
+            auctions: auctions.slice(0, 3) // Only return the 3 most recent auctions
+          };
+        })
+      );
+
+      // Filter out sellers without profiles or recent auctions
+      const activeSellers = sellersWithDetails.filter(
+        seller => seller.profile && seller.auctions.length > 0
+      );
+
+      res.json(activeSellers);
+    } catch (error) {
+      console.error("Error fetching active sellers:", error);
+      res.status(500).json({ message: "Failed to fetch active sellers" });
+    }
+  });
+
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
       // Get all approved auctions
@@ -1716,6 +1752,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching active sellers:", error);
       res.status(500).json({ message: "Failed to fetch active sellers" });
+    }
+  });
+
+  // Add this route after the existing analytics endpoint
+  app.get("/api/analytics/active-buyers", async (req, res) => {
+    try {
+      // Get active buyers (logged in within last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const activeUsers = await storage.getUsers({
+        lastLoginAfter: thirtyDaysAgo,
+        role: "buyer"
+      });
+
+      res.json({ activeBuyers: activeUsers.length });
+    } catch (error) {
+      console.error("Error fetching active buyers:", error);
+      res.status(500).json({ message: "Failed to fetch active buyers" });
+    }
+  });
+
+  app.get("/api/analytics/auction-bids", async (req, res) => {
+    try {
+      // Get all auctions with their bids
+      const auctions = await storage.getAuctions({});
+      const auctionBids = await Promise.all(
+        auctions.map(async (auction) => {
+          const bids = await storage.getBidsForAuction(auction.id);
+          return {
+            auctionId: auction.id,
+            totalBids: bids.length
+          };
+        })
+      );
+
+      res.json(auctionBids);
+    } catch (error) {
+      console.error("Error fetching auction bids:", error);
+      res.status(500).json({ message: "Failed to fetch auction bids" });
+    }
+  });
+
+  app.get("/api/analytics/top-performers", async (req, res) => {
+    try {
+      // Get all auctions with their bids
+      const auctions = await storage.getAuctions({});
+      const completedAuctions = auctions.filter(a => a.status === "ended" && a.winningBidderId);
+
+      // Calculate seller performance
+      const sellerStats = new Map();
+      completedAuctions.forEach(auction => {
+        if (!sellerStats.has(auction.sellerId)) {
+          sellerStats.set(auction.sellerId, { total: 0, auctionsWon: 0 });
+        }
+        const stats = sellerStats.get(auction.sellerId);
+        stats.total += auction.currentPrice;
+        stats.auctionsWon += 1;
+      });
+
+      // Calculate buyer performance
+      const buyerStats = new Map();
+      completedAuctions.forEach(auction => {
+        if (!buyerStats.has(auction.winningBidderId)) {
+          buyerStats.set(auction.winningBidderId, { total: 0, auctionsWon: 0 });
+        }
+        const stats = buyerStats.get(auction.winningBidderId);
+        stats.total += auction.currentPrice;
+        stats.auctionsWon += 1;
+      });
+
+      // Get top seller
+      let topSeller = null;
+      if (sellerStats.size > 0) {
+        const [topSellerId, topSellerStats] = Array.from(sellerStats.entries())
+          .sort((a, b) => b[1].total - a[1].total)[0];
+        const sellerProfile = await storage.getProfile(topSellerId);
+        topSeller = {
+          userId: topSellerId,
+          name: sellerProfile?.businessName || "Anonymous Seller",
+          ...topSellerStats
+        };
+      }
+
+      // Get top buyer
+      let topBuyer = null;
+      if (buyerStats.size > 0) {
+        const [topBuyerId, topBuyerStats] = Array.from(buyerStats.entries())
+          .sort((a, b) => b[1].total - a[1].total)[0];
+        const buyerProfile = await storage.getProfile(topBuyerId);
+        topBuyer = {
+          userId: topBuyerId,
+          name: buyerProfile?.businessName || "Anonymous Buyer",
+          ...topBuyerStats
+        };
+      }
+
+      res.json({ topSeller, topBuyer });
+    } catch (error) {
+      console.error("Error fetching top performers:", error);
+      res.status(500).json({ message: "Failed to fetch top performers" });
     }
   });
 

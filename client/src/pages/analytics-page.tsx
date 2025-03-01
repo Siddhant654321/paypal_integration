@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Loader2, Trophy } from "lucide-react";
 import {
   LineChart,
@@ -16,6 +16,8 @@ import { formatPrice } from "@/utils/formatters";
 import { BuyerRequestList } from "@/components/buyer-request-list";
 
 interface MarketStats {
+  activeBuyers: number;
+  totalBids: number;
   averagePrices: {
     species: string;
     averagePrice: number;
@@ -60,7 +62,7 @@ export default function AnalyticsPage() {
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-8">Market Analytics</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Active Auctions Card */}
         <Card>
           <CardHeader>
@@ -73,8 +75,34 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Top Performers Card */}
+        {/* Active Buyers Card */}
         <Card>
+          <CardHeader>
+            <CardTitle>Active Buyers</CardTitle>
+            <CardDescription>Last 30 days</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold">
+              {marketStats?.activeBuyers || 0}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Total Bids Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Bids</CardTitle>
+            <CardDescription>All time</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold">
+              {marketStats?.totalBids || 0}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Top Performers Card */}
+        <Card className="md:col-span-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-yellow-500" />
@@ -82,12 +110,12 @@ export default function AnalyticsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-6">
               {/* Top Seller */}
               <div className="space-y-2">
                 <h3 className="font-semibold">Top Seller</h3>
                 {marketStats?.topPerformers.seller ? (
-                  <div className="bg-muted p-3 rounded-lg">
+                  <div className="bg-muted p-4 rounded-lg">
                     <div className="font-medium">{marketStats.topPerformers.seller.name}</div>
                     <div className="text-sm text-muted-foreground">
                       Total Sales: {formatPrice(marketStats.topPerformers.seller.total)}
@@ -105,7 +133,7 @@ export default function AnalyticsPage() {
               <div className="space-y-2">
                 <h3 className="font-semibold">Top Buyer</h3>
                 {marketStats?.topPerformers.buyer ? (
-                  <div className="bg-muted p-3 rounded-lg">
+                  <div className="bg-muted p-4 rounded-lg">
                     <div className="font-medium">{marketStats.topPerformers.buyer.name}</div>
                     <div className="text-sm text-muted-foreground">
                       Total Spent: {formatPrice(marketStats.topPerformers.buyer.total)}
@@ -133,7 +161,7 @@ export default function AnalyticsPage() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="species" />
                 <YAxis tickFormatter={(value) => formatPrice(value)} />
-                <Tooltip 
+                <Tooltip
                   formatter={(value) => [formatPrice(value as number), "Average Price"]}
                 />
                 <Bar dataKey="averagePrice" fill="#8884d8" />
