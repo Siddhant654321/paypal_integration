@@ -1,10 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useParams, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { BuyerRequest, Profile } from "@shared/schema";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface BuyerRequestWithProfile extends BuyerRequest {
   buyerProfile: Profile;
@@ -12,11 +15,38 @@ interface BuyerRequestWithProfile extends BuyerRequest {
 
 export default function BuyerRequestPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
 
   const { data: request, isLoading, error } = useQuery<BuyerRequestWithProfile>({
     queryKey: [`/api/buyer-requests/${id}`],
     enabled: !!id,
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/buyer-requests/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Request Deleted",
+        description: "The request has been deleted successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/buyer-requests"] });
+      navigate("/");
+    },
+  });
+
+  const handleFulfill = () => {
+    // Navigate to new auction form with pre-filled data
+    navigate(`/seller/new-auction?fulfill=${id}`);
+  };
+
+  // Check if user is an approved seller
+  const isApprovedSeller = user?.role === "seller" && user.approved;
+  const isAdmin = user?.role === "admin" || user?.role === "seller_admin";
 
   if (isLoading) {
     return (
@@ -26,27 +56,13 @@ export default function BuyerRequestPage() {
     );
   }
 
-  if (error) {
+  if (error || !request) {
     return (
       <div className="container py-8">
         <Card>
           <CardContent className="py-8">
             <div className="text-center text-muted-foreground">
-              Failed to load buyer request
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!request) {
-    return (
-      <div className="container py-8">
-        <Card>
-          <CardContent className="py-8">
-            <div className="text-center text-muted-foreground">
-              Request not found
+              {error ? "Failed to load buyer request" : "Request not found"}
             </div>
           </CardContent>
         </Card>
@@ -65,28 +81,30 @@ export default function BuyerRequestPage() {
                 {request.category} - {request.species}
               </div>
             </div>
-            <div className="text-sm text-muted-foreground">
-              Posted {format(new Date(request.createdAt), "MMM d, yyyy")}
+            <div className="flex items-center gap-2">
+              {isApprovedSeller && (
+                <Button onClick={handleFulfill}>
+                  Fulfill Request
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => deleteMutation.mutate()}
+                  disabled={deleteMutation.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <p className="text-lg">{request.description}</p>
-
-            <div className="flex items-center mt-6 pt-6 border-t">
-              <Avatar className="h-10 w-10 mr-3">
-                <AvatarImage src={request.buyerProfile?.profilePicture || ""} />
-                <AvatarFallback>{request.buyerProfile?.fullName?.[0] || '?'}</AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="font-medium">
-                  {request.buyerProfile?.fullName || "Anonymous"}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Request Status: {request.status}
-                </div>
-              </div>
+            <div className="text-sm text-muted-foreground">
+              Posted {format(new Date(request.createdAt), "MMM d, yyyy")}
             </div>
           </div>
         </CardContent>

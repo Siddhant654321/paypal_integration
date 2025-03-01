@@ -21,18 +21,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
-import { Redirect, useLocation } from "wouter";
-import { useState } from 'react';
+import { Redirect, useLocation, useSearch } from "wouter";
+import { useState, useEffect } from 'react';
+import { apiRequest } from "@/lib/queryClient";
 
 export default function NewAuction() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const search = useSearch();
+  const fulfillRequestId = new URLSearchParams(search).get('fulfill');
+
+  // Fetch buyer request data if fulfilling a request
+  const { data: buyerRequest } = useQuery({
+    queryKey: [`/api/buyer-requests/${fulfillRequestId}`],
+    enabled: !!fulfillRequestId,
+  });
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -45,7 +54,7 @@ export default function NewAuction() {
       title: "",
       description: "",
       species: "",
-      category: "Show Quality", // Default to "show" category
+      category: "Show Quality",
       startPrice: 0,
       reservePrice: 0,
       startDate: `${new Date().toISOString().split("T")[0]}T00:00`,
@@ -53,29 +62,37 @@ export default function NewAuction() {
     },
   });
 
+  // Pre-fill form with buyer request data when available
+  useEffect(() => {
+    if (buyerRequest) {
+      form.reset({
+        ...form.getValues(),
+        title: `Fulfilling Request: ${buyerRequest.title}`,
+        species: buyerRequest.species,
+        category: buyerRequest.category,
+        description: `This auction is in response to a buyer request:\n\n${buyerRequest.description}\n\nDetails of this offering:`,
+      });
+    }
+  }, [buyerRequest]);
+
   const createAuctionMutation = useMutation({
     mutationFn: async (auctionData: any) => {
       console.log("Form data before submission:", auctionData);
 
-      // Create FormData for the multipart/form-data request
       const formData = new FormData();
 
-      // Append all form fields
       Object.keys(auctionData).forEach(key => {
         if (key !== 'files' && key !== 'images') {
-          // Prices are now passed directly as dollars; server-side conversion is assumed.
           formData.append(key, auctionData[key].toString());
         }
       });
 
-      // Handle file uploads
       selectedFiles.forEach(file => {
         formData.append('images', file);
       });
 
       console.log("Submitting FormData with files:", selectedFiles.length);
 
-      // Use fetch directly to properly handle FormData with files
       const res = await fetch("/api/auctions", {
         method: "POST",
         body: formData,
@@ -87,12 +104,23 @@ export default function NewAuction() {
         throw new Error(errorData.message || "Failed to create auction");
       }
 
+      // If this is fulfilling a request, mark it as fulfilled
+      if (fulfillRequestId) {
+        await apiRequest("PATCH", `/api/buyer-requests/${fulfillRequestId}/status`, {
+          method: "PATCH",
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: "fulfilled" })
+        });
+      }
+
       return res.json();
     },
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Your auction has been created and is pending approval",
+        description: fulfillRequestId 
+          ? "Your auction has been created and the request has been marked as fulfilled"
+          : "Your auction has been created and is pending approval",
       });
       setLocation("/seller/dashboard");
     },
@@ -107,7 +135,9 @@ export default function NewAuction() {
 
   return (
     <div className="container max-w-2xl mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-8">Create New Auction</h1>
+      <h1 className="text-3xl font-bold mb-8">
+        {fulfillRequestId ? "Fulfill Buyer Request" : "Create New Auction"}
+      </h1>
 
       <Form {...form}>
         <form
@@ -278,10 +308,8 @@ export default function NewAuction() {
                         type="datetime-local"
                         {...field}
                         min={new Date().toISOString().split("T")[0] + "T00:00"}
-
                       />
                     </FormControl>
-
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -300,10 +328,8 @@ export default function NewAuction() {
                         type="datetime-local"
                         {...field}
                         min={form.watch("startDate")}
-
                       />
                     </FormControl>
-
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -319,7 +345,7 @@ export default function NewAuction() {
             {createAuctionMutation.isPending && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
-            Create Auction
+            {fulfillRequestId ? "Create Auction & Fulfill Request" : "Create Auction"}
           </Button>
         </form>
       </Form>
