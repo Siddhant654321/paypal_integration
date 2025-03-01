@@ -9,22 +9,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { Notification } from "@shared/schema";
 
-interface Notification {
-  id: string;
-  type: "bid" | "auction" | "admin" | "payment";
-  message: string;
-  read: boolean;
-  createdAt: string;
+interface NotificationsMenuProps {
+  notifications?: Notification[];
+  onMarkAllRead?: () => void;
 }
 
 export function NotificationsMenu({ 
   notifications = [],
   onMarkAllRead
-}: { 
-  notifications?: Notification[];
-  onMarkAllRead?: () => void;
-}) {
+}: NotificationsMenuProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
@@ -71,12 +66,15 @@ export function NotificationsMenu({
             >
               <div className="flex w-full justify-between gap-4">
                 <span className="font-medium leading-none">
-                  {notification.message}
+                  {notification.title}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {new Date(notification.createdAt).toLocaleDateString()}
+                  {new Date(notification.createdAt!).toLocaleDateString()}
                 </span>
               </div>
+              <p className="text-sm text-muted-foreground">
+                {notification.message}
+              </p>
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
