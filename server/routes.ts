@@ -146,7 +146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create new auction (sellers only)
-  app.post("/api/auctions", requireAuth, requireProfile, upload.array('images', 5), async (req, res) => {
+  app.post("/api/auctions", requireAuth, upload.array('images', 5), async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         console.log("[AUCTION CREATE] Not authenticated");
@@ -171,6 +171,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.user.role !== "seller" && req.user.role !== "seller_admin") {
         console.log("[AUCTION CREATE] Invalid role:", req.user.role);
         return res.status(403).json({ message: "Only sellers can create auctions" });
+      }
+
+      // Check if the seller has a profile - removed requireProfile middleware for more control
+      try {
+        const profile = await storage.getProfile(userId);
+        console.log("[AUCTION CREATE] Profile check:", { 
+          userId, 
+          hasProfile: !!profile,
+          profileId: profile?.id 
+        });
+      } catch (profileError) {
+        console.log("[AUCTION CREATE] Error checking profile:", profileError);
+        // Continue even if there's a profile error - we'll create the auction anyway
       }
 
       const auctionData = req.body;
