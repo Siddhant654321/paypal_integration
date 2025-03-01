@@ -114,9 +114,7 @@ export default function AuctionPage() {
   }
 
   const isActive = new Date() >= new Date(auction.startDate) && new Date() <= new Date(auction.endDate);
-
-  const showSellerDecision = auction.status === "pending_seller_decision" &&
-                            user?.id === auction.sellerId;
+  const showSellerDecision = auction.status === "pending_seller_decision" && user?.id === auction.sellerId;
 
   const getStatusBadge = () => {
     switch (auction.status) {
@@ -134,17 +132,17 @@ export default function AuctionPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto px-4 py-6 md:py-8">
       <Link href="/">
-        <Button variant="ghost" className="mb-6">
+        <Button variant="ghost" className="mb-4 md:mb-6">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Auctions
         </Button>
       </Link>
 
-      <div className="grid md:grid-cols-2 gap-8">
-        <div className="space-y-4">
-          <div className="aspect-square w-full overflow-hidden rounded-lg">
+      <div className="grid md:grid-cols-2 gap-6 md:gap-8">
+        <div className="space-y-4 md:space-y-6">
+          <div className="aspect-square w-full overflow-hidden rounded-lg bg-muted">
             <img
               src={auction.imageUrl || ''}
               alt={auction.title}
@@ -168,7 +166,7 @@ export default function AuctionPage() {
 
           {auction.sellerProfile && (
             <Card>
-              <CardHeader>
+              <CardHeader className="space-y-1.5">
                 <CardTitle className="text-lg">About the Seller</CardTitle>
                 <CardDescription>
                   Learn more about this seller and their specialties
@@ -176,7 +174,7 @@ export default function AuctionPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <Store className="h-4 w-4" />
+                  <Store className="h-4 w-4 flex-shrink-0" />
                   <span className="font-medium">
                     {auction.sellerProfile.businessName || "Anonymous Seller"}
                   </span>
@@ -184,7 +182,7 @@ export default function AuctionPage() {
 
                 {auction.sellerProfile.state && (
                   <div className="flex items-center gap-2 text-sm">
-                    <MapPin className="h-4 w-4" />
+                    <MapPin className="h-4 w-4 flex-shrink-0" />
                     <span>Shipping from {auction.sellerProfile.state}</span>
                   </div>
                 )}
@@ -221,9 +219,9 @@ export default function AuctionPage() {
         </div>
 
         <div className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">{auction.title}</h1>
-            <div className="flex gap-2 mt-2">
+          <div className="space-y-4">
+            <h1 className="text-2xl md:text-3xl font-bold">{auction.title}</h1>
+            <div className="flex flex-wrap gap-2">
               <Badge>{auction.species}</Badge>
               <Badge variant="outline">
                 {auction.category}
@@ -243,14 +241,14 @@ export default function AuctionPage() {
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-lg">
-              <Clock className="h-5 w-5" />
+              <Clock className="h-5 w-5 flex-shrink-0" />
               <span>{timeLeft}</span>
             </div>
             <div className="text-lg">
-              Current bid: <span className="font-bold">{formatPrice(auction.currentPrice)}</span> 
+              Current bid: <span className="font-bold">{formatPrice(auction.currentPrice)}</span>
             </div>
             <div className="text-sm text-muted-foreground">
-              Starting price: {formatPrice(auction.startPrice)} 
+              Starting price: {formatPrice(auction.startPrice)}
             </div>
           </div>
 
@@ -263,17 +261,17 @@ export default function AuctionPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Auction Decision Required</AlertDialogTitle>
                   <AlertDialogDescription>
-                    The reserve price was not met. The highest bid was {formatPrice(auction.currentPrice)}. 
+                    The reserve price was not met. The highest bid was {formatPrice(auction.currentPrice)}.
                     Would you like to accept this bid or void the auction?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <AlertDialogFooter>
+                <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction onClick={() => handleSellerDecision("accept")}>
                     Accept Bid
                   </AlertDialogAction>
-                  <AlertDialogAction 
-                    onClick={() => handleSellerDecision("void")} 
+                  <AlertDialogAction
+                    onClick={() => handleSellerDecision("void")}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
                     Void Auction
@@ -297,16 +295,16 @@ export default function AuctionPage() {
           )}
 
           {bids && bids.length > 0 && (
-            <div>
-              <h2 className="text-xl font-semibold mb-4">Bid History</h2>
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Bid History</h2>
               <div className="space-y-2">
                 {bids.map((bid) => (
                   <div
                     key={bid.id}
                     className="flex justify-between items-center p-3 bg-muted rounded-lg"
                   >
-                    <div>
-                      <span className="font-medium">{formatPrice(bid.amount)}</span> 
+                    <div className="space-y-1">
+                      <span className="font-medium">{formatPrice(bid.amount)}</span>
                       {bid.bidderId === user?.id && (
                         <Badge variant="outline" className="ml-2">Your Bid</Badge>
                       )}

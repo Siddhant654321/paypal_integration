@@ -59,17 +59,17 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-8">Market Analytics</h1>
+    <div className="container mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
+      <h1 className="text-2xl md:text-3xl font-bold">Market Analytics</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         {/* Active Auctions Card */}
         <Card>
-          <CardHeader>
-            <CardTitle>Active Auctions</CardTitle>
+          <CardHeader className="space-y-1.5 p-4 md:p-6">
+            <CardTitle className="text-lg md:text-xl">Active Auctions</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold">
+          <CardContent className="p-4 md:p-6 pt-0">
+            <div className="text-3xl md:text-4xl font-bold">
               {marketStats?.activeAuctions || 0}
             </div>
           </CardContent>
@@ -77,12 +77,12 @@ export default function AnalyticsPage() {
 
         {/* Active Buyers Card */}
         <Card>
-          <CardHeader>
-            <CardTitle>Active Buyers</CardTitle>
+          <CardHeader className="space-y-1.5 p-4 md:p-6">
+            <CardTitle className="text-lg md:text-xl">Active Buyers</CardTitle>
             <CardDescription>Last 30 days</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold">
+          <CardContent className="p-4 md:p-6 pt-0">
+            <div className="text-3xl md:text-4xl font-bold">
               {marketStats?.activeBuyers || 0}
             </div>
           </CardContent>
@@ -90,34 +90,34 @@ export default function AnalyticsPage() {
 
         {/* Total Bids Card */}
         <Card>
-          <CardHeader>
-            <CardTitle>Total Bids</CardTitle>
+          <CardHeader className="space-y-1.5 p-4 md:p-6">
+            <CardTitle className="text-lg md:text-xl">Total Bids</CardTitle>
             <CardDescription>All time</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold">
+          <CardContent className="p-4 md:p-6 pt-0">
+            <div className="text-3xl md:text-4xl font-bold">
               {marketStats?.totalBids || 0}
             </div>
           </CardContent>
         </Card>
 
         {/* Top Performers Card */}
-        <Card className="md:col-span-3">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <Card className="col-span-full">
+          <CardHeader className="space-y-1.5 p-4 md:p-6">
+            <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
               <Trophy className="h-5 w-5 text-yellow-500" />
               Top Performers (Last 30 Days)
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 gap-6">
+          <CardContent className="p-4 md:p-6 pt-0">
+            <div className="grid gap-6 sm:grid-cols-2">
               {/* Top Seller */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <h3 className="font-semibold">Top Seller</h3>
                 {marketStats?.topPerformers.seller ? (
                   <div className="bg-muted p-4 rounded-lg">
                     <div className="font-medium">{marketStats.topPerformers.seller.name}</div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground mt-2">
                       Total Sales: {formatPrice(marketStats.topPerformers.seller.total)}
                     </div>
                     <div className="text-sm text-muted-foreground">
@@ -130,12 +130,12 @@ export default function AnalyticsPage() {
               </div>
 
               {/* Top Buyer */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <h3 className="font-semibold">Top Buyer</h3>
                 {marketStats?.topPerformers.buyer ? (
                   <div className="bg-muted p-4 rounded-lg">
                     <div className="font-medium">{marketStats.topPerformers.buyer.name}</div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground mt-2">
                       Total Spent: {formatPrice(marketStats.topPerformers.buyer.total)}
                     </div>
                     <div className="text-sm text-muted-foreground">
@@ -151,11 +151,11 @@ export default function AnalyticsPage() {
         </Card>
 
         {/* Average Prices by Species */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Average Prices by Species</CardTitle>
+        <Card className="col-span-full sm:col-span-1">
+          <CardHeader className="space-y-1.5 p-4 md:p-6">
+            <CardTitle className="text-lg md:text-xl">Average Prices by Species</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={marketStats?.averagePrices || []}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -171,11 +171,11 @@ export default function AnalyticsPage() {
         </Card>
 
         {/* Popular Categories */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Popular Categories</CardTitle>
+        <Card className="col-span-full sm:col-span-1">
+          <CardHeader className="space-y-1.5 p-4 md:p-6">
+            <CardTitle className="text-lg md:text-xl">Popular Categories</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={marketStats?.popularCategories || []}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -190,12 +190,14 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Market Demand Section */}
-      <div className="mt-12">
-        <h2 className="text-2xl font-bold mb-6">Market Demand</h2>
-        <p className="text-muted-foreground mb-8">
+      <div className="mt-8 space-y-4">
+        <h2 className="text-xl md:text-2xl font-bold">Market Demand</h2>
+        <p className="text-sm md:text-base text-muted-foreground">
           Current buyer requests and market demand for specific breeds and varieties
         </p>
-        <BuyerRequestList />
+        <div className="mt-6">
+          <BuyerRequestList />
+        </div>
       </div>
     </div>
   );
