@@ -112,6 +112,26 @@ app.use((req, res, next) => {
     const port = 5000;
 
     const startServer = () => {
+      try {
+        // First try to kill any existing process on this port
+        log(`Checking if port ${port} is in use...`);
+        const { execSync } = require('child_process');
+        try {
+          execSync(`lsof -i :${port} -t | xargs kill -9`);
+          log(`Freed port ${port}`);
+          // Wait a moment before starting
+          setTimeout(() => bindServer(), 1000);
+        } catch (err) {
+          // No process was using the port or couldn't be killed
+          bindServer();
+        }
+      } catch (error) {
+        log(`Error during server startup: ${error}`);
+        process.exit(1);
+      }
+    };
+
+    const bindServer = () => {
       server.listen({
         port,
         host: "0.0.0.0",
@@ -119,19 +139,8 @@ app.use((req, res, next) => {
         log(`Server started successfully on port ${port}`);
       }).on('error', (e: any) => {
         if (e.code === 'EADDRINUSE') {
-          log(`Port ${port} is already in use. Attempting to close existing server...`);
-
-          // Try to find and kill the process using this port
-          import('child_process').then(cp => cp.exec(`lsof -i :${port} -t | xargs kill -9`, (err: any) => {
-            if (err) {
-              log(`Could not free port ${port}: ${err.message}`);
-              process.exit(1);
-            } else {
-              log(`Successfully freed port ${port}, restarting server...`);
-              // Wait a moment before trying again
-              setTimeout(startServer, 1000);
-            }
-          }));
+          log(`Port ${port} is still in use. Please restart your Repl to free resources.`);
+          process.exit(1);
         } else {
           log(`Server error: ${e.message}`);
           process.exit(1);

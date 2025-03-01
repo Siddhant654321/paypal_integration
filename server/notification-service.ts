@@ -10,35 +10,54 @@ export class NotificationService {
   private static userSockets: Map<number, WebSocket[]> = new Map();
 
   static initialize(server: Server) {
-    this.wss = new WebSocketServer({ server, path: '/ws' });
+    try {
+      log("Creating WebSocket server...", "notification");
+      this.wss = new WebSocketServer({ server, path: '/ws' });
+      log("WebSocket server created successfully", "notification");
 
-    this.wss.on('connection', (ws: WebSocket) => {
-      ws.on('message', async (message: string) => {
-        try {
-          const data = JSON.parse(message);
-          if (data.type === 'auth' && data.userId) {
-            const userSockets = this.userSockets.get(data.userId) || [];
-            userSockets.push(ws);
-            this.userSockets.set(data.userId, userSockets);
-          }
-        } catch (error) {
-          log(`WebSocket message error: ${error}`, "notification");
-        }
-      });
-
-      ws.on('close', () => {
-        for (const [userId, sockets] of this.userSockets.entries()) {
-          const index = sockets.indexOf(ws);
-          if (index !== -1) {
-            sockets.splice(index, 1);
-            if (sockets.length === 0) {
-              this.userSockets.delete(userId);
+      this.wss.on('connection', (ws: WebSocket) => {
+        log("New WebSocket connection established", "notification");
+        
+        ws.on('message', async (message: string) => {
+          try {
+            const data = JSON.parse(message);
+            if (data.type === 'auth' && data.userId) {
+              const userSockets = this.userSockets.get(data.userId) || [];
+              userSockets.push(ws);
+              this.userSockets.set(data.userId, userSockets);
+              log(`User ${data.userId} authenticated on WebSocket`, "notification");
             }
-            break;
+          } catch (error) {
+            log(`WebSocket message error: ${error}`, "notification");
           }
-        }
+        });
+
+        ws.on('close', () => {
+          for (const [userId, sockets] of this.userSockets.entries()) {
+            const index = sockets.indexOf(ws);
+            if (index !== -1) {
+              sockets.splice(index, 1);
+              if (sockets.length === 0) {
+                this.userSockets.delete(userId);
+              }
+              log(`WebSocket connection closed for user ${userId}`, "notification");
+              break;
+            }
+          }
+        });
+        
+        ws.on('error', (error) => {
+          log(`WebSocket error: ${error}`, "notification");
+        });
       });
-    });
+      
+      this.wss.on('error', (error) => {
+        log(`WebSocket server error: ${error}`, "notification");
+      });
+      
+    } catch (error) {
+      log(`Failed to initialize WebSocket server: ${error}`, "notification");
+    }
   }
 
   private static async sendWebSocketMessage(userId: number, notification: any) {
