@@ -25,7 +25,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
-import { Redirect, useLocation, useSearch } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { useState, useEffect } from 'react';
 import { apiRequest } from "@/lib/queryClient";
 
@@ -34,8 +34,7 @@ export default function NewAuction() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const search = useSearch();
-  const fulfillRequestId = new URLSearchParams(search).get('fulfill');
+  const fulfillRequestId = new URLSearchParams(window.location.search).get('fulfill');
 
   // Fetch buyer request data if fulfilling a request
   const { data: buyerRequest } = useQuery({
@@ -143,7 +142,7 @@ export default function NewAuction() {
         <form
           onSubmit={form.handleSubmit((data) => {
             console.log("Form data before submission:", data);
-            createAuctionMutation.mutate({...data});
+            createAuctionMutation.mutate(data);
           })}
           className="space-y-6"
           encType="multipart/form-data"
