@@ -85,6 +85,7 @@ export class SellerPaymentService {
       // Attempt to retrieve the account
       try {
         const account = await stripe.accounts.retrieve(accountId);
+        
         console.log("Account status details:", {
           id: account.id,
           charges_enabled: account.charges_enabled,
@@ -92,6 +93,16 @@ export class SellerPaymentService {
           requirements_disabled_reason: account.requirements?.disabled_reason,
           capabilities: account.capabilities
         });
+
+        // For better debugging, log more details about requirements
+        if (account.requirements) {
+          console.log("Account requirements:", {
+            currently_due: account.requirements.currently_due,
+            eventually_due: account.requirements.eventually_due,
+            past_due: account.requirements.past_due,
+            pending_verification: account.requirements.pending_verification
+          });
+        }
 
         if (account.charges_enabled && account.payouts_enabled) {
           return "verified";

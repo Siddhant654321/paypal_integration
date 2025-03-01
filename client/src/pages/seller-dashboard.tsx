@@ -89,7 +89,7 @@ const SellerDashboard = () => {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      console.log("Initiating Stripe Connect...");
+      console.log("Connecting with Stripe...");
       try {
         const response = await fetch('/api/seller/connect', {
           method: 'POST',
@@ -101,45 +101,34 @@ const SellerDashboard = () => {
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error("Stripe Connect error response:", {
+          console.error("Connect with Stripe error:", {
             status: response.status,
             statusText: response.statusText,
             body: errorText
           });
-          throw new Error(`Server error: ${response.status} ${response.statusText}`);
+          throw new Error(`Failed to connect with Stripe: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log("Stripe Connect response:", data);
+        console.log("Connect with Stripe response:", data);
 
         if (!data?.url) {
           throw new Error('No onboarding URL received');
         }
+
+        // Redirect to Stripe onboarding URL
+        window.location.href = data.url;
         return data;
       } catch (err) {
         console.error("Fetch error:", err);
         throw err;
       }
     },
-    onSuccess: (data) => {
-      console.log("Successfully connected to Stripe, redirecting to:", data.url);
-      if (data.url) {
-        // Small delay to ensure toast is visible
-        toast({
-          title: "Success!",
-          description: "Redirecting to Stripe Connect...",
-          variant: "default",
-        });
-        setTimeout(() => {
-          window.location.href = data.url;
-        }, 1000);
-      }
-    },
-    onError: (error: Error) => {
-      console.error("Error connecting to Stripe:", error);
+    onError: (error: any) => {
+      console.error("Error connecting with Stripe:", error);
       toast({
-        title: "Error connecting to Stripe",
-        description: error.message || "Please try again later",
+        title: "Error connecting with Stripe",
+        description: error.message || "Failed to connect with Stripe",
         variant: "destructive",
       });
     }
@@ -183,11 +172,11 @@ const SellerDashboard = () => {
         throw err;
       }
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error refreshing onboarding:", error);
       toast({
-        title: "Error",
-        description: "Failed to refresh onboarding link. Please try again.",
+        title: "Error refreshing onboarding",
+        description: error.message || "Failed to connect with Stripe",
         variant: "destructive",
       });
     }
