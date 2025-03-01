@@ -323,10 +323,26 @@ export class DatabaseStorage implements IStorage {
         formattedData.endDate = new Date(formattedData.endDate);
       }
       
+      // Ensure price fields are properly converted to numbers
+      if (formattedData.startPrice !== undefined && typeof formattedData.startPrice === 'string') {
+        formattedData.startPrice = Number(formattedData.startPrice);
+      }
+      
+      if (formattedData.reservePrice !== undefined && typeof formattedData.reservePrice === 'string') {
+        formattedData.reservePrice = Number(formattedData.reservePrice);
+      }
+      
+      if (formattedData.currentPrice !== undefined && typeof formattedData.currentPrice === 'string') {
+        formattedData.currentPrice = Number(formattedData.currentPrice);
+      }
+      
       log(`Updating auction ${auctionId} with formatted data:`, JSON.stringify({
         title: formattedData.title,
         startDate: formattedData.startDate,
-        endDate: formattedData.endDate
+        endDate: formattedData.endDate,
+        startPrice: formattedData.startPrice,
+        reservePrice: formattedData.reservePrice,
+        currentPrice: formattedData.currentPrice
       }));
       
       const [auction] = await db
