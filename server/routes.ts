@@ -30,14 +30,6 @@ const requireProfile = async (req: any, res: any, next: any) => {
     isAuthenticated: req.isAuthenticated()
   });
 
-  // Check if profile exists 
-  const hasProfile = await storage.hasProfile(req.user.id);
-  console.log("[PROFILE CHECK] Profile check result:", {
-    userId: req.user.id, 
-    role: req.user.role,
-    hasProfile
-  });
-
   // For buyers, no profile is required
   if (req.user.role === "buyer") {
     console.log("[PROFILE CHECK] Skipping profile check for buyer");
@@ -46,7 +38,7 @@ const requireProfile = async (req: any, res: any, next: any) => {
 
   // For sellers and seller_admin, check profile status
   const isSeller = req.user.role === "seller" || req.user.role === "seller_admin";
-  if (isSeller && !hasProfile) {
+  if (isSeller && !req.user.has_profile) {
     console.log("[PROFILE CHECK] Seller missing required profile");
     return res.status(403).json({ message: "Profile completion required" });
   }
@@ -159,7 +151,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: req.user.id,
           role: req.user.role,
           username: req.user.username,
-          approved: req.user.approved
+          approved: req.user.approved,
+          has_profile: req.user.has_profile
         },
         userId,
         userIdType: typeof userId,
@@ -172,17 +165,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only sellers can create auctions" });
       }
 
-      // Check if the seller has a profile - removed requireProfile middleware for more control
-      try {
-        const profile = await storage.getProfile(userId);
-        console.log("[AUCTION CREATE] Profile check:", { 
-          userId, 
-          hasProfile: !!profile,
-          profileId: profile?.id 
-        });
-      } catch (profileError) {
-        console.log("[AUCTION CREATE] Error checking profile:", profileError);
-        // Continue even if there's a profile error - we'll create the auction anyway
+      // Check if seller has required profile
+      if (!req.user.has_profile) {
+        console.log("[AUCTION CREATE] Seller missing required profile");
+        return res.status(403).json({ message: "Profile completion required" });
       }
 
       const auctionData = req.body;

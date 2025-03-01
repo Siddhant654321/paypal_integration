@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction } from "@shared/schema";
+import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -11,6 +11,9 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(insertUser: InsertUser): Promise<User>;
   hasProfile(userId: number): Promise<boolean>;
+  getProfile(userId: number): Promise<Profile | undefined>;
+  createProfile(insertProfile: InsertProfile): Promise<Profile>;
+  updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile>;
   createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction>;
   getAuction(id: number): Promise<Auction | undefined>;
   getAuctions(filters?: { 
@@ -88,12 +91,58 @@ export class DatabaseStorage implements IStorage {
 
   async hasProfile(userId: number): Promise<boolean> {
     try {
-      const user = await this.getUser(userId);
-      // Changed from hasProfile to has_profile to match database column
-      return user?.has_profile || false;
+      const profile = await this.getProfile(userId);
+      return !!profile;
     } catch (error) {
       log(`Error checking profile for user ${userId}: ${error}`);
       return false;
+    }
+  }
+
+  async getProfile(userId: number): Promise<Profile | undefined> {
+    try {
+      const [profile] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.userId, userId));
+      return profile;
+    } catch (error) {
+      log(`Error getting profile for user ${userId}: ${error}`);
+      throw error;
+    }
+  }
+
+  async createProfile(insertProfile: InsertProfile): Promise<Profile> {
+    try {
+      const [profile] = await db
+        .insert(profiles)
+        .values(insertProfile)
+        .returning();
+
+      // Update user has_profile flag
+      await db
+        .update(users)
+        .set({ has_profile: true })
+        .where(eq(users.id, insertProfile.userId));
+
+      return profile;
+    } catch (error) {
+      log(`Error creating profile: ${error}`);
+      throw error;
+    }
+  }
+
+  async updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile> {
+    try {
+      const [updatedProfile] = await db
+        .update(profiles)
+        .set(profile)
+        .where(eq(profiles.userId, userId))
+        .returning();
+      return updatedProfile;
+    } catch (error) {
+      log(`Error updating profile: ${error}`);
+      throw error;
     }
   }
 
