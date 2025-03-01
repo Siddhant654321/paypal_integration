@@ -53,6 +53,7 @@ const SellerDashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [onboardingError, setOnboardingError] = useState<string | null>(null);
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -90,9 +91,11 @@ const SellerDashboard = () => {
     onSuccess: (data) => {
       setClientSecret(data.clientSecret);
       setShowOnboarding(true);
+      setOnboardingError(null);
     },
     onError: (error: Error) => {
       setShowOnboarding(false);
+      setOnboardingError(error.message);
       toast({
         title: "Error connecting to Stripe",
         description: error.message,
@@ -117,9 +120,11 @@ const SellerDashboard = () => {
     onSuccess: (data) => {
       setClientSecret(data.clientSecret);
       setShowOnboarding(true);
+      setOnboardingError(null);
     },
     onError: (error: Error) => {
       setShowOnboarding(false);
+      setOnboardingError(error.message);
       toast({
         title: "Error refreshing onboarding",
         description: error.message,
@@ -132,29 +137,66 @@ const SellerDashboard = () => {
   useEffect(() => {
     if (!showOnboarding || !clientSecret) return;
 
-    const script = document.createElement('script');
-    script.src = 'https://connect.stripe.com/connect-js/v1';
-    script.async = true;
+    let scriptElement: HTMLScriptElement | null = null;
+    let cleanupTimeout: NodeJS.Timeout;
 
-    script.onload = () => {
-      if (window.StripeConnect?.EmbeddedComponents) {
-        window.StripeConnect.EmbeddedComponents.mount({
-          clientSecret,
-          appearance: {
-            theme: 'flat',
-          },
-          onComplete: () => {
+    const loadStripeConnect = () => {
+      // Create and load the script
+      scriptElement = document.createElement('script');
+      scriptElement.src = 'https://connect.stripe.com/connect-js/v1';
+      scriptElement.async = true;
+
+      scriptElement.onload = () => {
+        if (window.StripeConnect?.EmbeddedComponents) {
+          try {
+            window.StripeConnect.EmbeddedComponents.mount({
+              clientSecret: clientSecret,
+              appearance: {
+                theme: 'flat',
+                variables: {
+                  colorPrimary: '#0099ff',
+                  colorBackground: '#ffffff',
+                  colorText: '#1a1f36',
+                  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+                  borderRadius: '8px',
+                }
+              },
+              onComplete: () => {
+                setShowOnboarding(false);
+                window.location.reload();
+              },
+            });
+          } catch (error) {
+            console.error('Error mounting Stripe Connect:', error);
+            setOnboardingError('Failed to load the onboarding form. Please try again.');
             setShowOnboarding(false);
-            window.location.reload();
-          },
-        });
-      }
+          }
+        }
+      };
+
+      scriptElement.onerror = () => {
+        setOnboardingError('Failed to load Stripe Connect. Please try again.');
+        setShowOnboarding(false);
+      };
+
+      document.body.appendChild(scriptElement);
     };
 
-    document.body.appendChild(script);
+    // Set a timeout to detect if the script fails to load
+    cleanupTimeout = setTimeout(() => {
+      if (!window.StripeConnect) {
+        setOnboardingError('Failed to load Stripe Connect. Please try again.');
+        setShowOnboarding(false);
+      }
+    }, 10000); // 10 second timeout
+
+    loadStripeConnect();
 
     return () => {
-      document.body.removeChild(script);
+      clearTimeout(cleanupTimeout);
+      if (scriptElement && scriptElement.parentNode) {
+        scriptElement.parentNode.removeChild(scriptElement);
+      }
     };
   }, [showOnboarding, clientSecret]);
 
@@ -193,7 +235,14 @@ const SellerDashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div id="stripe-connect-components" className="w-full min-h-[600px]" />
+            <div id="stripe-connect-mount" className="w-full min-h-[600px]" />
+            {onboardingError && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{onboardingError}</AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
       </div>

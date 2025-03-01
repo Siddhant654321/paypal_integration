@@ -34,8 +34,6 @@ export class SellerPaymentService {
         account: account.id,
         components: {
           account_onboarding: { enabled: true },
-          payment_details: { enabled: true },
-          payout_settings: { enabled: true },
         },
       });
 
@@ -58,8 +56,6 @@ export class SellerPaymentService {
         account: accountId,
         components: {
           account_onboarding: { enabled: true },
-          payment_details: { enabled: true },
-          payout_settings: { enabled: true },
         },
       });
 
@@ -133,7 +129,6 @@ export class SellerPaymentService {
         paymentId,
         amount,
         stripeTransferId: transfer.id,
-        status: 'pending',
       });
     } catch (error) {
       console.error("Error creating payout:", error);
