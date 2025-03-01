@@ -111,11 +111,13 @@ app.use((req, res, next) => {
     // ALWAYS serve on port 5000
     const port = 5000;
 
-    const startServer = () => {
+    const startServer = async () => {
       try {
         // First try to kill any existing process on this port
         log(`Checking if port ${port} is in use...`);
-        const { execSync } = require('child_process');
+        // Import child_process using dynamic import instead of require
+        const childProcess = await import('child_process');
+        const { execSync } = childProcess;
         try {
           execSync(`lsof -i :${port} -t | xargs kill -9`);
           log(`Freed port ${port}`);

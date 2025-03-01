@@ -1,9 +1,12 @@
 import { storage } from "./storage";
 import { EmailService } from "./email-service";
 import { type InsertNotification, type User } from "@shared/schema";
-import { log } from "./vite";
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
+
+const log = (message: string, context: string = 'notification') => {
+  console.log(`[${context}] ${message}`);
+};
 
 export class NotificationService {
   private static wss: WebSocketServer;
@@ -17,7 +20,7 @@ export class NotificationService {
 
       this.wss.on('connection', (ws: WebSocket) => {
         log("New WebSocket connection established", "notification");
-        
+
         ws.on('message', async (message: string) => {
           try {
             const data = JSON.parse(message);
@@ -45,16 +48,16 @@ export class NotificationService {
             }
           }
         });
-        
+
         ws.on('error', (error) => {
           log(`WebSocket error: ${error}`, "notification");
         });
       });
-      
+
       this.wss.on('error', (error) => {
         log(`WebSocket server error: ${error}`, "notification");
       });
-      
+
     } catch (error) {
       log(`Failed to initialize WebSocket server: ${error}`, "notification");
     }
