@@ -66,8 +66,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return next();
     }
 
-    // Check approval for regular sellers
-    if (req.user.role !== "seller" || !req.user.approved) {
+    // Check approval for regular sellers - removed the role check since it's redundant
+    if (!req.user.approved) {
       return res.status(403).json({ message: "Only approved sellers can perform this action" });
     }
 
@@ -100,10 +100,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get seller's auctions
-  app.get("/api/seller/auctions", requireApprovedSeller, async (req, res) => {
+  app.get("/api/seller/auctions", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Allow both seller and seller_admin to view their auctions
+      if (req.user.role !== "seller" && req.user.role !== "seller_admin") {
+        return res.status(403).json({ message: "Only sellers can view their auctions" });
       }
 
       const auctions = await storage.getAuctions({
@@ -117,9 +122,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create new auction (sellers only)
-  app.post("/api/auctions", requireApprovedSeller, requireProfile, upload.array('images', 5), async (req, res) => {
+  app.post("/api/auctions", requireAuth, requireProfile, upload.array('images', 5), async (req, res) => {
     try {
-      const userId = req.user!.id;
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Allow both seller and seller_admin to create auctions
+      if (req.user.role !== "seller" && req.user.role !== "seller_admin") {
+        return res.status(403).json({ message: "Only sellers can create auctions" });
+      }
+
+      const userId = req.user.id;
       const auctionData = req.body;
 
       console.log("Creating auction with user:", userId);
