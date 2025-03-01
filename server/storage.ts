@@ -307,9 +307,27 @@ export class DatabaseStorage implements IStorage {
 
   async updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction> {
     try {
+      // Ensure dates are properly formatted
+      const formattedData = { ...data };
+      
+      // Convert date strings to Date objects if needed
+      if (formattedData.startDate && !(formattedData.startDate instanceof Date)) {
+        formattedData.startDate = new Date(formattedData.startDate);
+      }
+      
+      if (formattedData.endDate && !(formattedData.endDate instanceof Date)) {
+        formattedData.endDate = new Date(formattedData.endDate);
+      }
+      
+      log(`Updating auction ${auctionId} with formatted data:`, JSON.stringify({
+        title: formattedData.title,
+        startDate: formattedData.startDate,
+        endDate: formattedData.endDate
+      }));
+      
       const [auction] = await db
         .update(auctions)
-        .set(data)
+        .set(formattedData)
         .where(eq(auctions.id, auctionId))
         .returning();
       
