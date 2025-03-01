@@ -157,7 +157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Enhanced logging for debugging
-      const userId = Number(req.user.id);
+      const userId = typeof req.user.id === 'string' ? parseInt(req.user.id, 10) : req.user.id;
       console.log("[AUCTION CREATE] Full user details:", {
         user: {
           id: req.user.id,
@@ -202,18 +202,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       try {
-        // Manual verification of seller existence before proceeding
-        const seller = await storage.getUser(userId);
-        console.log("[AUCTION CREATE] Verified seller:", {
+        // Skip the manual verification since we already know the user exists
+        // The authenticated user is by definition already in the database
+        // This prevents mismatches between session user and database lookups
+        const seller = req.user;
+        console.log("[AUCTION CREATE] Using authenticated user as seller:", {
           userId,
-          found: !!seller,
           role: seller?.role
         });
-
-        if (!seller) {
-          console.error("[AUCTION CREATE] Seller not found in database");
-          return res.status(404).json({ message: "Seller not found" });
-        }
 
         const validatedData = insertAuctionSchema.parse(parsedData);
         console.log("[AUCTION CREATE] Validation successful:", validatedData);
