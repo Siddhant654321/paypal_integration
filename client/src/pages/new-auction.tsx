@@ -27,7 +27,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
 import { useState, useEffect } from 'react';
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function NewAuction() {
   const { user } = useAuth();
@@ -37,9 +37,16 @@ export default function NewAuction() {
   const fulfillRequestId = new URLSearchParams(window.location.search).get('fulfill');
 
   // Fetch buyer request data if fulfilling a request
-  const { data: buyerRequest } = useQuery({
+  const { data: buyerRequest, error: buyerRequestError } = useQuery({
     queryKey: [`/api/buyer-requests/${fulfillRequestId}`],
     enabled: !!fulfillRequestId,
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: `Failed to load buyer request: ${error.message}`,
+        variant: "destructive",
+      });
+    }
   });
 
   // Redirect if not a seller or seller_admin
@@ -76,8 +83,6 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (auctionData: any) => {
-      console.log("Form data before submission:", auctionData);
-
       const formData = new FormData();
 
       Object.keys(auctionData).forEach(key => {
@@ -90,7 +95,6 @@ export default function NewAuction() {
         formData.append('images', file);
       });
 
-      console.log("Submitting FormData with files:", selectedFiles.length);
 
       const res = await fetch("/api/auctions", {
         method: "POST",
@@ -115,6 +119,7 @@ export default function NewAuction() {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       toast({
         title: "Success",
         description: fulfillRequestId 
@@ -141,7 +146,6 @@ export default function NewAuction() {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit((data) => {
-            console.log("Form data before submission:", data);
             createAuctionMutation.mutate(data);
           })}
           className="space-y-6"
@@ -301,15 +305,13 @@ export default function NewAuction() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Start Date and Time</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input
-                        type="datetime-local"
-                        {...field}
-                        min={new Date().toISOString().split("T")[0] + "T00:00"}
-                      />
-                    </FormControl>
-                  </div>
+                  <FormControl>
+                    <Input
+                      type="datetime-local"
+                      {...field}
+                      min={new Date().toISOString().split("T")[0] + "T00:00"}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -321,15 +323,13 @@ export default function NewAuction() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>End Date and Time</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input
-                        type="datetime-local"
-                        {...field}
-                        min={form.watch("startDate")}
-                      />
-                    </FormControl>
-                  </div>
+                  <FormControl>
+                    <Input
+                      type="datetime-local"
+                      {...field}
+                      min={form.watch("startDate")}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
