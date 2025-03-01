@@ -2,7 +2,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Auction, Payout } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, DollarSign, Package } from "lucide-react";
+import { Plus, Search, DollarSign, Package, ExternalLink, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
 import { formatPrice } from '../utils/formatters';
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 interface StripeStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
@@ -26,6 +39,7 @@ declare global {
 
 const SellerDashboard = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [stripeLoaded, setStripeLoaded] = useState(false);
   const [stripeInstance, setStripeInstance] = useState<any>(null);
@@ -53,34 +67,9 @@ const SellerDashboard = () => {
     select: (data) => data || [], // Ensure we always have an array
   });
 
-  const { data: stripeStatus } = useQuery<StripeStatus>({
+  const { data: stripeStatus, isLoading: stripeStatusLoading } = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
   });
-
-  // Load Stripe.js
-  useEffect(() => {
-    if (window.Stripe || stripeLoaded) return;
-
-    const script = document.createElement('script');
-    script.src = 'https://js.stripe.com/v3/';
-    script.async = true;
-
-    script.onload = () => {
-      setStripeLoaded(true);
-      if (window.Stripe) {
-        const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
-        setStripeInstance(stripe);
-      }
-    };
-
-    document.body.appendChild(script);
-
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-  }, []);
 
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
@@ -90,6 +79,13 @@ const SellerDashboard = () => {
         window.location.href = data.url;
       }
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error connecting to Stripe",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
 
   // Refresh onboarding mutation
@@ -100,6 +96,13 @@ const SellerDashboard = () => {
         window.location.href = data.url;
       }
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error refreshing onboarding",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
 
   // Safe filtering functions
@@ -121,65 +124,141 @@ const SellerDashboard = () => {
 
   // Render Stripe Connect status and actions
   const renderStripeConnectStatus = () => {
-    if (!stripeStatus) return null;
+    if (stripeStatusLoading) {
+      return (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Loading Stripe Status...</CardTitle>
+          </CardHeader>
+        </Card>
+      );
+    }
+
+    if (!stripeStatus) {
+      return (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            Unable to retrieve your Stripe account status. Please try refreshing the page.
+          </AlertDescription>
+        </Alert>
+      );
+    }
 
     switch (stripeStatus.status) {
       case "not_started":
         return (
-          <div className="text-center p-8 bg-muted rounded-lg">
-            <h3 className="text-lg font-semibold mb-4">Set Up Payouts</h3>
-            <p className="text-muted-foreground mb-4">
-              To receive payouts from your auctions, you'll need to connect your Stripe account.
-              This allows us to securely transfer payments to your bank account.
-            </p>
-            <Button 
-              onClick={() => connectWithStripeMutation.mutate()}
-              disabled={connectWithStripeMutation.isPending}
-            >
-              {connectWithStripeMutation.isPending ? "Setting up..." : "Connect with Stripe"}
-            </Button>
-          </div>
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Set Up Your Seller Account</CardTitle>
+              <CardDescription>
+                Before you can receive payments, you need to connect your Stripe account.
+                This is a secure process that allows us to send your earnings directly to your bank account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border p-4 space-y-2">
+                <h4 className="font-medium">What you'll need:</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li>Personal identification (driver's license or passport)</li>
+                  <li>Your bank account information</li>
+                  <li>Your business information (if applicable)</li>
+                </ul>
+              </div>
+              <Button 
+                className="w-full"
+                onClick={() => connectWithStripeMutation.mutate()}
+                disabled={connectWithStripeMutation.isPending}
+              >
+                {connectWithStripeMutation.isPending ? (
+                  "Setting up..."
+                ) : (
+                  <>
+                    Connect with Stripe
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
         );
 
       case "pending":
         return (
-          <div className="text-center p-8 bg-yellow-50 rounded-lg">
-            <h3 className="text-lg font-semibold mb-4">Complete Your Stripe Setup</h3>
-            <p className="text-muted-foreground mb-4">
-              You've started the Stripe connection process, but there are still some steps to complete.
-            </p>
-            <Button 
-              onClick={() => refreshOnboardingMutation.mutate()}
-              disabled={refreshOnboardingMutation.isPending}
-            >
-              Complete Setup
-            </Button>
-          </div>
+          <Card className="mb-6 border-yellow-200">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <AlertCircle className="mr-2 h-5 w-5 text-yellow-500" />
+                Complete Your Account Setup
+              </CardTitle>
+              <CardDescription>
+                You've started the account setup process, but there are still some steps to complete.
+                Click below to continue where you left off.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                className="w-full"
+                onClick={() => refreshOnboardingMutation.mutate()}
+                disabled={refreshOnboardingMutation.isPending}
+              >
+                {refreshOnboardingMutation.isPending ? (
+                  "Loading..."
+                ) : (
+                  <>
+                    Continue Setup
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
         );
 
       case "verified":
         return (
-          <div className="text-center p-4 bg-green-50 rounded-lg mb-6">
-            <p className="text-green-800">
-              ✓ Your Stripe account is connected and ready to receive payouts
-            </p>
-          </div>
+          <Alert className="mb-6 border-green-200 bg-green-50">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <AlertTitle className="text-green-800">Account Connected</AlertTitle>
+            <AlertDescription className="text-green-700">
+              Your Stripe account is verified and ready to receive payments.
+              Payouts will be automatically transferred to your bank account.
+            </AlertDescription>
+          </Alert>
         );
 
       case "rejected":
         return (
-          <div className="text-center p-8 bg-red-50 rounded-lg">
-            <h3 className="text-lg font-semibold mb-4">Account Verification Failed</h3>
-            <p className="text-muted-foreground mb-4">
-              There was an issue verifying your Stripe account. Please try again or contact support.
-            </p>
-            <Button 
-              onClick={() => connectWithStripeMutation.mutate()}
-              disabled={connectWithStripeMutation.isPending}
-            >
-              Try Again
-            </Button>
-          </div>
+          <Card className="mb-6 border-red-200">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <XCircle className="mr-2 h-5 w-5 text-red-500" />
+                Account Verification Failed
+              </CardTitle>
+              <CardDescription>
+                There was an issue verifying your account. This could be due to incomplete or incorrect information.
+                Please try again with accurate details.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                className="w-full"
+                onClick={() => connectWithStripeMutation.mutate()}
+                disabled={connectWithStripeMutation.isPending}
+                variant="destructive"
+              >
+                {connectWithStripeMutation.isPending ? (
+                  "Processing..."
+                ) : (
+                  <>
+                    Try Again
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
         );
     }
   };
