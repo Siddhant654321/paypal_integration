@@ -149,6 +149,14 @@ export class DatabaseStorage implements IStorage {
         .insert(profiles)
         .values(insertProfile)
         .returning();
+
+      // Update user's has_profile flag
+      await db
+        .update(users)
+        .set({ has_profile: true })
+        .where(eq(users.id, insertProfile.userId));
+
+      log(`Profile created and user updated for user ${insertProfile.userId}`);
       return profile;
     } catch (error) {
       log(`Error creating profile: ${error}`);
@@ -163,6 +171,14 @@ export class DatabaseStorage implements IStorage {
         .set(profile)
         .where(eq(profiles.userId, userId))
         .returning();
+
+      // Ensure user's has_profile flag is set
+      await db
+        .update(users)
+        .set({ has_profile: true })
+        .where(eq(users.id, userId));
+
+      log(`Profile updated and user flag verified for user ${userId}`);
       return updatedProfile;
     } catch (error) {
       log(`Error updating profile: ${error}`);
