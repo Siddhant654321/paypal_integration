@@ -12,6 +12,16 @@ import { formatDistanceToNow } from "date-fns";
 import { formatPrice } from '../utils/formatters';
 import { apiRequest } from "@/lib/queryClient";
 
+interface StripeStatus {
+  status: "not_started" | "pending" | "verified" | "rejected";
+}
+
+declare global {
+  interface Window {
+    Stripe?: any;
+  }
+}
+
 export default function SellerDashboard() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
@@ -37,41 +47,31 @@ export default function SellerDashboard() {
   });
 
   // Get Stripe Connect status
-  const { data: stripeStatus } = useQuery({
+  const { data: stripeStatus } = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
   });
 
   // Load Stripe.js and initialize
   useEffect(() => {
-    // Check if Stripe is already loaded to prevent duplicate loading
-    if (window.Stripe) {
+    if (window.Stripe && stripeInstance) {
       setStripeLoaded(true);
-      if (!stripeInstance) {
-        try {
-          const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
-          setStripeInstance(stripe);
-          console.log("Stripe initialized from existing instance");
-        } catch (err) {
-          console.error("Error initializing Stripe with existing instance:", err);
-        }
-      }
       return;
     }
 
-    // Load Stripe script if not already loaded
     const script = document.createElement('script');
     script.src = 'https://js.stripe.com/v3/';
     script.async = true;
 
     script.onload = () => {
       setStripeLoaded(true);
-      try {
-        // Initialize Stripe with publishable key
-        const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
-        setStripeInstance(stripe);
-        console.log("Stripe initialized successfully");
-      } catch (err) {
-        console.error("Error initializing Stripe:", err);
+      if (window.Stripe) {
+        try {
+          const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+          setStripeInstance(stripe);
+          console.log("Stripe initialized successfully");
+        } catch (err) {
+          console.error("Error initializing Stripe:", err);
+        }
       }
     };
 
@@ -81,9 +81,8 @@ export default function SellerDashboard() {
 
     document.body.appendChild(script);
 
-    // Cleanup function
     return () => {
-      if (script && script.parentNode) {
+      if (script.parentNode) {
         script.parentNode.removeChild(script);
       }
     };
@@ -92,67 +91,29 @@ export default function SellerDashboard() {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      console.log("Starting Stripe Connect mutation");
-      try {
-        const response = await fetch('/api/seller/connect', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-
-        // Check for HTTP errors
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("Stripe Connect HTTP error:", errorData);
-          throw new Error(errorData.message || 'Failed to connect with Stripe');
-        }
-
-        // Parse response data
-        const data = await response.json();
-        console.log("Received Stripe data:", data);
-
-        if (!data.url) {
-          throw new Error('No Stripe onboarding URL received from server');
-        }
-
-        return data;
-      } catch (err) {
-        console.error("Stripe Connect request failed:", err);
-        throw err;
-      }
+      const response = await apiRequest('/api/seller/connect', {
+        method: 'POST',
+      });
+      return response;
     },
     onSuccess: (data) => {
-      console.log("Stripe Connect successful, redirecting to:", data.url);
-      // Use window.location.assign for more reliable navigation
-      window.location.assign(data.url);
+      if (data.url) {
+        window.location.assign(data.url);
+      } else {
+        throw new Error('No onboarding URL received');
+      }
     },
-    onError: (error) => {
-      console.error("Stripe Connect error:", error instanceof Error ? error.message : error);
-      // You could add toast notification here if you have a toast system
-    }
   });
 
   // Refresh onboarding link mutation
   const refreshOnboardingMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/seller/onboarding/refresh', {
+      const response = await apiRequest('/api/seller/onboarding/refresh', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to refresh onboarding link');
-      }
-
-      const data = await response.json();
-      if (data.url) {
-        window.location.href = data.url;
+      if (response.url) {
+        window.location.assign(response.url);
       } else {
         throw new Error('No onboarding URL received');
       }
@@ -171,16 +132,9 @@ export default function SellerDashboard() {
 
   const pendingAuctions = filteredAuctions?.filter(auction => !auction.approved);
   const approvedAuctions = filteredAuctions?.filter(auction => auction.approved);
-  const endedAuctions = filteredAuctions?.filter(auction => auction.status === "ended" || auction.status === "fulfilled");
-
-
-  // Format currency helper
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount / 100);
-  };
+  const endedAuctions = filteredAuctions?.filter(auction => 
+    auction.status === "ended" || auction.status === "fulfilled"
+  );
 
   // Render Stripe Connect status and actions
   const renderStripeConnectStatus = () => {
@@ -196,17 +150,10 @@ export default function SellerDashboard() {
               This allows us to securely transfer payments to your bank account.
             </p>
             <Button 
-              onClick={() => {
-                console.log("Connecting with Stripe...");
-                connectWithStripeMutation.mutate();
-              }}
+              onClick={() => connectWithStripeMutation.mutate()}
               disabled={connectWithStripeMutation.isPending}
             >
-              {connectWithStripeMutation.isPending ? (
-                "Setting up..."
-              ) : (
-                "Connect with Stripe"
-              )}
+              {connectWithStripeMutation.isPending ? "Setting up..." : "Connect with Stripe"}
             </Button>
           </div>
         );
@@ -372,7 +319,6 @@ export default function SellerDashboard() {
             </Tabs>
           )}
         </TabsContent>
-
 
         <TabsContent value="payouts">
           {renderStripeConnectStatus()}

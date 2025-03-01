@@ -14,7 +14,7 @@ if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16",
+  apiVersion: "2025-02-24.acacia",
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
@@ -55,9 +55,22 @@ export class PaymentService {
         insuranceFee,
       };
 
+      // Get seller's Stripe account ID
+      const sellerProfile = await storage.getProfile(auction.sellerId);
+      if (!sellerProfile?.stripeAccountId) {
+        throw new Error("Seller has not completed Stripe onboarding");
+      }
+
       // Create Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
+        payment_method_types: ['card'],
+        payment_intent_data: {
+          application_fee_amount: platformFee,
+          transfer_data: {
+            destination: sellerProfile.stripeAccountId,
+          },
+        },
         line_items: [
           {
             price_data: {
@@ -96,10 +109,13 @@ export class PaymentService {
       const payment = await storage.createPayment({
         ...paymentData,
         stripePaymentIntentId: session.payment_intent as string,
+        status: 'pending',
       });
 
       // Update auction status
-      await storage.updateAuctionPaymentStatus(auctionId, "processing");
+      await storage.updateAuction(auctionId, {
+        paymentStatus: "processing",
+      });
 
       return {
         sessionId: session.id,
@@ -131,7 +147,9 @@ export class PaymentService {
       });
 
       // Update auction payment status
-      await storage.updateAuctionPaymentStatus(payment.auctionId, "completed");
+      await storage.updateAuction(payment.auctionId, {
+        paymentStatus: "completed",
+      });
 
       // Notify the seller
       await NotificationService.notifyPayment(
@@ -165,7 +183,9 @@ export class PaymentService {
       });
 
       // Update auction payment status
-      await storage.updateAuctionPaymentStatus(payment.auctionId, "failed");
+      await storage.updateAuction(payment.auctionId, {
+        paymentStatus: "failed",
+      });
 
       // Notify the seller
       await NotificationService.notifyPayment(
