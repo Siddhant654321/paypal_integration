@@ -175,24 +175,29 @@ export function BuyerRequestForm() {
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea
-                  placeholder="Describe what you're looking for..."
-                  {...field}
+                <Textarea 
+                  placeholder="Describe what you're looking for in detail..." 
+                  className="min-h-[120px]" 
+                  {...field} 
                 />
               </FormControl>
               <FormDescription>
-                Include any specific details about what you're looking for
+                Provide details about what you're looking for (age, quantity, etc.)
               </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <Button type="submit" disabled={createRequest.isPending}>
-          {createRequest.isPending && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <Button type="submit" disabled={createRequest.isPending} className="w-full">
+          {createRequest.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Submitting...
+            </>
+          ) : (
+            "Submit Request"
           )}
-          Submit Request
         </Button>
       </form>
     </Form>

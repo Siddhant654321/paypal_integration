@@ -55,7 +55,7 @@ export function BuyerRequestList() {
                 <div className="space-y-1">
                   <CardTitle>{request.title}</CardTitle>
                   <CardDescription>
-                    Looking for {request.breedVariety}
+                    Looking for {request.species} - {request.category}
                   </CardDescription>
                 </div>
                 <Badge variant={request.status === "open" ? "default" : "secondary"}>
