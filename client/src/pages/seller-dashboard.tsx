@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign, Package, ExternalLink, AlertCircle, CheckCirc
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState } from "react"; 
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
 import { formatPrice } from '../utils/formatters';
@@ -28,6 +28,27 @@ import {
 interface StripeStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
 }
+
+interface Balance {
+  available: { amount: number }[];
+  pending: { amount: number }[];
+}
+
+interface PayoutSchedule {
+  interval: string;
+  next_payout_date: number | null;
+}
+
+interface StripePayout {
+  data: {
+    id: string;
+    created: number;
+    amount: number;
+    status: string;
+    arrival_date: number | null;
+  }[];
+}
+
 
 const SellerDashboard = () => {
   const { user } = useAuth();
@@ -121,6 +142,22 @@ const SellerDashboard = () => {
     }
   });
 
+  // Add these new query hooks after the existing queries
+  const { data: payoutSchedule, isLoading: scheduleLoading } = useQuery<PayoutSchedule>({
+    queryKey: ["/api/seller/payout-schedule"],
+    enabled: stripeStatus?.status === "verified",
+  });
+
+  const { data: balance, isLoading: balanceLoading } = useQuery<Balance>({
+    queryKey: ["/api/seller/balance"],
+    enabled: stripeStatus?.status === "verified",
+  });
+
+  const { data: stripePayouts, isLoading: stripePayoutsLoading } = useQuery<StripePayout>({
+    queryKey: ["/api/seller/stripe-payouts"],
+    enabled: stripeStatus?.status === "verified",
+  });
+
   // Safe filtering functions
   const safeFilter = (auction: Auction) => {
     const searchLower = searchTerm.toLowerCase();
@@ -149,7 +186,7 @@ const SellerDashboard = () => {
         </Card>
       );
     }
-    
+
     if (!stripeStatus) {
       return (
         <Alert variant="destructive" className="mb-6">
@@ -183,7 +220,7 @@ const SellerDashboard = () => {
                   <li>Your business information (if applicable)</li>
                 </ul>
               </div>
-              <Button 
+              <Button
                 className="w-full"
                 onClick={() => connectWithStripeMutation.mutate()}
                 disabled={connectWithStripeMutation.isPending}
@@ -215,7 +252,7 @@ const SellerDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
+              <Button
                 className="w-full"
                 onClick={() => refreshOnboardingMutation.mutate()}
                 disabled={refreshOnboardingMutation.isPending}
@@ -259,7 +296,7 @@ const SellerDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
+              <Button
                 className="w-full"
                 onClick={() => connectWithStripeMutation.mutate()}
                 disabled={connectWithStripeMutation.isPending}
@@ -284,7 +321,7 @@ const SellerDashboard = () => {
 
   const renderAuctionCard = (auction: Auction) => (
     <div key={auction.id} className="space-y-2">
-      <AuctionCard 
+      <AuctionCard
         auction={auction}
         showStatus={true}
       />
@@ -296,7 +333,7 @@ const SellerDashboard = () => {
             </div>
           ) : (
             <Link href={`/seller/fulfill/${auction.id}`}>
-              <Button 
+              <Button
                 className="w-full"
                 variant="default"
               >
@@ -310,8 +347,73 @@ const SellerDashboard = () => {
     </div>
   );
 
+  // Add this function to render balance information
+  const renderBalanceInfo = () => {
+    if (!balance || balanceLoading) return null;
+
+    return (
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Available Balance</CardTitle>
+          <CardDescription>
+            Your current balance and pending payouts
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-lg bg-background border">
+              <div className="text-sm text-muted-foreground">Available</div>
+              <div className="text-2xl font-bold">
+                {formatPrice(balance.available[0]?.amount || 0)}
+              </div>
+            </div>
+            <div className="p-4 rounded-lg bg-background border">
+              <div className="text-sm text-muted-foreground">Pending</div>
+              <div className="text-2xl font-bold">
+                {formatPrice(balance.pending[0]?.amount || 0)}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Add this function to render payout schedule
+  const renderPayoutSchedule = () => {
+    if (!payoutSchedule || scheduleLoading) return null;
+
+    return (
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Payout Schedule</CardTitle>
+          <CardDescription>
+            Your current payout settings and schedule
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Frequency</span>
+              <span className="font-medium capitalize">{payoutSchedule.interval}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Next Payout</span>
+              <span className="font-medium">
+                {payoutSchedule.next_payout_date
+                  ? formatDistanceToNow(new Date(payoutSchedule.next_payout_date * 1000), { addSuffix: true })
+                  : 'Automatic'}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+
   // Show loading state while data is being fetched
-  if (auctionsLoading || bidsLoading || payoutsLoading) {
+  if (auctionsLoading || bidsLoading || payoutsLoading || stripeStatusLoading || scheduleLoading || balanceLoading || stripePayoutsLoading) {
     return (
       <div className="container mx-auto py-8">
         <div className="text-center">Loading your dashboard...</div>
@@ -404,81 +506,70 @@ const SellerDashboard = () => {
 
         <TabsContent value="payouts">
           {renderStripeConnectStatus()}
-          
-          {/* Debug section for account status */}
-          <div className="mb-4 p-4 bg-muted rounded-lg">
-            <h3 className="font-semibold">Account Status Debug</h3>
-            <p>Status: {stripeStatusLoading ? 'Loading...' : stripeStatus?.status || 'Not available'}</p>
-            {stripeStatusError && (
-              <p className="text-destructive">Error: {(stripeStatusError as Error).message}</p>
-            )}
-            <Button 
-              className="mt-2"
-              size="sm"
-              variant="outline"
-              onClick={() => connectWithStripeMutation.mutate()}
-            >
-              {connectWithStripeMutation.isPending ? 'Connecting...' : 'Retry Connection'}
-            </Button>
-          </div>
-          
-          {payoutsLoading ? (
-            <div className="text-center">Loading your payouts...</div>
-          ) : payouts === undefined || payouts === null ? (
-            <div className="text-center text-muted-foreground">
-              Payout system is being set up. Check back later.
-            </div>
-          ) : !payouts.length ? (
-            <div className="text-center text-muted-foreground">
-              No payouts found. Completed auction payments will appear here.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-lg border">
-                <table className="min-w-full divide-y divide-border">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Amount
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Stripe Transfer ID
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-popover divide-y divide-border">
-                    {payouts.map((payout) => (
-                      <tr key={payout.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {formatDistanceToNow(new Date(payout.createdAt), { addSuffix: true })}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {formatPrice(payout.amount)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                            ${payout.status === 'completed' ? 'bg-green-100 text-green-800' :
-                              payout.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              payout.status === 'failed' ? 'bg-red-100 text-red-800' :
-                              'bg-blue-100 text-blue-800'}`}>
-                            {payout.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                          {payout.stripeTransferId}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+          {stripeStatus?.status === "verified" && (
+            <>
+              {renderBalanceInfo()}
+              {renderPayoutSchedule()}
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Recent Payouts</h3>
+                {stripePayoutsLoading ? (
+                  <div className="text-center">Loading your payouts...</div>
+                ) : !stripePayouts?.data.length ? (
+                  <div className="text-center text-muted-foreground">
+                    No payouts found. Completed payments will appear here.
+                  </div>
+                ) : (
+                  <div className="rounded-lg border">
+                    <table className="min-w-full divide-y divide-border">
+                      <thead className="bg-muted">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            Expected Arrival
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-popover divide-y divide-border">
+                        {stripePayouts.data.map((payout) => (
+                          <tr key={payout.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              {formatDistanceToNow(new Date(payout.created * 1000), { addSuffix: true })}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              {formatPrice(payout.amount)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
+                                ${payout.status === 'paid' ? 'bg-green-100 text-green-800' :
+                                  payout.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                  payout.status === 'failed' ? 'bg-red-100 text-red-800' :
+                                  'bg-blue-100 text-blue-800'}`}>
+                                {payout.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                              {payout.arrival_date
+                                ? formatDistanceToNow(new Date(payout.arrival_date * 1000), { addSuffix: true })
+                                : 'Processing'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            </div>
+            </>
           )}
         </TabsContent>
       </Tabs>

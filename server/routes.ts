@@ -1668,6 +1668,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get seller's payout schedule
+  app.get("/api/seller/payout-schedule", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(400).json({ message: "No Stripe account found" });
+      }
+
+      const schedule = await SellerPaymentService.getPayoutSchedule(profile.stripeAccountId);
+      res.json(schedule);
+    } catch (error) {
+      console.error("Error getting payout schedule:", error);
+      res.status(500).json({ message: "Failed to get payout schedule" });
+    }
+  });
+
+  // Get seller's balance
+  app.get("/api/seller/balance", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(400).json({ message: "No Stripe account found" });
+      }
+
+      const balance = await SellerPaymentService.getBalance(profile.stripeAccountId);
+      res.json(balance);
+    } catch (error) {
+      console.error("Error getting balance:", error);
+      res.status(500).json({ message: "Failed to get balance" });
+    }
+  });
+
+  // Get seller's recent payouts
+  app.get("/api/seller/stripe-payouts", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(400).json({ message: "No Stripe account found" });
+      }
+
+      const payouts = await SellerPaymentService.getPayouts(profile.stripeAccountId);
+      res.json(payouts);
+    } catch (error) {
+      console.error("Error getting payouts:", error);
+      res.status(500).json({ message: "Failed to get payouts" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -47,20 +47,13 @@ export class SellerPaymentService {
     try {
       console.log("Creating onboarding link for account:", accountId);
 
-      // Ensure baseUrl is properly formatted
-      const formattedBaseUrl = baseUrl.endsWith('/')
-        ? baseUrl.slice(0, -1)
-        : baseUrl;
-
       // Create an account link with type=account_onboarding
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        refresh_url: `${formattedBaseUrl}/seller/dashboard?refresh_onboarding=true`,
-        return_url: `${formattedBaseUrl}/seller/dashboard?onboarding_complete=true`,
+        refresh_url: `${baseUrl}/seller/dashboard?refresh_onboarding=true`,
+        return_url: `${baseUrl}/seller/dashboard?onboarding_complete=true`,
         type: 'account_onboarding',
       });
-
-      console.log("Onboarding link created:", accountLink.url);
 
       if (!accountLink.url) {
         throw new Error('Stripe did not return a valid onboarding URL');
@@ -69,12 +62,58 @@ export class SellerPaymentService {
       return accountLink.url;
     } catch (error) {
       console.error("Error creating onboarding link:", error);
+      throw error;
+    }
+  }
 
-      if (error instanceof Error) {
-        console.error("Error message:", error.message);
-        console.error("Error stack:", error.stack);
+  static async getAccountStatus(accountId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
+    try {
+      console.log("Checking account status for:", accountId);
+
+      const account = await stripe.accounts.retrieve(accountId);
+
+      if (account.charges_enabled && account.payouts_enabled) {
+        return "verified";
+      } else if (account.requirements?.disabled_reason) {
+        return "rejected";
       }
 
+      return "pending";
+    } catch (error) {
+      console.error("Error checking account status:", error);
+      throw error;
+    }
+  }
+
+  static async getPayoutSchedule(accountId: string) {
+    try {
+      const account = await stripe.accounts.retrieve(accountId);
+      return account.settings?.payouts;
+    } catch (error) {
+      console.error("Error getting payout schedule:", error);
+      throw error;
+    }
+  }
+
+  static async getBalance(accountId: string) {
+    try {
+      return await stripe.balance.retrieve({
+        stripeAccount: accountId,
+      });
+    } catch (error) {
+      console.error("Error getting balance:", error);
+      throw error;
+    }
+  }
+
+  static async getPayouts(accountId: string, limit = 10) {
+    try {
+      return await stripe.payouts.list(
+        { limit },
+        { stripeAccount: accountId }
+      );
+    } catch (error) {
+      console.error("Error getting payouts:", error);
       throw error;
     }
   }
@@ -109,25 +148,6 @@ export class SellerPaymentService {
       });
     } catch (error) {
       console.error("Error creating payout:", error);
-      throw error;
-    }
-  }
-
-  static async getAccountStatus(accountId: string): Promise<"pending" | "verified" | "rejected"> {
-    try {
-      console.log("Checking account status for:", accountId);
-
-      const account = await stripe.accounts.retrieve(accountId);
-
-      if (account.charges_enabled && account.payouts_enabled) {
-        return "verified";
-      } else if (account.requirements?.disabled_reason) {
-        return "rejected";
-      }
-
-      return "pending";
-    } catch (error) {
-      console.error("Error checking account status:", error);
       throw error;
     }
   }
