@@ -130,8 +130,9 @@ export class SellerPaymentService {
           }
         }
         
-        // Re-throw for general error handling
-        throw stripeError;
+        // Instead of re-throwing, return rejected state to prevent UI breakage
+        console.error("Unhandled Stripe error:", stripeError);
+        return "rejected";
       }
     } catch (error) {
       console.error("Error checking account status:", error);

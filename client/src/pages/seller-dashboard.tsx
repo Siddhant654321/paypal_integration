@@ -83,16 +83,21 @@ const SellerDashboard = () => {
   const stripeStatusQuery = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
     onSuccess: (data) => console.log("Stripe status data:", data),
-    onError: (error) => console.error("Stripe status error:", error)
+    onError: (error) => {
+      console.error("Stripe status error:", error);
+      // Don't let errors break the UI
+      return { status: "not_started" };
+    },
+    retry: 1
   });
 
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
       console.log("Connecting with Stripe...");
-      
-      const response = await fetch('/api/seller/connect', {
-        method: 'POST',
+      try {
+        const response = await fetch('/api/seller/connect', {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
@@ -117,8 +122,16 @@ const SellerDashboard = () => {
         }
 
         // Redirect to Stripe onboarding URL
-        window.location.href = data.url;
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          throw new Error("No URL returned from Stripe");
+        }
         return data;
+      } catch (err) {
+        console.error("Fetch error:", err);
+        throw err;
+      }
     },
     onError: (error: any) => {
       console.error("Error connecting with Stripe:", error);
