@@ -2,7 +2,7 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertAuctionSchema, insertBidSchema, insertProfileSchema } from "@shared/schema";
+import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import path from "path";
 import multer from 'multer';
@@ -11,14 +11,18 @@ import { PaymentService } from "./payments";
 import { buffer } from "micro";
 import Stripe from "stripe";
 import {SellerPaymentService} from "./seller-payments";
-import {insertFulfillmentSchema} from "@shared/schema"; // Assuming this schema is defined elsewhere
-import { EmailService } from "./email"; // Assuming this service is defined elsewhere
-
+import {insertFulfillmentSchema} from "@shared/schema"; 
+import { EmailService } from "./email"; 
 
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  // Skip profile check for buyers
+  if (req.user.role === "buyer") {
+    return next();
   }
 
   const hasProfile = await storage.hasProfile(req.user.id);
@@ -76,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filters = {
         species: req.query.species as string | undefined,
         category: req.query.category as string | undefined,
-        approved: true, // Only return approved auctions by default
+        approved: true, 
       };
       const auctions = await storage.getAuctions(filters);
 
@@ -184,8 +188,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sellerId: userId,
         currentPrice: parsedData.startPrice,
         images: imageUrls,
-        imageUrl: imageUrls[0] || "", // Set first image as main image
-        approved: false, // New auctions start unapproved
+        imageUrl: imageUrls[0] || "", 
+        approved: false, 
       };
 
       try {
@@ -582,34 +586,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add these buyer request endpoints to the routes
-  app.post("/api/buyer-requests", requireAuth, requireProfile, async (req, res) => {
+  // Update the buyer request endpoint
+  app.post("/api/buyer-requests", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      console.log("Received buyer request data:", req.body);
-
-      const requestData = insertBuyerRequestSchema.parse(req.body);
-      console.log("Validated request data:", requestData);
-
-      const buyerRequest = await storage.createBuyerRequest({
-        ...requestData,
-        buyerId: req.user.id,
+      console.log("Creating buyer request with data:", {
+        ...req.body,
+        buyerId: req.user.id
       });
 
-      res.status(201).json(buyerRequest);
+      try {
+        const requestData = insertBuyerRequestSchema.parse(req.body);
+        console.log("Validated request data:", requestData);
+
+        const buyerRequest = await storage.createBuyerRequest({
+          ...requestData,
+          buyerId: req.user.id,
+        });
+
+        console.log("Successfully created buyer request:", buyerRequest);
+        res.status(201).json(buyerRequest);
+      } catch (error) {
+        console.error("Validation or creation error:", error);
+        if (error instanceof ZodError) {
+          return res.status(400).json({
+            message: "Invalid request data",
+            errors: error.errors,
+          });
+        }
+        throw error;
+      }
     } catch (error) {
       console.error("Error creating buyer request:", error);
-      if (error instanceof ZodError) {
-        res.status(400).json({
-          message: "Invalid request data",
-          errors: error.errors,
-        });
-      } else {
-        res.status(500).json({ message: "Failed to create buyer request" });
-      }
+      res.status(500).json({ 
+        message: "Failed to create buyer request",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
@@ -866,8 +881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               (auction.status === "ended" && auction.winningBidderId)
             )
           };
-        })
-      );
+        })      );
 
       // Only return sellers who have profiles and active/successful auctions
       const activeSellers = sellersWithDetails.filter(
@@ -995,7 +1009,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           winningBidderId: highestBid.bidderId,
           reserveMet: true,
           paymentStatus: "pending",
-          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days to pay
+          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
         });
         return res.json({
           message: "Auction ended successfully, reserve met",
@@ -1054,7 +1068,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           winningBidderId: highestBid.bidderId,
           sellerDecision: "accept",
           paymentStatus: "pending",
-          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days to pay
+          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
         });
         return res.json({
           message: "Highest bid accepted",
@@ -1316,7 +1330,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const priceHistory = Object.entries(monthlyPrices)
         .map(([date, data]) => ({
-          date: `${date}-01`,  // First day of each month
+          date: `${date}-01`,  
           averagePrice: Math.round(data.total / data.count)
         }))
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -1511,7 +1525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           winningBidderId: highestBid.bidderId,
           reserveMet: true,
           paymentStatus: "pending",
-          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days to pay
+          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
         });
         return res.json({
           message: "Auction ended successfully, reserve met",
