@@ -88,12 +88,28 @@ const SellerDashboard = () => {
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
       console.log("Initiating Stripe Connect...");
-      const response = await apiRequest('/api/seller/connect', { method: 'POST' });
-      console.log("Stripe Connect response:", response);
-      if (!response?.url) {
-        throw new Error('No onboarding URL received');
+      try {
+        const response = await apiRequest('/api/seller/connect', { 
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        console.log("Stripe Connect response:", response);
+        
+        if (!response) {
+          throw new Error('No response received from server');
+        }
+        
+        if (!response.url) {
+          throw new Error('No onboarding URL received: ' + JSON.stringify(response));
+        }
+        
+        return response;
+      } catch (err) {
+        console.error("Error in Stripe Connect request:", err);
+        throw err;
       }
-      return response;
     },
     onSuccess: (data) => {
       console.log("Successfully connected to Stripe, redirecting to:", data.url);
@@ -296,9 +312,21 @@ const SellerDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 p-3 bg-muted rounded-md text-sm">
+                <p>Status: {stripeStatus?.status}</p>
+                {stripeStatusError && (
+                  <p className="text-red-500 mt-1">Error: {(stripeStatusError as Error).message}</p>
+                )}
+                {connectWithStripeMutation.error && (
+                  <p className="text-red-500 mt-1">Connection Error: {(connectWithStripeMutation.error as Error).message}</p>
+                )}
+              </div>
               <Button
                 className="w-full"
-                onClick={() => connectWithStripeMutation.mutate()}
+                onClick={() => {
+                  console.log("Retrying Stripe Connect...");
+                  connectWithStripeMutation.mutate();
+                }}
                 disabled={connectWithStripeMutation.isPending}
                 variant="destructive"
               >

@@ -1223,6 +1223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log("Stripe Connect request initiated. PublishableKey available:", !!stripePublishableKey);
+      console.log("User ID:", req.user.id, "User role:", req.user.role);
 
       // Validate protocol and host
       if (!req.protocol || !req.get('host')) {
@@ -1239,15 +1240,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if user already has a Stripe account
       const existingProfile = await storage.getProfile(req.user.id);
+      console.log("Existing profile:", existingProfile ? "found" : "not found", 
+                   "Stripe account ID:", existingProfile?.stripeAccountId || "none");
+      
       if (existingProfile?.stripeAccountId) {
         console.log("User already has Stripe account:", existingProfile.stripeAccountId);
 
         // Get onboarding link for existing account
         try {
+          console.log("Getting onboarding link for existing account");
           const onboardingUrl = await SellerPaymentService.getOnboardingLink(
             existingProfile.stripeAccountId,
             baseUrl
           );
+          console.log("Successfully generated onboarding URL for existing account");
 
           return res.json({
             url: onboardingUrl,
@@ -1256,10 +1262,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         } catch (linkError) {
           console.error("Failed to create onboarding link:", linkError);
-          return res.status(500).json({
-            message: "Failed to create Stripe onboarding link",
-            error: linkError instanceof Error ? linkError.message : "Unknown error"
-          });
+          if (linkError instanceof Error && linkError.message.includes("No such account")) {
+            // The account was deleted on Stripe side, need to create a new one
+            console.log("Account was deleted on Stripe, creating a new one");
+            // Continue with creation flow
+          } else {
+            return res.status(500).json({
+              message: "Failed to create Stripe onboarding link",
+              error: linkError instanceof Error ? linkError.message : "Unknown error"
+            });
+          }
         }
       }
 
@@ -1271,19 +1283,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("Creating new Stripe account for user:", req.user.id);
 
-      // Create Stripe account
-      const accountId = await SellerPaymentService.createSellerAccount(profile);
+      try {
+        // Create Stripe account
+        const accountId = await SellerPaymentService.createSellerAccount(profile);
+        console.log("New Stripe account created with ID:", accountId);
 
-      // Get onboarding link
-      const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
+        // Get onboarding link
+        const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
+        console.log("Onboarding URL generated:", onboardingUrl);
 
-      console.log("Onboarding URL generated:", onboardingUrl);
-
-      res.json({
-        url: onboardingUrl,
-        accountId,
-        publishableKey: stripePublishableKey
-      });
+        res.json({
+          url: onboardingUrl,
+          accountId,
+          publishableKey: stripePublishableKey
+        });
+      } catch (stripeError) {
+        console.error("Stripe API error:", stripeError);
+        return res.status(500).json({
+          message: "Failed to setup Stripe account",
+          error: stripeError instanceof Error ? stripeError.message : "Unknown Stripe error"
+        });
+      }
     } catch (error) {
       console.error("Error creating seller account:", error);
       res.status(500).json({
