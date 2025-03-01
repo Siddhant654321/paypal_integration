@@ -38,8 +38,8 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // Session store - this would need to be properly implemented based on your session store
-  sessionStore = {} as Store; 
+  // Using a real session store implementation
+  sessionStore = require('express-session/session/memory')(); 
 
   async getUser(id: number): Promise<User | undefined> {
     try {
