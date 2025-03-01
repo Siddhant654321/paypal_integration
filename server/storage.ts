@@ -454,6 +454,19 @@ export class DatabaseStorage implements IStorage {
       if (data.species) updateData.species = data.species;
       if (data.imageUrl) updateData.imageUrl = data.imageUrl;
       if (data.images) updateData.images = data.images;
+      
+      // Handle auction status fields
+      if (data.status) updateData.status = data.status;
+      if (data.reserveMet !== undefined) updateData.reserveMet = data.reserveMet;
+      if (data.paymentStatus) updateData.paymentStatus = data.paymentStatus;
+      if (data.winningBidderId !== undefined) updateData.winningBidderId = data.winningBidderId;
+      if (data.paymentDueDate) updateData.paymentDueDate = new Date(data.paymentDueDate);
+      if (data.updatedAt) updateData.updatedAt = new Date(data.updatedAt);
+      
+      // Always include updatedAt to prevent empty update errors
+      if (Object.keys(updateData).length === 0) {
+        updateData.updatedAt = new Date();
+      }
 
       // Handle price fields
       // Important: directly check against undefined to handle cases where the value is 0

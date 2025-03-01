@@ -137,7 +137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Initialize images array if not present
         images: Array.isArray(auctionData.images) ? auctionData.images : [],
       };
-      
+
       console.log("Parsed auction data (before validation):", {
         ...parsedData,
         startPrice: parsedData.startPrice,
@@ -1020,6 +1020,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // No bids placed, void the auction
         await storage.updateAuction(auctionId, {
           status: "voided",
+          // Add a dummy field to avoid empty update error
+          updatedAt: new Date()
         });
         return res.json({ message: "Auction ended with no bids" });
       }
@@ -1034,7 +1036,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           winningBidderId: highestBid.bidderId,
           reserveMet: true,
           paymentStatus: "pending",
-          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
+          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          updatedAt: new Date() 
         });
         return res.json({
           message: "Auction ended successfully, reserve met",
@@ -1045,6 +1048,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateAuction(auctionId, {
           status: "pending_seller_decision",
           reserveMet: false,
+          updatedAt: new Date()
         });
         return res.json({
           message: "Auction ended, awaiting seller decision",
@@ -1536,6 +1540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // No bids placed, void the auction
         await storage.updateAuction(auctionId, {
           status: "voided",
+          updatedAt: new Date()
         });
         return res.json({ message: "Auction ended with no bids" });
       }
@@ -1551,6 +1556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           reserveMet: true,
           paymentStatus: "pending",
           paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
+          updatedAt: new Date() 
         });
         return res.json({
           message: "Auction ended successfully, reserve met",
@@ -1561,6 +1567,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateAuction(auctionId, {
           status: "pending_seller_decision",
           reserveMet: false,
+          updatedAt: new Date()
         });
         return res.json({
           message: "Auction ended, awaiting seller decision",

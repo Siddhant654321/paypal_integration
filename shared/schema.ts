@@ -46,6 +46,21 @@ export const profiles = pgTable("profiles", {
 
 // Update user decisions enum
 const sellerDecisionEnum = z.enum(["accept", "void"]);
+
+// Notifications schema
+export const notifications = pgTable('notifications', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  read: boolean('read').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+  data: text('data'),
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
 type SellerDecision = z.infer<typeof sellerDecisionEnum>;
 
 export const auctions = pgTable("auctions", {
