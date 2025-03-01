@@ -11,13 +11,18 @@ export class NotificationService {
     notification: Omit<InsertNotification, "userId">
   ): Promise<void> {
     try {
-      await storage.createNotification({
+      log(`Creating notification for user ${userId}: ${JSON.stringify(notification)}`);
+
+      const createdNotification = await storage.createNotification({
         ...notification,
         userId,
       });
+
+      log(`Successfully created notification: ${JSON.stringify(createdNotification)}`);
     } catch (error) {
       log(`Error creating notification: ${error}`);
-      console.error('Notification error:', error);
+      console.error('Full notification error:', error);
+      // Don't throw the error to prevent bid process from failing
     }
   }
 
@@ -26,6 +31,7 @@ export class NotificationService {
     auctionTitle: string,
     bidAmount: number
   ): Promise<void> {
+    log(`Notifying seller ${sellerId} about new bid on "${auctionTitle}"`);
     return this.createNotification(
       sellerId,
       {
@@ -41,6 +47,7 @@ export class NotificationService {
     auctionTitle: string,
     newBidAmount: number
   ): Promise<void> {
+    log(`Notifying previous bidder ${previousBidderId} about being outbid on "${auctionTitle}"`);
     return this.createNotification(
       previousBidderId,
       {

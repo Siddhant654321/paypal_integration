@@ -10,6 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@shared/schema";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface NotificationsMenuProps {
   notifications?: Notification[];
@@ -20,7 +22,31 @@ export function NotificationsMenu({
   notifications = [],
   onMarkAllRead
 }: NotificationsMenuProps) {
+  const queryClient = useQueryClient();
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Add mutation for marking a single notification as read
+  const markAsReadMutation = useMutation({
+    mutationFn: async (notificationId: number) => {
+      await apiRequest("POST", `/api/notifications/${notificationId}/read`);
+    },
+    onSuccess: () => {
+      // Refetch notifications after marking as read
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+    }
+  });
+
+  // Add mutation for marking all notifications as read
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/notifications/mark-all-read");
+    },
+    onSuccess: () => {
+      // Refetch notifications after marking all as read
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      onMarkAllRead?.();
+    }
+  });
 
   return (
     <DropdownMenu>
@@ -43,7 +69,8 @@ export function NotificationsMenu({
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => onMarkAllRead?.()}
+              onClick={() => markAllReadMutation.mutate()}
+              disabled={markAllReadMutation.isPending}
               className="text-xs hover:bg-accent"
             >
               Mark all as read
@@ -56,40 +83,43 @@ export function NotificationsMenu({
             No notifications
           </div>
         ) : (
-          notifications.map((notification) => (
-            <DropdownMenuItem
-              key={notification.id}
-              className={cn(
-                "flex flex-col items-start gap-1 p-4",
-                !notification.read && "bg-accent/50"
-              )}
-            >
-              <div className="flex w-full justify-between gap-4">
-                <span className="font-medium leading-none">
-                  {notification.title}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(notification.createdAt!).toLocaleDateString()}
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {notification.message}
-              </p>
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    "text-xs",
-                    notification.type === "bid" && "text-green-500",
-                    notification.type === "auction" && "text-blue-500",
-                    notification.type === "admin" && "text-red-500",
-                    notification.type === "payment" && "text-yellow-500"
-                  )}
-                >
-                  {notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}
-                </span>
-              </div>
-            </DropdownMenuItem>
-          ))
+          <div className="max-h-[300px] overflow-y-auto">
+            {notifications.map((notification) => (
+              <DropdownMenuItem
+                key={notification.id}
+                className={cn(
+                  "flex flex-col items-start gap-1 p-4 cursor-pointer",
+                  !notification.read && "bg-accent/50"
+                )}
+                onClick={() => markAsReadMutation.mutate(notification.id)}
+              >
+                <div className="flex w-full justify-between gap-4">
+                  <span className="font-medium leading-none">
+                    {notification.title}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(notification.createdAt!).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {notification.message}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "text-xs",
+                      notification.type === "bid" && "text-green-500",
+                      notification.type === "auction" && "text-blue-500",
+                      notification.type === "admin" && "text-red-500",
+                      notification.type === "payment" && "text-yellow-500"
+                    )}
+                  >
+                    {notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}
+                  </span>
+                </div>
+              </DropdownMenuItem>
+            ))}
+          </div>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

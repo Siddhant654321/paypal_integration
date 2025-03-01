@@ -849,29 +849,49 @@ export class DatabaseStorage implements IStorage {
 
   async createNotification(notification: InsertNotification): Promise<Notification> {
     try {
-      const [newNotification] = await db
+      log(`[STORAGE] Creating notification: ${JSON.stringify(notification)}`, "notification");
+
+      // Ensure we have all required fields
+      if (!notification.userId || !notification.type || !notification.title || !notification.message) {
+        throw new Error(`Missing required notification fields: ${JSON.stringify(notification)}`);
+      }
+
+      const [createdNotification] = await db
         .insert(notifications)
         .values({
           ...notification,
+          read: false,
           createdAt: new Date(),
         })
         .returning();
-      return newNotification;
+
+      log(`[STORAGE] Successfully created notification: ${JSON.stringify(createdNotification)}`, "notification");
+      return createdNotification;
     } catch (error) {
-      log(`Error creating notification: ${error}`, "storage");
+      log(`[STORAGE] Error creating notification: ${error}`, "notification");
+      console.error('[STORAGE] Full notification error:', {
+        error,
+        stack: error instanceof Error ? error.stack : undefined,
+        notification
+      });
       throw error;
     }
   }
 
   async getNotificationsByUserId(userId: number): Promise<Notification[]> {
     try {
-      return await db
+      log(`[STORAGE] Fetching notifications for user ${userId}`, "notification");
+
+      const results = await db
         .select()
         .from(notifications)
         .where(eq(notifications.userId, userId))
         .orderBy(desc(notifications.createdAt));
+
+      log(`[STORAGE] Retrieved ${results.length} notifications for user ${userId}`, "notification");
+      return results;
     } catch (error) {
-      log(`Error getting notifications for user ${userId}: ${error}`, "storage");
+      log(`[STORAGE] Error getting notifications for user ${userId}: ${error}`, "notification");
       throw error;
     }
   }

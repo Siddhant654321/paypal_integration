@@ -11,10 +11,22 @@ import type { Notification } from "@shared/schema";
 export default function NavBar() {
   const { user, logoutMutation } = useAuth();
 
-  const { data: notifications = [] } = useQuery<Notification[]>({
+  // Enhanced notification fetching with detailed logging
+  const { data: notifications = [], error: notificationError } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
     enabled: !!user,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 10000, // Increased frequency for testing
+    staleTime: 5000,
+    onSuccess: (data) => {
+      console.log("[Notifications] Fetch successful:", {
+        count: data.length,
+        unreadCount: data.filter(n => !n.read).length,
+        latestNotification: data[0]
+      });
+    },
+    onError: (error) => {
+      console.error("[Notifications] Fetch error:", error);
+    }
   });
 
   const markAllReadMutation = useMutation({
@@ -27,8 +39,12 @@ export default function NavBar() {
       return response.json();
     },
     onSuccess: () => {
+      console.log("[Notifications] Marked all as read");
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     },
+    onError: (error) => {
+      console.error("[Notifications] Mark all read error:", error);
+    }
   });
 
   return (

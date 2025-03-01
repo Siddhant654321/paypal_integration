@@ -220,6 +220,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const auctionId = parseInt(req.params.id);
+      console.log(`[BID] Processing new bid for auction ${auctionId} from user ${req.user.id}`);
+
       if (isNaN(auctionId)) {
         return res.status(400).json({ message: "Invalid auction ID" });
       }
@@ -234,22 +236,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You cannot bid on your own auction" });
       }
 
-      const now = new Date();
-      if (now < auction.startDate) {
-        return res.status(400).json({ message: "Auction has not started yet" });
-      }
-
-      if (now > auction.endDate) {
-        return res.status(400).json({ message: "Auction has already ended" });
-      }
-
       // Convert amount to number if it's a string (and ensure it's in cents)
       let amount;
       if (typeof req.body.amount === 'string') {
-        // If input is a string that might be a dollar amount (e.g. "10.50")
         amount = Math.round(parseFloat(req.body.amount) * 100);
       } else {
-        // If input is already a number, ensure it's in cents
         amount = req.body.amount;
       }
 
@@ -263,24 +254,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const bidData = insertBidSchema.parse({
+      console.log(`[BID] Amount validated: $${amount/100} for auction "${auction.title}"`);
+
+      const bidData = {
         auctionId: auction.id,
         bidderId: req.user.id,
         amount: amount,
-      });
+      };
 
+      console.log("[BID] Creating bid with data:", bidData);
       const bid = await storage.createBid(bidData);
-      
+      console.log("[BID] Bid created successfully:", bid);
 
       // Send notification to the seller about the new bid
       try {
+        console.log("[NOTIFICATION] Attempting to send notifications for new bid");
         const { NotificationService } = await import('./notification-service');
+
+        console.log("[NOTIFICATION] Notifying seller:", {
+          sellerId: auction.sellerId,
+          auctionTitle: auction.title,
+          amount: amount
+        });
+
         await NotificationService.notifyNewBid(
           auction.sellerId,
           auction.title,
           amount
         );
-        
+        console.log("[NOTIFICATION] Seller notification sent successfully");
 
         // If there was a previous highest bidder, notify them that they've been outbid
         const previousBids = await storage.getBidsForAuction(auction.id);
@@ -288,26 +290,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Sort by amount in descending order to get the second highest bid
           const sortedBids = previousBids.sort((a, b) => b.amount - a.amount);
           const secondHighestBid = sortedBids[1];
-          
 
           // Only notify if it's a different bidder
           if (secondHighestBid.bidderId !== req.user.id) {
+            console.log("[NOTIFICATION] Notifying previous bidder:", {
+              bidderId: secondHighestBid.bidderId,
+              auctionTitle: auction.title,
+              newAmount: amount
+            });
+
             await NotificationService.notifyOutbid(
               secondHighestBid.bidderId,
               auction.title,
               amount
             );
+            console.log("[NOTIFICATION] Previous bidder notification sent successfully");
           }
         }
       } catch (notifyError) {
-        console.error("Failed to send bid notification:", notifyError);
-        // Continue with the response even if notification fails
+        console.error("[NOTIFICATION] Failed to send bid notification:", notifyError);
+        console.error("[NOTIFICATION] Full error details:", {
+          error: notifyError,
+          stack: notifyError.stack,
+          bid: bid,
+          auction: auction
+        });
       }
-      
 
       res.status(201).json(bid);
     } catch (error) {
-      console.error("Bid error:", error);
+      console.error("[BID] Error:", error);
       if (error instanceof ZodError) {
         res.status(400).json({
           message: "Invalid bid data",
@@ -316,7 +328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({
           message: "Failed to place bid",
-          error: (error as Error).message
+          error: error instanceof Error ? error.message : "Unknown error"
         });
       }
     }
@@ -402,6 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch user bids" });
     }
   });
+
 
 
   // Profile routes
@@ -860,7 +873,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Update payment and auction status
           await storage.updatePaymentBySessionId(session.id, {
-            status: "completed",
+            status:"completed",
             stripePaymentIntentId: session.payment_intent as string,
           });
 
@@ -871,7 +884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateAuction(payment.auctionId, {
               paymentStatus: "completed",
             });
-          }
+          }          }
           break;
 
         case "payment_intent.payment_failed":
@@ -908,7 +921,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({        status: auction.paymentStatus,        dueDate: auction.paymentDueDate,      });
     } catch (error) {
-      consoleerror("Error fetching paymentstatus:", error);
+      console.error("Error fetching paymentstatus:", error);
       res.status(500).json({ message: "Failed to fetch payment status" });
     }
   });
@@ -1733,7 +1746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stats.auctionsWon += 1;
       });
 
-      // Calculate buyer performance
+      // Calculate buyerperformance
       const buyerStats = new Map();
       completedAuctions.forEach(auction => {
         if (!buyerStats.has(auction.winningBidderId)) {
