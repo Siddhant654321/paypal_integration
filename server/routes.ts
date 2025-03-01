@@ -136,13 +136,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.id;
       const auctionData = req.body;
 
-      console.log("Creating auction with user:", userId);
-      console.log("Received auction data:", auctionData);
-      console.log("Received files:", req.files);
+      console.log("Creating auction with data:", {
+        userId,
+        userRole: req.user.role,
+        user: req.user,
+        auctionData
+      });
+
+      // Verify seller exists first
+      const seller = await storage.getUser(userId);
+      if (!seller) {
+        console.error(`Seller with ID ${userId} not found`);
+        return res.status(404).json({ message: "Seller not found" });
+      }
+
+      console.log("Found seller:", seller);
 
       // Convert string values to appropriate types and ensure required fields
       const parsedData = {
         ...auctionData,
+        sellerId: userId, // Explicitly set the sellerId
         // Convert price from dollars to cents for storage (multiply by 100)
         startPrice: Number(auctionData.startPrice || 0) * 100,
         reservePrice: Number(auctionData.reservePrice || 0) * 100,
@@ -152,13 +165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         images: Array.isArray(auctionData.images) ? auctionData.images : [],
       };
 
-      console.log("Parsed auction data (before validation):", {
-        ...parsedData,
-        startPrice: parsedData.startPrice,
-        reservePrice: parsedData.reservePrice
-      });
-
-      console.log("Parsed auction data for validation:", parsedData);
+      console.log("Parsed auction data:", parsedData);
 
       try {
         const validatedData = insertAuctionSchema.parse(parsedData);
@@ -446,9 +453,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: n.id,
           type: n.type,
           title: n.title,  
-          read: n.read
+          read: n.read,
+          createdAt: n.createdAt
         }))
       });
+
+      // Debug: Check database connection and last notification 
+      const lastNotification = await storage.getLastNotification();
+      console.log("[NOTIFICATION] Last notification in system:", lastNotification);
 
       res.json(notifications);
     } catch (error) {

@@ -94,6 +94,7 @@ export interface IStorage {
   deleteNotification(id: number): Promise<void>;
   getUnreadNotificationsCount(userId: number): Promise<number>;
   markAllNotificationsAsRead(userId: number): Promise<void>; //added method
+  getLastNotification(): Promise<Notification | undefined>; //added method
 }
 
 export class DatabaseStorage implements IStorage {
@@ -953,6 +954,22 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getLastNotification(): Promise<Notification | undefined> {
+    try {
+      log(`[STORAGE] Fetching last notification`, "notification");
+      const [notification] = await db
+        .select()
+        .from(notifications)
+        .orderBy(desc(notifications.createdAt))
+        .limit(1);
+
+      log(`[STORAGE] Last notification:`, notification, "notification");
+      return notification;
+    } catch (error) {
+      log(`[STORAGE] Error getting last notification: ${error}`, "notification");
+      throw error;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();

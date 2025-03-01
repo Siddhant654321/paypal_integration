@@ -2,8 +2,8 @@ import { storage } from "./storage";
 import { type InsertNotification } from "@shared/schema";
 import { EmailService } from "./email-service";
 
-const log = (message: string, context: string = 'notification') => {
-  console.log(`[${context}] ${message}`);
+const log = (message: string, data?: any, context: string = 'notification') => {
+  console.log(`[${context}] ${message}`, data ? data : '');
 };
 
 export class NotificationService {
@@ -12,14 +12,21 @@ export class NotificationService {
     notification: Omit<InsertNotification, "userId">
   ): Promise<void> {
     try {
-      log(`Creating notification for user ${userId}: ${JSON.stringify(notification)}`);
+      log(`Creating notification for user ${userId}`, notification);
+
+      // Ensure all required fields are present
+      if (!notification.type || !notification.title || !notification.message) {
+        throw new Error("Missing required notification fields");
+      }
 
       const createdNotification = await storage.createNotification({
         ...notification,
         userId,
+        read: false, // Explicitly set read status
+        createdAt: new Date(),
       });
 
-      log(`Successfully created notification: ${JSON.stringify(createdNotification)}`);
+      log(`Successfully created notification:`, createdNotification);
 
       // Also send email notification if applicable
       try {
@@ -38,7 +45,7 @@ export class NotificationService {
       }
     } catch (error) {
       log(`Error creating notification: ${error}`);
-      console.error('Full notification error:', error);
+      console.error('[NOTIFICATION] Full notification error:', error);
       // Don't throw the error to prevent bid process from failing
     }
   }
@@ -54,7 +61,7 @@ export class NotificationService {
       {
         type: "bid",
         title: "New Bid Received",
-        message: `A new bid of $${bidAmount/100} has been placed on your auction "${auctionTitle}"`,
+        message: `A new bid of $${(bidAmount/100).toFixed(2)} has been placed on your auction "${auctionTitle}"`,
       }
     );
   }
@@ -70,7 +77,7 @@ export class NotificationService {
       {
         type: "bid",
         title: "You've Been Outbid",
-        message: `Someone has placed a higher bid of $${newBidAmount/100} on "${auctionTitle}"`,
+        message: `Someone has placed a higher bid of $${(newBidAmount/100).toFixed(2)} on "${auctionTitle}"`,
       }
     );
   }
@@ -118,7 +125,7 @@ export class NotificationService {
       {
         type: "payment",
         title: "Payment Update",
-        message: `Payment of $${amount/100} has been ${status}`,
+        message: `Payment of $${(amount/100).toFixed(2)} has been ${status}`,
       }
     );
   }
