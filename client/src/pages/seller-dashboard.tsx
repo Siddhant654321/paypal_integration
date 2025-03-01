@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Auction, Payout } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, DollarSign, Package } from "lucide-react";
@@ -16,16 +16,17 @@ interface StripeStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
 }
 
-declare global {
-  interface Window {
-    Stripe?: any;
-  }
+interface StripeWindow extends Window {
+  Stripe?: any;
 }
 
-export default function SellerDashboard() {
+declare global {
+  interface Window extends StripeWindow {}
+}
+
+const SellerDashboard = () => {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
-  const queryClient = useQueryClient();
   const [stripeLoaded, setStripeLoaded] = useState(false);
   const [stripeInstance, setStripeInstance] = useState<any>(null);
 
@@ -34,29 +35,25 @@ export default function SellerDashboard() {
     return <Redirect to="/" />;
   }
 
-  const { data: auctions, isLoading } = useQuery<Auction[]>({
+  const { data: auctions = [], isLoading: auctionsLoading } = useQuery<Auction[]>({
     queryKey: [`/api/seller/auctions`],
   });
 
-  const { data: biddingOn, isLoading: isLoadingBids } = useQuery<Auction[]>({
+  const { data: biddingOn = [], isLoading: bidsLoading } = useQuery<Auction[]>({
     queryKey: ["/api/user/bids"],
   });
 
-  const { data: payouts, isLoading: isLoadingPayouts } = useQuery<Payout[]>({
+  const { data: payouts = [], isLoading: payoutsLoading } = useQuery<Payout[]>({
     queryKey: ["/api/seller/payouts"],
   });
 
-  // Get Stripe Connect status
   const { data: stripeStatus } = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
   });
 
-  // Load Stripe.js and initialize
+  // Load Stripe.js
   useEffect(() => {
-    if (window.Stripe && stripeInstance) {
-      setStripeLoaded(true);
-      return;
-    }
+    if (window.Stripe || stripeLoaded) return;
 
     const script = document.createElement('script');
     script.src = 'https://js.stripe.com/v3/';
@@ -65,18 +62,9 @@ export default function SellerDashboard() {
     script.onload = () => {
       setStripeLoaded(true);
       if (window.Stripe) {
-        try {
-          const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
-          setStripeInstance(stripe);
-          console.log("Stripe initialized successfully");
-        } catch (err) {
-          console.error("Error initializing Stripe:", err);
-        }
+        const stripe = window.Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+        setStripeInstance(stripe);
       }
-    };
-
-    script.onerror = (error) => {
-      console.error("Error loading Stripe.js script:", error);
     };
 
     document.body.appendChild(script);
@@ -86,54 +74,42 @@ export default function SellerDashboard() {
         script.parentNode.removeChild(script);
       }
     };
-  }, [stripeInstance]);
+  }, []);
 
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('/api/seller/connect', {
-        method: 'POST',
-      });
-      return response;
-    },
-    onSuccess: (data) => {
+    mutationFn: () => apiRequest('/api/seller/connect', { method: 'POST' }),
+    onSuccess: (data: { url: string }) => {
       if (data.url) {
-        window.location.assign(data.url);
-      } else {
-        throw new Error('No onboarding URL received');
+        window.location.href = data.url;
       }
     },
   });
 
-  // Refresh onboarding link mutation
+  // Refresh onboarding mutation
   const refreshOnboardingMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('/api/seller/onboarding/refresh', {
-        method: 'POST',
-      });
-
-      if (response.url) {
-        window.location.assign(response.url);
-      } else {
-        throw new Error('No onboarding URL received');
+    mutationFn: () => apiRequest('/api/seller/onboarding/refresh', { method: 'POST' }),
+    onSuccess: (data: { url: string }) => {
+      if (data.url) {
+        window.location.href = data.url;
       }
     },
   });
 
-  const filteredAuctions = auctions?.filter(auction =>
+  const filteredAuctions = auctions.filter(auction => 
     auction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     auction.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredBiddingOn = biddingOn?.filter(auction =>
+  const filteredBiddingOn = biddingOn.filter(auction =>
     auction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     auction.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const pendingAuctions = filteredAuctions?.filter(auction => !auction.approved);
-  const approvedAuctions = filteredAuctions?.filter(auction => auction.approved);
-  const endedAuctions = filteredAuctions?.filter(auction => 
-    auction.status === "ended" || auction.status === "fulfilled"
+  const pendingAuctions = filteredAuctions.filter(auction => !auction.approved);
+  const approvedAuctions = filteredAuctions.filter(auction => auction.approved);
+  const endedAuctions = filteredAuctions.filter(auction => 
+    auction.status === "ended"
   );
 
   // Render Stripe Connect status and actions
@@ -217,10 +193,10 @@ export default function SellerDashboard() {
             <Link href={`/seller/fulfill/${auction.id}`}>
               <Button 
                 className="w-full"
-                variant={auction.status === "fulfilled" ? "outline" : "default"}
+                variant="default"
               >
                 <Package className="h-4 w-4 mr-2" />
-                {auction.status === "fulfilled" ? "View Fulfillment" : "Fulfill Order"}
+                Fulfill Order
               </Button>
             </Link>
           )}
@@ -228,6 +204,10 @@ export default function SellerDashboard() {
       )}
     </div>
   );
+
+  if (auctionsLoading || bidsLoading || payoutsLoading) {
+    return <div className="container mx-auto py-8">Loading...</div>;
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -261,70 +241,62 @@ export default function SellerDashboard() {
         </TabsList>
 
         <TabsContent value="myAuctions">
-          {isLoading ? (
-            <div className="text-center">Loading your auctions...</div>
-          ) : !auctions?.length ? (
-            <div className="text-center text-muted-foreground">
-              You haven't created any auctions yet.
-            </div>
-          ) : (
-            <Tabs defaultValue="approved">
-              <TabsList className="w-full">
-                <TabsTrigger value="approved">
-                  Active Auctions ({approvedAuctions?.length || 0})
-                </TabsTrigger>
-                <TabsTrigger value="pending">
-                  Pending Approval ({pendingAuctions?.length || 0})
-                </TabsTrigger>
-                <TabsTrigger value="ended">
-                  Ended Auctions ({endedAuctions?.length || 0})
-                </TabsTrigger>
-              </TabsList>
+          <Tabs defaultValue="approved">
+            <TabsList className="w-full">
+              <TabsTrigger value="approved">
+                Active Auctions ({approvedAuctions.length})
+              </TabsTrigger>
+              <TabsTrigger value="pending">
+                Pending Approval ({pendingAuctions.length})
+              </TabsTrigger>
+              <TabsTrigger value="ended">
+                Ended Auctions ({endedAuctions.length})
+              </TabsTrigger>
+            </TabsList>
 
-              <TabsContent value="approved">
-                {!approvedAuctions?.length ? (
-                  <div className="text-center text-muted-foreground">
-                    No approved auctions found
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {approvedAuctions.map(renderAuctionCard)}
-                  </div>
-                )}
-              </TabsContent>
+            <TabsContent value="approved">
+              {!approvedAuctions.length ? (
+                <div className="text-center text-muted-foreground">
+                  No approved auctions found
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {approvedAuctions.map(renderAuctionCard)}
+                </div>
+              )}
+            </TabsContent>
 
-              <TabsContent value="pending">
-                {!pendingAuctions?.length ? (
-                  <div className="text-center text-muted-foreground">
-                    No pending auctions found
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {pendingAuctions.map(renderAuctionCard)}
-                  </div>
-                )}
-              </TabsContent>
+            <TabsContent value="pending">
+              {!pendingAuctions.length ? (
+                <div className="text-center text-muted-foreground">
+                  No pending auctions found
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {pendingAuctions.map(renderAuctionCard)}
+                </div>
+              )}
+            </TabsContent>
 
-              <TabsContent value="ended">
-                {!endedAuctions?.length ? (
-                  <div className="text-center text-muted-foreground">
-                    No ended auctions found
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {endedAuctions.map(renderAuctionCard)}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          )}
+            <TabsContent value="ended">
+              {!endedAuctions.length ? (
+                <div className="text-center text-muted-foreground">
+                  No ended auctions found
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {endedAuctions.map(renderAuctionCard)}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         <TabsContent value="payouts">
           {renderStripeConnectStatus()}
-          {isLoadingPayouts ? (
+          {payoutsLoading ? (
             <div className="text-center">Loading your payouts...</div>
-          ) : !payouts?.length ? (
+          ) : !payouts.length ? (
             <div className="text-center text-muted-foreground">
               No payouts found. Completed auction payments will appear here.
             </div>
@@ -380,4 +352,6 @@ export default function SellerDashboard() {
       </Tabs>
     </div>
   );
-}
+};
+
+export default SellerDashboard;

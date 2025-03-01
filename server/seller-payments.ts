@@ -61,45 +61,20 @@ export class SellerPaymentService {
       });
 
       console.log("Onboarding link created:", accountLink.url);
-      
-      // Validate URL was returned
+
       if (!accountLink.url) {
         throw new Error('Stripe did not return a valid onboarding URL');
       }
-      
+
       return accountLink.url;
     } catch (error) {
       console.error("Error creating onboarding link:", error);
-      
-      // Log more details for debugging
+
       if (error instanceof Error) {
         console.error("Error message:", error.message);
         console.error("Error stack:", error.stack);
       }
-      
-      throw error;
-    }
-  }
-  
-  static async createSetupIntent(accountId: string): Promise<string> {
-    try {
-      console.log("Creating setup intent for account:", accountId);
-      
-      // Get account capabilities to determine if we need to collect payments or just identity
-      const account = await stripe.accounts.retrieve(accountId);
-      
-      // Create a setup intent for the connected account
-      const setupIntent = await stripe.setupIntents.create({
-        payment_method_types: ['card'],
-        usage: 'off_session',
-      }, {
-        stripeAccount: accountId,
-      });
-      
-      console.log("Setup intent created");
-      return setupIntent.client_secret as string;
-    } catch (error) {
-      console.error("Error creating setup intent:", error);
+
       throw error;
     }
   }
@@ -129,8 +104,8 @@ export class SellerPaymentService {
         sellerId,
         paymentId,
         amount,
-        status: 'pending',
         stripeTransferId: transfer.id,
+        status: 'pending',
       });
     } catch (error) {
       console.error("Error creating payout:", error);

@@ -4,13 +4,8 @@ import { insertPaymentSchema, type InsertPayment } from "@shared/schema";
 import { SellerPaymentService } from "./seller-payments";
 import { NotificationService } from "./notification-service";
 
-// Verify Stripe secret key is available and in test mode
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("Missing STRIPE_SECRET_KEY environment variable");
-}
-
-if (!process.env.STRIPE_SECRET_KEY.startsWith('sk_test_')) {
-  throw new Error("Stripe secret key must be a test mode key (starts with sk_test_)");
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -44,8 +39,14 @@ export class PaymentService {
       const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const sellerPayout = baseAmount - platformFee;
 
+      // Get seller's Stripe account ID
+      const sellerProfile = await storage.getProfile(auction.sellerId);
+      if (!sellerProfile?.stripeAccountId) {
+        throw new Error("Seller has not completed Stripe onboarding");
+      }
+
       // Create payment record
-      const paymentData: InsertPayment = {
+      const paymentData = {
         auctionId,
         buyerId,
         sellerId: auction.sellerId,
@@ -53,13 +54,9 @@ export class PaymentService {
         platformFee,
         sellerPayout,
         insuranceFee,
+        stripePaymentIntentId: '',
+        status: 'pending' as const,
       };
-
-      // Get seller's Stripe account ID
-      const sellerProfile = await storage.getProfile(auction.sellerId);
-      if (!sellerProfile?.stripeAccountId) {
-        throw new Error("Seller has not completed Stripe onboarding");
-      }
 
       // Create Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
@@ -105,22 +102,22 @@ export class PaymentService {
         cancel_url: `${baseUrl}/auction/${auctionId}?payment=cancelled`,
       });
 
-      // Create payment record in database
+      // Update the payment with the Stripe session ID
       const payment = await storage.createPayment({
         ...paymentData,
         stripePaymentIntentId: session.payment_intent as string,
-        status: 'pending',
       });
 
-      // Update auction status
+      // Mark auction as payment processing
       await storage.updateAuction(auctionId, {
-        paymentStatus: "processing",
+        status: "payment_processing",
       });
 
       return {
         sessionId: session.id,
-        payment: paymentData,
+        payment,
       };
+
     } catch (error) {
       console.error("Stripe session creation error:", error);
       if (error instanceof Stripe.errors.StripeError) {
@@ -146,9 +143,9 @@ export class PaymentService {
         status: "completed",
       });
 
-      // Update auction payment status
+      // Update auction status
       await storage.updateAuction(payment.auctionId, {
-        paymentStatus: "completed",
+        status: "payment_completed",
       });
 
       // Notify the seller
@@ -182,9 +179,9 @@ export class PaymentService {
         status: "failed",
       });
 
-      // Update auction payment status
+      // Update auction status
       await storage.updateAuction(payment.auctionId, {
-        paymentStatus: "failed",
+        status: "payment_failed",
       });
 
       // Notify the seller
