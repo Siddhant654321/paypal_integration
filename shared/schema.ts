@@ -38,7 +38,7 @@ export const profiles = pgTable("profiles", {
   // Stripe Connect fields
   stripeAccountId: text("stripe_account_id"),
   stripeAccountStatus: text("stripe_account_status", {
-    enum: ["pending", "verified", "rejected"]
+    enum: ["pending", "verified", "not_started"]
   }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

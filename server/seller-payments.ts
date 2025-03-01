@@ -13,7 +13,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
-      // Create a Connect Express account
+      // Clean up any existing account first
+      if (profile.stripeAccountId) {
+        try {
+          await stripe.accounts.del(profile.stripeAccountId);
+        } catch (error) {
+          console.log("Could not delete existing account, might already be deleted:", error);
+        }
+      }
+
+      // Create a new Connect Express account
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US',
@@ -50,30 +59,7 @@ export class SellerPaymentService {
     }
   }
 
-  static async refreshOnboarding(accountId: string): Promise<string> {
-    try {
-      // Create a new account link for continuing onboarding
-      const accountLink = await stripe.accountLinks.create({
-        account: accountId,
-        refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
-        return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
-        type: 'account_onboarding',
-      });
-
-      // Reset the account status to allow fresh attempt
-      const profiles = await storage.getProfiles({ stripeAccountId: accountId });
-      if (profiles && profiles.length > 0) {
-        await storage.updateProfileStripeAccount(profiles[0].userId, accountId, "not_started");
-      }
-
-      return accountLink.url;
-    } catch (error) {
-      console.error("Error refreshing onboarding:", error);
-      throw error;
-    }
-  }
-
-  static async getAccountStatus(accountId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
+  static async getAccountStatus(accountId: string): Promise<"not_started" | "pending" | "verified"> {
     try {
       if (!accountId) {
         return "not_started";
@@ -114,18 +100,6 @@ export class SellerPaymentService {
       };
     } catch (error) {
       console.error("Error getting payout schedule:", error);
-      throw error;
-    }
-  }
-
-  static async getPayouts(accountId: string, limit = 10) {
-    try {
-      return await stripe.payouts.list(
-        { limit },
-        { stripeAccount: accountId }
-      );
-    } catch (error) {
-      console.error("Error getting payouts:", error);
       throw error;
     }
   }
