@@ -698,6 +698,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add admin delete route for buyer requests
+  app.delete("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      await storage.deleteBuyerRequest(requestId);
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting buyer request:", error);
+      res.status(500).json({ message: "Failed to delete buyer request" });
+    }
+  });
+
+  // Add admin update route for buyer requests
+  app.patch("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const data = req.body;
+
+      const updatedRequest = await storage.updateBuyerRequest(requestId, data);
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Error updating buyer request:", error);
+      res.status(500).json({ message: "Failed to update buyer request" });
+    }
+  });
+
   app.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
     try {
       // Log authentication state
@@ -850,7 +876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dueDate: auction.paymentDueDate,
       });
     } catch (error) {
-      console.error("Error fetching payment status:", error);
+      consoleerror("Error fetching payment status:", error);
       res.status(500).json({ message: "Failed to fetch payment status" });
     }
   });
@@ -956,8 +982,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               (auction.status === "ended" && auction.winningBidderId)
             )
           };
-        })
-      );
+        })      );
 
       // Only return sellers who have profiles and active/successful auctions
       const activeSellers = sellersWithDetails.filter(

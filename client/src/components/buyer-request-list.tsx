@@ -2,16 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { type BuyerRequest, type Profile } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Eye, Clock } from "lucide-react";
+import { Eye, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "@/hooks/use-auth";
 
 interface BuyerRequestWithProfile extends BuyerRequest {
   buyerProfile: Profile;
 }
 
 export function BuyerRequestList() {
+  const { user } = useAuth();
   const { data: requests, isLoading } = useQuery<BuyerRequestWithProfile[]>({
     queryKey: ["/api/buyer-requests"],
   });
@@ -66,15 +67,7 @@ export function BuyerRequestList() {
               <div className="space-y-4">
                 <p className="text-sm line-clamp-2">{request.description}</p>
 
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <div className="flex items-center">
-                    <Avatar className="h-6 w-6 mr-2">
-                      <AvatarImage src={request.buyerProfile.profilePicture || ""} />
-                      <AvatarFallback>{request.buyerProfile.fullName?.[0]}</AvatarFallback>
-                    </Avatar>
-                    <span>{request.buyerProfile.fullName || "Anonymous"}</span>
-                  </div>
-
+                <div className="flex items-center justify-end text-sm text-muted-foreground">
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center gap-1">
                       <Eye className="h-4 w-4" />
