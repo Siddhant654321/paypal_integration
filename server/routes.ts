@@ -263,8 +263,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Convert dates to ensure they're in the correct format
         const auctionWithFormattedDates = {
           ...newAuction,
-          startDate: new Date(newAuction.startDate).toISOString(),
-          endDate: new Date(newAuction.endDate).toISOString()
+          startDate: new Date(newAuction.startDate),
+          endDate: new Date(newAuction.endDate)
         };
         
         console.log("[AUCTION CREATE] Final formatted data:", {

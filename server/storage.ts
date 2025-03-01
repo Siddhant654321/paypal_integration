@@ -141,11 +141,13 @@ export class DatabaseStorage implements IStorage {
 
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
-      // Ensure dates are properly formatted as ISO strings
+      // Ensure dates are properly formatted by creating actual Date objects
       const formattedAuction = {
         ...insertAuction,
-        startDate: new Date(insertAuction.startDate).toISOString(),
-        endDate: new Date(insertAuction.endDate).toISOString(),
+        startDate: typeof insertAuction.startDate === 'string' ? 
+          new Date(insertAuction.startDate) : insertAuction.startDate,
+        endDate: typeof insertAuction.endDate === 'string' ? 
+          new Date(insertAuction.endDate) : insertAuction.endDate,
         currentPrice: insertAuction.startPrice // Set initial current price to start price
       };
       
