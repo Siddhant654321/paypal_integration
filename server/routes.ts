@@ -1473,7 +1473,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         // Create Stripe account
-        const accountId = await SellerPaymentService.createSellerAccount(profile);
+        const { accountId, clientSecret } = await SellerPaymentService.createSellerAccount(profile);
         console.log("New Stripe account created with ID:", accountId);
 
         // Get onboarding link
@@ -1483,6 +1483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({
           url: onboardingUrl,
           accountId,
+          clientSecret,
           publishableKey: stripePublishableKey
         });
       } catch (stripeError) {

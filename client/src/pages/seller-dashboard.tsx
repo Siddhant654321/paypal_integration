@@ -210,7 +210,44 @@ const SellerDashboard = () => {
               </div>
               <Button
                 className="w-full"
-                onClick={() => connectWithStripeMutation.mutate()}
+                onClick={() => {
+                  connectWithStripeMutation.mutate(undefined, {
+                    onSuccess: (data) => {
+                      // Check if we have the URL and redirect to it
+                      if (data.url) {
+                        window.location.href = data.url;
+                      } else if (data.accountId && data.clientSecret) {
+                        // If we have client secret but no Stripe Connect object yet, load the script
+                        if (!window.StripeConnect) {
+                          const script = document.createElement('script');
+                          script.src = 'https://connect.stripe.com/connect-js/v1';
+                          script.onload = () => {
+                            if (window.StripeConnect) {
+                              window.StripeConnect.EmbeddedComponents.mount({
+                                clientSecret: data.clientSecret,
+                                appearance: { theme: 'flat' },
+                                onComplete: () => {
+                                  // Refresh the page to update the status
+                                  window.location.reload();
+                                }
+                              });
+                            }
+                          };
+                          document.body.appendChild(script);
+                        } else {
+                          // If StripeConnect is already loaded, mount immediately
+                          window.StripeConnect.EmbeddedComponents.mount({
+                            clientSecret: data.clientSecret,
+                            appearance: { theme: 'flat' },
+                            onComplete: () => {
+                              window.location.reload();
+                            }
+                          });
+                        }
+                      }
+                    }
+                  });
+                }}
                 disabled={connectWithStripeMutation.isPending}
               >
                 {connectWithStripeMutation.isPending ? (

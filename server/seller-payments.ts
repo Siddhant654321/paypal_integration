@@ -11,6 +11,23 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 export class SellerPaymentService {
+  static async getOnboardingLink(accountId: string, baseUrl: string): Promise<string> {
+    try {
+      // Create an account link for the user to complete onboarding
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${baseUrl}/seller/dashboard?refresh=true`,
+        return_url: `${baseUrl}/seller/dashboard?success=true`,
+        type: 'account_onboarding',
+      });
+
+      return accountLink.url;
+    } catch (error) {
+      console.error("Error creating onboarding link:", error);
+      throw error;
+    }
+  }
+
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; clientSecret: string }> {
     try {
       // Create Stripe Connect account
