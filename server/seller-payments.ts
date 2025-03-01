@@ -11,23 +11,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 export class SellerPaymentService {
-  static async getOnboardingLink(accountId: string, baseUrl: string): Promise<string> {
-    try {
-      // Create an account link for the user to complete onboarding
-      const accountLink = await stripe.accountLinks.create({
-        account: accountId,
-        refresh_url: `${baseUrl}/seller/dashboard?refresh=true`,
-        return_url: `${baseUrl}/seller/dashboard?success=true`,
-        type: 'account_onboarding',
-      });
-
-      return accountLink.url;
-    } catch (error) {
-      console.error("Error creating onboarding link:", error);
-      throw error;
-    }
-  }
-
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; clientSecret: string }> {
     try {
       // Create a Connect Express account
@@ -40,20 +23,21 @@ export class SellerPaymentService {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
-        business_profile: {
-          product_description: "Poultry and hatching eggs auction sales",
-          mcc: "0742", // Veterinary Services, which includes animal breeding
-        },
+        settings: {
+          payouts: {
+            schedule: {
+              interval: 'manual'
+            }
+          }
+        }
       });
 
-      // Create an account session for embedded components
+      // Create an account session for embedded onboarding
       const session = await stripe.accountSessions.create({
         account: account.id,
         components: {
           account_onboarding: { enabled: true },
-          payment_details: { enabled: true },
-          payout_settings: { enabled: true },
-        },
+        }
       });
 
       // Update profile with Stripe account ID
@@ -65,24 +49,6 @@ export class SellerPaymentService {
       };
     } catch (error) {
       console.error("Error creating seller account:", error);
-      throw error;
-    }
-  }
-
-  static async refreshAccountSession(accountId: string): Promise<string> {
-    try {
-      const session = await stripe.accountSessions.create({
-        account: accountId,
-        components: {
-          account_onboarding: { enabled: true },
-          payment_details: { enabled: true },
-          payout_settings: { enabled: true },
-        },
-      });
-
-      return session.client_secret;
-    } catch (error) {
-      console.error("Error refreshing account session:", error);
       throw error;
     }
   }
@@ -119,18 +85,6 @@ export class SellerPaymentService {
     }
   }
 
-  static async getPayouts(accountId: string, limit = 10) {
-    try {
-      return await stripe.payouts.list(
-        { limit },
-        { stripeAccount: accountId }
-      );
-    } catch (error) {
-      console.error("Error getting payouts:", error);
-      throw error;
-    }
-  }
-
   static async getPayoutSchedule(accountId: string) {
     try {
       const account = await stripe.accounts.retrieve(accountId);
@@ -140,6 +94,18 @@ export class SellerPaymentService {
       };
     } catch (error) {
       console.error("Error getting payout schedule:", error);
+      throw error;
+    }
+  }
+
+  static async getPayouts(accountId: string, limit = 10) {
+    try {
+      return await stripe.payouts.list(
+        { limit },
+        { stripeAccount: accountId }
+      );
+    } catch (error) {
+      console.error("Error getting payouts:", error);
       throw error;
     }
   }

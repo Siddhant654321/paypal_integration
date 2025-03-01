@@ -30,99 +30,83 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if the script is already loaded
-    if (document.getElementById('stripe-js')) {
-      if (window.StripeConnect) {
-        mountStripeConnect();
-      }
-      return;
-    }
+    const loadAndMount = async () => {
+      try {
+        // Load the Stripe Connect script
+        const script = document.createElement('script');
+        script.src = 'https://b.stripecdn.com/connect-js/v1/connect-js-v1.min.js';
+        script.async = true;
 
-    const script = document.createElement('script');
-    script.id = 'stripe-js';
-    script.src = 'https://js.stripe.com/v3/connect-js/';
-    script.async = true;
+        // Create a promise to handle script loading
+        const scriptLoaded = new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load Stripe Connect script'));
+        });
 
-    script.onload = () => {
-      console.log('Stripe Connect script loaded');
-      if (window.StripeConnect) {
-        mountStripeConnect();
-      } else {
+        document.body.appendChild(script);
+        await scriptLoaded;
+
+        // Wait a moment for Stripe to initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (!window.StripeConnect) {
+          throw new Error('Stripe Connect failed to initialize');
+        }
+
+        // Mount the Connect components
+        window.StripeConnect.EmbeddedComponents.mount({
+          clientSecret,
+          appearance: {
+            theme: 'flat',
+            variables: {
+              colorPrimary: '#0F172A',
+              colorBackground: '#ffffff',
+              colorText: '#1e293b',
+              fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+              borderRadius: '0.5rem',
+              spacingUnit: '5px',
+            },
+          },
+          onComplete: () => {
+            setIsLoading(false);
+            toast({
+              title: "Success",
+              description: "Account setup completed successfully",
+            });
+            if (onComplete) {
+              onComplete();
+            }
+          },
+          onError: (error: Error) => {
+            setIsLoading(false);
+            toast({
+              title: "Error",
+              description: error.message || "Failed to complete account setup",
+              variant: "destructive",
+            });
+          },
+        });
+      } catch (error) {
         setIsLoading(false);
+        console.error('Stripe Connect error:', error);
         toast({
           title: "Error",
-          description: "Failed to load Stripe Connect",
+          description: "Failed to initialize Stripe Connect. Please try again.",
           variant: "destructive",
         });
       }
     };
 
-    script.onerror = () => {
-      setIsLoading(false);
-      toast({
-        title: "Error",
-        description: "Failed to load Stripe Connect script",
-        variant: "destructive",
-      });
-    };
-
-    document.body.appendChild(script);
+    loadAndMount();
 
     return () => {
-      if (document.getElementById('stripe-js')) {
-        document.getElementById('stripe-js')?.remove();
+      // Cleanup script on unmount
+      const script = document.querySelector('script[src*="connect-js"]');
+      if (script) {
+        document.body.removeChild(script);
       }
     };
-  }, [clientSecret, toast]);
-
-  const mountStripeConnect = () => {
-    try {
-      const targetElement = document.getElementById('stripe-connect-mount');
-      if (!targetElement) {
-        throw new Error('Mount point not found');
-      }
-
-      window.StripeConnect?.EmbeddedComponents.mount({
-        clientSecret,
-        appearance: {
-          theme: 'flat',
-          variables: {
-            colorPrimary: '#0F172A',
-            colorBackground: '#ffffff',
-            colorText: '#1e293b',
-            fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-            borderRadius: '0.5rem',
-            spacingUnit: '5px',
-          },
-        },
-        onComplete: () => {
-          toast({
-            title: "Success",
-            description: "Account setup completed successfully",
-          });
-          setIsLoading(false);
-          if (onComplete) {
-            onComplete();
-          }
-        },
-        onError: (error: Error) => {
-          toast({
-            title: "Error",
-            description: error.message || "Failed to complete account setup",
-            variant: "destructive",
-          });
-          setIsLoading(false);
-        },
-      });
-    } catch (error) {
-      setIsLoading(false);
-      toast({
-        title: "Error",
-        description: "Failed to initialize Stripe Connect",
-        variant: "destructive",
-      });
-    }
-  };
+  }, [clientSecret, toast, onComplete]);
 
   return (
     <div className="relative min-h-[600px]">
