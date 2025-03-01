@@ -58,15 +58,24 @@ export function BuyerRequestForm() {
     mutationFn: async (data: InsertBuyerRequest) => {
       console.log("Submitting buyer request with data:", data);
       try {
-        const response = await apiRequest("/api/buyer-requests", {
+        const response = await fetch("/api/buyer-requests", {
           method: "POST",
           headers: {
             'Content-Type': 'application/json'
           },
+          credentials: 'include',
           body: JSON.stringify(data)
         });
-        console.log("Buyer request creation response:", response);
-        return response;
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: "Failed to create request" }));
+          console.error("Server error response:", errorData);
+          throw new Error(errorData.message || "Failed to create request");
+        }
+        
+        const result = await response.json();
+        console.log("Buyer request creation response:", result);
+        return result;
       } catch (error) {
         console.error("Error creating buyer request:", error);
         throw error;
@@ -94,9 +103,9 @@ export function BuyerRequestForm() {
         navigate("/auth");
       } else {
         // Show more detailed error if available
-        const errorMessage = error.response?.data?.message || error.message || "Failed to create request";
+        const errorMessage = error.message || "Failed to create request";
         toast({
-          title: "Error",
+          title: "Error Creating Request",
           description: errorMessage + ". Please try again.",
           variant: "destructive",
         });
