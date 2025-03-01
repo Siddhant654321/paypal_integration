@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile } from "@shared/schema";
+import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { Store } from "express-session";
@@ -26,7 +26,43 @@ export interface IStorage {
     approved?: boolean;
     species?: string;
     category?: string;
+    status?: string;
   }): Promise<Auction[]>;
+  getPendingAuctions(): Promise<Auction[]>;
+  approveAuction(auctionId: number, reviewerId: number): Promise<Auction>;
+  updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction>;
+  createBid(bid: any): Promise<any>;
+  getBidsForAuction(auctionId: number): Promise<any[]>;
+  getBidsByUser(userId: number): Promise<any[]>;
+  deleteBid(bidId: number):Promise<void>;
+  getUsers(filters?: { 
+    approved?: boolean;
+    role?: string;
+    lastLoginAfter?: Date;
+  }): Promise<User[]>;
+  approveUser(userId: number): Promise<User>;
+  deleteProfile(userId: number): Promise<void>;
+  getNotificationsByUserId(userId: number): Promise<any[]>;
+  getLastNotification(): Promise<any | undefined>;
+  markNotificationAsRead(notificationId: number): Promise<any>;
+  markAllNotificationsAsRead(userId: number): Promise<void>;
+  getUnreadNotificationsCount(userId: number): Promise<number>;
+  getPaymentBySessionId(sessionId: string): Promise<any | undefined>;
+  updatePaymentBySessionId(sessionId: string, data: any): Promise<any>;
+  updatePaymentByIntentId(intentId: string, data: any): Promise<any>;
+  getWinnerDetails(auctionId: number): Promise<any | undefined>;
+  createFulfillment(fulfillmentData: any): Promise<any>;
+  getFulfillment(auctionId: number): Promise<any | undefined>;
+  createBuyerRequest(requestData: any): Promise<any>;
+  getBuyerRequests(filters?: any): Promise<any[]>;
+  getBuyerRequest(id: number): Promise<any | undefined>;
+  incrementBuyerRequestViews(id: number): Promise<void>;
+  updateBuyerRequestStatus(id: number, status: string): Promise<any>;
+  deleteBuyerRequest(id: number): Promise<void>;
+  updateBuyerRequest(id: number, data: any): Promise<any>;
+  getPayoutsBySeller(sellerId: number): Promise<any[]>;
+  deleteAuction(auctionId: number): Promise<void>;
+
 }
 
 export class DatabaseStorage implements IStorage {
@@ -34,19 +70,14 @@ export class DatabaseStorage implements IStorage {
 
   constructor() {
     const PostgresStore = connectPg(session);
-
-    // Create a new pg Pool using the DATABASE_URL
     const pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
     });
-
-    // Initialize the session store with the pool
     this.sessionStore = new PostgresStore({
       pool,
       createTableIfMissing: true,
       tableName: 'session'
     });
-
     log("Session store initialized");
   }
 
@@ -141,25 +172,24 @@ export class DatabaseStorage implements IStorage {
 
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
-      // Ensure dates are properly formatted by creating actual Date objects
+      // Ensure dates are properly formatted
       const formattedAuction = {
         ...insertAuction,
-        startDate: typeof insertAuction.startDate === 'string' ? 
-          new Date(insertAuction.startDate) : insertAuction.startDate,
-        endDate: typeof insertAuction.endDate === 'string' ? 
-          new Date(insertAuction.endDate) : insertAuction.endDate,
+        startDate: new Date(insertAuction.startDate),
+        endDate: new Date(insertAuction.endDate),
         currentPrice: insertAuction.startPrice, // Set initial current price to start price
-        status: insertAuction.status || "pending" // Set default status to pending
+        status: "pending_review" // New auctions start in pending_review state
       };
-      
-      console.log("[STORAGE] Creating auction with formatted data:", {
+
+      log("Creating auction with formatted data:", {
         title: formattedAuction.title,
         sellerId: formattedAuction.sellerId,
+        startPrice: formattedAuction.startPrice,
         startDate: formattedAuction.startDate,
         endDate: formattedAuction.endDate,
         status: formattedAuction.status
       });
-      
+
       const [auction] = await db
         .insert(auctions)
         .values(formattedAuction)
@@ -213,7 +243,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       const results = await query;
-      console.log(`Retrieved ${results.length} auctions with filters:`, filters);
+      log(`Retrieved ${results.length} auctions with filters:`, filters);
       return results;
     } catch (error) {
       log(`Error getting auctions: ${error}`);
@@ -221,20 +251,126 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Implementation for getBidsForAuction
+  async getPendingAuctions(): Promise<Auction[]> {
+    return this.getAuctions({ status: "pending_review" });
+  }
+
+  async approveAuction(auctionId: number, reviewerId: number): Promise<Auction> {
+    try {
+      const [auction] = await db
+        .update(auctions)
+        .set({ 
+          approved: true,
+          status: "active",
+          reviewedBy: reviewerId,
+          reviewedAt: new Date()
+        })
+        .where(eq(auctions.id, auctionId))
+        .returning();
+
+      return auction;
+    } catch (error) {
+      log(`Error approving auction ${auctionId}: ${error}`);
+      throw error;
+    }
+  }
+
+  async updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction> {
+    try {
+      // First get the current auction data
+      const currentAuction = await this.getAuction(auctionId);
+      if (!currentAuction) {
+        throw new Error(`Auction with id ${auctionId} not found`);
+      }
+
+      // Ensure dates are properly formatted
+      const formattedData = { ...data };
+
+      if (formattedData.startDate) {
+        formattedData.startDate = new Date(formattedData.startDate);
+      }
+
+      if (formattedData.endDate) {
+        formattedData.endDate = new Date(formattedData.endDate);
+      }
+
+      // If startPrice is updated but currentPrice is not, and there are no bids yet,
+      // update currentPrice to match startPrice
+      if (formattedData.startPrice !== undefined && formattedData.currentPrice === undefined) {
+        if (currentAuction.currentPrice === currentAuction.startPrice) {
+          formattedData.currentPrice = formattedData.startPrice;
+        }
+      }
+
+      // Handle images properly
+      if (formattedData.images) {
+        if (!Array.isArray(formattedData.images)) {
+          formattedData.images = [formattedData.images];
+        }
+
+        if (!formattedData.imageUrl && formattedData.images.length > 0) {
+          formattedData.imageUrl = formattedData.images[0];
+        }
+      }
+
+      log(`Updating auction ${auctionId} with formatted data:`, {
+        title: formattedData.title,
+        startDate: formattedData.startDate,
+        endDate: formattedData.endDate,
+        startPrice: formattedData.startPrice,
+        reservePrice: formattedData.reservePrice,
+        currentPrice: formattedData.currentPrice,
+        images: Array.isArray(formattedData.images) ? `${formattedData.images.length} images` : formattedData.images
+      });
+
+      const [auction] = await db
+        .update(auctions)
+        .set(formattedData)
+        .where(eq(auctions.id, auctionId))
+        .returning();
+
+      return auction;
+    } catch (error) {
+      log(`Error updating auction ${auctionId}: ${error}`);
+      throw error;
+    }
+  }
+
+  async createBid(bid: any): Promise<any> {
+    try {
+      log(`Creating bid for auction ${bid.auctionId}`);
+      const [newBid] = await db
+        .insert(bids)
+        .values({
+          ...bid,
+          timestamp: new Date()
+        })
+        .returning();
+
+      // Update auction's current price
+      await this.updateAuction(bid.auctionId, {
+        currentPrice: bid.amount
+      });
+
+      return newBid;
+    } catch (error) {
+      log(`Error creating bid: ${error}`);
+      throw error;
+    }
+  }
+
   async getBidsForAuction(auctionId: number): Promise<any[]> {
     try {
-      // This is a placeholder implementation. 
-      // Implement this with the actual bids table when available
-      log(`Getting bids for auction ${auctionId}`);
-      return []; // Return empty array for now
+      return await db
+        .select()
+        .from(bids)
+        .where(eq(bids.auctionId, auctionId));
     } catch (error) {
       log(`Error getting bids for auction ${auctionId}: ${error}`);
       throw error;
     }
   }
 
-  // Implementation for getBidsByUser
   async getBidsByUser(userId: number): Promise<any[]> {
     try {
       log(`Getting bids for user ${userId}`);
@@ -245,18 +381,16 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Implementation for createBid
-  async createBid(bid: any): Promise<any> {
+  async deleteBid(bidId: number): Promise<void> {
     try {
-      log(`Creating bid for auction ${bid.auctionId}`);
-      return bid; // Just return the bid data for now
+      log(`Deleting bid ${bidId}`);
+      await db.delete(bids).where(eq(bids.id, bidId));
     } catch (error) {
-      log(`Error creating bid: ${error}`);
+      log(`Error deleting bid ${bidId}: ${error}`);
       throw error;
     }
   }
 
-  // Implementation for getUsers
   async getUsers(filters?: { 
     approved?: boolean;
     role?: string;
@@ -284,116 +418,27 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Implementation for deleteBid
-  async deleteBid(bidId: number): Promise<void> {
+  async approveUser(userId: number): Promise<User> {
     try {
-      log(`Deleting bid ${bidId}`);
-      // Implement actual deletion when bid table is available
-    } catch (error) {
-      log(`Error deleting bid ${bidId}: ${error}`);
-      throw error;
-    }
-  }
-  async approveAuction(auctionId: number): Promise<Auction> {
-    try {
-      const [auction] = await db
-        .update(auctions)
+      const [user] = await db
+        .update(users)
         .set({ approved: true })
-        .where(eq(auctions.id, auctionId))
+        .where(eq(users.id, userId))
         .returning();
-      
-      return auction;
+      return user;
     } catch (error) {
-      log(`Error approving auction ${auctionId}: ${error}`);
+      log(`Error approving user ${userId}: ${error}`);
       throw error;
     }
   }
 
-  async updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction> {
-    try {
-      // First get the current auction data
-      const currentAuction = await this.getAuction(auctionId);
-      if (!currentAuction) {
-        throw new Error(`Auction with id ${auctionId} not found`);
-      }
-      
-      // Ensure dates are properly formatted
-      const formattedData = { ...data };
-      
-      // Convert date strings to Date objects if needed
-      if (formattedData.startDate && !(formattedData.startDate instanceof Date)) {
-        formattedData.startDate = new Date(formattedData.startDate);
-      }
-      
-      if (formattedData.endDate && !(formattedData.endDate instanceof Date)) {
-        formattedData.endDate = new Date(formattedData.endDate);
-      }
-      
-      // Ensure price fields are properly converted to numbers
-      if (formattedData.startPrice !== undefined && typeof formattedData.startPrice === 'string') {
-        formattedData.startPrice = Number(formattedData.startPrice);
-      }
-      
-      if (formattedData.reservePrice !== undefined && typeof formattedData.reservePrice === 'string') {
-        formattedData.reservePrice = Number(formattedData.reservePrice);
-      }
-      
-      if (formattedData.currentPrice !== undefined && typeof formattedData.currentPrice === 'string') {
-        formattedData.currentPrice = Number(formattedData.currentPrice);
-      }
-      
-      // If startPrice is updated but currentPrice is not, and there are no bids yet,
-      // update currentPrice to match startPrice
-      if (formattedData.startPrice !== undefined && formattedData.currentPrice === undefined) {
-        // Only update currentPrice if it currently equals the old startPrice (no bids yet)
-        if (currentAuction.currentPrice === currentAuction.startPrice) {
-          formattedData.currentPrice = formattedData.startPrice;
-        }
-      }
-      
-      // Handle images properly
-      if (formattedData.images) {
-        // Ensure images is always an array
-        if (!Array.isArray(formattedData.images)) {
-          formattedData.images = [formattedData.images];
-        }
-        
-        // If imageUrl is not specified, use the first image as the primary image
-        if (!formattedData.imageUrl && formattedData.images.length > 0) {
-          formattedData.imageUrl = formattedData.images[0];
-        }
-      }
-      
-      log(`Updating auction ${auctionId} with formatted data:`, JSON.stringify({
-        title: formattedData.title,
-        startDate: formattedData.startDate,
-        endDate: formattedData.endDate,
-        startPrice: formattedData.startPrice,
-        reservePrice: formattedData.reservePrice,
-        currentPrice: formattedData.currentPrice,
-        images: Array.isArray(formattedData.images) ? `${formattedData.images.length} images` : formattedData.images
-      }));
-      
-      const [auction] = await db
-        .update(auctions)
-        .set(formattedData)
-        .where(eq(auctions.id, auctionId))
-        .returning();
-      
-      return auction;
-    } catch (error) {
-      log(`Error updating auction ${auctionId}: ${error}`);
-      throw error;
-    }
-  }
-
-  async deleteAuction(auctionId: number): Promise<void> {
+  async deleteProfile(userId: number): Promise<void> {
     try {
       await db
-        .delete(auctions)
-        .where(eq(auctions.id, auctionId));
+        .delete(profiles)
+        .where(eq(profiles.userId, userId));
     } catch (error) {
-      log(`Error deleting auction ${auctionId}: ${error}`);
+      log(`Error deleting profile for user ${userId}: ${error}`);
       throw error;
     }
   }
@@ -479,29 +524,13 @@ export class DatabaseStorage implements IStorage {
   async getPayoutsBySeller(sellerId: number): Promise<any[]> {
     return [];
   }
-
-  // User management
-  async approveUser(userId: number): Promise<User> {
-    try {
-      const [user] = await db
-        .update(users)
-        .set({ approved: true })
-        .where(eq(users.id, userId))
-        .returning();
-      return user;
-    } catch (error) {
-      log(`Error approving user ${userId}: ${error}`);
-      throw error;
-    }
-  }
-
-  async deleteProfile(userId: number): Promise<void> {
+  async deleteAuction(auctionId: number): Promise<void> {
     try {
       await db
-        .delete(profiles)
-        .where(eq(profiles.userId, userId));
+        .delete(auctions)
+        .where(eq(auctions.id, auctionId));
     } catch (error) {
-      log(`Error deleting profile for user ${userId}: ${error}`);
+      log(`Error deleting auction ${auctionId}: ${error}`);
       throw error;
     }
   }
