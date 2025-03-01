@@ -93,6 +93,7 @@ export interface IStorage {
   markNotificationAsRead(id: number): Promise<Notification>;
   deleteNotification(id: number): Promise<void>;
   getUnreadNotificationsCount(userId: number): Promise<number>;
+  markAllNotificationsAsRead(userId: number): Promise<void>; //added method
 }
 
 export class DatabaseStorage implements IStorage {
@@ -936,6 +937,18 @@ export class DatabaseStorage implements IStorage {
       return Number(result[0]?.count || 0);
     } catch (error) {
       log(`Error getting unread notifications count for user ${userId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async markAllNotificationsAsRead(userId: number): Promise<void> {
+    try {
+      await db
+        .update(notifications)
+        .set({ read: true })
+        .where(eq(notifications.userId, userId));
+    } catch (error) {
+      log(`Error marking all notifications as read for user ${userId}: ${error}`, "storage");
       throw error;
     }
   }

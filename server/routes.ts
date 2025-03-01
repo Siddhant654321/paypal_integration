@@ -417,6 +417,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
+  // Notification routes
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      console.log("[NOTIFICATION] Fetching notifications for user:", req.user.id);
+      const notifications = await storage.getNotificationsByUserId(req.user.id);
+      console.log("[NOTIFICATION] Retrieved notifications:", {
+        count: notifications.length,
+        notifications: notifications.map(n => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,  
+          read: n.read
+        }))
+      });
+
+      res.json(notifications);
+    } catch (error) {
+      console.error("[NOTIFICATION] Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  // Add endpoint for marking a single notification as read
+  app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const notificationId = parseInt(req.params.id);
+      console.log("[NOTIFICATION] Marking notification as read:", notificationId);
+      
+      await storage.markNotificationAsRead(notificationId);
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("[NOTIFICATION] Error marking notification as read:", error);
+      res.status(500).json({ message: "Failed to mark notification as read" });
+    }
+  });
+
+  // Add endpoint for marking all notifications as read
+  app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      console.log("[NOTIFICATION] Marking all notifications as read for user:", req.user.id);
+      
+      await storage.markAllNotificationsAsRead(req.user.id);
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("[NOTIFICATION] Error marking all notifications as read:", error);
+      res.status(500).json({ message: "Failed to mark all notifications as read" });
+    }
+  });
   // Profile routes
   app.post("/api/profile", requireAuth, async (req, res) => {
     try {

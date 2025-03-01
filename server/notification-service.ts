@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { type InsertNotification } from "@shared/schema";
+import { EmailService } from "./email-service";
 
 const log = (message: string, context: string = 'notification') => {
   console.log(`[${context}] ${message}`);
@@ -19,6 +20,22 @@ export class NotificationService {
       });
 
       log(`Successfully created notification: ${JSON.stringify(createdNotification)}`);
+
+      // Also send email notification if applicable
+      try {
+        const user = await storage.getUser(userId);
+        if (user && user.emailNotificationsEnabled) {
+          await EmailService.sendNotification(notification.type, user, {
+            message: notification.message,
+            auctionTitle: notification.message.split('"')[1], // Extract auction title from message
+            status: 'new',
+          });
+          log(`Email notification sent successfully to user ${userId}`);
+        }
+      } catch (emailError) {
+        log(`Failed to send email notification: ${emailError}`);
+        // Don't throw error here, continue with notification creation
+      }
     } catch (error) {
       log(`Error creating notification: ${error}`);
       console.error('Full notification error:', error);
@@ -87,6 +104,21 @@ export class NotificationService {
         type: "auction",
         title: isWinner ? "Auction Won!" : "Auction Ended",
         message,
+      }
+    );
+  }
+
+  static async notifyPayment(
+    userId: number,
+    amount: number,
+    status: string
+  ): Promise<void> {
+    return this.createNotification(
+      userId,
+      {
+        type: "payment",
+        title: "Payment Update",
+        message: `Payment of $${amount/100} has been ${status}`,
       }
     );
   }
