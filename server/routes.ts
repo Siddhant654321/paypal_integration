@@ -193,8 +193,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sellerId: userId, // Use the explicitly cast numeric userId
         startPrice: Number(auctionData.startPrice || 0) * 100,
         reservePrice: Number(auctionData.reservePrice || 0) * 100,
-        startDate: auctionData.startDate || new Date().toISOString(),
-        endDate: auctionData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        startDate: auctionData.startDate ? new Date(auctionData.startDate).toISOString() : new Date().toISOString(),
+        endDate: auctionData.endDate ? new Date(auctionData.endDate).toISOString() : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         images: Array.isArray(auctionData.images) ? auctionData.images : [],
       };
 

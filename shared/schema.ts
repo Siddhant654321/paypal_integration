@@ -212,14 +212,23 @@ export const insertAuctionSchema = createInsertSchema(auctions)
       .min(0.01, "Reserve price must be at least $0.01")
       .transform((price) => Math.round(price * 100)), // Convert dollars to cents - only for NEW auctions
     startDate: z.string().transform((str) => {
-      // Make sure we have a full ISO string with time
-      const date = str.includes('T') ? str : `${str}T00:00:00`;
-      return new Date(date);
+      try {
+        // Handle both string and Date object string representations
+        return new Date(str).toISOString();
+      } catch (error) {
+        console.error("Error parsing startDate:", error);
+        return new Date().toISOString();
+      }
     }),
     endDate: z.string().transform((str) => {
-      // Make sure we have a full ISO string with time
-      const date = str.includes('T') ? str : `${str}T23:59:59`;
-      return new Date(date);
+      try {
+        // Handle both string and Date object string representations
+        return new Date(str).toISOString();
+      } catch (error) {
+        console.error("Error parsing endDate:", error);
+        // Default to 7 days from now if parsing fails
+        return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      }
     }),
     imageUrl: z.string().optional(),
     images: z.array(z.string()).optional().default([]),
