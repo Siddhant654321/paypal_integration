@@ -1533,11 +1533,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const baseUrl = `${req.protocol}://${req.get('host')}`;
+      console.log("Getting onboarding link with base URL:", baseUrl);
+      
       const onboardingUrl = await SellerPaymentService.getOnboardingLink(
         profile.stripeAccountId,
         baseUrl
       );
-
+      
+      console.log("Generated onboarding URL:", onboardingUrl);
+      
       res.json({ url: onboardingUrl });
     } catch (error) {
       console.error("Error refreshing onboarding link:", error);

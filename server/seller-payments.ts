@@ -50,6 +50,7 @@ export class SellerPaymentService {
       return {
         accountId: account.id,
         url: accountLink.url,
+        clientSecret: null, // Adding this for API compatibility
       };
     } catch (error) {
       console.error("Error creating seller account:", error);

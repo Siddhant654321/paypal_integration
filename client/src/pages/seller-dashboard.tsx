@@ -96,13 +96,36 @@ const SellerDashboard = () => {
       const data = await response.json();
       console.log("Stripe Connect response:", data);
 
-      if (!data.url) {
+      // Log full response for debugging
+      console.log("Full Stripe Connect response data:", data);
+      
+      // Try to extract URL from different possible response formats
+      let url = data.url;
+      
+      if (!url && data.accountId) {
+        // If no URL but we have an account ID, try to get the onboarding link
+        const refreshResponse = await fetch(`/api/seller/onboarding/refresh`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+        
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          url = refreshData.url;
+          console.log("Got URL from refresh endpoint:", url);
+        }
+      }
+      
+      if (!url) {
         throw new Error('No URL received from Stripe Connect');
       }
 
-      return data.url;
+      return url;
     },
     onSuccess: (url) => {
+      console.log("Redirecting to Stripe URL:", url);
       // Directly redirect to Stripe's hosted onboarding
       window.location.href = url;
     },
