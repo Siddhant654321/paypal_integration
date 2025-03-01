@@ -874,7 +874,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({        status: auction.paymentStatus,
         dueDate: auction.paymentDueDate,      });
     } catch (error) {
-      consoleerror("Error fetching payment status:", error);
+      consoleerror("Error fetching paymentstatus:", error);
       res.status(500).json({ message: "Failed to fetch payment status" });
     }
   });
@@ -1678,6 +1678,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting payouts:", error);
       res.status(500).json({ message: "Failed to get payouts" });
+    }
+  });
+
+  // Add this new route after the existing /api/sellers/status route
+  app.get("/api/sellers/active", async (req, res) => {
+    try {
+      // Get all approved sellers
+      const sellers = await storage.getUsers({ 
+        role: "seller",
+        approved: true 
+      });
+
+      // Get profiles and recent auctions for each seller
+      const sellersWithDetails = await Promise.all(
+        sellers.map(async (seller) => {
+          const profile = await storage.getProfile(seller.id);
+          const auctions = await storage.getAuctions({ 
+            sellerId: seller.id,
+            approved: true
+          });
+
+          return {
+            ...seller,
+            profile,
+            auctions: auctions.slice(0, 3) // Only return the 3 most recent auctions
+          };
+        })
+      );
+
+      // Filter out sellers without profiles or recent auctions
+      const activeSellers = sellersWithDetails.filter(
+        seller => seller.profile && seller.auctions.length > 0
+      );
+
+      res.json(activeSellers);
+    } catch (error) {
+      console.error("Error fetching active sellers:", error);
+      res.status(500).json({ message: "Failed to fetch active sellers" });
     }
   });
 
