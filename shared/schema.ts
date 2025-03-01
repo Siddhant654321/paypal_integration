@@ -51,7 +51,9 @@ const sellerDecisionEnum = z.enum(["accept", "void"]);
 export const notifications = pgTable('notifications', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull().references(() => users.id),
-  type: text('type').notNull(),
+  type: text('type', { 
+    enum: ['bid', 'auction', 'payment', 'fulfillment', 'admin'] 
+  }).notNull(),
   title: text('title').notNull(),
   message: text('message').notNull(),
   read: boolean('read').default(false),
@@ -59,8 +61,16 @@ export const notifications = pgTable('notifications', {
   data: text('data'),
 });
 
+// Create insert schema for notifications
+export const insertNotificationSchema = createInsertSchema(notifications)
+  .omit({
+    id: true,
+    read: true,
+    createdAt: true,
+  });
+
 export type Notification = typeof notifications.$inferSelect;
-export type InsertNotification = typeof notifications.$inferInsert;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 type SellerDecision = z.infer<typeof sellerDecisionEnum>;
 
 export const auctions = pgTable("auctions", {
@@ -294,8 +304,6 @@ export const buyerRequests = pgTable("buyer_requests", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Notifications schema is already defined above
-
 // Add insert schema for buyer requests
 export const insertBuyerRequestSchema = createInsertSchema(buyerRequests)
   .omit({
@@ -337,6 +345,3 @@ export type Payout = typeof payouts.$inferSelect;
 export type InsertPayout = z.infer<typeof insertPayoutSchema>;
 export type Fulfillment = typeof fulfillments.$inferSelect;
 export type InsertFulfillment = z.infer<typeof insertFulfillmentSchema>;
-// Add at the bottom with other type exports
-export type Notification = typeof notifications.$inferSelect;
-export type InsertNotification = z.infer<typeof insertNotificationSchema>;

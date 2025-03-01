@@ -4,18 +4,31 @@ import { Link } from "wouter";
 import { UserCircle, LineChart, Home, LayoutDashboard } from "lucide-react";
 import { NotificationsMenu } from "./notifications";
 import { Separator } from "@/components/ui/separator";
-import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import type { Notification } from "@shared/schema";
 
 export default function NavBar() {
   const { user, logoutMutation } = useAuth();
-  const [notifications, setNotifications] = useState(initialNotifications);
 
-  const handleMarkAllRead = () => {
-    setNotifications(notifications.map(notification => ({
-      ...notification,
-      read: true
-    })));
-  };
+  const { data: notifications = [] } = useQuery<Notification[]>({
+    queryKey: ["/api/notifications"],
+    enabled: !!user,
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/notifications/mark-all-read", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to mark notifications as read");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+    },
+  });
 
   return (
     <div className="bg-accent p-4">
@@ -77,7 +90,7 @@ export default function NavBar() {
               <div className="flex items-center gap-2">
                 <NotificationsMenu 
                   notifications={notifications} 
-                  onMarkAllRead={handleMarkAllRead}
+                  onMarkAllRead={() => markAllReadMutation.mutate()}
                 />
 
                 <Link href="/profile">
@@ -102,21 +115,3 @@ export default function NavBar() {
     </div>
   );
 }
-
-// Example notifications (this will be replaced with real data from the backend)
-const initialNotifications = [
-  {
-    id: "1",
-    type: "bid" as const,
-    message: "New bid on your Brahma chickens auction",
-    read: false,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    type: "auction" as const,
-    message: "Your auction has been approved",
-    read: true,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-  },
-];

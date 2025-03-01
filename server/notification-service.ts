@@ -49,8 +49,6 @@ export class NotificationService {
         type: "bid",
         title: "New Bid Received",
         message: `A new bid of $${bidAmount} has been placed on your auction "${auctionTitle}"`,
-        entityType: "auction",
-        entityId: userId,
       },
       {
         type: "bid",
@@ -70,11 +68,9 @@ export class NotificationService {
     return this.createNotificationAndSendEmail(
       userId,
       {
-        type: "auction_end",
+        type: "auction",
         title: "Auction Status Update",
         message: `Your auction "${auctionTitle}" has ${status}`,
-        entityType: "auction",
-        entityId: userId,
       },
       {
         type: "auction",
@@ -97,8 +93,6 @@ export class NotificationService {
         type: "payment",
         title: "Payment Update",
         message: `A payment of $${amount} has been ${status}`,
-        entityType: "payment",
-        entityId: userId,
       },
       {
         type: "payment",
@@ -126,8 +120,6 @@ export class NotificationService {
         type: "fulfillment",
         title: "Shipping Update",
         message: `Your item from auction "${fulfillmentData.auctionTitle}" has been shipped`,
-        entityType: "fulfillment",
-        entityId: userId,
       },
       {
         type: "fulfillment",
@@ -146,8 +138,6 @@ export class NotificationService {
         type: "admin",
         title: "Administrative Notice",
         message,
-        entityType: "user",
-        entityId: userId,
       },
       {
         type: "admin",
