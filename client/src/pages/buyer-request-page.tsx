@@ -40,7 +40,7 @@ export default function BuyerRequestPage() {
   });
 
   const handleFulfill = () => {
-    navigate(`/new-auction?fulfill=${id}`);
+    navigate(`/seller/new-auction?fulfill=${id}`);
   };
 
   // Check if user is an approved seller or seller_admin
