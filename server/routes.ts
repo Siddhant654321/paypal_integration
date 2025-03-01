@@ -686,12 +686,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Buyer request not found" });
       }
 
-      // Only allow buyer, admin, or approved seller to update status
+      // Allow buyer, admin, seller_admin, or any seller to update status
       const canUpdate = 
         req.user!.id === request.buyerId || 
         req.user!.role === "admin" || 
         req.user!.role === "seller_admin" ||
-        (req.user!.role === "seller" && req.user!.approved);
+        req.user!.role === "seller";
 
       if (!canUpdate) {
         return res.status(403).json({ message: "Not authorized to update this request" });
@@ -963,8 +963,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               (auction.status === "ended" && auction.winningBidderId)
             )
           };
-        })
-      );
+        })      );
 
       // Only return sellers who have profiles and active/successful auctions
       const activeSellers = sellersWithDetails.filter(
