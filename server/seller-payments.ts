@@ -7,7 +7,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-02-24.acacia"
+  apiVersion: "2023-10-16"
 });
 
 export class SellerPaymentService {
@@ -36,12 +36,12 @@ export class SellerPaymentService {
         }
       });
 
-      // Create an account session for embedded onboarding
-      const session = await stripe.accountSessions.create({
+      // Create account link for onboarding
+      const accountLink = await stripe.accountLinks.create({
         account: account.id,
-        components: {
-          account_onboarding: { enabled: true },
-        }
+        refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
+        return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
+        type: 'account_onboarding',
       });
 
       // Update profile with Stripe account ID
@@ -49,7 +49,7 @@ export class SellerPaymentService {
 
       return {
         accountId: account.id,
-        clientSecret: session.client_secret,
+        url: accountLink.url,
       };
     } catch (error) {
       console.error("Error creating seller account:", error);
@@ -114,18 +114,18 @@ export class SellerPaymentService {
     }
   }
 
-  static async refreshAccountSession(accountId: string): Promise<string> {
+  static async getOnboardingLink(accountId: string, baseUrl: string): Promise<string> {
     try {
-      const session = await stripe.accountSessions.create({
+      const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        components: {
-          account_onboarding: { enabled: true },
-        }
+        refresh_url: `${baseUrl}/seller-dashboard?refresh=true`,
+        return_url: `${baseUrl}/seller-dashboard?success=true`,
+        type: 'account_onboarding',
       });
 
-      return session.client_secret;
+      return accountLink.url;
     } catch (error) {
-      console.error("Error refreshing account session:", error);
+      console.error("Error creating onboarding link:", error);
       throw error;
     }
   }

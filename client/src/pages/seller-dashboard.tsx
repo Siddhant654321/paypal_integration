@@ -118,30 +118,29 @@ const SellerDashboard = () => {
   const approvedAuctions = filteredAuctions.filter(auction => auction.approved);
   const endedAuctions = filteredAuctions.filter(auction => auction.status === "ended");
 
-  // Render Stripe Connect form
-  if (clientSecret) {
-    return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Complete Your Account Setup</CardTitle>
-            <CardDescription>
-              Please complete all required information to start receiving payments.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <StripeConnect
-              clientSecret={clientSecret}
-              onComplete={() => {
-                setClientSecret(null);
-                window.location.reload();
-              }}
-            />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Handle redirect URL if available
+  useEffect(() => {
+    // Get the URL search params
+    const searchParams = new URLSearchParams(window.location.search);
+    const success = searchParams.get('success');
+    const refresh = searchParams.get('refresh');
+    
+    // If the user was redirected back with a success parameter
+    if (success === 'true') {
+      // Clear the search params
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Refresh the stripe status
+      stripeStatusQuery.refetch();
+    }
+    
+    // If the user was redirected back with a refresh parameter
+    if (refresh === 'true') {
+      // Clear the search params
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Retry the connect with stripe action
+      connectWithStripeMutation.mutate();
+    }
+  }, []);
 
   // Render account status section
   const renderAccountStatus = () => {
