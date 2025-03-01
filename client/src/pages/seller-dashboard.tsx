@@ -43,8 +43,8 @@ const SellerDashboard = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Redirect if not a seller or seller_admin
-  if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
+  // Redirect if not a seller
+  if (!user || user.role !== "seller") {
     return <Redirect to="/" />;
   }
 
@@ -73,9 +73,6 @@ const SellerDashboard = () => {
     mutationFn: async () => {
       const response = await apiRequest('/api/seller/connect', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
       });
 
       if (!response?.url) {
@@ -104,21 +101,19 @@ const SellerDashboard = () => {
     const refresh = params.get('refresh');
 
     if (success === 'true' || refresh === 'true') {
-      // Clean up URL parameters
+      // Clean up URL parameters and reload the page
       window.history.replaceState({}, document.title, window.location.pathname);
+      window.location.reload();
     }
   }, []);
 
-  // Safe filtering functions
-  const safeFilter = (auction: Auction) => {
-    const searchLower = searchTerm.toLowerCase();
-    const titleMatch = auction.title?.toLowerCase().includes(searchLower) || false;
-    const descMatch = auction.description?.toLowerCase().includes(searchLower) || false;
-    return titleMatch || descMatch;
-  };
-
   // Filter auctions
-  const filteredAuctions = auctions ? auctions.filter(safeFilter) : [];
+  const filteredAuctions = auctions ? auctions.filter(auction => {
+    const searchLower = searchTerm.toLowerCase();
+    return auction.title?.toLowerCase().includes(searchLower) || 
+           auction.description?.toLowerCase().includes(searchLower);
+  }) : [];
+
   const pendingAuctions = filteredAuctions.filter(auction => !auction.approved);
   const approvedAuctions = filteredAuctions.filter(auction => auction.approved);
   const endedAuctions = filteredAuctions.filter(auction => auction.status === "ended");
