@@ -172,7 +172,23 @@ export function BuyerRequestForm() {
           control={form.control}
           name="description"
           render={({ field }) => (
-
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Describe what you're looking for in detail" 
+                  className="min-h-[120px]" 
+                  {...field} 
+                />
+              </FormControl>
+              <FormDescription>
+                Provide details about what you're looking for
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
         <FormField
           control={form.control}
           name="species"
