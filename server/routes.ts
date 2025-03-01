@@ -416,15 +416,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/profile", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
+        console.log("[PROFILE] No authenticated user found");
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      console.log("[PROFILE CREATE] Starting profile creation for user:", {
+      console.log("[PROFILE] Processing profile update for user:", {
         userId: req.user.id,
         role: req.user.role,
-        data: req.body
+        hasProfile: req.user.hasProfile,
+        receivedData: req.body
       });
 
+      // Prepare profile data with userId
       const profileData = {
         ...req.body,
         userId: req.user.id
@@ -433,9 +436,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate the profile data
       try {
         const validatedData = insertProfileSchema.parse(profileData);
-        console.log("[PROFILE CREATE] Data validation successful");
+        console.log("[PROFILE] Data validation successful:", validatedData);
       } catch (validationError) {
-        console.error("[PROFILE CREATE] Validation failed:", validationError);
+        console.error("[PROFILE] Validation failed:", validationError);
         return res.status(400).json({
           message: "Invalid profile data",
           errors: validationError instanceof ZodError ? validationError.errors : String(validationError)
@@ -443,21 +446,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if profile exists
-      const existingProfile = await storage.getProfile(req.user.id);
       let profile;
+      try {
+        const existingProfile = await storage.getProfile(req.user.id);
 
-      if (existingProfile) {
-        console.log("[PROFILE CREATE] Updating existing profile");
-        profile = await storage.updateProfile(req.user.id, profileData);
-      } else {
-        console.log("[PROFILE CREATE] Creating new profile");
-        profile = await storage.createProfile(profileData);
+        if (existingProfile) {
+          console.log("[PROFILE] Updating existing profile");
+          profile = await storage.updateProfile(req.user.id, profileData);
+        } else {
+          console.log("[PROFILE] Creating new profile");
+          profile = await storage.createProfile(profileData);
+        }
+
+        console.log("[PROFILE] Profile saved successfully:", profile);
+        res.status(201).json(profile);
+      } catch (storageError) {
+        console.error("[PROFILE] Storage operation failed:", storageError);
+        throw storageError;
       }
-
-      console.log("[PROFILE CREATE] Profile saved successfully");
-      res.status(201).json(profile);
     } catch (error) {
-      console.error("[PROFILE CREATE] Error:", error);
+      console.error("[PROFILE] Error:", error);
       res.status(500).json({
         message: "Failed to save profile",
         error: error instanceof Error ? error.message : "Unknown error"
@@ -468,17 +476,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/profile", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
+        console.log("[PROFILE] No authenticated user found");
         return res.status(401).json({ message: "Unauthorized" });
       }
 
+      console.log("[PROFILE] Fetching profile for user:", {
+        userId: req.user.id,
+        role: req.user.role,
+        hasProfile: req.user.hasProfile
+      });
+
       const profile = await storage.getProfile(req.user.id);
       if (!profile) {
+        console.log("[PROFILE] No profile found for user:", req.user.id);
         return res.status(404).json({ message: "Profile not found" });
       }
 
+      console.log("[PROFILE] Profile retrieved successfully");
       res.json(profile);
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      console.error("[PROFILE] Error fetching profile:", error);
       res.status(500).json({ message: "Failed to fetch profile" });
     }
   });
@@ -829,7 +846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const requestId = parseInt(req.params.id);
       const { status } = req.body;
 
-      if (!status || !["open", "fulfilled", "closed"].includes(status)) {
+      if (!status || !["open", "fulfilled","closed"].includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
       }
 
