@@ -126,16 +126,6 @@ const SellerDashboard = () => {
 
   // Render Stripe Connect status and actions
   const renderStripeConnectStatus = () => {
-    if (stripeStatusLoading) {
-      return (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Loading Stripe Status...</CardTitle>
-          </CardHeader>
-        </Card>
-      );
-    }
-
     if (!stripeStatus) {
       return (
         <Alert variant="destructive" className="mb-6">
@@ -148,7 +138,8 @@ const SellerDashboard = () => {
       );
     }
 
-    switch (stripeStatus.status) {
+    // Safely access status with optional chaining
+    switch (stripeStatus?.status) {
       case "not_started":
         return (
           <Card className="mb-6">
@@ -262,6 +253,8 @@ const SellerDashboard = () => {
             </CardContent>
           </Card>
         );
+      default:
+        return null;
     }
   };
 
@@ -389,7 +382,11 @@ const SellerDashboard = () => {
           {renderStripeConnectStatus()}
           {payoutsLoading ? (
             <div className="text-center">Loading your payouts...</div>
-          ) : payouts.length === 0 ? (
+          ) : payouts === undefined || payouts === null ? (
+            <div className="text-center text-muted-foreground">
+              Payout system is being set up. Check back later.
+            </div>
+          ) : !payouts.length ? (
             <div className="text-center text-muted-foreground">
               No payouts found. Completed auction payments will appear here.
             </div>
