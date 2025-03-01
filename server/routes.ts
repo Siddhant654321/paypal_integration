@@ -1441,7 +1441,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             existingProfile.stripeAccountId,
             baseUrl
           );
-          console.log("Successfully generated onboarding URL for existing account");
+          console.log("Successfully generated onboarding URL for existing account:", onboardingUrl);
+
+          // Ensure URL is included in the response
+          if (!onboardingUrl) {
+            throw new Error("No onboarding URL was generated");
+          }
 
           return res.json({
             url: onboardingUrl,
@@ -1472,18 +1477,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Creating new Stripe account for user:", req.user.id);
 
       try {
-        // Create Stripe account
-        const { accountId, clientSecret } = await SellerPaymentService.createSellerAccount(profile);
-        console.log("New Stripe account created with ID:", accountId);
+        // Create Stripe account and get the result
+        const result = await SellerPaymentService.createSellerAccount(profile);
+        console.log("New Stripe account created with ID:", result.accountId);
+        console.log("Full result from createSellerAccount:", result);
 
-        // Get onboarding link
-        const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
+        // If we already have a URL in the result, use it directly
+        if (result.url) {
+          console.log("URL received directly from createSellerAccount:", result.url);
+          return res.json({
+            url: result.url,
+            accountId: result.accountId,
+            clientSecret: result.clientSecret,
+            publishableKey: stripePublishableKey
+          });
+        }
+
+        // Otherwise, get onboarding link
+        const onboardingUrl = await SellerPaymentService.getOnboardingLink(result.accountId, baseUrl);
         console.log("Onboarding URL generated:", onboardingUrl);
+
+        if (!onboardingUrl) {
+          throw new Error("Failed to generate onboarding URL");
+        }
 
         res.json({
           url: onboardingUrl,
-          accountId,
-          clientSecret,
+          accountId: result.accountId,
+          clientSecret: result.clientSecret,
           publishableKey: stripePublishableKey
         });
       } catch (stripeError) {
