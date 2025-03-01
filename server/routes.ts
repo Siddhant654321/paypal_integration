@@ -26,6 +26,7 @@ const requireProfile = async (req: any, res: any, next: any) => {
   console.log("[PROFILE CHECK] User authentication state:", {
     userId: req.user?.id,
     role: req.user?.role,
+    username: req.user?.username,
     isAuthenticated: req.isAuthenticated(),
     hasProfile: req.user?.hasProfile
   });
@@ -36,6 +37,12 @@ const requireProfile = async (req: any, res: any, next: any) => {
   // Only skip profile check for buyers
   if (req.user.role === "buyer") {
     console.log("[PROFILE CHECK] Skipping profile check for buyer");
+    return next();
+  }
+
+  // If it's a seller or seller_admin, we should allow them to proceed 
+  if (isSeller) {
+    console.log("[PROFILE CHECK] Allowing seller access:", req.user.role);
     return next();
   }
 
