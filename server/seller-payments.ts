@@ -30,7 +30,7 @@ export class SellerPaymentService {
 
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; clientSecret: string }> {
     try {
-      // Create Stripe Connect account
+      // Create a Connect Express account
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US',
@@ -131,6 +131,19 @@ export class SellerPaymentService {
     }
   }
 
+  static async getPayoutSchedule(accountId: string) {
+    try {
+      const account = await stripe.accounts.retrieve(accountId);
+      return {
+        interval: account.settings?.payouts?.schedule?.interval || 'daily',
+        delay_days: account.settings?.payouts?.schedule?.delay_days || 2,
+      };
+    } catch (error) {
+      console.error("Error getting payout schedule:", error);
+      throw error;
+    }
+  }
+
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
       const profile = await storage.getProfile(sellerId);
@@ -150,7 +163,6 @@ export class SellerPaymentService {
         paymentId,
         amount,
         stripeTransferId: transfer.id,
-        status: 'pending',
       });
     } catch (error) {
       console.error("Error creating payout:", error);

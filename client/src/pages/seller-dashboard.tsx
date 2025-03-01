@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign, Package, ExternalLink, AlertCircle, CheckCirc
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
 import { formatPrice } from '../utils/formatters';
@@ -24,34 +24,26 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { StripeConnect } from "@/components/StripeConnect";
 
 interface StripeStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
 }
 
-// Declare Stripe Connect types
-declare global {
-  interface Window {
-    StripeConnect?: {
-      EmbeddedComponents: {
-        mount: (options: {
-          clientSecret: string;
-          appearance?: {
-            theme: 'flat' | 'stripe' | 'night';
-            variables?: Record<string, string>;
-          };
-          onComplete: () => void;
-        }) => void;
-      };
-    };
-  }
+interface Balance {
+  available: { amount: number; currency: string }[];
+  pending: { amount: number; currency: string }[];
+}
+
+interface PayoutSchedule {
+  delay_days: number;
+  interval: string;
 }
 
 const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   // Redirect if not a seller or seller_admin
@@ -74,10 +66,20 @@ const SellerDashboard = () => {
     retry: false,
   });
 
+  const { data: balance } = useQuery<Balance>({
+    queryKey: ["/api/seller/balance"],
+    enabled: stripeStatus?.status === "verified",
+  });
+
+  const { data: payoutSchedule } = useQuery<PayoutSchedule>({
+    queryKey: ["/api/seller/payout-schedule"],
+    enabled: stripeStatus?.status === "verified",
+  });
+
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('/api/seller/connect', { 
+      const response = await apiRequest('/api/seller/connect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -92,10 +94,8 @@ const SellerDashboard = () => {
     },
     onSuccess: (data) => {
       setClientSecret(data.clientSecret);
-      setShowOnboarding(true);
     },
     onError: (error: Error) => {
-      setShowOnboarding(false);
       toast({
         title: "Error connecting to Stripe",
         description: error.message,
@@ -103,36 +103,6 @@ const SellerDashboard = () => {
       });
     }
   });
-
-  // Effect to load Stripe Connect script and mount components
-  useEffect(() => {
-    if (!showOnboarding || !clientSecret) return;
-
-    const script = document.createElement('script');
-    script.src = 'https://connect.stripe.com/connect-js/v1';
-    script.async = true;
-
-    script.onload = () => {
-      if (window.StripeConnect?.EmbeddedComponents) {
-        window.StripeConnect.EmbeddedComponents.mount({
-          clientSecret,
-          appearance: {
-            theme: 'flat',
-          },
-          onComplete: () => {
-            setShowOnboarding(false);
-            window.location.reload();
-          },
-        });
-      }
-    };
-
-    document.body.appendChild(script);
-
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, [showOnboarding, clientSecret]);
 
   // Safe filtering functions
   const safeFilter = (auction: Auction) => {
@@ -148,17 +118,8 @@ const SellerDashboard = () => {
   const approvedAuctions = filteredAuctions.filter(auction => auction.approved);
   const endedAuctions = filteredAuctions.filter(auction => auction.status === "ended");
 
-  // Loading state
-  if (auctionsLoading || payoutsLoading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="text-center">Loading your dashboard...</div>
-      </div>
-    );
-  }
-
-  // Render Stripe Connect onboarding form
-  if (showOnboarding && clientSecret) {
+  // Render Stripe Connect form
+  if (clientSecret) {
     return (
       <div className="container mx-auto py-8">
         <Card>
@@ -169,15 +130,21 @@ const SellerDashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div id="stripe-connect-components" className="w-full min-h-[600px]" />
+            <StripeConnect
+              clientSecret={clientSecret}
+              onComplete={() => {
+                setClientSecret(null);
+                window.location.reload();
+              }}
+            />
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // Render Stripe Connect status and onboarding (rest of the original code)
-  const renderStripeConnect = () => {
+  // Render account status section
+  const renderAccountStatus = () => {
     if (stripeStatusLoading) {
       return (
         <Card className="mb-6">
@@ -210,44 +177,7 @@ const SellerDashboard = () => {
               </div>
               <Button
                 className="w-full"
-                onClick={() => {
-                  connectWithStripeMutation.mutate(undefined, {
-                    onSuccess: (data) => {
-                      // Check if we have the URL and redirect to it
-                      if (data.url) {
-                        window.location.href = data.url;
-                      } else if (data.accountId && data.clientSecret) {
-                        // If we have client secret but no Stripe Connect object yet, load the script
-                        if (!window.StripeConnect) {
-                          const script = document.createElement('script');
-                          script.src = 'https://connect.stripe.com/connect-js/v1';
-                          script.onload = () => {
-                            if (window.StripeConnect) {
-                              window.StripeConnect.EmbeddedComponents.mount({
-                                clientSecret: data.clientSecret,
-                                appearance: { theme: 'flat' },
-                                onComplete: () => {
-                                  // Refresh the page to update the status
-                                  window.location.reload();
-                                }
-                              });
-                            }
-                          };
-                          document.body.appendChild(script);
-                        } else {
-                          // If StripeConnect is already loaded, mount immediately
-                          window.StripeConnect.EmbeddedComponents.mount({
-                            clientSecret: data.clientSecret,
-                            appearance: { theme: 'flat' },
-                            onComplete: () => {
-                              window.location.reload();
-                            }
-                          });
-                        }
-                      }
-                    }
-                  });
-                }}
+                onClick={() => connectWithStripeMutation.mutate()}
                 disabled={connectWithStripeMutation.isPending}
               >
                 {connectWithStripeMutation.isPending ? (
@@ -278,7 +208,7 @@ const SellerDashboard = () => {
             <CardContent>
               <Button
                 className="w-full"
-                onClick={() => setShowOnboarding(true)}
+                onClick={() => connectWithStripeMutation.mutate()}
               >
                 Continue Setup
               </Button>
@@ -288,13 +218,59 @@ const SellerDashboard = () => {
 
       case "verified":
         return (
-          <Alert className="mb-6 border-green-200 bg-green-50">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800">Account Connected</AlertTitle>
-            <AlertDescription className="text-green-700">
-              Your account is verified and ready to receive payments.
-            </AlertDescription>
-          </Alert>
+          <>
+            <Alert className="mb-6 border-green-200 bg-green-50">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertTitle className="text-green-800">Account Connected</AlertTitle>
+              <AlertDescription className="text-green-700">
+                Your account is verified and ready to receive payments.
+              </AlertDescription>
+            </Alert>
+            {balance && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Balance</CardTitle>
+                  <CardDescription>Your current balance and pending payouts</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg border">
+                      <div className="text-sm text-muted-foreground">Available</div>
+                      <div className="text-2xl font-bold">
+                        {formatPrice(balance.available[0]?.amount || 0)}
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-lg border">
+                      <div className="text-sm text-muted-foreground">Pending</div>
+                      <div className="text-2xl font-bold">
+                        {formatPrice(balance.pending[0]?.amount || 0)}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {payoutSchedule && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Payout Schedule</CardTitle>
+                  <CardDescription>When you'll receive your money</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Frequency</span>
+                      <span className="font-medium capitalize">{payoutSchedule.interval}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Processing Time</span>
+                      <span className="font-medium">{payoutSchedule.delay_days} days</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
         );
 
       case "rejected":
@@ -312,7 +288,7 @@ const SellerDashboard = () => {
             <CardContent>
               <Button
                 className="w-full"
-                onClick={() => setShowOnboarding(true)}
+                onClick={() => connectWithStripeMutation.mutate()}
                 variant="destructive"
               >
                 Complete Required Information
@@ -326,6 +302,14 @@ const SellerDashboard = () => {
     }
   };
 
+  // Loading state
+  if (auctionsLoading || payoutsLoading) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="text-center">Loading your dashboard...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -339,7 +323,7 @@ const SellerDashboard = () => {
         </Link>
       </div>
 
-      {renderStripeConnect()}
+      {renderAccountStatus()}
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -405,7 +389,7 @@ const SellerDashboard = () => {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Payouts</CardTitle>
+                  <CardTitle>Recent Payouts</CardTitle>
                   <CardDescription>
                     View your recent payouts and payment history
                   </CardDescription>
@@ -423,9 +407,9 @@ const SellerDashboard = () => {
                             <span>Payout ID: {payout.id}</span>
                             <span>{formatPrice(payout.amount)}</span>
                           </div>
-                          <div className="flex justify-between">
-                            <span>Date: {new Date(payout.created * 1000).toLocaleDateString()}</span>
-                            <span>Status: {payout.status}</span>
+                          <div className="flex justify-between text-sm text-muted-foreground">
+                            <span>{new Date(payout.created * 1000).toLocaleDateString()}</span>
+                            <span className="capitalize">{payout.status}</span>
                           </div>
                         </div>
                       ))}
