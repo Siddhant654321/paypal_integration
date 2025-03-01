@@ -28,6 +28,20 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+async function updateUserProfileStatus(userId: number): Promise<void> {
+  try {
+    const profile = await storage.getProfile(userId);
+    const hasProfile = !!profile;
+
+    if (hasProfile) {
+      await storage.updateUser(userId, { hasProfile: true });
+      console.log("[AUTH] Updated user profile status:", { userId, hasProfile });
+    }
+  } catch (error) {
+    console.error("[AUTH] Error updating profile status:", error);
+  }
+}
+
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
@@ -56,12 +70,22 @@ export function setupAuth(app: Express) {
           console.log("[AUTH] Authentication failed for username:", username);
           return done(null, false, { message: "Invalid username or password" });
         }
+
+        // Check and update profile status
+        await updateUserProfileStatus(user.id);
+
+        // Refresh user data after profile status update
+        const updatedUser = await storage.getUser(user.id);
+        if (!updatedUser) {
+          return done(null, false, { message: "User not found after update" });
+        }
+
         console.log("[AUTH] User authenticated:", { 
-          id: user.id, 
-          role: user.role,
-          hasProfile: user.hasProfile 
+          id: updatedUser.id, 
+          role: updatedUser.role,
+          hasProfile: updatedUser.hasProfile 
         });
-        return done(null, user);
+        return done(null, updatedUser);
       } catch (error) {
         console.error("[AUTH] Authentication error:", error);
         return done(error);
@@ -90,12 +114,21 @@ export function setupAuth(app: Express) {
         return done(null, false);
       }
 
+      // Update profile status during deserialization
+      await updateUserProfileStatus(userId);
+
+      // Refresh user data after profile status update
+      const updatedUser = await storage.getUser(userId);
+      if (!updatedUser) {
+        return done(null, false);
+      }
+
       console.log("[AUTH] User deserialized successfully:", { 
-        id: user.id, 
-        role: user.role,
-        hasProfile: user.hasProfile
+        id: updatedUser.id, 
+        role: updatedUser.role,
+        hasProfile: updatedUser.hasProfile
       });
-      done(null, user);
+      done(null, updatedUser);
     } catch (error) {
       console.error("[AUTH] Deserialization error:", error);
       done(error);

@@ -19,7 +19,7 @@ export interface IStorage {
   hasProfile(userId: number): Promise<boolean>;
   getProfile(userId: number): Promise<Profile | undefined>;
   createProfile(insertProfile: InsertProfile): Promise<Profile>;
-  updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile>;
+  updateProfile(userId: number, profile: Partial<Profile>): Promise<Profile>;
   createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction>;
   getAuction(id: number): Promise<Auction | undefined>;
   getAuctions(filters?: { 
@@ -88,6 +88,15 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(users)
         .where(eq(users.id, id));
+
+      // Log user retrieval
+      log(`Retrieved user ${id}: ${user ? JSON.stringify({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        hasProfile: user.hasProfile
+      }) : 'not found'}`);
+
       return user;
     } catch (error) {
       log(`Error getting user ${id}: ${error}`);
@@ -112,7 +121,10 @@ export class DatabaseStorage implements IStorage {
     try {
       const [user] = await db
         .insert(users)
-        .values(insertUser)
+        .values({
+          ...insertUser,
+          hasProfile: false // Explicitly set hasProfile to false for new users
+        })
         .returning();
       return user;
     } catch (error) {
@@ -153,6 +165,10 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(profiles)
         .where(eq(profiles.userId, userId));
+
+      // Log profile retrieval
+      log(`Retrieved profile for user ${userId}: ${profile ? 'found' : 'not found'}`);
+
       return profile;
     } catch (error) {
       log(`Error getting profile for user ${userId}: ${error}`);
@@ -184,7 +200,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile> {
+  async updateProfile(userId: number, profile: Partial<Profile>): Promise<Profile> {
     try {
       const [updatedProfile] = await db
         .update(profiles)

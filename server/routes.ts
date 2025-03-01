@@ -462,6 +462,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           profile = await storage.createProfile(profileData);
         }
 
+        // Update user's hasProfile flag
+        await storage.updateUser(req.user.id, { hasProfile: true });
+        req.user.hasProfile = true;
+
         console.log("[PROFILE] Profile saved successfully:", profile);
         res.status(201).json(profile);
       } catch (storageError) {
@@ -494,6 +498,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!profile) {
         console.log("[PROFILE] No profile found for user:", req.user.id);
         return res.status(404).json({ message: "Profile not found" });
+      }
+
+      // Update user's hasProfile flag if needed
+      if (!req.user.hasProfile) {
+        await storage.updateUser(req.user.id, { hasProfile: true });
+        req.user.hasProfile = true;
+        console.log("[PROFILE] Updated hasProfile flag for user:", req.user.id);
       }
 
       console.log("[PROFILE] Profile retrieved successfully");
