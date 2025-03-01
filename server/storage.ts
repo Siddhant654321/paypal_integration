@@ -420,8 +420,9 @@ export class DatabaseStorage implements IStorage {
 
   async hasProfile(userId: number): Promise<boolean> {
     try {
-      const user = await this.getUser(userId);
-      return user?.hasProfile ?? false;
+      // Instead of relying on the user.hasProfile flag, check directly if a profile exists
+      const profile = await this.getProfile(userId);
+      return !!profile; // Convert to boolean - true if profile exists, false otherwise
     } catch (error) {
       log(`Error checking profile status for user ${userId}: ${error}`, "storage");
       throw error;
