@@ -911,12 +911,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create Stripe Connect account and get onboarding URL
-      const { accountId, url } = await SellerPaymentService.createSellerAccount(profile);
+      console.log("Creating Stripe Connect account for user:", req.user.id);
+      const result = await SellerPaymentService.createSellerAccount(profile);
+      console.log("Stripe Connect account created:", result);
+
+      if (!result.url) {
+        console.error("No URL returned from Stripe:", result);
+        return res.status(500).json({ 
+          message: "Failed to get onboarding URL from Stripe",
+          accountId: result.accountId
+        });
+      }
 
       // Send both the account ID and the onboarding URL
-      res.json({ accountId, url });
+      res.json({ 
+        accountId: result.accountId, 
+        url: result.url
+      });
     } catch (error) {
       console.error("Error creating Stripe Connect account:", error);
+      // Ensure we always return valid JSON
       res.status(500).json({ 
         message: "Failed to create Stripe Connect account",
         error: error instanceof Error ? error.message : "Unknown error"

@@ -70,25 +70,49 @@ const SellerDashboard = () => {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/seller/connect', {
-        method: 'POST',
-        credentials: 'include'
-      });
+      try {
+        console.log("Starting Stripe Connect process...");
+        const response = await fetch("/api/seller/connect", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to connect with Stripe');
+        if (!response.ok) {
+          // Handle non-JSON errors (like HTML responses)
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.indexOf("application/json") !== -1) {
+            const errorData = await response.json();
+            console.error("Error response from server:", errorData);
+            throw new Error(errorData.message || "Failed to connect with Stripe");
+          } else {
+            // Not JSON, might be HTML error page
+            const text = await response.text();
+            console.error("Non-JSON error response:", text.substring(0, 200) + "...");
+            throw new Error(`Server error: ${response.status} ${response.statusText}`);
+          }
+        }
+
+        const data = await response.json();
+        console.log("Stripe Connect response:", data);
+
+        // Get the URL directly from the response
+        const url = data.url;
+
+        if (!url) {
+          console.error("No URL in response:", data);
+          throw new Error('No URL received from Stripe Connect');
+        }
+
+        return url;
+      } catch (error) {
+        console.error("Stripe Connect error:", error);
+        throw error;
       }
-
-      const data = await response.json();
-      if (!data.url) {
-        throw new Error('No onboarding URL received');
-      }
-
-      return data;
     },
     onSuccess: (data) => {
-      window.location.href = data.url;
+      window.location.href = data;
     },
     onError: (error: Error) => {
       toast({

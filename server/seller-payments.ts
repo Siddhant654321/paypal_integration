@@ -13,16 +13,21 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
+      console.log("Creating seller account for:", profile.email);
+      
       // Clean up any existing account first
       if (profile.stripeAccountId) {
         try {
+          console.log("Deleting existing Stripe account:", profile.stripeAccountId);
           await stripe.accounts.del(profile.stripeAccountId);
+          console.log("Successfully deleted existing account");
         } catch (error) {
           console.log("Could not delete existing account, might already be deleted:", error);
         }
       }
 
       // Create a new Connect Express account
+      console.log("Creating new Stripe Connect account");
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US',
@@ -37,17 +42,21 @@ export class SellerPaymentService {
           mcc: "0742", // Veterinary Services, which includes animal breeding
         },
       });
+      console.log("Stripe account created with ID:", account.id);
 
       // Create an account link for onboarding
+      console.log("Creating account link for onboarding");
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
         refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
         return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
         type: 'account_onboarding',
       });
+      console.log("Account link created:", accountLink.url ? "Success" : "Failed");
 
       // Update profile with Stripe account ID and initial status
       await storage.updateProfileStripeAccount(profile.userId, account.id, "not_started");
+      console.log("Profile updated with Stripe account ID");
 
       return {
         accountId: account.id,
