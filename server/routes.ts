@@ -18,15 +18,34 @@ import { AuctionService } from "./auction-service";
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
   if (!req.isAuthenticated()) {
+    console.log("[PROFILE CHECK] User not authenticated");
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  // Skip profile check for buyers and all seller roles
-  if (req.user.role === "buyer" || req.user.role === "seller" || req.user.role === "seller_admin") {
+  // Enhanced logging for debugging
+  console.log("[PROFILE CHECK] User authentication state:", {
+    userId: req.user?.id,
+    role: req.user?.role,
+    isAuthenticated: req.isAuthenticated(),
+    hasProfile: req.user?.hasProfile
+  });
+
+  // For sellers and seller_admin, we do want to check their profile
+  const isSeller = req.user.role === "seller" || req.user.role === "seller_admin";
+  
+  // Only skip profile check for buyers
+  if (req.user.role === "buyer") {
+    console.log("[PROFILE CHECK] Skipping profile check for buyer");
     return next();
   }
 
   const hasProfile = await storage.hasProfile(req.user.id);
+  console.log("[PROFILE CHECK] Profile check result:", {
+    userId: req.user.id,
+    role: req.user.role,
+    hasProfile
+  });
+
   if (!hasProfile) {
     return res.status(403).json({ message: "Profile completion required" });
   }
@@ -125,99 +144,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new auction (sellers only)
   app.post("/api/auctions", requireAuth, requireProfile, upload.array('images', 5), async (req, res) => {
     try {
-      if (!req.user) {
+      if (!req.isAuthenticated()) {
+        console.log("[AUCTION CREATE] Not authenticated");
         return res.status(401).json({ message: "Unauthorized" });
       }
 
+      // Enhanced logging for debugging
+      const userId = Number(req.user.id);
+      console.log("[AUCTION CREATE] Full user details:", {
+        user: {
+          id: req.user.id,
+          role: req.user.role,
+          username: req.user.username,
+          approved: req.user.approved
+        },
+        userId,
+        userIdType: typeof userId,
+        isAuthenticated: req.isAuthenticated()
+      });
+
       // Allow both seller and seller_admin to create auctions
       if (req.user.role !== "seller" && req.user.role !== "seller_admin") {
+        console.log("[AUCTION CREATE] Invalid role:", req.user.role);
         return res.status(403).json({ message: "Only sellers can create auctions" });
       }
 
-      const userId = req.user.id;
       const auctionData = req.body;
 
-      console.log("Creating auction with data:", {
+      console.log("[AUCTION CREATE] Processing auction data:", {
         userId,
         userRole: req.user.role,
-        user: req.user,
         auctionData
       });
 
       // Convert string values to appropriate types and ensure required fields
       const parsedData = {
         ...auctionData,
-        sellerId: userId, // Explicitly set the sellerId
-        // Convert price from dollars to cents for storage (multiply by 100) 
+        sellerId: userId, // Use the explicitly cast numeric userId
         startPrice: Number(auctionData.startPrice || 0) * 100,
         reservePrice: Number(auctionData.reservePrice || 0) * 100,
         startDate: auctionData.startDate || new Date().toISOString(),
         endDate: auctionData.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        // Initialize images array if not present
         images: Array.isArray(auctionData.images) ? auctionData.images : [],
       };
 
-      console.log("Parsed auction data:", parsedData);
+      console.log("[AUCTION CREATE] Parsed auction data:", {
+        ...parsedData,
+        sellerId: parsedData.sellerId,
+        sellerIdType: typeof parsedData.sellerId
+      });
 
       try {
+        // Manual verification of seller existence before proceeding
+        const seller = await storage.getUser(userId);
+        console.log("[AUCTION CREATE] Verified seller:", {
+          userId,
+          found: !!seller,
+          role: seller?.role
+        });
+
+        if (!seller) {
+          console.error("[AUCTION CREATE] Seller not found in database");
+          return res.status(404).json({ message: "Seller not found" });
+        }
+
         const validatedData = insertAuctionSchema.parse(parsedData);
-        console.log("Validation successful:", validatedData);
+        console.log("[AUCTION CREATE] Validation successful:", validatedData);
       } catch (error) {
         if (error instanceof ZodError) {
-          console.error("Validation error:", error.errors);
+          console.error("[AUCTION CREATE] Validation error:", error.errors);
           return res.status(400).json({ message: "Invalid auction data", errors: error.errors });
         }
         throw error;
       }
 
-      // Handle uploaded files
+      // Handle image uploads
       const uploadedFiles = req.files as Express.Multer.File[];
       let imageUrls = [];
 
       if (uploadedFiles && uploadedFiles.length > 0) {
-        // Create URLs for uploaded images
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         imageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
-        console.log("Image URLs created:", imageUrls);
-      }
-
-      // Map legacy categories to new format if present
-      if (parsedData.category) {
-        const categoryMap = {
-          "show": "Show Quality",
-          "purebred": "Purebred & Production",
-          "fun": "Fun & Mixed"
-        };
-
-        if (categoryMap[parsedData.category]) {
-          parsedData.category = categoryMap[parsedData.category];
-          console.log(`Mapped category from ${req.body.category} to ${parsedData.category}`);
-        }
+        console.log("[AUCTION CREATE] Image URLs created:", imageUrls);
       }
 
       // Set the seller ID, current price, and image URLs
       const newAuction = {
         ...parsedData,
-        sellerId: userId,
-        currentPrice: parsedData.startPrice,
         images: imageUrls,
-        imageUrl: imageUrls[0] || "", 
-        approved: false, 
+        imageUrl: imageUrls[0] || "",
+        approved: false,
       };
 
       try {
-        console.log("Creating auction:", newAuction);
+        console.log("[AUCTION CREATE] Creating auction with sellerId:", {
+          sellerId: newAuction.sellerId,
+          sellerIdType: typeof newAuction.sellerId
+        });
         const result = await storage.createAuction(newAuction);
         return res.status(201).json(result);
       } catch (dbError) {
-        console.error("Database error creating auction:", dbError);
+        console.error("[AUCTION CREATE] Database error:", dbError);
         return res.status(500).json({
           message: `Failed to save auction: ${(dbError as Error).message}`,
           details: dbError
         });
       }
     } catch (error) {
-      console.error("Error creating auction:", error);
+      console.error("[AUCTION CREATE] Error:", error);
       return res.status(500).json({
         message: `Failed to create auction: ${(error as Error).message}`,
         details: error

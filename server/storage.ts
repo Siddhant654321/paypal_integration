@@ -109,20 +109,49 @@ export class DatabaseStorage implements IStorage {
 
   async getUser(id: number): Promise<User | undefined> {
     try {
-      const [user] = await db.select().from(users).where(eq(users.id, id));
+      // Ensure id is a number
+      const userId = typeof id === 'string' ? parseInt(id, 10) : id;
+
+      log(`[STORAGE] getUser called with id: ${userId} (type: ${typeof userId})`, "storage");
+
+      if (isNaN(userId)) {
+        log(`[STORAGE] Invalid user ID: ${id}`, "storage");
+        return undefined;
+      }
+
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId));
+
+      log(`[STORAGE] getUser result:`, {
+        id: userId,
+        found: !!user,
+        role: user?.role
+      });
+
       return user;
     } catch (error) {
-      log(`Error getting user ${id}: ${error}`, "storage");
+      log(`[STORAGE] Error getting user ${id}: ${error}`, "storage");
       throw error;
     }
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     try {
+      log(`[STORAGE] getUserByUsername called with username: ${username}`, "storage");
+
       const [user] = await db.select().from(users).where(eq(users.username, username));
+
+      log(`[STORAGE] getUserByUsername result:`, {
+        username,
+        found: !!user,
+        role: user?.role
+      });
+
       return user;
     } catch (error) {
-      log(`Error getting user by username ${username}: ${error}`, "storage");
+      log(`[STORAGE] Error getting user by username ${username}: ${error}`, "storage");
       throw error;
     }
   }
@@ -161,7 +190,7 @@ export class DatabaseStorage implements IStorage {
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
       // Log the incoming data
-      log(`Creating auction with data: ${JSON.stringify({
+      log(`[STORAGE] Creating auction with data: ${JSON.stringify({
         ...insertAuction,
         startPrice: insertAuction.startPrice,
         reservePrice: insertAuction.reservePrice || 0
@@ -173,15 +202,19 @@ export class DatabaseStorage implements IStorage {
         .from(users)
         .where(eq(users.id, insertAuction.sellerId));
 
-      log(`Found seller for auction: ${JSON.stringify(seller)}`, "storage");
+      log(`[STORAGE] Seller lookup result:`, {
+        sellerId: insertAuction.sellerId,
+        found: !!seller,
+        role: seller?.role
+      });
 
       if (!seller) {
-        log(`No seller found with ID ${insertAuction.sellerId}`, "storage");
+        log(`[STORAGE] No seller found with ID ${insertAuction.sellerId}`, "storage");
         throw new Error(`Seller with ID ${insertAuction.sellerId} not found`);
       }
 
       if (seller.role !== 'seller' && seller.role !== 'seller_admin') {
-        log(`Invalid seller role: ${seller.role}`, "storage");
+        log(`[STORAGE] Invalid seller role: ${seller.role}`, "storage");
         throw new Error(`User ${insertAuction.sellerId} is not a seller (role: ${seller.role})`);
       }
 
@@ -195,7 +228,7 @@ export class DatabaseStorage implements IStorage {
 
       if (categoryMap[category as keyof typeof categoryMap]) {
         category = categoryMap[category as keyof typeof categoryMap];
-        log(`Mapped category from ${insertAuction.category} to ${category}`, "storage");
+        log(`[STORAGE] Mapped category from ${insertAuction.category} to ${category}`, "storage");
       }
 
       // Prepare auction data
@@ -208,16 +241,18 @@ export class DatabaseStorage implements IStorage {
         endDate: new Date(insertAuction.endDate),
       };
 
+      log(`[STORAGE] Prepared auction data:`, auctionData);
+
       // Insert the auction
       const [auction] = await db
         .insert(auctions)
         .values(auctionData)
         .returning();
 
-      log(`Successfully created auction: ${JSON.stringify(auction)}`, "storage");
+      log(`[STORAGE] Successfully created auction:`, auction);
       return auction;
     } catch (error) {
-      log(`Error creating auction: ${error}`, "storage");
+      log(`[STORAGE] Error creating auction: ${error}`, "storage");
       throw error;
     }
   }
@@ -487,7 +522,7 @@ export class DatabaseStorage implements IStorage {
       if (data.species) updateData.species = data.species;
       if (data.imageUrl) updateData.imageUrl = data.imageUrl;
       if (data.images) updateData.images = data.images;
-      
+
       // Handle auction status fields
       if (data.status) updateData.status = data.status;
       if (data.reserveMet !== undefined) updateData.reserveMet = data.reserveMet;
@@ -495,7 +530,7 @@ export class DatabaseStorage implements IStorage {
       if (data.winningBidderId !== undefined) updateData.winningBidderId = data.winningBidderId;
       if (data.paymentDueDate) updateData.paymentDueDate = new Date(data.paymentDueDate);
       if (data.updatedAt) updateData.updatedAt = new Date(data.updatedAt);
-      
+
       // Always include updatedAt to prevent empty update errors
       if (Object.keys(updateData).length === 0) {
         updateData.updatedAt = new Date();
@@ -968,7 +1003,7 @@ export class DatabaseStorage implements IStorage {
         );
       return Number(result[0]?.count || 0);
     } catch (error) {
-      log(`Error getting unread notifications count for user ${userId}: ${error}`, "storage");
+      log(`[STORAGE] Error getting unread notifications count for user ${userId}: ${error}`, "storage");
       throw error;
     }
   }
@@ -994,7 +1029,8 @@ export class DatabaseStorage implements IStorage {
         .orderBy(desc(notifications.createdAt))
         .limit(1);
 
-      log(`[STORAGE] Last notification:`, notification, "notification");      return notification;
+      log(`[STORAGE] Last notification:`, notification, "notification");
+      return notification;
     } catch (error) {
       log(`[STORAGE] Error getting last notification: ${error}`, "notification");
       throw error;
