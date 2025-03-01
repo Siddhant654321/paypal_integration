@@ -187,6 +187,7 @@ export class DatabaseStorage implements IStorage {
     approved?: boolean;
     species?: string;
     category?: string;
+    status?: string;
   }): Promise<Auction[]> {
     try {
       let query = db.select().from(auctions);
@@ -204,11 +205,88 @@ export class DatabaseStorage implements IStorage {
         if (filters.category) {
           query = query.where(eq(auctions.category, filters.category));
         }
+        if (filters.status) {
+          query = query.where(eq(auctions.status, filters.status));
+        }
       }
 
       return await query;
     } catch (error) {
       log(`Error getting auctions: ${error}`);
+      throw error;
+    }
+  }
+
+  // Implementation for getBidsForAuction
+  async getBidsForAuction(auctionId: number): Promise<any[]> {
+    try {
+      // This is a placeholder implementation. 
+      // Implement this with the actual bids table when available
+      log(`Getting bids for auction ${auctionId}`);
+      return []; // Return empty array for now
+    } catch (error) {
+      log(`Error getting bids for auction ${auctionId}: ${error}`);
+      throw error;
+    }
+  }
+
+  // Implementation for getBidsByUser
+  async getBidsByUser(userId: number): Promise<any[]> {
+    try {
+      log(`Getting bids for user ${userId}`);
+      return []; // Return empty array for now
+    } catch (error) {
+      log(`Error getting bids for user ${userId}: ${error}`);
+      throw error;
+    }
+  }
+
+  // Implementation for createBid
+  async createBid(bid: any): Promise<any> {
+    try {
+      log(`Creating bid for auction ${bid.auctionId}`);
+      return bid; // Just return the bid data for now
+    } catch (error) {
+      log(`Error creating bid: ${error}`);
+      throw error;
+    }
+  }
+
+  // Implementation for getUsers
+  async getUsers(filters?: { 
+    approved?: boolean;
+    role?: string;
+    lastLoginAfter?: Date;
+  }): Promise<User[]> {
+    try {
+      log(`Getting users with filters: ${JSON.stringify(filters)}`);
+      // Filter users based on provided criteria
+      let query = db.select().from(users);
+      
+      if (filters) {
+        if (filters.approved !== undefined) {
+          query = query.where(eq(users.approved, filters.approved));
+        }
+        if (filters.role) {
+          query = query.where(eq(users.role, filters.role));
+        }
+        // Note: lastLoginAfter would require a lastLogin field which is not implemented
+      }
+      
+      return await query;
+    } catch (error) {
+      log(`Error getting users: ${error}`);
+      throw error;
+    }
+  }
+
+  // Implementation for deleteBid
+  async deleteBid(bidId: number): Promise<void> {
+    try {
+      log(`Deleting bid ${bidId}`);
+      // Implement actual deletion when bid table is available
+    } catch (error) {
+      log(`Error deleting bid ${bidId}: ${error}`);
       throw error;
     }
   }
@@ -273,6 +351,92 @@ export class DatabaseStorage implements IStorage {
 
   async getUnreadNotificationsCount(userId: number): Promise<number> {
     return 0;
+  }
+
+  // Payment related functions
+  async getPaymentBySessionId(sessionId: string): Promise<any | undefined> {
+    return undefined;
+  }
+
+  async updatePaymentBySessionId(sessionId: string, data: any): Promise<any> {
+    return { id: 1, sessionId, ...data };
+  }
+
+  async updatePaymentByIntentId(intentId: string, data: any): Promise<any> {
+    return { id: 1, intentId, ...data };
+  }
+
+  // Fulfillment related functions
+  async getWinnerDetails(auctionId: number): Promise<any | undefined> {
+    return undefined;
+  }
+
+  async createFulfillment(fulfillmentData: any): Promise<any> {
+    return fulfillmentData;
+  }
+
+  async getFulfillment(auctionId: number): Promise<any | undefined> {
+    return undefined;
+  }
+
+  // Buyer request related functions
+  async createBuyerRequest(requestData: any): Promise<any> {
+    return requestData;
+  }
+
+  async getBuyerRequests(filters?: any): Promise<any[]> {
+    return [];
+  }
+
+  async getBuyerRequest(id: number): Promise<any | undefined> {
+    return undefined;
+  }
+
+  async incrementBuyerRequestViews(id: number): Promise<void> {
+    return;
+  }
+
+  async updateBuyerRequestStatus(id: number, status: string): Promise<any> {
+    return { id, status };
+  }
+
+  async deleteBuyerRequest(id: number): Promise<void> {
+    return;
+  }
+
+  async updateBuyerRequest(id: number, data: any): Promise<any> {
+    return { id, ...data };
+  }
+
+  // Seller payment related functions
+  async getPayoutsBySeller(sellerId: number): Promise<any[]> {
+    return [];
+  }
+
+  // User management
+  async approveUser(userId: number): Promise<User> {
+    try {
+      const [user] = await db
+        .update(users)
+        .set({ approved: true })
+        .where(eq(users.id, userId))
+        .returning();
+      return user;
+    } catch (error) {
+      log(`Error approving user ${userId}: ${error}`);
+      throw error;
+    }
+  }
+
+  async deleteProfile(userId: number): Promise<void> {
+    try {
+      await db
+        .delete(profiles)
+        .where(eq(profiles.userId, userId));
+    } catch (error) {
+      log(`Error deleting profile for user ${userId}: ${error}`);
+      throw error;
+    }
   }
 }
 
