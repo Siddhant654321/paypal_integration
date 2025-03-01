@@ -2,6 +2,9 @@ import { users, type User, type InsertUser, auctions, type Auction, type InsertA
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { Store } from "express-session";
+import connectPg from "connect-pg-simple";
+import session from "express-session";
+import pg from 'pg';
 
 function log(message: string, context = "general") {
   console.log(`[STORAGE:${context}] ${message}`);
@@ -12,13 +15,10 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(insertUser: InsertUser): Promise<User>;
-  getUsers(filters?: { approved?: boolean; role?: string; lastLoginAfter?: Date }): Promise<User[]>;
-  approveUser(userId: number): Promise<User>;
   hasProfile(userId: number): Promise<boolean>;
   getProfile(userId: number): Promise<Profile | undefined>;
-  createProfile(insertProfile: InsertProfile & { userId: number }): Promise<Profile>;
-  updateProfile(userId: number, data: Partial<Profile>): Promise<Profile>;
-  deleteProfile(userId: number): Promise<void>;
+  createProfile(insertProfile: InsertProfile): Promise<Profile>;
+  updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile>;
   createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction>;
   getAuction(id: number): Promise<Auction | undefined>;
   getAuctions(filters?: { 
@@ -27,43 +27,35 @@ export interface IStorage {
     species?: string;
     category?: string;
   }): Promise<Auction[]>;
-  approveAuction(auctionId: number): Promise<Auction>;
-  updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction>;
-  deleteAuction(auctionId: number): Promise<void>;
-  getNotificationsByUserId(userId: number): Promise<any[]>;
-  getLastNotification(): Promise<any | undefined>;
-  markNotificationAsRead(notificationId: number): Promise<any>;
-  markAllNotificationsAsRead(userId: number): Promise<void>;
-  getUnreadNotificationsCount(userId: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
-  // Session store - this would need to be properly implemented based on your session store
-  sessionStore = {} as Store; 
+  sessionStore: Store;
+
+  constructor() {
+    const PostgresStore = connectPg(session);
+
+    // Create a new pg Pool using the DATABASE_URL
+    const pool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+    });
+
+    // Initialize the session store with the pool
+    this.sessionStore = new PostgresStore({
+      pool,
+      createTableIfMissing: true,
+      tableName: 'session'
+    });
+
+    log("Session store initialized");
+  }
 
   async getUser(id: number): Promise<User | undefined> {
     try {
-      // Ensure id is a number
-      const userId = typeof id === 'string' ? parseInt(id, 10) : id;
-
-      log(`Getting user with ID: ${userId} (type: ${typeof userId})`);
-
-      if (isNaN(userId)) {
-        log(`Invalid user ID: ${id}`);
-        return undefined;
-      }
-
       const [user] = await db
         .select()
         .from(users)
-        .where(eq(users.id, userId));
-
-      log(`User lookup result: ${JSON.stringify({
-        id: userId,
-        found: !!user,
-        role: user?.role
-      })}`);
-
+        .where(eq(users.id, id));
       return user;
     } catch (error) {
       log(`Error getting user ${id}: ${error}`);
@@ -73,19 +65,10 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     try {
-      log(`Looking up user by username: ${username}`);
-
       const [user] = await db
         .select()
         .from(users)
         .where(eq(users.username, username));
-
-      log(`Username lookup result: ${JSON.stringify({
-        username,
-        found: !!user,
-        role: user?.role
-      })}`);
-
       return user;
     } catch (error) {
       log(`Error getting user by username ${username}: ${error}`);
@@ -95,9 +78,10 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     try {
-      log(`Creating new user: ${insertUser.username}`);
-      const [user] = await db.insert(users).values(insertUser).returning();
-      log(`User created successfully: ${user.username}`);
+      const [user] = await db
+        .insert(users)
+        .values(insertUser)
+        .returning();
       return user;
     } catch (error) {
       log(`Error creating user: ${error}`);
@@ -105,45 +89,8 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getUsers(filters?: { approved?: boolean; role?: string; lastLoginAfter?: Date }): Promise<User[]> {
-    try {
-      let query = db.select().from(users);
-      
-      if (filters) {
-        if (filters.approved !== undefined) {
-          query = query.where(eq(users.approved, filters.approved));
-        }
-        if (filters.role) {
-          query = query.where(eq(users.role, filters.role));
-        }
-        // Last login filtering would need more implementation
-      }
-      
-      return await query;
-    } catch (error) {
-      log(`Error getting users: ${error}`);
-      throw error;
-    }
-  }
-
-  async approveUser(userId: number): Promise<User> {
-    try {
-      const [user] = await db
-        .update(users)
-        .set({ approved: true })
-        .where(eq(users.id, userId))
-        .returning();
-      
-      return user;
-    } catch (error) {
-      log(`Error approving user ${userId}: ${error}`);
-      throw error;
-    }
-  }
-
   async hasProfile(userId: number): Promise<boolean> {
     try {
-      log(`Checking if user ${userId} has a profile`);
       const profile = await this.getProfile(userId);
       return !!profile;
     } catch (error) {
@@ -154,20 +101,10 @@ export class DatabaseStorage implements IStorage {
 
   async getProfile(userId: number): Promise<Profile | undefined> {
     try {
-      log(`Getting profile for user ${userId}`);
       const [profile] = await db
         .select()
         .from(profiles)
         .where(eq(profiles.userId, userId));
-
-      // After fetching profile, update user's has_profile status if needed
-      if (profile) {
-        await db
-          .update(users)
-          .set({ has_profile: true })
-          .where(eq(users.id, userId));
-      }
-
       return profile;
     } catch (error) {
       log(`Error getting profile for user ${userId}: ${error}`);
@@ -175,20 +112,12 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createProfile(insertProfile: InsertProfile & { userId: number }): Promise<Profile> {
+  async createProfile(insertProfile: InsertProfile): Promise<Profile> {
     try {
-      log(`Creating profile for user ${insertProfile.userId}`);
       const [profile] = await db
         .insert(profiles)
         .values(insertProfile)
         .returning();
-
-      // Update user's has_profile status
-      await db
-        .update(users)
-        .set({ has_profile: true })
-        .where(eq(users.id, insertProfile.userId));
-
       return profile;
     } catch (error) {
       log(`Error creating profile: ${error}`);
@@ -196,62 +125,26 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateProfile(userId: number, data: Partial<Profile>): Promise<Profile> {
+  async updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile> {
     try {
-      log(`Updating profile for user ${userId}`);
-      const [profile] = await db
+      const [updatedProfile] = await db
         .update(profiles)
-        .set(data)
+        .set(profile)
         .where(eq(profiles.userId, userId))
         .returning();
-
-      return profile;
+      return updatedProfile;
     } catch (error) {
       log(`Error updating profile: ${error}`);
       throw error;
     }
   }
 
-  async deleteProfile(userId: number): Promise<void> {
-    try {
-      log(`Deleting profile for user ${userId}`);
-      await db
-        .delete(profiles)
-        .where(eq(profiles.userId, userId));
-
-      // Update user's has_profile status
-      await db
-        .update(users)
-        .set({ has_profile: false })
-        .where(eq(users.id, userId));
-    } catch (error) {
-      log(`Error deleting profile: ${error}`);
-      throw error;
-    }
-  }
-
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
-      log(`Creating auction for seller ${insertAuction.sellerId}`);
-
-      // Verify seller exists and is authorized
-      const seller = await this.getUser(insertAuction.sellerId);
-
-      if (!seller) {
-        throw new Error(`Seller with ID ${insertAuction.sellerId} not found`);
-      }
-
-      if (seller.role !== 'seller' && seller.role !== 'seller_admin') {
-        throw new Error(`User ${insertAuction.sellerId} is not authorized to create auctions`);
-      }
-
-      // Insert the auction
       const [auction] = await db
         .insert(auctions)
         .values(insertAuction)
         .returning();
-
-      log(`Auction created successfully: ${auction.id}`);
       return auction;
     } catch (error) {
       log(`Error creating auction: ${error}`);
@@ -302,7 +195,6 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
-
   async approveAuction(auctionId: number): Promise<Auction> {
     try {
       const [auction] = await db
