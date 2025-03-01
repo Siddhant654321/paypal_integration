@@ -23,6 +23,10 @@ export class SellerPaymentService {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
+        business_profile: {
+          product_description: "Poultry and hatching eggs auction sales",
+          mcc: "0742", // Veterinary Services, which includes animal breeding
+        },
         settings: {
           payouts: {
             schedule: {
@@ -110,6 +114,21 @@ export class SellerPaymentService {
     }
   }
 
+  static async refreshAccountSession(accountId: string): Promise<string> {
+    try {
+      const session = await stripe.accountSessions.create({
+        account: accountId,
+        components: {
+          account_onboarding: { enabled: true },
+        }
+      });
+
+      return session.client_secret;
+    } catch (error) {
+      console.error("Error refreshing account session:", error);
+      throw error;
+    }
+  }
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
       const profile = await storage.getProfile(sellerId);
