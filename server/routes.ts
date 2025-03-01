@@ -117,14 +117,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Return the server instance
   return httpServer;
 
-  // Update the getAuctions endpoint to include seller profiles
+  // Update the getAuctions endpoint to include all relevant auctions
   app.get("/api/auctions", async (req, res) => {
     try {
       const filters = {
         species: req.query.species as string | undefined,
         category: req.query.category as string | undefined,
-        approved: true, 
+        // Only filter by approval for public listings
+        approved: req.user?.role === "admin" ? undefined : true,
       };
+      
+      console.log("Fetching auctions with filters:", filters);
       const auctions = await storage.getAuctions(filters);
 
       // Get seller profiles for each auction
@@ -135,6 +138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
+      console.log(`Found ${auctionsWithProfiles.length} auctions`);
       res.json(auctionsWithProfiles);
     } catch (error) {
       console.error("Error fetching auctions:", error);
