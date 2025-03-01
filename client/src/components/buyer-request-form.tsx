@@ -22,14 +22,6 @@ const SPECIES_OPTIONS = [
   "Other",
 ];
 
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-
 const CATEGORY_OPTIONS = [
   "Show Quality",
   "Purebred & Production",
