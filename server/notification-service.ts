@@ -147,4 +147,28 @@ export class NotificationService {
       }
     );
   }
+
+  static async notifyAuctionReminder(
+    userId: number,
+    auctionTitle: string,
+    hoursRemaining: number,
+    auctionId: number
+  ): Promise<void> {
+    return this.createNotificationAndSendEmail(
+      userId,
+      {
+        type: "auction",
+        title: "Auction Ending Soon",
+        message: `Your auction "${auctionTitle}" will end in ${hoursRemaining} ${hoursRemaining === 1 ? 'hour' : 'hours'}`,
+      },
+      {
+        type: "auction",
+        data: {
+          auctionTitle,
+          hoursRemaining,
+          auctionId,
+        },
+      }
+    );
+  }
 }
