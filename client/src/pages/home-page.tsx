@@ -32,6 +32,7 @@ export default function HomePage() {
 
   const { data: activeSellers, isLoading: isLoadingSellers } = useQuery<(User & { profile: Profile, auctions: Auction[] })[]>({
     queryKey: ["/api/sellers/active"],
+    enabled: true, // Always enable this query
   });
 
   const { activeAuctions, completedAuctions } = useMemo(() => {
@@ -150,8 +151,8 @@ export default function HomePage() {
         </section>
 
         {/* Featured Sellers Section */}
-        {activeSellers && activeSellers.length > 0 && (
-          <section className="pt-8 space-y-6">
+        {!isLoadingSellers && activeSellers && activeSellers.length > 0 && (
+          <section className="space-y-6">
             <h2 className="text-2xl font-bold">Featured Sellers</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {activeSellers.map((seller) => (
@@ -162,7 +163,7 @@ export default function HomePage() {
         )}
 
         {/* Archives Section */}
-        <section className="pt-8 space-y-6">
+        <section className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h2 className="text-2xl font-bold">Archives</h2>
             <Button
