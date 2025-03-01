@@ -57,28 +57,42 @@ const SellerDashboard = () => {
     select: (data) => data || [], // Ensure we always have an array
   });
 
-  const { data: stripeStatus, isLoading: stripeStatusLoading } = useQuery<StripeStatus>({
+  const { data: stripeStatus, isLoading: stripeStatusLoading, error: stripeStatusError } = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
+    onSuccess: (data) => console.log("Stripe status data:", data),
+    onError: (error) => console.error("Stripe status error:", error)
   });
 
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
+      console.log("Initiating Stripe Connect...");
       const response = await apiRequest('/api/seller/connect', { method: 'POST' });
+      console.log("Stripe Connect response:", response);
       if (!response?.url) {
         throw new Error('No onboarding URL received');
       }
       return response;
     },
     onSuccess: (data) => {
+      console.log("Successfully connected to Stripe, redirecting to:", data.url);
       if (data.url) {
-        window.location.href = data.url;
+        // Small delay to ensure toast is visible
+        toast({
+          title: "Success!",
+          description: "Redirecting to Stripe Connect...",
+          variant: "default",
+        });
+        setTimeout(() => {
+          window.location.href = data.url;
+        }, 1000);
       }
     },
     onError: (error: Error) => {
+      console.error("Error connecting to Stripe:", error);
       toast({
         title: "Error connecting to Stripe",
-        description: error.message,
+        description: error.message || "Please try again later",
         variant: "destructive",
       });
     }
@@ -126,6 +140,16 @@ const SellerDashboard = () => {
 
   // Render Stripe Connect status and actions
   const renderStripeConnectStatus = () => {
+    if (stripeStatusLoading) {
+      return (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Loading Stripe Status...</CardTitle>
+          </CardHeader>
+        </Card>
+      );
+    }
+    
     if (!stripeStatus) {
       return (
         <Alert variant="destructive" className="mb-6">
@@ -380,6 +404,24 @@ const SellerDashboard = () => {
 
         <TabsContent value="payouts">
           {renderStripeConnectStatus()}
+          
+          {/* Debug section for account status */}
+          <div className="mb-4 p-4 bg-muted rounded-lg">
+            <h3 className="font-semibold">Account Status Debug</h3>
+            <p>Status: {stripeStatusLoading ? 'Loading...' : stripeStatus?.status || 'Not available'}</p>
+            {stripeStatusError && (
+              <p className="text-destructive">Error: {(stripeStatusError as Error).message}</p>
+            )}
+            <Button 
+              className="mt-2"
+              size="sm"
+              variant="outline"
+              onClick={() => connectWithStripeMutation.mutate()}
+            >
+              {connectWithStripeMutation.isPending ? 'Connecting...' : 'Retry Connection'}
+            </Button>
+          </div>
+          
           {payoutsLoading ? (
             <div className="text-center">Loading your payouts...</div>
           ) : payouts === undefined || payouts === null ? (
