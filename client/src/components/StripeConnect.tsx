@@ -1,6 +1,6 @@
 
-import React, { useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useEffect } from 'react';
+import { useToast } from "@/components/ui/use-toast";
 
 interface StripeConnectProps {
   clientSecret: string;
@@ -11,33 +11,40 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
   const { toast } = useToast();
 
   useEffect(() => {
-    // Make sure we don't load the script multiple times
+    // Check if the script is already loaded to avoid duplicates
     if (document.getElementById('stripe-connect-script')) {
       document.getElementById('stripe-connect-script')?.remove();
     }
 
-    // Create and append script
+    const targetElement = document.getElementById('stripe-connect-mount');
+    if (!targetElement) {
+      console.error('Target element #stripe-connect-mount not found');
+      return;
+    }
+
+    // Load Stripe Connect script
     const script = document.createElement('script');
     script.id = 'stripe-connect-script';
     script.src = 'https://js.stripe.com/v3/connect-embeddable/v1/';
     script.async = true;
     
-    // Define the onload handler
     script.onload = () => {
-      console.log('Stripe Connect script loaded');
+      console.log('Stripe Connect script loaded successfully');
       
-      // Small delay to ensure script is fully initialized
+      // Wait for Stripe to initialize
       setTimeout(() => {
+        if (!window.StripeConnect) {
+          console.error('StripeConnect not found on window object');
+          toast({
+            title: "Error",
+            description: "Failed to load Stripe Connect. Please refresh and try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
         try {
-          if (typeof window.StripeConnect === 'undefined') {
-            console.error('StripeConnect is not defined on window');
-            toast({
-              title: "Error",
-              description: "Failed to load Stripe Connect. Please refresh and try again.",
-              variant: "destructive",
-            });
-            return;
-          }
+          console.log('Mounting Stripe Connect with client secret:', clientSecret.substring(0, 5) + '...');
           
           window.StripeConnect.EmbeddedComponents.mount({
             clientSecret,
@@ -53,21 +60,25 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
               },
             },
             onComplete: () => {
+              console.log('Stripe Connect onComplete callback fired');
               toast({
                 title: "Account setup completed",
                 description: "Your account has been successfully set up.",
               });
-              onComplete?.();
+              if (onComplete) {
+                onComplete();
+              }
             },
             onError: (error: Error) => {
               console.error('Stripe Connect error:', error);
               toast({
                 title: "Error",
-                description: error.message,
+                description: error.message || "An error occurred during setup",
                 variant: "destructive",
               });
             },
           });
+          console.log('Stripe Connect mounted successfully');
         } catch (error) {
           console.error('Error mounting Stripe Connect:', error);
           toast({
@@ -78,7 +89,7 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
         }
       }, 1000);
     };
-
+    
     script.onerror = () => {
       console.error('Failed to load Stripe Connect script');
       toast({
@@ -98,14 +109,14 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
   }, [clientSecret, onComplete, toast]);
 
   return (
-    <div id="stripe-connect-mount" className="w-full min-h-[600px] border rounded-lg bg-background" />
+    <div id="stripe-connect-mount" className="w-full min-h-[600px] border rounded-lg bg-background"></div>
   );
 }
 
-// Add TypeScript declaration
+// TypeScript declaration
 declare global {
   interface Window {
-    StripeConnect: {
+    StripeConnect?: {
       EmbeddedComponents: {
         mount: (options: any) => void;
       };

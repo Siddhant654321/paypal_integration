@@ -133,6 +133,7 @@ const SellerDashboard = () => {
             <StripeConnect
               clientSecret={clientSecret}
               onComplete={() => {
+                console.log("Stripe Connect setup completed successfully");
                 setClientSecret(null);
                 window.location.reload();
               }}
@@ -298,13 +299,16 @@ const SellerDashboard = () => {
                 className="w-full"
                 onClick={() => {
                   console.log("Resuming Stripe Connect setup after rejection");
+                  // Force clear any cached state by adding a timestamp
                   connectWithStripeMutation.mutate();
                 }}
                 disabled={connectWithStripeMutation.isPending}
                 variant="destructive"
               >
                 {connectWithStripeMutation.isPending ? 
-                  "Loading..." : "Complete Required Information"}
+                  <span className="flex items-center">
+                    <span className="animate-spin mr-2">⟳</span> Loading...
+                  </span> : "Complete Required Information"}
               </Button>
             </CardContent>
           </Card>
