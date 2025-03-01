@@ -14,6 +14,7 @@ export default function NavBar() {
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
     enabled: !!user,
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
 
   const markAllReadMutation = useMutation({

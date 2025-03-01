@@ -21,7 +21,6 @@ export class NotificationService {
     }
   }
 
-  // Basic notification methods
   static async notifyNewBid(
     sellerId: number,
     auctionTitle: string,
@@ -48,6 +47,39 @@ export class NotificationService {
         type: "bid",
         title: "You've Been Outbid",
         message: `Someone has placed a higher bid of $${newBidAmount/100} on "${auctionTitle}"`,
+      }
+    );
+  }
+
+  static async notifyAuctionEnding(
+    bidderId: number,
+    auctionTitle: string
+  ): Promise<void> {
+    return this.createNotification(
+      bidderId,
+      {
+        type: "auction",
+        title: "Auction Ending Soon",
+        message: `The auction "${auctionTitle}" will end in 12 hours`,
+      }
+    );
+  }
+
+  static async notifyAuctionEnd(
+    userId: number,
+    auctionTitle: string,
+    isWinner: boolean
+  ): Promise<void> {
+    const message = isWinner 
+      ? `Congratulations! You've won the auction "${auctionTitle}"`
+      : `The auction "${auctionTitle}" has ended`;
+
+    return this.createNotification(
+      userId,
+      {
+        type: "auction",
+        title: isWinner ? "Auction Won!" : "Auction Ended",
+        message,
       }
     );
   }
