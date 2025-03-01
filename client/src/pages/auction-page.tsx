@@ -115,15 +115,24 @@ export default function AuctionPage() {
 
   const isActive = new Date() >= new Date(auction.startDate) && new Date() <= new Date(auction.endDate);
   const showSellerDecision = auction.status === "pending_seller_decision" && user?.id === auction.sellerId;
+  const showPaymentButton = auction.status === "payment_pending" && user?.id === auction.winningBidderId;
 
   const getStatusBadge = () => {
     switch (auction.status) {
+      case "pending_review":
+        return <Badge variant="secondary">Pending Review</Badge>;
       case "active":
         return <Badge>Active</Badge>;
       case "ended":
-        return <Badge variant="secondary">{auction.winningBidderId ? "Sold" : "Ended"}</Badge>;
+        return <Badge variant="secondary">Ended</Badge>;
       case "pending_seller_decision":
         return <Badge variant="secondary">Awaiting Seller Decision</Badge>;
+      case "payment_pending":
+        return <Badge variant="secondary">Payment Required</Badge>;
+      case "pending_fulfillment":
+        return <Badge variant="secondary">Pending Fulfillment</Badge>;
+      case "fulfilled":
+        return <Badge variant="secondary">Fulfilled</Badge>;
       case "voided":
         return <Badge variant="destructive">Voided</Badge>;
       default:
@@ -227,11 +236,6 @@ export default function AuctionPage() {
                 {auction.category}
               </Badge>
               {getStatusBadge()}
-              {auction.status === "active" && (
-                <Badge variant={auction.currentPrice >= auction.reservePrice ? "default" : "destructive"}>
-                  {auction.currentPrice >= auction.reservePrice ? "Reserve Met" : "Reserve Not Met"}
-                </Badge>
-              )}
             </div>
           </div>
 
@@ -245,11 +249,21 @@ export default function AuctionPage() {
               <span>{timeLeft}</span>
             </div>
             <div className="text-lg">
-              Current bid: <span className="font-bold">{formatPrice(auction.currentPrice)}</span>
+              Current bid: <span className="font-bold">${auction.currentPrice.toFixed(2)}</span>
             </div>
             <div className="text-sm text-muted-foreground">
-              Starting price: {formatPrice(auction.startPrice)}
+              Starting price: ${auction.startPrice.toFixed(2)}
             </div>
+            {auction.reservePrice > 0 && (
+              <div className="text-sm text-muted-foreground">
+                Reserve price: ${auction.reservePrice.toFixed(2)}
+                {auction.status === "active" && (
+                  <Badge className="ml-2" variant={auction.currentPrice >= auction.reservePrice ? "default" : "destructive"}>
+                    {auction.currentPrice >= auction.reservePrice ? "Reserve Met" : "Reserve Not Met"}
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
 
           {showSellerDecision && (
@@ -261,7 +275,7 @@ export default function AuctionPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Auction Decision Required</AlertDialogTitle>
                   <AlertDialogDescription>
-                    The reserve price was not met. The highest bid was {formatPrice(auction.currentPrice)}.
+                    The reserve price was not met. The highest bid was ${auction.currentPrice.toFixed(2)}.
                     Would you like to accept this bid or void the auction?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -279,6 +293,30 @@ export default function AuctionPage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+          )}
+
+          {showPaymentButton && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Complete Your Purchase</h2>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
+                  <span>Final Price:</span>
+                  <span className="font-bold">${auction.currentPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
+                  <span>Insurance (Optional):</span>
+                  <span>$8.00</span>
+                </div>
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => {
+                  // Implement payment flow
+                }}
+              >
+                Proceed to Payment
+              </Button>
+            </div>
           )}
 
           {user && isActive && user.id !== auction.sellerId && (

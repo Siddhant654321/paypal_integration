@@ -22,22 +22,8 @@ export function NotificationsMenu({
   notifications = [],
   onMarkAllRead
 }: NotificationsMenuProps) {
-  // Add debug logging
-  console.log("[NotificationsMenu] Rendering with notifications:", {
-    total: notifications.length,
-    notifications: notifications.map(n => ({
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      read: n.read,
-      timestamp: n.createdAt
-    }))
-  });
-
   const queryClient = useQueryClient();
   const unreadCount = notifications.filter(n => !n.read).length;
-
-  console.log("[NotificationsMenu] Unread count:", unreadCount);
 
   // Add mutation for marking a single notification as read
   const markAsReadMutation = useMutation({
@@ -100,44 +86,41 @@ export function NotificationsMenu({
           </div>
         ) : (
           <div className="max-h-[300px] overflow-y-auto">
-            {notifications.map((notification) => {
-              console.log("[NotificationsMenu] Rendering notification:", notification);
-              return (
-                <DropdownMenuItem
-                  key={notification.id}
-                  className={cn(
-                    "flex flex-col items-start gap-1 p-4 cursor-pointer",
-                    !notification.read && "bg-accent/50"
-                  )}
-                  onClick={() => markAsReadMutation.mutate(notification.id)}
-                >
-                  <div className="flex w-full justify-between gap-4">
-                    <span className="font-medium leading-none">
-                      {notification.title}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(notification.createdAt!).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {notification.message}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "text-xs",
-                        notification.type === "bid" && "text-green-500",
-                        notification.type === "auction" && "text-blue-500",
-                        notification.type === "admin" && "text-red-500",
-                        notification.type === "payment" && "text-yellow-500"
-                      )}
-                    >
-                      {notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}
-                    </span>
-                  </div>
-                </DropdownMenuItem>
-              );
-            })}
+            {notifications.map((notification) => (
+              <DropdownMenuItem
+                key={notification.id}
+                className={cn(
+                  "flex flex-col items-start gap-1 p-4 cursor-pointer",
+                  !notification.read && "bg-accent/50"
+                )}
+                onClick={() => markAsReadMutation.mutate(notification.id)}
+              >
+                <div className="flex w-full justify-between gap-4">
+                  <span className="font-medium leading-none">
+                    {notification.title}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(notification.createdAt!).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {notification.message}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "text-xs",
+                      notification.type === "bid" && "text-green-500",
+                      notification.type === "auction" && "text-blue-500",
+                      notification.type === "admin" && "text-red-500",
+                      notification.type === "payment" && "text-yellow-500"
+                    )}
+                  >
+                    {notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}
+                  </span>
+                </div>
+              </DropdownMenuItem>
+            ))}
           </div>
         )}
       </DropdownMenuContent>

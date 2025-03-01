@@ -83,7 +83,17 @@ export const auctions = pgTable("auctions", {
   endDate: timestamp("end_date").notNull(),
   approved: boolean("approved").notNull().default(false),
   status: text("status", {
-    enum: ["draft", "pending_review", "active", "ended", "pending_seller_decision", "voided", "pending_fulfillment", "fulfilled"],
+    enum: [
+      "draft",
+      "pending_review",
+      "active",
+      "ended",
+      "pending_seller_decision",
+      "payment_pending",
+      "pending_fulfillment",
+      "fulfilled",
+      "voided"
+    ],
   }).notNull().default("draft"),
   paymentStatus: text("payment_status", {
     enum: ["pending", "processing", "completed", "failed"],
@@ -95,11 +105,58 @@ export const auctions = pgTable("auctions", {
   }),
   reserveMet: boolean("reserve_met").notNull().default(false),
   fulfillmentRequired: boolean("fulfillment_required").notNull().default(false),
-  insuranceSelected: boolean("insurance_selected").default(false),
+  insuranceSelected: boolean("insurance_selected").notNull().default(false),
   adminNotes: text("admin_notes"),
   reviewedBy: integer("reviewed_by"),
   reviewedAt: timestamp("reviewed_at"),
 });
+
+export const insertAuctionSchema = createInsertSchema(auctions)
+  .omit({
+    id: true,
+    sellerId: true,
+    approved: true,
+    currentPrice: true,
+    paymentStatus: true,
+    paymentDueDate: true,
+    winningBidderId: true,
+    status: true,
+    sellerDecision: true,
+    reserveMet: true,
+    fulfillmentRequired: true,
+    insuranceSelected: true,
+    adminNotes: true,
+    reviewedBy: true,
+    reviewedAt: true,
+  })
+  .extend({
+    title: z.string().min(5, "Title must be at least 5 characters"),
+    description: z.string().min(20, "Description must be at least 20 characters"),
+    startPrice: z
+      .number()
+      .min(0.01, "Start price must be at least $0.01")
+      .transform((price) => parseFloat(price.toFixed(2))),
+    reservePrice: z
+      .number()
+      .min(0.01, "Reserve price must be at least $0.01")
+      .transform((price) => parseFloat(price.toFixed(2))),
+    startDate: z.string().transform((str) => new Date(str)),
+    endDate: z.string().transform((str) => new Date(str)),
+    imageUrl: z.string().optional(),
+    images: z.array(z.string()).optional().default([]),
+  })
+  .refine(
+    (data) => data.reservePrice >= data.startPrice,
+    "Reserve price must be greater than or equal to start price"
+  )
+  .refine(
+    (data) => {
+      const start = new Date(data.startDate);
+      const end = new Date(data.endDate);
+      return end > start;
+    },
+    "End date must be after start date"
+  );
 
 export const bids = pgTable("bids", {
   id: serial("id").primaryKey(),
@@ -108,6 +165,18 @@ export const bids = pgTable("bids", {
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   timestamp: timestamp("timestamp").notNull(),
 });
+
+export const insertBidSchema = createInsertSchema(bids)
+  .omit({
+    id: true,
+    timestamp: true,
+  })
+  .extend({
+    amount: z
+      .number()
+      .min(0.01, "Bid amount must be at least $0.01")
+      .transform((amount) => parseFloat(amount.toFixed(2))),
+  });
 
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
@@ -179,65 +248,6 @@ export const insertProfileSchema = createInsertSchema(profiles)
     emailAuctionNotifications: z.boolean().default(true),
     emailPaymentNotifications: z.boolean().default(true),
     emailAdminNotifications: z.boolean().default(true),
-  });
-
-export const insertAuctionSchema = createInsertSchema(auctions)
-  .omit({
-    id: true,
-    sellerId: true,
-    approved: true,
-    currentPrice: true,
-    paymentStatus: true,
-    paymentDueDate: true,
-    winningBidderId: true,
-    status: true,
-    sellerDecision: true,
-    reserveMet: true,
-    fulfillmentRequired: true,
-    insuranceSelected: true,
-    adminNotes: true,
-    reviewedBy: true,
-    reviewedAt: true,
-  })
-  .extend({
-    title: z.string().min(5, "Title must be at least 5 characters"),
-    description: z.string().min(20, "Description must be at least 20 characters"),
-    startPrice: z
-      .number()
-      .min(0.01, "Start price must be at least $0.01")
-      .refine((n) => Number.isFinite(n) && n >= 0.01, "Invalid price"),
-    reservePrice: z
-      .number()
-      .min(0.01, "Reserve price must be at least $0.01")
-      .refine((n) => Number.isFinite(n) && n >= 0.01, "Invalid price"),
-    startDate: z.string().transform((str) => new Date(str)),
-    endDate: z.string().transform((str) => new Date(str)),
-    imageUrl: z.string().optional(),
-    images: z.array(z.string()).optional().default([]),
-  })
-  .refine(
-    (data) => data.reservePrice >= data.startPrice,
-    "Reserve price must be greater than or equal to start price"
-  )
-  .refine(
-    (data) => {
-      const start = new Date(data.startDate);
-      const end = new Date(data.endDate);
-      return end > start;
-    },
-    "End date must be after start date"
-  );
-
-export const insertBidSchema = createInsertSchema(bids)
-  .omit({
-    id: true,
-    timestamp: true,
-  })
-  .extend({
-    amount: z
-      .number()
-      .min(0.01, "Bid amount must be at least $0.01")
-      .refine((n) => Number.isFinite(n) && n >= 0.01, "Invalid bid amount"),
   });
 
 export const insertPaymentSchema = createInsertSchema(payments)

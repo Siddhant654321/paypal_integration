@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid } from "@shared/schema";
+import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, notifications, type InsertNotification } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { Store } from "express-session";
@@ -31,10 +31,10 @@ export interface IStorage {
   getPendingAuctions(): Promise<Auction[]>;
   approveAuction(auctionId: number, reviewerId: number): Promise<Auction>;
   updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction>;
-  createBid(bid: any): Promise<any>;
-  getBidsForAuction(auctionId: number): Promise<any[]>;
-  getBidsByUser(userId: number): Promise<any[]>;
-  deleteBid(bidId: number):Promise<void>;
+  createBid(bid: InsertBid): Promise<Bid>;
+  getBidsForAuction(auctionId: number): Promise<Bid[]>;
+  getBidsByUser(userId: number): Promise<Bid[]>;
+  deleteBid(bidId: number): Promise<void>;
   getUsers(filters?: { 
     approved?: boolean;
     role?: string;
@@ -42,6 +42,7 @@ export interface IStorage {
   }): Promise<User[]>;
   approveUser(userId: number): Promise<User>;
   deleteProfile(userId: number): Promise<void>;
+  createNotification(notification: InsertNotification): Promise<any>;
   getNotificationsByUserId(userId: number): Promise<any[]>;
   getLastNotification(): Promise<any | undefined>;
   markNotificationAsRead(notificationId: number): Promise<any>;
@@ -62,7 +63,6 @@ export interface IStorage {
   updateBuyerRequest(id: number, data: any): Promise<any>;
   getPayoutsBySeller(sellerId: number): Promise<any[]>;
   deleteAuction(auctionId: number): Promise<void>;
-
 }
 
 export class DatabaseStorage implements IStorage {
@@ -355,20 +355,28 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createBid(bid: any): Promise<any> {
+  async createBid(bid: InsertBid): Promise<Bid> {
     try {
       log(`Creating bid for auction ${bid.auctionId}`);
+
+      // Validate bid amount is a valid number
+      const bidAmount = parseFloat(bid.amount.toString());
+      if (isNaN(bidAmount)) {
+        throw new Error("Invalid bid amount");
+      }
+
       const [newBid] = await db
         .insert(bids)
         .values({
           ...bid,
+          amount: bidAmount,
           timestamp: new Date()
         })
         .returning();
 
       // Update auction's current price
       await this.updateAuction(bid.auctionId, {
-        currentPrice: bid.amount
+        currentPrice: bidAmount
       });
 
       return newBid;
@@ -378,22 +386,26 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getBidsForAuction(auctionId: number): Promise<any[]> {
+  async getBidsForAuction(auctionId: number): Promise<Bid[]> {
     try {
       return await db
         .select()
         .from(bids)
-        .where(eq(bids.auctionId, auctionId));
+        .where(eq(bids.auctionId, auctionId))
+        .orderBy(bids.timestamp, "desc");
     } catch (error) {
       log(`Error getting bids for auction ${auctionId}: ${error}`);
       throw error;
     }
   }
 
-  async getBidsByUser(userId: number): Promise<any[]> {
+  async getBidsByUser(userId: number): Promise<Bid[]> {
     try {
-      log(`Getting bids for user ${userId}`);
-      return []; // Return empty array for now
+      return await db
+        .select()
+        .from(bids)
+        .where(eq(bids.bidderId, userId))
+        .orderBy(bids.timestamp, "desc");
     } catch (error) {
       log(`Error getting bids for user ${userId}: ${error}`);
       throw error;
@@ -462,10 +474,31 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Mock implementations for notification functions
+  async createNotification(notification: InsertNotification): Promise<any> {
+    try {
+      log(`Creating notification for user ${notification.userId}`);
+      const [newNotification] = await db
+        .insert(notifications)
+        .values(notification)
+        .returning();
+      return newNotification;
+    } catch (error) {
+      log(`Error creating notification: ${error}`);
+      throw error;
+    }
+  }
+
   async getNotificationsByUserId(userId: number): Promise<any[]> {
-    log(`Getting notifications for user ${userId}`);
-    return []; // Return empty array for now
+    try {
+      return await db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+        .orderBy(notifications.createdAt, "desc");
+    } catch (error) {
+      log(`Error getting notifications for user ${userId}: ${error}`);
+      throw error;
+    }
   }
 
   async getLastNotification(): Promise<any | undefined> {
@@ -473,18 +506,45 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markNotificationAsRead(notificationId: number): Promise<any> {
-    return { id: notificationId, read: true };
+    try {
+      const [notification] = await db
+        .update(notifications)
+        .set({ read: true })
+        .where(eq(notifications.id, notificationId))
+        .returning();
+      return notification;
+    } catch (error) {
+      log(`Error marking notification ${notificationId} as read: ${error}`);
+      throw error;
+    }
   }
 
   async markAllNotificationsAsRead(userId: number): Promise<void> {
-    // Implementation would mark all user notifications as read
+    try {
+      await db
+        .update(notifications)
+        .set({ read: true })
+        .where(eq(notifications.userId, userId));
+    } catch (error) {
+      log(`Error marking all notifications as read for user ${userId}: ${error}`);
+      throw error;
+    }
   }
 
   async getUnreadNotificationsCount(userId: number): Promise<number> {
-    return 0;
+    try {
+      const unreadNotifications = await db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+        .where(eq(notifications.read, false));
+      return unreadNotifications.length;
+    } catch (error) {
+      log(`Error getting unread notification count for user ${userId}: ${error}`);
+      return 0;
+    }
   }
 
-  // Payment related functions
   async getPaymentBySessionId(sessionId: string): Promise<any | undefined> {
     return undefined;
   }
@@ -497,7 +557,6 @@ export class DatabaseStorage implements IStorage {
     return { id: 1, intentId, ...data };
   }
 
-  // Fulfillment related functions
   async getWinnerDetails(auctionId: number): Promise<any | undefined> {
     return undefined;
   }
@@ -510,7 +569,6 @@ export class DatabaseStorage implements IStorage {
     return undefined;
   }
 
-  // Buyer request related functions
   async createBuyerRequest(requestData: any): Promise<any> {
     return requestData;
   }
@@ -539,7 +597,6 @@ export class DatabaseStorage implements IStorage {
     return { id, ...data };
   }
 
-  // Seller payment related functions
   async getPayoutsBySeller(sellerId: number): Promise<any[]> {
     return [];
   }
