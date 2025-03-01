@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { InsertBuyerRequest, insertBuyerRequestSchema } from "@shared/schema";
+import { InsertBuyerRequest, insertBuyerRequestSchema, BuyerRequest } from "@shared/schema";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -36,7 +36,13 @@ const CATEGORY_OPTIONS = [
   "Fun & Mixed",
 ];
 
-export function BuyerRequestForm({ onClose }: { onClose?: () => void }) {
+interface BuyerRequestFormProps {
+  onClose?: () => void;
+  initialData?: BuyerRequest;
+  isEditing?: boolean;
+}
+
+export function BuyerRequestForm({ onClose, initialData, isEditing }: BuyerRequestFormProps) {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -44,7 +50,7 @@ export function BuyerRequestForm({ onClose }: { onClose?: () => void }) {
 
   const form = useForm<InsertBuyerRequest>({
     resolver: zodResolver(insertBuyerRequestSchema),
-    defaultValues: {
+    defaultValues: initialData || {
       title: "",
       species: "",
       category: "",
@@ -52,10 +58,15 @@ export function BuyerRequestForm({ onClose }: { onClose?: () => void }) {
     },
   });
 
-  const createRequest = useMutation({
+  const mutation = useMutation({
     mutationFn: async (data: InsertBuyerRequest) => {
-      const response = await apiRequest("POST", "/api/buyer-requests", {
-        method: "POST",
+      const endpoint = isEditing 
+        ? `/api/buyer-requests/${initialData?.id}`
+        : "/api/buyer-requests";
+      const method = isEditing ? "PATCH" : "POST";
+
+      const response = await apiRequest(endpoint, {
+        method,
         headers: {
           'Content-Type': 'application/json'
         },
@@ -65,12 +76,19 @@ export function BuyerRequestForm({ onClose }: { onClose?: () => void }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/buyer-requests"] });
+      if (isEditing) {
+        queryClient.invalidateQueries({ queryKey: [`/api/buyer-requests/${initialData?.id}`] });
+      }
       toast({
-        title: "Request Created",
-        description: "Your request has been created successfully.",
+        title: isEditing ? "Request Updated" : "Request Created",
+        description: isEditing 
+          ? "Your request has been updated successfully."
+          : "Your request has been created successfully.",
       });
       form.reset();
-      if (onClose) {
+      if (isEditing) {
+        navigate(`/buyer-requests/${initialData?.id}`);
+      } else if (onClose) {
         onClose();
       }
     },
@@ -86,8 +104,8 @@ export function BuyerRequestForm({ onClose }: { onClose?: () => void }) {
         navigate("/auth");
       } else {
         toast({
-          title: "Error Creating Request",
-          description: error.message || "Failed to create request",
+          title: isEditing ? "Error Updating Request" : "Error Creating Request",
+          description: error.message || "Failed to save request",
           variant: "destructive",
         });
       }
@@ -95,8 +113,6 @@ export function BuyerRequestForm({ onClose }: { onClose?: () => void }) {
   });
 
   function onSubmit(data: InsertBuyerRequest) {
-    console.log("Form submitted with values:", data);
-
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -107,7 +123,7 @@ export function BuyerRequestForm({ onClose }: { onClose?: () => void }) {
       return;
     }
 
-    createRequest.mutate(data);
+    mutation.mutate(data);
   }
 
   return (
@@ -194,13 +210,13 @@ export function BuyerRequestForm({ onClose }: { onClose?: () => void }) {
           )}
         />
 
-        <Button type="submit" disabled={createRequest.isPending}>
-          {createRequest.isPending ? (
+        <Button type="submit" disabled={mutation.isPending}>
+          {mutation.isPending ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Submitting...
+              {isEditing ? "Updating..." : "Submitting..."}
             </>
-          ) : "Submit Request"}
+          ) : (isEditing ? "Update Request" : "Submit Request")}
         </Button>
       </form>
     </Form>

@@ -18,6 +18,7 @@ import AnalyticsPage from "@/pages/analytics-page";
 import FulfillmentPage from "@/pages/fulfillment-page";
 import SellerProfilePage from "@/pages/seller-profile";
 import BuyerRequestPage from "@/pages/buyer-request-page";
+import EditBuyerRequestPage from "@/pages/edit-buyer-request";
 
 function Router() {
   return (
@@ -37,6 +38,7 @@ function Router() {
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/analytics" component={AnalyticsPage} />
         <Route path="/buyer-requests/:id" component={BuyerRequestPage} />
+        <Route path="/buyer-requests/:id/edit" component={EditBuyerRequestPage} />
         <Route component={NotFound} />
       </Switch>
     </div>
