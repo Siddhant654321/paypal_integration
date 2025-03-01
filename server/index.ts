@@ -102,12 +102,6 @@ app.use((req, res, next) => {
       log("Static file serving setup complete");
     }
 
-    // Initialize the notification service
-    log("Initializing notification service...");
-    const { NotificationService } = await import('./notification-service');
-    NotificationService.initialize(server);
-    log("Notification service initialized");
-
     // ALWAYS serve on port 5000
     const port = 5000;
 
