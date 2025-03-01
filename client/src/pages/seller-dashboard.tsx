@@ -177,7 +177,10 @@ const SellerDashboard = () => {
               </div>
               <Button
                 className="w-full"
-                onClick={() => connectWithStripeMutation.mutate()}
+                onClick={() => {
+                  console.log("Initiating Stripe Connect setup");
+                  connectWithStripeMutation.mutate();
+                }}
                 disabled={connectWithStripeMutation.isPending}
               >
                 {connectWithStripeMutation.isPending ? (
@@ -208,9 +211,14 @@ const SellerDashboard = () => {
             <CardContent>
               <Button
                 className="w-full"
-                onClick={() => connectWithStripeMutation.mutate()}
+                onClick={() => {
+                  console.log("Continuing Stripe Connect setup");
+                  connectWithStripeMutation.mutate();
+                }}
+                disabled={connectWithStripeMutation.isPending}
               >
-                Continue Setup
+                {connectWithStripeMutation.isPending ? 
+                  "Loading..." : "Continue Setup"}
               </Button>
             </CardContent>
           </Card>
@@ -288,10 +296,15 @@ const SellerDashboard = () => {
             <CardContent>
               <Button
                 className="w-full"
-                onClick={() => connectWithStripeMutation.mutate()}
+                onClick={() => {
+                  console.log("Resuming Stripe Connect setup after rejection");
+                  connectWithStripeMutation.mutate();
+                }}
+                disabled={connectWithStripeMutation.isPending}
                 variant="destructive"
               >
-                Complete Required Information
+                {connectWithStripeMutation.isPending ? 
+                  "Loading..." : "Complete Required Information"}
               </Button>
             </CardContent>
           </Card>
