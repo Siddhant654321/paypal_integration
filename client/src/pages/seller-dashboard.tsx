@@ -96,7 +96,9 @@ const SellerDashboard = () => {
       return response;
     },
     onSuccess: (data) => {
-      //setClientSecret(data.clientSecret); //Not needed anymore
+      // The data.url contains the onboarding URL we should redirect to
+      console.log("Got Stripe Connect URL:", data.url);
+      window.location.href = data.url;
     },
     onError: (error: Error) => {
       toast({

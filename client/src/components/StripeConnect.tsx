@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
@@ -76,20 +77,3 @@ export function StripeConnect({ url, onComplete }: StripeConnectProps) {
     </div>
   );
 }
-
-// Add TypeScript declarations for Stripe (This part is not strictly necessary since the Stripe.js integration is removed)
-// declare global {
-//   interface Window {
-//     Stripe?: (publishableKey: string) => {
-//       accountLinks: {
-//         redirect: (options: {
-//           accountLinkSecret: string;
-//         }) => Promise<{
-//           error?: {
-//             message: string;
-//           };
-//         }>;
-//       };
-//     };
-//   }
-// }
