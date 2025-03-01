@@ -1092,136 +1092,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
-      // Get all approved auctions
-      const allAuctions = await storage.getAuctions({ approved: true });
-
-      // Count active auctions (not ended and approved)
+      // Get active auctions
+      const auctions = await storage.getAuctions({ approved: true });
       const now = new Date();
-      const activeAuctions = allAuctions.filter(auction =>
-        new Date(auction.endDate) > now && auction.approved
-      ).length;
-
-      // Calculate average prices by species
-      const speciesPrices = allAuctions.reduce((acc, auction) => {
-        if (!acc[auction.species]) {
-          acc[auction.species] = { total: 0, count: 0 };
-        }
-        acc[auction.species].total += auction.currentPrice;
-        acc[auction.species].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
-
-      const averagePrices = Object.entries(speciesPrices).map(([species, data]) => ({
-        species,
-        averagePrice: Math.round(data.total / data.count)
-      }));
-
-      // Calculate top seller and buyer for the last month
-      const lastMonth = new Date();
-      lastMonth.setMonth(lastMonth.getMonth() - 1);
-
-      // Get completed auctions from last month
-      const lastMonthAuctions = allAuctions.filter(auction =>
-        auction.paymentStatus === 'completed' &&
-        new Date(auction.endDate) >= lastMonth
+      const activeAuctions = auctions.filter(
+        auction => new Date(auction.endDate) > now && new Date(auction.startDate) <= now
       );
 
-      // Calculate seller totals
-      const sellerTotals = lastMonthAuctions.reduce((acc, auction) => {
-        if (!acc[auction.sellerId]) {
-          acc[auction.sellerId] = { total: 0, count: 0 };
-        }
-        acc[auction.sellerId].total += auction.currentPrice;
-        acc[auction.sellerId].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
+      // Calculate active buyers (made bids in last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      // Calculate buyer totals
-      const buyerTotals = lastMonthAuctions.reduce((acc, auction) => {
-        if (!acc[auction.winningBidderId]) {
-          acc[auction.winningBidderId] = { total: 0, count: 0 };
-        }
-        acc[auction.winningBidderId].total += auction.currentPrice;
-        acc[auction.winningBidderId].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
+      // Get all bids in the last 30 days
+      const recentBids = await storage.getBids({
+        after: thirtyDaysAgo
+      });
 
-      // Find top seller
-      let topSeller = { userId: 0, total: 0, count: 0 };
-      for (const [userId, data] of Object.entries(sellerTotals)) {
-        if (data.total > topSeller.total) {
-          topSeller = { userId: parseInt(userId), ...data };
+      // Count unique bidders from recent bids
+      const activeBidders = new Set(recentBids.map(bid => bid.bidderId));
+
+      // Get total bids for active auctions
+      const activeBids = await Promise.all(
+        activeAuctions.map(auction => storage.getBidsForAuction(auction.id))
+      );
+      const totalActiveBids = activeBids.reduce((sum, bids) => sum + bids.length, 0);
+
+      // Calculate top performers from completed auctions
+      const completedAuctions = auctions.filter(a => a.status === "ended" && a.winningBidderId);
+
+      // Calculate seller performance
+      const sellerStats = new Map();
+      completedAuctions.forEach(auction => {
+        if (!sellerStats.has(auction.sellerId)) {
+          sellerStats.set(auction.sellerId, { total: 0, auctionsWon: 0 });
         }
+        const stats = sellerStats.get(auction.sellerId);
+        stats.total += auction.currentPrice;
+        stats.auctionsWon += 1;
+      });
+
+      // Calculate buyer performance
+      const buyerStats = new Map();
+      completedAuctions.forEach(auction => {
+        if (!buyerStats.has(auction.winningBidderId)) {
+          buyerStats.set(auction.winningBidderId, { total: 0, auctionsWon: 0 });
+        }
+        const stats = buyerStats.get(auction.winningBidderId);
+        stats.total += auction.currentPrice;
+        stats.auctionsWon += 1;
+      });
+
+      // Get top seller
+      let topSeller = null;
+      if (sellerStats.size > 0) {
+        const [topSellerId, topSellerStats] = Array.from(sellerStats.entries())
+          .sort((a, b) => b[1].total - a[1].total)[0];
+        const sellerProfile = await storage.getProfile(topSellerId);
+        topSeller = {
+          name: sellerProfile?.businessName || "Anonymous Seller",
+          ...topSellerStats
+        };
       }
 
-      // Find top buyer
-      let topBuyer = { userId: 0, total: 0, count: 0 };
-      for (const [userId, data] of Object.entries(buyerTotals)) {
-        if (data.total > topBuyer.total) {
-          topBuyer = { userId: parseInt(userId), ...data };
-        }
+      // Get top buyer
+      let topBuyer = null;
+      if (buyerStats.size > 0) {
+        const [topBuyerId, topBuyerStats] = Array.from(buyerStats.entries())
+          .sort((a, b) => b[1].total - a[1].total)[0];
+        const buyerProfile = await storage.getProfile(topBuyerId);
+        topBuyer = {
+          name: buyerProfile?.businessName || "Anonymous Buyer",
+          ...topBuyerStats
+        };
       }
 
-      // Get user profiles for top performers
-      const [topSellerProfile, topBuyerProfile] = await Promise.all([
-        topSeller.userId ? storage.getProfile(topSeller.userId) : null,
-        topBuyer.userId ? storage.getProfile(topBuyer.userId) : null,
-      ]);
+      // Calculate average prices by species
+      const speciesGroups = new Map();
+      auctions.forEach(auction => {
+        if (!speciesGroups.has(auction.species)) {
+          speciesGroups.set(auction.species, []);
+        }
+        speciesGroups.get(auction.species).push(auction.currentPrice);
+      });
 
-      // Calculate price history (average price by month)
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-      const monthlyPrices = allAuctions
-        .filter(auction => new Date(auction.endDate) >= sixMonthsAgo)
-        .reduce((acc, auction) => {
-          const monthKey = new Date(auction.endDate).toISOString().slice(0, 7);
-          if (!acc[monthKey]) {
-            acc[monthKey] = { total: 0, count: 0 };
-          }
-          acc[monthKey].total += auction.currentPrice;
-          acc[monthKey].count += 1;
-          return acc;
-        }, {} as Record<string, { total: number; count: number }>);
-
-      const priceHistory = Object.entries(monthlyPrices)
-        .map(([date, data]) => ({
-          date: `${date}-01`,  
-          averagePrice: Math.round(data.total / data.count)
-        }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const averagePrices = Array.from(speciesGroups.entries()).map(([species, prices]) => ({
+        species,
+        averagePrice: prices.reduce((sum, price) => sum + price, 0) / prices.length
+      }));
 
       // Calculate popular categories
-      const categoryCount = allAuctions.reduce((acc, auction) => {
-        acc[auction.category] = (acc[auction.category] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      const categoryCount = new Map();
+      auctions.forEach(auction => {
+        categoryCount.set(auction.category, (categoryCount.get(auction.category) || 0) + 1);
+      });
 
-      const popularCategories = Object.entries(categoryCount)
-        .map(([category, count]) => ({ category, count }))
-        .sort((a, b) => b.count - a.count);
+      const popularCategories = Array.from(categoryCount.entries()).map(([category, count]) => ({
+        category,
+        count
+      }));
 
       res.json({
+        activeBuyers: activeBidders.size,
+        totalBids: totalActiveBids,
+        activeAuctions: activeAuctions.length,
         averagePrices,
-        activeAuctions,
+        popularCategories,
         topPerformers: {
-          seller: topSellerProfile ? {
-            name: topSellerProfile.fullName,
-            total: topSeller.total,
-            auctionsWon: topSeller.count
-          } : null,
-          buyer: topBuyerProfile ? {
-            name: topBuyerProfile.fullName,
-            total: topBuyer.total,
-            auctionsWon: topBuyer.count
-          } : null
-        },
-        priceHistory,
-        popularCategories
+          seller: topSeller,
+          buyer: topBuyer
+        }
       });
     } catch (error) {
-      console.error("Error fetching market statistics:", error);
-      res.status(500).json({ message: "Failed to fetch market statistics" });
+      console.error("Error fetching market stats:", error);
+      res.status(500).json({ message: "Failed to fetch market stats" });
     }
   });
 
@@ -1632,6 +1615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         baseUrl
       );
       
+      
 
       console.log("Generated onboarding URL:", onboardingUrl);
       
@@ -1767,8 +1751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         role: "buyer"
       });
 
-      res.json({ activeBuyers: activeUsers.length });
-    } catch (error) {
+      res.json({ activeBuyers: activeUsers.length });    } catch (error) {
       console.error("Error fetching active buyers:", error);
       res.status(500).json({ message: "Failed to fetch active buyers" });
     }
