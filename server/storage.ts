@@ -4,7 +4,7 @@ import { pool } from "./db";
 import { db } from "./db";
 import { users, auctions, bids, profiles, payments, payouts, fulfillments, buyerRequests } from "@shared/schema";
 import { type User, type InsertUser, type Auction, type InsertAuction, type Bid, type InsertBid, type Profile, type InsertProfile, type Payment, type InsertPayment, type Payout, type InsertPayout, type Fulfillment, type InsertFulfillment, type BuyerRequest, type InsertBuyerRequest } from "@shared/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
 import { log } from "./vite";
 
@@ -86,6 +86,13 @@ export interface IStorage {
   }): Promise<BuyerRequest[]>;
   updateBuyerRequestStatus(id: number, status: string): Promise<BuyerRequest>;
   incrementBuyerRequestViews(id: number): Promise<void>;
+
+  // Notification operations
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotificationsByUserId(userId: number): Promise<Notification[]>;
+  markNotificationAsRead(id: number): Promise<Notification>;
+  deleteNotification(id: number): Promise<void>;
+  getUnreadNotificationsCount(userId: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -826,6 +833,80 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    try {
+      const [newNotification] = await db
+        .insert(notifications)
+        .values({
+          ...notification,
+          createdAt: new Date(),
+        })
+        .returning();
+      return newNotification;
+    } catch (error) {
+      log(`Error creating notification: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async getNotificationsByUserId(userId: number): Promise<Notification[]> {
+    try {
+      return await db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+        .orderBy(desc(notifications.createdAt));
+    } catch (error) {
+      log(`Error getting notifications for user ${userId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async markNotificationAsRead(id: number): Promise<Notification> {
+    try {
+      const [notification] = await db
+        .update(notifications)
+        .set({ read: true })
+        .where(eq(notifications.id, id))
+        .returning();
+      if (!notification) throw new Error("Notification not found");
+      return notification;
+    } catch (error) {
+      log(`Error marking notification ${id} as read: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async deleteNotification(id: number): Promise<void> {
+    try {
+      await db
+        .delete(notifications)
+        .where(eq(notifications.id, id));
+    } catch (error) {
+      log(`Error deleting notification ${id}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
+  async getUnreadNotificationsCount(userId: number): Promise<number> {
+    try {
+      const result = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.userId, userId),
+            eq(notifications.read, false)
+          )
+        );
+      return Number(result[0]?.count || 0);
+    } catch (error) {
+      log(`Error getting unread notifications count for user ${userId}: ${error}`, "storage");
+      throw error;
+    }
+  }
+
 }
 
 export const storage = new DatabaseStorage();

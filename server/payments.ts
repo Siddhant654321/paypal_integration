@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { storage } from "./storage";
 import { insertPaymentSchema, type InsertPayment } from "@shared/schema";
 import { SellerPaymentService } from "./seller-payments";
+import { NotificationService } from "./notification-service";
 
 // Verify Stripe secret key is available and in test mode
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -132,6 +133,13 @@ export class PaymentService {
       // Update auction payment status
       await storage.updateAuctionPaymentStatus(payment.auctionId, "completed");
 
+      // Notify the seller
+      await NotificationService.notifyPayment(
+        payment.sellerId,
+        payment.amount,
+        "completed"
+      );
+
       // Create payout for seller
       await SellerPaymentService.createPayout(
         payment.id,
@@ -158,6 +166,13 @@ export class PaymentService {
 
       // Update auction payment status
       await storage.updateAuctionPaymentStatus(payment.auctionId, "failed");
+
+      // Notify the seller
+      await NotificationService.notifyPayment(
+        payment.sellerId,
+        payment.amount,
+        "failed"
+      );
     } catch (error) {
       console.error("Error handling payment failure:", error);
       throw error;
