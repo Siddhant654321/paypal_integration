@@ -291,7 +291,10 @@ export const insertBuyerRequestSchema = createInsertSchema(buyerRequests)
   })
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),
-    species: z.string().min(2, "Species must be at least 2 characters"),
+    species: z.string().refine(
+      (val) => ["bantam", "standard", "waterfowl", "quail", "other"].includes(val),
+      "Invalid species"
+    ),
     category: z.string().refine(
       (val) => ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(val),
       "Invalid category"

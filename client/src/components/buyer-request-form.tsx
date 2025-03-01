@@ -45,14 +45,16 @@ export function BuyerRequestForm() {
   });
 
   const createRequest = useMutation({
-    mutationFn: async (data: InsertBuyerRequest) =>
-      apiRequest("/api/buyer-requests", {
+    mutationFn: async (data: InsertBuyerRequest) => {
+      const response = await apiRequest("/api/buyer-requests", {
         method: "POST",
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(data)
-      }),
+      });
+      return response;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/buyer-requests"] });
       toast({
@@ -104,9 +106,6 @@ export function BuyerRequestForm() {
               <FormControl>
                 <Input placeholder="e.g., Looking for Silver Laced Wyandottes" {...field} />
               </FormControl>
-              <FormDescription>
-                A brief title describing what you're looking for
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -132,9 +131,6 @@ export function BuyerRequestForm() {
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>
-                Select the type of poultry you're interested in
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -160,9 +156,6 @@ export function BuyerRequestForm() {
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>
-                Select the quality category you're looking for
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -180,9 +173,6 @@ export function BuyerRequestForm() {
                   {...field}
                 />
               </FormControl>
-              <FormDescription>
-                Include any specific details about what you're looking for
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

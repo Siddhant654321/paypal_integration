@@ -589,7 +589,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
+      console.log("Received buyer request data:", req.body);
+
       const requestData = insertBuyerRequestSchema.parse(req.body);
+      console.log("Validated request data:", requestData);
+
       const buyerRequest = await storage.createBuyerRequest({
         ...requestData,
         buyerId: req.user.id,
@@ -597,13 +601,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json(buyerRequest);
     } catch (error) {
+      console.error("Error creating buyer request:", error);
       if (error instanceof ZodError) {
         res.status(400).json({
           message: "Invalid request data",
           errors: error.errors,
         });
       } else {
-        console.error("Error creating buyer request:", error);
         res.status(500).json({ message: "Failed to create buyer request" });
       }
     }
@@ -836,7 +840,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this new endpoint for handling auction end
+  // Add this new endpoint after the existing seller-related routes
+  app.get("/api/sellers/active", async (req, res) => {
+    try {
+      // Get approved sellers with profiles
+      const sellers = await storage.getUsers({ 
+        role: "seller",
+        approved: true 
+      });
+
+      // Get profiles and auctions for each seller
+      const sellersWithDetails = await Promise.all(
+        sellers.map(async (seller) => {
+          const profile = await storage.getProfile(seller.id);
+          const auctions = await storage.getAuctions({ 
+            sellerId: seller.id,
+            approved: true 
+          });
+
+          return {
+            ...seller,
+            profile,
+            auctions: auctions.filter(auction => 
+              auction.status === "active" || 
+              (auction.status === "ended" && auction.winningBidderId)
+            )
+          };
+        })
+      );
+
+      // Only return sellers who have profiles and active/successful auctions
+      const activeSellers = sellersWithDetails.filter(
+        seller => seller.profile && seller.auctions.length > 0
+      );
+
+      res.json(activeSellers);
+    } catch (error) {
+      console.error("Error fetching active sellers:", error);
+      res.status(500).json({ message: "Failed to fetch active sellers" });
+    }
+  });
+
+  // Add this new endpoint for fetching individual seller data
+  app.get("/api/sellers/:id", async (req, res) => {
+    try {
+      const sellerId = parseInt(req.params.id);
+
+      // Get the seller's user data
+      const seller = await storage.getUser(sellerId);
+      if (!seller) {
+        return res.status(404).json({ message: "Seller not found" });
+      }
+
+      // Get the seller's profile
+      const profile = await storage.getProfile(sellerId);
+      if (!profile) {
+        return res.status(404).json({ message: "Seller profile not found" });
+      }
+
+      // Get the seller's auctions
+      const auctions = await storage.getAuctions({ 
+        sellerId: sellerId,
+        approved: true 
+      });
+
+      // Combine all the data
+      res.json({
+        ...seller,
+        profile,
+        auctions
+      });
+    } catch (error) {
+      console.error("Error fetching seller:", error);
+      res.status(500).json({ message: "Failed to fetch seller data" });
+    }
+  });
+
+  // Add this new endpoint after the existing seller-related routes
+  app.get("/api/sellers/active", async (req, res) => {
+    try {
+      // Get approved sellers with profiles
+      const sellers = await storage.getUsers({ 
+        role: "seller",
+        approved: true 
+      });
+
+      // Get profiles and auctions for each seller
+      const sellersWithDetails = await Promise.all(
+        sellers.map(async (seller) => {
+          const profile = await storage.getProfile(seller.id);
+          const auctions = await storage.getAuctions({ 
+            sellerId: seller.id,
+            approved: true 
+          });
+
+          return {
+            ...seller,
+            profile,
+            auctions: auctions.filter(auction => 
+              auction.status === "active" || 
+              (auction.status === "ended" && auction.winningBidderId)
+            )
+          };
+        })
+      );
+
+      // Only return sellers who have profiles and active/successful auctions
+      const activeSellers = sellersWithDetails.filter(
+        seller => seller.profile && seller.auctions.length > 0
+      );
+
+      res.json(activeSellers);
+    } catch (error) {
+      console.error("Error fetching active sellers:", error);
+      res.status(500).json({ message: "Failed to fetch active sellers" });
+    }
+  });
+
   app.post("/api/auctions/:id/end", requireAuth, async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
@@ -1352,79 +1472,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this new endpoint after the existing seller-related routes
-  app.get("/api/sellers/active", async (req, res) => {
+  // Add this new endpoint for handling auction end
+  app.post("/api/auctions/:id/end", requireAuth, async (req, res) => {
     try {
-      // Get approved sellers with profiles
-      const sellers = await storage.getUsers({ 
-        role: "seller",
-        approved: true 
-      });
+      const auctionId = parseInt(req.params.id);
+      const auction = await storage.getAuction(auctionId);
 
-      // Get profiles and auctions for each seller
-      const sellersWithDetails = await Promise.all(
-        sellers.map(async (seller) => {
-          const profile = await storage.getProfile(seller.id);
-          const auctions = await storage.getAuctions({ 
-            sellerId: seller.id,
-            approved: true 
-          });
-
-          return {
-            ...seller,
-            profile,
-            auctions: auctions.filter(auction => 
-              auction.status === "active" || 
-              (auction.status === "ended" && auction.winningBidderId)
-            )
-          };
-        })
-      );
-
-      // Only return sellers who have profiles and active/successful auctions
-      const activeSellers = sellersWithDetails.filter(
-        seller => seller.profile && seller.auctions.length > 0
-      );
-
-      res.json(activeSellers);
-    } catch (error) {
-      console.error("Error fetching active sellers:", error);
-      res.status(500).json({ message: "Failed to fetch active sellers" });
-    }
-  });
-
-  // Add this new endpoint for fetching individual seller data
-  app.get("/api/sellers/:id", async (req, res) => {
-    try {
-      const sellerId = parseInt(req.params.id);
-
-      // Get the seller's user data
-      const seller = await storage.getUser(sellerId);
-      if (!seller) {
-        return res.status(404).json({ message: "Seller not found" });
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
       }
 
-      // Get the seller's profile
-      const profile = await storage.getProfile(sellerId);
-      if (!profile) {
-        return res.status(404).json({ message: "Seller profile not found" });
+      // Verify auction has actually ended
+      if (new Date() <= new Date(auction.endDate)) {
+        return res.status(400).json({ message: "Auction has not ended yet" });
       }
 
-      // Get the seller's auctions
-      const auctions = await storage.getAuctions({ 
-        sellerId: sellerId,
-        approved: true 
-      });
+      // Get highest bid
+      const bids = await storage.getBidsForAuction(auctionId);
+      const highestBid = bids.length > 0
+        ? bids.reduce((max, bid) => bid.amount > max.amount ? bid : max, bids[0])
+        : null;
 
-      // Combine all the data
-      res.json({
-        ...seller,
-        profile,
-        auctions
-      });
+      if (!highestBid) {
+        // No bids placed, void the auction
+        await storage.updateAuction(auctionId, {
+          status: "voided",
+        });
+        return res.json({ message: "Auction ended with no bids" });
+      }
+
+      // Check if reserve price was met
+      const reserveMet = highestBid.amount >= auction.reservePrice;
+
+      if (reserveMet) {
+        // Automatically award to highest bidder
+        await storage.updateAuction(auctionId, {
+          status: "ended",
+          winningBidderId: highestBid.bidderId,
+          reserveMet: true,
+          paymentStatus: "pending",
+          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days to pay
+        });
+        return res.json({
+          message: "Auction ended successfully, reserve met",
+          winningBidderId: highestBid.bidderId
+        });
+      } else {
+        // Set to pending seller decision
+        await storage.updateAuction(auctionId, {
+          status: "pending_seller_decision",
+          reserveMet: false,
+        });
+        return res.json({
+          message: "Auction ended, awaiting seller decision",
+          highestBid: highestBid.amount
+        });
+      }
     } catch (error) {
-      console.error("Error fetching seller:", error);
-      res.status(500).json({ message: "Failed to fetch seller data" });
+      console.error("Error ending auction:", error);
+      res.status(500).json({ message: "Failed to end auction" });
     }
   });
 
