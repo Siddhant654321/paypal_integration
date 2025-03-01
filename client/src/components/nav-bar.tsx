@@ -4,12 +4,11 @@ import { Link } from "wouter";
 import { UserCircle, LineChart, Home, LayoutDashboard } from "lucide-react";
 import { NotificationsMenu } from "./notifications";
 import { Separator } from "@/components/ui/separator";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import type { Notification } from "@shared/schema";
 
 export default function NavBar() {
-  const { user, logoutMutation } = useAuth();
+  const { user } = useAuth();
 
   // Enhanced notification fetching with detailed logging
   const { data: notifications = [], error: notificationError } = useQuery<Notification[]>({
@@ -26,24 +25,6 @@ export default function NavBar() {
     },
     onError: (error) => {
       console.error("[Notifications] Fetch error:", error);
-    }
-  });
-
-  const markAllReadMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/notifications/mark-all-read", {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to mark notifications as read");
-      return response.json();
-    },
-    onSuccess: () => {
-      console.log("[Notifications] Marked all as read");
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-    },
-    onError: (error) => {
-      console.error("[Notifications] Mark all read error:", error);
     }
   });
 
@@ -106,8 +87,10 @@ export default function NavBar() {
               {/* User section */}
               <div className="flex items-center gap-2">
                 <NotificationsMenu 
-                  notifications={notifications} 
-                  onMarkAllRead={() => markAllReadMutation.mutate()}
+                  notifications={notifications || []} 
+                  onMarkAllRead={() => {
+                    // markAllReadMutation will be handled in the NotificationsMenu component
+                  }}
                 />
 
                 <Link href="/profile">

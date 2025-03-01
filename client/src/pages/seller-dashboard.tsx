@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign, ExternalLink, AlertCircle, CheckCircle2 } fro
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatPrice } from '../utils/formatters';
 import { useToast } from "@/hooks/use-toast";
@@ -43,9 +43,15 @@ const SellerDashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
 
   // Redirect if not a seller
-  if (!user || user.role !== "seller") {
+  if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
   }
+
+  // Fetch profile data
+  const { data: profile } = useQuery({
+    queryKey: ["/api/profile"],
+    enabled: !!user,
+  });
 
   const { data: auctions, isLoading: auctionsLoading } = useQuery<Auction[]>({
     queryKey: ["/api/seller/auctions"],
@@ -80,14 +86,12 @@ const SellerDashboard = () => {
         });
 
         if (!response.ok) {
-          // Handle non-JSON errors (like HTML responses)
           const contentType = response.headers.get("content-type");
           if (contentType && contentType.indexOf("application/json") !== -1) {
             const errorData = await response.json();
             console.error("Error response from server:", errorData);
             throw new Error(errorData.message || "Failed to connect with Stripe");
           } else {
-            // Not JSON, might be HTML error page
             const text = await response.text();
             console.error("Non-JSON error response:", text.substring(0, 200) + "...");
             throw new Error(`Server error: ${response.status} ${response.statusText}`);
@@ -97,7 +101,6 @@ const SellerDashboard = () => {
         const data = await response.json();
         console.log("Stripe Connect response:", data);
 
-        // Get the URL directly from the response
         const url = data.url;
 
         if (!url) {
@@ -113,10 +116,8 @@ const SellerDashboard = () => {
     },
     onSuccess: (data) => {
       console.log("Successfully got Stripe Connect URL:", data.substring(0, 30) + "...");
-      // Open the URL in a new tab instead of redirecting
       window.open(data, '_blank', 'noopener,noreferrer');
-      
-      // Show success message
+
       toast({
         title: "Stripe Connect",
         description: "Stripe onboarding page opened in a new tab. Please complete the setup there.",
@@ -131,17 +132,6 @@ const SellerDashboard = () => {
     }
   });
 
-  // Handle return from Stripe onboarding
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const success = params.get('success');
-    const refresh = params.get('refresh');
-
-    if (success === 'true' || refresh === 'true') {
-      window.history.replaceState({}, document.title, window.location.pathname);
-      window.location.reload();
-    }
-  }, []);
 
   // Filter auctions
   const filteredAuctions = auctions ? auctions.filter(auction => {
@@ -322,40 +312,15 @@ const SellerDashboard = () => {
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Seller Dashboard</h1>
-        {user && profile ? (
-          <Link href="/seller/new-auction">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Auction
-            </Button>
-          </Link>
-        ) : (
-          <Button disabled title="Complete your profile first">
+        <Link href="/seller/new-auction">
+          <Button>
             <Plus className="w-4 h-4 mr-2" />
             Create New Auction
           </Button>
-        )}
+        </Link>
       </div>
 
-      {!profile ? (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Complete Your Profile</CardTitle>
-            <CardDescription>
-              Please complete your seller profile before creating auctions.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/profile">
-              <Button className="w-full">
-                Complete Profile
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      ) : (
-        renderAccountStatus()
-      )}
+      {renderAccountStatus()}
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
