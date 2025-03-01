@@ -13,8 +13,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<string> {
     try {
-      console.log("Creating Stripe Connect account for seller:", profile.userId);
-
       // Create Stripe Connect account with more detailed settings
       const account = await stripe.accounts.create({
         type: 'express',
@@ -31,39 +29,20 @@ export class SellerPaymentService {
         },
       });
 
+      // Create an account session for embedded onboarding
+      const accountSession = await stripe.accountSessions.create({
+        account: account.id,
+        components: {
+          account_onboarding: { enabled: true },
+        },
+      });
+
       // Update profile with Stripe account ID
       await storage.updateProfileStripeAccount(profile.userId, account.id, "pending");
 
-      return account.id;
+      return accountSession.client_secret;
     } catch (error) {
       console.error("Error creating seller account:", error);
-      throw error;
-    }
-  }
-
-  static async getOnboardingLink(accountId: string, baseUrl: string): Promise<string> {
-    try {
-      console.log("Creating onboarding link for account:", accountId);
-
-      // Make sure URLs don't have double slashes
-      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-
-      // Create an account link with type=account_onboarding
-      const accountLink = await stripe.accountLinks.create({
-        account: accountId,
-        refresh_url: `${cleanBaseUrl}/seller/dashboard?refresh_onboarding=true`,
-        return_url: `${cleanBaseUrl}/seller/dashboard?onboarding_complete=true`,
-        type: 'account_onboarding',
-        collect: 'eventually_due',
-      });
-
-      if (!accountLink.url) {
-        throw new Error('Stripe did not return a valid onboarding URL');
-      }
-
-      return accountLink.url;
-    } catch (error) {
-      console.error("Error creating onboarding link:", error);
       throw error;
     }
   }
@@ -75,14 +54,6 @@ export class SellerPaymentService {
       }
 
       const account = await stripe.accounts.retrieve(accountId);
-
-      // Log detailed account status for debugging
-      console.log("Account status details:", {
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        requirements: account.requirements,
-        capabilities: account.capabilities
-      });
 
       if (account.charges_enabled && account.payouts_enabled) {
         return "verified";
@@ -97,24 +68,6 @@ export class SellerPaymentService {
     }
   }
 
-  static async getAccountDetails(accountId: string) {
-    try {
-      const account = await stripe.accounts.retrieve(accountId);
-      return {
-        payouts_enabled: account.payouts_enabled,
-        charges_enabled: account.charges_enabled,
-        requirements: account.requirements,
-        business_profile: account.business_profile,
-        business_type: account.business_type,
-        capabilities: account.capabilities,
-        settings: account.settings,
-      };
-    } catch (error) {
-      console.error("Error getting account details:", error);
-      throw error;
-    }
-  }
-
   static async getBalance(accountId: string) {
     try {
       return await stripe.balance.retrieve({
@@ -122,20 +75,6 @@ export class SellerPaymentService {
       });
     } catch (error) {
       console.error("Error getting balance:", error);
-      throw error;
-    }
-  }
-
-  static async getPayoutSchedule(accountId: string) {
-    try {
-      const account = await stripe.accounts.retrieve(accountId);
-      return {
-        interval: account.settings?.payouts?.schedule?.interval || 'daily',
-        delay_days: account.settings?.payouts?.schedule?.delay_days || 2,
-        next_payout_date: null // Stripe doesn't provide this directly
-      };
-    } catch (error) {
-      console.error("Error getting payout schedule:", error);
       throw error;
     }
   }
@@ -152,33 +91,13 @@ export class SellerPaymentService {
     }
   }
 
-  static async updatePayoutSchedule(accountId: string, interval: 'manual' | 'daily' | 'weekly' | 'monthly') {
-    try {
-      await stripe.accounts.update(accountId, {
-        settings: {
-          payouts: {
-            schedule: {
-              interval,
-            },
-          },
-        },
-      });
-    } catch (error) {
-      console.error("Error updating payout schedule:", error);
-      throw error;
-    }
-  }
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
-      console.log("Creating payout for seller:", sellerId, "amount:", amount);
-
-      // Get seller's Stripe account ID
       const profile = await storage.getProfile(sellerId);
       if (!profile?.stripeAccountId) {
         throw new Error("Seller has no Stripe account");
       }
 
-      // Create transfer to seller's connected account
       const transfer = await stripe.transfers.create({
         amount,
         currency: 'usd',
@@ -186,9 +105,6 @@ export class SellerPaymentService {
         transfer_group: `payment_${paymentId}`,
       });
 
-      console.log("Transfer created:", transfer.id);
-
-      // Create payout record
       await storage.createPayout({
         sellerId,
         paymentId,
