@@ -259,13 +259,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sellerId: newAuction.sellerId,
           sellerIdType: typeof newAuction.sellerId
         });
-        const result = await storage.createAuction(newAuction);
+        
+        // Convert dates to ensure they're in the correct format
+        const auctionWithFormattedDates = {
+          ...newAuction,
+          startDate: new Date(newAuction.startDate).toISOString(),
+          endDate: new Date(newAuction.endDate).toISOString()
+        };
+        
+        console.log("[AUCTION CREATE] Final formatted data:", {
+          title: auctionWithFormattedDates.title,
+          startDate: auctionWithFormattedDates.startDate,
+          endDate: auctionWithFormattedDates.endDate
+        });
+        
+        const result = await storage.createAuction(auctionWithFormattedDates);
         return res.status(201).json(result);
       } catch (dbError) {
         console.error("[AUCTION CREATE] Database error:", dbError);
+        console.error("[AUCTION CREATE] Error stack:", (dbError as Error).stack);
         return res.status(500).json({
           message: `Failed to save auction: ${(dbError as Error).message}`,
-          details: dbError
+          details: dbError instanceof Error ? dbError.message : String(dbError)
         });
       }
     } catch (error) {
