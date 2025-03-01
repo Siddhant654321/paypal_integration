@@ -322,15 +322,40 @@ const SellerDashboard = () => {
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Seller Dashboard</h1>
-        <Link href="/seller/new-auction">
-          <Button>
+        {user && profile ? (
+          <Link href="/seller/new-auction">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Auction
+            </Button>
+          </Link>
+        ) : (
+          <Button disabled title="Complete your profile first">
             <Plus className="w-4 h-4 mr-2" />
             Create New Auction
           </Button>
-        </Link>
+        )}
       </div>
 
-      {renderAccountStatus()}
+      {!profile ? (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Complete Your Profile</CardTitle>
+            <CardDescription>
+              Please complete your seller profile before creating auctions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/profile">
+              <Button className="w-full">
+                Complete Profile
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        renderAccountStatus()
+      )}
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />

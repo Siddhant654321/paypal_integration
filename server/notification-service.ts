@@ -14,9 +14,14 @@ export class NotificationService {
 
   static initialize(server: Server) {
     try {
-      log("Creating WebSocket server...", "notification");
-      this.wss = new WebSocketServer({ server, path: '/ws' });
-      log("WebSocket server created successfully", "notification");
+      // Create WebSocket server
+      console.log("Creating WebSocket server...");
+      this.wss = new WebSocketServer({ 
+        server,
+        path: '/ws'  // Add specific path for WebSocket connections
+      });
+      console.log("WebSocket server created successfully");
+      this.clients = new Map();
 
       this.wss.on('connection', (ws: WebSocket) => {
         log("New WebSocket connection established", "notification");
