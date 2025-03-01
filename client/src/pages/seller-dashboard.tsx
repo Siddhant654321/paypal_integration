@@ -45,7 +45,7 @@ const SellerDashboard = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"pending" | "active" | "ended">("active");
-  const [stripeConnectUrl, setStripeConnectUrl] = useState<string | null>(null);
+  //Removed: const [stripeConnectUrl, setStripeConnectUrl] = useState<string | null>(null);
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -83,21 +83,28 @@ const SellerDashboard = () => {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('/api/seller/connect', {
-        method: 'POST',
+      const response = await fetch("/api/seller/connect", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+        },
       });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to connect with Stripe");
+      }
+      const data = await response.json();
+      console.log("Stripe Connect response:", data);
 
-      if (!response?.url) {
+      if (!data.url) {
         throw new Error('No URL received from Stripe Connect');
       }
 
-      return response.url; // Return only the URL
+      return data.url;
     },
     onSuccess: (url) => {
-      setStripeConnectUrl(url); // Set the URL in state
+      // Directly redirect to Stripe's hosted onboarding
+      window.location.href = url;
     },
     onError: (error: Error) => {
       toast({
@@ -428,11 +435,6 @@ const SellerDashboard = () => {
           )}
         </TabsContent>
       </Tabs>
-      {stripeConnectUrl && (
-        <a href={stripeConnectUrl} target="_blank" rel="noopener noreferrer">
-          Go to Stripe Connect
-        </a>
-      )}
     </div>
   );
 };
