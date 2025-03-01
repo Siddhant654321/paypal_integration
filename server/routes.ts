@@ -882,26 +882,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add these routes after the existing seller routes
-  // Stripe Connect integration routes
+  app.get("/api/seller/account", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(404).json({ message: "No Stripe account found" });
+      }
+
+      const accountDetails = await SellerPaymentService.getAccountDetails(profile.stripeAccountId);
+      res.json(accountDetails);
+    } catch (error) {
+      console.error("Error getting account details:", error);
+      res.status(500).json({ message: "Failed to get account details" });
+    }
+  });
+
   app.post("/api/seller/connect", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      // Get user profile
       const profile = await storage.getProfile(req.user.id);
       if (!profile) {
         return res.status(400).json({ message: "Profile not found. Please complete your profile first." });
       }
 
-      // Create Stripe Connect account
       const accountId = await SellerPaymentService.createSellerAccount(profile);
-
-      // Get the base URL
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-      // Get onboarding link
       const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
 
       res.json({ url: onboardingUrl });
@@ -914,445 +926,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/seller/status", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.json({ status: "not_started" });
+      }
+
+      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
+      res.json({ status });
+    } catch (error) {
+      console.error("Error checking account status:", error);
+      res.status(500).json({ message: "Failed to check account status" });
+    }
+  });
+
+  app.get("/api/seller/balance", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(404).json({ message: "No Stripe account found" });
+      }
+
+      const balance = await SellerPaymentService.getBalance(profile.stripeAccountId);
+      res.json(balance);
+    } catch (error) {
+      console.error("Error getting balance:", error);
+      res.status(500).json({ message: "Failed to get balance" });
+    }
+  });
+
   app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      // Get user profile with Stripe account ID
       const profile = await storage.getProfile(req.user.id);
       if (!profile?.stripeAccountId) {
-        return res.status(400).json({ message: "No Stripe account found" });
+        return res.status(404).json({ message: "No Stripe account found" });
       }
 
-      // Get the base URL
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-      // Get fresh onboarding link
       const onboardingUrl = await SellerPaymentService.getOnboardingLink(profile.stripeAccountId, baseUrl);
 
       res.json({ url: onboardingUrl });
     } catch (error) {
       console.error("Error refreshing onboarding link:", error);
-      res.status(500).json({ 
-        message: "Failed to refresh onboarding link",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  });
-
-  // Add Stripe Connect account status endpoint
-  app.get("/api/seller/status", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      // Get user profile
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile) {
-        return res.json({ status: "not_started" });
-      }
-
-      if (!profile.stripeAccountId) {
-        return res.json({ status: "not_started" });
-      }
-
-      // Check account status with Stripe
-      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
-      res.json({ status });
-    } catch (error) {
-      console.error("Error checking Stripe account status:", error);
-      res.status(500).json({ 
-        message: "Failed to check account status",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  });
-
-  app.get("/api/sellers/active", async (req, res) => {
-    try {
-      // Get approved sellers with profiles
-      const sellers = await storage.getUsers({ 
-        role: "seller",
-        approved: true 
-      });
-
-      // Get profiles and auctions for each seller
-      const sellersWithDetails = await Promise.all(
-        sellers.map(async (seller) => {
-          const profile = await storage.getProfile(seller.id);
-          const auctions = await storage.getAuctions({ 
-            sellerId: seller.id,
-            approved: true 
-          });
-
-          return {
-            ...seller,
-            profile,
-            auctions: auctions.filter(auction => 
-              auction.status === "active" || 
-              (auction.status === "ended" && auction.winningBidderId)
-            )
-          };
-        })      );
-
-      // Only return sellers who have profiles and active/successful auctions
-      const activeSellers = sellersWithDetails.filter(
-        seller => seller.profile && seller.auctions.length > 0
-      );
-
-      res.json(activeSellers);
-    } catch (error) {
-      console.error("Error fetching active sellers:", error);
-      res.status(500).json({ message: "Failed to fetch active sellers" });
-    }
-  });
-
-  // Add this new endpoint for fetching individual seller data
-  app.get("/api/sellers/:id", async (req, res) => {
-    try {
-      const sellerId = parseInt(req.params.id);
-
-      // Get the seller's user data
-      const seller = await storage.getUser(sellerId);
-      if (!seller) {
-        return res.status(404).json({ message: "Seller not found" });
-      }
-
-      // Get the seller's profile
-      const profile = await storage.getProfile(sellerId);
-      if (!profile) {
-        return res.status(404).json({ message: "Seller profile not found" });
-      }
-
-      // Get the seller's auctions
-      const auctions = await storage.getAuctions({ 
-        sellerId: sellerId,
-        approved: true 
-      });
-
-      // Combine all the data
-      res.json({
-        ...seller,
-        profile,
-        auctions
-      });
-    } catch (error) {
-      console.error("Error fetching seller:", error);
-      res.status(500).json({ message: "Failed to fetch seller data" });
-    }
-  });
-
-  // Add this new endpoint after the existing seller-related routes
-  app.get("/api/sellers/active", async (req, res) => {
-    try {
-      // Get approved sellers with profiles
-      const sellers = await storage.getUsers({ 
-        role: "seller",
-        approved: true 
-      });
-
-      // Get profiles and auctions for each seller
-      const sellersWithDetails = await Promise.all(
-        sellers.map(async (seller) => {
-          const profile = await storage.getProfile(seller.id);
-          const auctions = await storage.getAuctions({ 
-            sellerId: seller.id,
-            approved: true 
-          });
-
-          return {
-            ...seller,
-            profile,
-            auctions: auctions.filter(auction => 
-              auction.status === "active" || 
-              (auction.status === "ended" && auction.winningBidderId)
-            )
-          };
-        })      );
-
-      // Only return sellers who have profiles and active/successful auctions
-      const activeSellers = sellersWithDetails.filter(
-        seller => seller.profile && seller.auctions.length > 0
-      );
-
-      res.json(activeSellers);
-    } catch (error) {
-      console.error("Error fetching active sellers:", error);
-      res.status(500).json({ message: "Failed to fetch active sellers" });
-    }
-  });
-
-  app.post("/api/auctions/:id/end", requireAuth, async (req, res) => {
-    try {
-      const auctionId = parseInt(req.params.id);
-      const auction = await storage.getAuction(auctionId);
-
-      if (!auction) {
-        return res.status(404).json({ message: "Auction not found" });
-      }
-
-      // Verify auction has actually ended
-      if (new Date() <= new Date(auction.endDate)) {
-        return res.status(400).json({ message: "Auction has not ended yet" });
-      }
-
-      // Get highest bid
-      const bids = await storage.getBidsForAuction(auctionId);
-      const highestBid = bids.length > 0
-        ? bids.reduce((max, bid) => bid.amount > max.amount ? bid : max, bids[0])
-        : null;
-
-      if (!highestBid) {
-        // No bids placed, void the auction
-        await storage.updateAuction(auctionId, {
-          status: "voided",
-          updatedAt: new Date()
-        });
-        return res.json({ message: "Auction ended with no bids" });
-      }
-
-      // Check if reserve price was met
-      const reserveMet = highestBid.amount >= auction.reservePrice;
-
-      if (reserveMet) {
-        // Automatically award to highest bidder
-        await storage.updateAuction(auctionId, {
-          status: "ended",
-          winningBidderId: highestBid.bidderId,
-          reserveMet: true,
-          paymentStatus: "pending",
-          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
-          updatedAt: new Date() 
-        });
-        return res.json({
-          message: "Auction ended successfully, reserve met",
-          winningBidderId: highestBid.bidderId
-        });
-      } else {
-        // Set to pending seller decision
-        await storage.updateAuction(auctionId, {
-          status: "pending_seller_decision",
-          reserveMet: false,
-          updatedAt: new Date()
-        });
-        return res.json({
-          message: "Auction ended, awaiting seller decision",
-          highestBid: highestBid.amount
-        });
-      }
-    } catch (error) {
-      console.error("Error ending auction:", error);
-      res.status(500).json({ message: "Failed to end auction" });
-    }
-  });
-
-  // Add endpoint for seller decision
-  app.post("/api/auctions/:id/seller-decision", requireAuth, async (req, res) => {
-    try {
-      const auctionId = parseInt(req.params.id);
-      const { decision } = req.body;
-
-      if (!decision || !["accept", "void"].includes(decision)) {
-        return res.status(400).json({ message: "Invalid decision" });
-      }
-
-      const auction = await storage.getAuction(auctionId);
-      if (!auction) {
-        return res.status(404).json({ message: "Auction not found" });
-      }
-
-      // Verify this is the seller
-      if (auction.sellerId !== req.user!.id) {
-        return res.status(403).json({ message: "Only the seller can make this decision" });
-      }
-
-      // Verify auction is in pending_seller_decision status
-      if (auction.status !== "pending_seller_decision") {
-        return res.status(400).json({ message: "Auction is not awaiting seller decision" });
-      }
-
-      // Get highest bid
-      const bids = await storage.getBidsForAuction(auctionId);
-      const highestBid = bids.reduce((max, bid) => bid.amount > max.amount ? bid : max, bids[0]);
-
-      if (decision === "accept") {
-        // Accept the highest bid
-        await storage.updateAuction(auctionId, {
-          status: "ended",
-          winningBidderId: highestBid.bidderId,
-          sellerDecision: "accept",
-          paymentStatus: "pending",
-          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
-        });
-        return res.json({
-          message: "Highest bid accepted",
-          winningBidderId: highestBid.bidderId
-        });
-      } else {
-        // Void the auction
-        await storage.updateAuction(auctionId, {
-          status: "voided",
-          sellerDecision: "void"
-        });
-        return res.json({ message: "Auction voided by seller" });
-      }
-    } catch (error) {
-      console.error("Error processing seller decision:", error);
-      res.status(500).json({ message: "Failed to process seller decision" });
-    }
-  });
-
-  // Seller onboarding and payout routes
-  app.post("/api/seller/connect", requireAuth, requireProfile, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      // Get publishable key (make sure it's using the correct env var name)
-      const stripePublishableKey = process.env.VITE_STRIPE_PUBLISHABLE_KEY;
-      if (!stripePublishableKey) {
-        console.error("Missing Stripe publishable key");
-        return res.status(500).json({
-          message: "Server configuration error",
-          details: "Missing Stripe publishable key"
-        });
-      }
-
-      console.log("Stripe Connect request initiated. PublishableKey available:", !!stripePublishableKey);
-      console.log("User ID:", req.user.id, "User role:", req.user.role);
-
-      // Validate protocol and host
-      if (!req.protocol || !req.get('host')) {
-        console.error("Missing protocol or host in request:", { protocol: req.protocol, host: req.get('host') });
-        return res.status(500).json({
-          message: "Invalid server configuration",
-          details: "Could not determine server URL"
-        });
-      }
-
-      // Construct base URL
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      console.log("Using base URL:", baseUrl);
-
-      // Check if user already has a Stripe account
-      const existingProfile = await storage.getProfile(req.user.id);
-      console.log("Existing profile:", existingProfile ? "found" : "not found", 
-                   "Stripe account ID:", existingProfile?.stripeAccountId || "none");
-      
-      if (existingProfile?.stripeAccountId) {
-        console.log("User already has Stripe account:", existingProfile.stripeAccountId);
-
-        // Get onboarding link for existing account
-        try {
-          console.log("Getting onboarding link for existing account");
-          const onboardingUrl = await SellerPaymentService.getOnboardingLink(
-            existingProfile.stripeAccountId,
-            baseUrl
-          );
-          console.log("Successfully generated onboarding URL for existing account");
-
-          return res.json({
-            url: onboardingUrl,
-            accountId: existingProfile.stripeAccountId,
-            publishableKey: stripePublishableKey
-          });
-        } catch (linkError) {
-          console.error("Failed to create onboarding link:", linkError);
-          if (linkError instanceof Error && linkError.message.includes("No such account")) {
-            // The account was deleted on Stripe side, need to create a new one
-            console.log("Account was deleted on Stripe, creating a new one");
-            // Continue with creation flow
-          } else {
-            return res.status(500).json({
-              message: "Failed to create Stripe onboarding link",
-              error: linkError instanceof Error ? linkError.message : "Unknown error"
-            });
-          }
-        }
-      }
-
-      // Get user profile
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile) {
-        return res.status(404).json({ message: "Profile not found" });
-      }
-
-      console.log("Creating new Stripe account for user:", req.user.id);
-
-      try {
-        // Create Stripe account
-        const accountId = await SellerPaymentService.createSellerAccount(profile);
-        console.log("New Stripe account created with ID:", accountId);
-
-        // Get onboarding link
-        const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
-        console.log("Onboarding URL generated:", onboardingUrl);
-
-        res.json({
-          url: onboardingUrl,
-          accountId,
-          publishableKey: stripePublishableKey
-        });
-      } catch (stripeError) {
-        console.error("Stripe API error:", stripeError);
-        return res.status(500).json({
-          message: "Failed to setup Stripe account",
-          error: stripeError instanceof Error ? stripeError.message : "Unknown Stripe error"
-        });
-      }
-    } catch (error) {
-      console.error("Error creating seller account:", error);
-      res.status(500).json({
-        message: "Failed to create seller account",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  });
-
-  app.get("/api/seller/status", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.json({ status: "not_started" });
-      }
-
-      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
-      res.json({ status });
-    } catch (error) {
-      console.error("Error checking seller status:", error);
-      res.status(500).json({ message: "Failed to check seller status" });
-    }
-  });
-
-  app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(404).json({ message: "Stripe account not found" });
-      }
-
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const onboardingUrl = await SellerPaymentService.getOnboardingLink(
-        profile.stripeAccountId,
-        baseUrl
-      );
-
-      res.json({ url: onboardingUrl });
-    } catch (error) {
-      console.error("Error refreshing onboarding link:", error);
       res.status(500).json({ message: "Failed to refresh onboarding link" });
+    }
+  });
+
+  app.get("/api/seller/payout-schedule", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(404).json({ message: "No Stripe account found" });
+      }
+
+      const schedule = await SellerPaymentService.getPayoutSchedule(profile.stripeAccountId);
+      res.json(schedule);
+    } catch (error) {
+      console.error("Error getting payout schedule:", error);
+      res.status(500).json({ message: "Failed to get payout schedule" });
     }
   });
 
@@ -1362,11 +1010,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const payouts = await storage.getPayoutsBySeller(req.id);
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(404).json({ message: "No Stripe account found" });
+      }
+
+      const payouts = await SellerPaymentService.getPayouts(profile.stripeAccountId);
       res.json(payouts);
     } catch (error) {
-      console.error("Error fetching payouts:", error);
-      res.status(500).json({ message: "Failed to fetch payouts" });
+      console.error("Error getting payouts:", error);
+      res.status(500).json({ message: "Failed to get payouts" });
     }
   });
 
@@ -1685,6 +1338,227 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error ending auction:", error);
       res.status(500).json({ message: "Failed to end auction" });
+    }
+  });
+
+  // Add endpoint for seller decision
+  app.post("/api/auctions/:id/seller-decision", requireAuth, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const { decision } = req.body;
+
+      if (!decision || !["accept", "void"].includes(decision)) {
+        return res.status(400).json({ message: "Invalid decision" });
+      }
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Verify this is the seller
+      if (auction.sellerId !== req.user!.id) {
+        return res.status(403).json({ message: "Only the seller can make this decision" });
+      }
+
+      // Verify auction is in pending_seller_decision status
+      if (auction.status !== "pending_seller_decision") {
+        return res.status(400).json({ message: "Auction is not awaiting seller decision" });
+      }
+
+      // Get highest bid
+      const bids = await storage.getBidsForAuction(auctionId);
+      const highestBid = bids.reduce((max, bid) => bid.amount > max.amount ? bid : max, bids[0]);
+
+      if (decision === "accept") {
+        // Accept the highest bid
+        await storage.updateAuction(auctionId, {
+          status: "ended",
+          winningBidderId: highestBid.bidderId,
+          sellerDecision: "accept",
+          paymentStatus: "pending",
+          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
+        });
+        return res.json({
+          message: "Highest bid accepted",
+          winningBidderId: highestBid.bidderId
+        });
+      } else {
+        // Void the auction
+        await storage.updateAuction(auctionId, {
+          status: "voided",
+          sellerDecision: "void"
+        });
+        return res.json({ message: "Auction voided by seller" });
+      }
+    } catch (error) {
+      console.error("Error processing seller decision:", error);
+      res.status(500).json({ message: "Failed to process seller decision" });
+    }
+  });
+
+  // Seller onboarding and payout routes
+  app.post("/api/seller/connect", requireAuth, requireProfile, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Get publishable key (make sure it's using the correct env var name)
+      const stripePublishableKey = process.env.VITE_STRIPE_PUBLISHABLE_KEY;
+      if (!stripePublishableKey) {
+        console.error("Missing Stripe publishable key");
+        return res.status(500).json({
+          message: "Server configuration error",
+          details: "Missing Stripe publishable key"
+        });
+      }
+
+      console.log("Stripe Connect request initiated. PublishableKey available:", !!stripePublishableKey);
+      console.log("User ID:", req.user.id, "User role:", req.user.role);
+
+      // Validate protocol and host
+      if (!req.protocol || !req.get('host')) {
+        console.error("Missing protocol or host in request:", { protocol: req.protocol, host: req.get('host') });
+        return res.status(500).json({
+          message: "Invalid server configuration",
+          details: "Could not determine server URL"
+        });
+      }
+
+      // Construct base URL
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      console.log("Using base URL:", baseUrl);
+
+      // Check if user already has a Stripe account
+      const existingProfile = await storage.getProfile(req.user.id);
+      console.log("Existing profile:", existingProfile ? "found" : "not found", 
+                   "Stripe account ID:", existingProfile?.stripeAccountId || "none");
+      
+      if (existingProfile?.stripeAccountId) {
+        console.log("User already has Stripe account:", existingProfile.stripeAccountId);
+
+        // Get onboarding link for existing account
+        try {
+          console.log("Getting onboarding link for existing account");
+          const onboardingUrl = await SellerPaymentService.getOnboardingLink(
+            existingProfile.stripeAccountId,
+            baseUrl
+          );
+          console.log("Successfully generated onboarding URL for existing account");
+
+          return res.json({
+            url: onboardingUrl,
+            accountId: existingProfile.stripeAccountId,
+            publishableKey: stripePublishableKey
+          });
+        } catch (linkError) {
+          console.error("Failed to create onboarding link:", linkError);
+          if (linkError instanceof Error && linkError.message.includes("No such account")) {
+            // The account was deleted on Stripe side, need to create a new one
+            console.log("Account was deleted on Stripe, creating a new one");
+            // Continue with creation flow
+          } else {
+            return res.status(500).json({
+              message: "Failed to create Stripe onboarding link",
+              error: linkError instanceof Error ? linkError.message : "Unknown error"
+            });
+          }
+        }
+      }
+
+      // Get user profile
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      console.log("Creating new Stripe account for user:", req.user.id);
+
+      try {
+        // Create Stripe account
+        const accountId = await SellerPaymentService.createSellerAccount(profile);
+        console.log("New Stripe account created with ID:", accountId);
+
+        // Get onboarding link
+        const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
+        console.log("Onboarding URL generated:", onboardingUrl);
+
+        res.json({
+          url: onboardingUrl,
+          accountId,
+          publishableKey: stripePublishableKey
+        });
+      } catch (stripeError) {
+        console.error("Stripe API error:", stripeError);
+        return res.status(500).json({
+          message: "Failed to setup Stripe account",
+          error: stripeError instanceof Error ? stripeError.message : "Unknown Stripe error"
+        });
+      }
+    } catch (error) {
+      console.error("Error creating seller account:", error);
+      res.status(500).json({
+        message: "Failed to create seller account",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.get("/api/seller/status", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.json({ status: "not_started" });
+      }
+
+      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
+      res.json({ status });
+    } catch (error) {
+      console.error("Error checking seller status:", error);
+      res.status(500).json({ message: "Failed to check seller status" });
+    }
+  });
+
+  app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(404).json({ message: "Stripe account not found" });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const onboardingUrl = await SellerPaymentService.getOnboardingLink(
+        profile.stripeAccountId,
+        baseUrl
+      );
+
+      res.json({ url: onboardingUrl });
+    } catch (error) {
+      console.error("Error refreshing onboarding link:", error);
+      res.status(500).json({ message: "Failed to refresh onboarding link" });
+    }
+  });
+
+  app.get("/api/seller/payouts", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const payouts = await storage.getPayoutsBySeller(req.id);
+      res.json(payouts);
+    } catch (error) {
+      console.error("Error fetching payouts:", error);
+      res.status(500).json({ message: "Failed to fetch payouts" });
     }
   });
 

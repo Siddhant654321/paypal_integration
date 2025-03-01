@@ -7,7 +7,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16"
+  apiVersion: "2025-02-24.acacia"
 });
 
 export class SellerPaymentService {
@@ -26,12 +26,10 @@ export class SellerPaymentService {
           transfers: { requested: true },
         },
         business_profile: {
-          name: profile.businessName || profile.fullName,
-          url: process.env.APP_URL ? `${process.env.APP_URL}/seller/${profile.userId}` : 'https://example.com',
+          product_description: "Poultry and hatching eggs auction sales",
+          mcc: "0742", // Veterinary Services, which includes animal breeding
         },
       });
-
-      console.log("Stripe Connect account created:", account.id);
 
       // Update profile with Stripe account ID
       await storage.updateProfileStripeAccount(profile.userId, account.id, "pending");
@@ -46,27 +44,23 @@ export class SellerPaymentService {
   static async getOnboardingLink(accountId: string, baseUrl: string): Promise<string> {
     try {
       console.log("Creating onboarding link for account:", accountId);
-      
+
       // Make sure URLs don't have double slashes
       const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      
+
       // Create an account link with type=account_onboarding
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        refresh_url: `${cleanBaseUrl}/#/seller/dashboard?refresh_onboarding=true`,
-        return_url: `${cleanBaseUrl}/#/seller/dashboard?onboarding_complete=true`,
+        refresh_url: `${cleanBaseUrl}/seller/dashboard?refresh_onboarding=true`,
+        return_url: `${cleanBaseUrl}/seller/dashboard?onboarding_complete=true`,
         type: 'account_onboarding',
-        collect: 'currently_due',  // Focus on collecting currently due requirements first
+        collect: 'eventually_due',
       });
 
       if (!accountLink.url) {
         throw new Error('Stripe did not return a valid onboarding URL');
       }
-      
-      console.log("Generated Stripe onboarding URL successfully");
-      
-      console.log("Generated onboarding URL:", accountLink.url);
-      console.log("With return path:", `${cleanBaseUrl}/#/seller/dashboard`);
+
       return accountLink.url;
     } catch (error) {
       console.error("Error creating onboarding link:", error);
@@ -76,76 +70,47 @@ export class SellerPaymentService {
 
   static async getAccountStatus(accountId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
     try {
-      console.log("Checking account status for:", accountId);
-
-      // Handle empty or invalid account ID
       if (!accountId || typeof accountId !== 'string' || accountId.trim() === '') {
-        console.error("Invalid account ID provided:", accountId);
         return "not_started";
       }
 
-      // Attempt to retrieve the account
-      try {
-        const account = await stripe.accounts.retrieve(accountId);
-        
-        console.log("Account status details:", {
-          id: account.id,
-          charges_enabled: account.charges_enabled,
-          payouts_enabled: account.payouts_enabled,
-          requirements_disabled_reason: account.requirements?.disabled_reason,
-          capabilities: account.capabilities
-        });
+      const account = await stripe.accounts.retrieve(accountId);
 
-        // For better debugging, log more details about requirements
-        if (account.requirements) {
-          console.log("Account requirements:", {
-            currently_due: account.requirements.currently_due,
-            eventually_due: account.requirements.eventually_due,
-            past_due: account.requirements.past_due,
-            pending_verification: account.requirements.pending_verification
-          });
-        }
+      // Log detailed account status for debugging
+      console.log("Account status details:", {
+        charges_enabled: account.charges_enabled,
+        payouts_enabled: account.payouts_enabled,
+        requirements: account.requirements,
+        capabilities: account.capabilities
+      });
 
-        if (account.charges_enabled && account.payouts_enabled) {
-          return "verified";
-        } else if (account.requirements?.disabled_reason) {
-          console.log("Account rejected reason:", account.requirements.disabled_reason);
-          return "rejected";
-        }
-
-        return "pending";
-      } catch (stripeError) {
-        // Handle specific Stripe errors
-        if (stripeError instanceof Stripe.errors.StripeError) {
-          console.error("Stripe API Error:", {
-            type: stripeError.type,
-            code: stripeError.code,
-            message: stripeError.message
-          });
-          
-          // If the account doesn't exist or was deleted
-          if (stripeError.code === 'resource_missing' || 
-              stripeError.message.includes('No such account')) {
-            return "not_started";
-          }
-        }
-        
-        // Instead of re-throwing, return rejected state to prevent UI breakage
-        console.error("Unhandled Stripe error:", stripeError);
+      if (account.charges_enabled && account.payouts_enabled) {
+        return "verified";
+      } else if (account.requirements?.disabled_reason) {
         return "rejected";
       }
+
+      return account.details_submitted ? "pending" : "not_started";
     } catch (error) {
       console.error("Error checking account status:", error);
-      return "rejected"; // Return rejected instead of throwing to avoid breaking the UI
+      return "not_started";
     }
   }
 
-  static async getPayoutSchedule(accountId: string) {
+  static async getAccountDetails(accountId: string) {
     try {
       const account = await stripe.accounts.retrieve(accountId);
-      return account.settings?.payouts;
+      return {
+        payouts_enabled: account.payouts_enabled,
+        charges_enabled: account.charges_enabled,
+        requirements: account.requirements,
+        business_profile: account.business_profile,
+        business_type: account.business_type,
+        capabilities: account.capabilities,
+        settings: account.settings,
+      };
     } catch (error) {
-      console.error("Error getting payout schedule:", error);
+      console.error("Error getting account details:", error);
       throw error;
     }
   }
@@ -157,6 +122,20 @@ export class SellerPaymentService {
       });
     } catch (error) {
       console.error("Error getting balance:", error);
+      throw error;
+    }
+  }
+
+  static async getPayoutSchedule(accountId: string) {
+    try {
+      const account = await stripe.accounts.retrieve(accountId);
+      return {
+        interval: account.settings?.payouts?.schedule?.interval || 'daily',
+        delay_days: account.settings?.payouts?.schedule?.delay_days || 2,
+        next_payout_date: null // Stripe doesn't provide this directly
+      };
+    } catch (error) {
+      console.error("Error getting payout schedule:", error);
       throw error;
     }
   }
@@ -173,6 +152,22 @@ export class SellerPaymentService {
     }
   }
 
+  static async updatePayoutSchedule(accountId: string, interval: 'manual' | 'daily' | 'weekly' | 'monthly') {
+    try {
+      await stripe.accounts.update(accountId, {
+        settings: {
+          payouts: {
+            schedule: {
+              interval,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error updating payout schedule:", error);
+      throw error;
+    }
+  }
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
       console.log("Creating payout for seller:", sellerId, "amount:", amount);

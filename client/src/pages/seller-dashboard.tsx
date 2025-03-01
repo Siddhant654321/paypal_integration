@@ -49,13 +49,11 @@ interface StripePayout {
   }[];
 }
 
-
 const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const searchParams = new URLSearchParams(window.location.search);
-
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -82,12 +80,6 @@ const SellerDashboard = () => {
 
   const stripeStatusQuery = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
-    onSuccess: (data) => console.log("Stripe status data:", data),
-    onError: (error) => {
-      console.error("Stripe status error:", error);
-      // Don't let errors break the UI
-      return { status: "not_started" };
-    },
     retry: 1
   });
 
@@ -471,16 +463,6 @@ const SellerDashboard = () => {
       </Card>
     );
   };
-
-
-  // Show loading state while data is being fetched
-  if (auctionsLoading || bidsLoading || payoutsLoading || stripeStatusQuery.isLoading || scheduleLoading || balanceLoading || stripePayoutsLoading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="text-center">Loading your dashboard...</div>
-      </div>
-    );
-  }
 
   useEffect(() => {
     // Handle return from Stripe onboarding
