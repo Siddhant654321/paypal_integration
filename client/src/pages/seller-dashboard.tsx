@@ -2,14 +2,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, DollarSign, ExternalLink, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Search, DollarSign, ExternalLink, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatPrice } from '../utils/formatters';
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Alert,
@@ -36,11 +35,6 @@ interface Balance {
 interface PayoutSchedule {
   delay_days: number;
   interval: string;
-}
-
-interface StripeConnectResponse {
-  url: string;
-  accountId: string;
 }
 
 const SellerDashboard = () => {
@@ -78,9 +72,6 @@ const SellerDashboard = () => {
     mutationFn: async () => {
       const response = await fetch('/api/seller/connect', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         credentials: 'include'
       });
 
@@ -97,7 +88,6 @@ const SellerDashboard = () => {
       return data;
     },
     onSuccess: (data) => {
-      // Redirect to Stripe's hosted onboarding
       window.location.href = data.url;
     },
     onError: (error: Error) => {
@@ -116,7 +106,6 @@ const SellerDashboard = () => {
     const refresh = params.get('refresh');
 
     if (success === 'true' || refresh === 'true') {
-      // Clean up URL parameters and reload to update status
       window.history.replaceState({}, document.title, window.location.pathname);
       window.location.reload();
     }
@@ -125,7 +114,7 @@ const SellerDashboard = () => {
   // Filter auctions
   const filteredAuctions = auctions ? auctions.filter(auction => {
     const searchLower = searchTerm.toLowerCase();
-    return auction.title?.toLowerCase().includes(searchLower) || 
+    return auction.title?.toLowerCase().includes(searchLower) ||
            auction.description?.toLowerCase().includes(searchLower);
   }) : [];
 
@@ -147,6 +136,7 @@ const SellerDashboard = () => {
 
     switch (stripeStatus?.status) {
       case "not_started":
+      case "rejected":
         return (
           <Card className="mb-6">
             <CardHeader>
@@ -201,6 +191,7 @@ const SellerDashboard = () => {
                 onClick={() => connectWithStripeMutation.mutate()}
               >
                 Continue Setup
+                <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
             </CardContent>
           </Card>
@@ -263,30 +254,6 @@ const SellerDashboard = () => {
           </>
         );
 
-      case "rejected":
-        return (
-          <Card className="mb-6 border-red-200">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <XCircle className="mr-2 h-5 w-5 text-red-500" />
-                Account Verification Failed
-              </CardTitle>
-              <CardDescription>
-                There was an issue verifying your account. Please complete all required information.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                className="w-full"
-                onClick={() => connectWithStripeMutation.mutate()}
-                variant="destructive"
-              >
-                Complete Required Information
-              </Button>
-            </CardContent>
-          </Card>
-        );
-
       default:
         return (
           <Card className="mb-6">
@@ -302,6 +269,7 @@ const SellerDashboard = () => {
                 onClick={() => connectWithStripeMutation.mutate()}
               >
                 Set Up Payments Account
+                <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
             </CardContent>
           </Card>

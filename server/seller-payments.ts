@@ -37,8 +37,8 @@ export class SellerPaymentService {
         type: 'account_onboarding',
       });
 
-      // Update profile with Stripe account ID
-      await storage.updateProfileStripeAccount(profile.userId, account.id, "pending");
+      // Update profile with Stripe account ID and initial status
+      await storage.updateProfileStripeAccount(profile.userId, account.id, "not_started");
 
       return {
         accountId: account.id,
@@ -52,12 +52,19 @@ export class SellerPaymentService {
 
   static async refreshOnboarding(accountId: string): Promise<string> {
     try {
+      // Create a new account link for continuing onboarding
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
         refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
         return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
         type: 'account_onboarding',
       });
+
+      // Reset the account status to allow fresh attempt
+      const profiles = await storage.getProfiles({ stripeAccountId: accountId });
+      if (profiles && profiles.length > 0) {
+        await storage.updateProfileStripeAccount(profiles[0].userId, accountId, "not_started");
+      }
 
       return accountLink.url;
     } catch (error) {
@@ -76,11 +83,11 @@ export class SellerPaymentService {
 
       if (account.charges_enabled && account.payouts_enabled) {
         return "verified";
-      } else if (account.requirements?.disabled_reason) {
-        return "rejected";
+      } else if (account.details_submitted) {
+        return "pending";
       }
 
-      return account.details_submitted ? "pending" : "not_started";
+      return "not_started";
     } catch (error) {
       console.error("Error checking account status:", error);
       return "not_started";
