@@ -1,100 +1,67 @@
-
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 interface StripeConnectProps {
   clientSecret: string;
   onComplete?: () => void;
 }
 
+declare global {
+  interface Window {
+    StripeConnect?: {
+      EmbeddedComponents: {
+        mount: (options: {
+          clientSecret: string;
+          appearance?: {
+            theme: 'flat' | 'stripe' | 'night';
+            variables?: Record<string, string>;
+          };
+          onComplete?: () => void;
+          onError?: (error: Error) => void;
+        }) => void;
+      };
+    };
+  }
+}
+
 export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) {
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if the script is already loaded to avoid duplicates
-    if (document.getElementById('stripe-connect-script')) {
-      document.getElementById('stripe-connect-script')?.remove();
-    }
-
-    const targetElement = document.getElementById('stripe-connect-mount');
-    if (!targetElement) {
-      console.error('Target element #stripe-connect-mount not found');
+    // Check if the script is already loaded
+    if (document.getElementById('stripe-js')) {
+      if (window.StripeConnect) {
+        mountStripeConnect();
+      }
       return;
     }
 
-    // Load Stripe Connect script
     const script = document.createElement('script');
-    script.id = 'stripe-connect-script';
-    script.src = 'https://js.stripe.com/v3/connect-embeddable/v1/';
+    script.id = 'stripe-js';
+    script.src = 'https://js.stripe.com/v3/connect-js/';
     script.async = true;
-    
+
     script.onload = () => {
-      console.log('Stripe Connect script loaded successfully');
-      
-      // Wait for Stripe to initialize
-      setTimeout(() => {
-        if (!window.StripeConnect) {
-          console.error('StripeConnect not found on window object');
-          toast({
-            title: "Error",
-            description: "Failed to load Stripe Connect. Please refresh and try again.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        try {
-          console.log('Mounting Stripe Connect with client secret:', clientSecret.substring(0, 5) + '...');
-          
-          window.StripeConnect.EmbeddedComponents.mount({
-            clientSecret,
-            appearance: {
-              theme: 'flat',
-              variables: {
-                colorPrimary: '#0F172A',
-                colorBackground: '#ffffff',
-                colorText: '#1e293b',
-                fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-                borderRadius: '0.5rem',
-                spacingUnit: '5px',
-              },
-            },
-            onComplete: () => {
-              console.log('Stripe Connect onComplete callback fired');
-              toast({
-                title: "Account setup completed",
-                description: "Your account has been successfully set up.",
-              });
-              if (onComplete) {
-                onComplete();
-              }
-            },
-            onError: (error: Error) => {
-              console.error('Stripe Connect error:', error);
-              toast({
-                title: "Error",
-                description: error.message || "An error occurred during setup",
-                variant: "destructive",
-              });
-            },
-          });
-          console.log('Stripe Connect mounted successfully');
-        } catch (error) {
-          console.error('Error mounting Stripe Connect:', error);
-          toast({
-            title: "Error",
-            description: "Failed to load the account setup form. Please try again.",
-            variant: "destructive",
-          });
-        }
-      }, 1000);
+      console.log('Stripe Connect script loaded');
+      if (window.StripeConnect) {
+        mountStripeConnect();
+      } else {
+        setIsLoading(false);
+        toast({
+          title: "Error",
+          description: "Failed to load Stripe Connect",
+          variant: "destructive",
+        });
+      }
     };
-    
+
     script.onerror = () => {
-      console.error('Failed to load Stripe Connect script');
+      setIsLoading(false);
       toast({
         title: "Error",
-        description: "Failed to load Stripe Connect. Please check your internet connection.",
+        description: "Failed to load Stripe Connect script",
         variant: "destructive",
       });
     };
@@ -102,24 +69,69 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
     document.body.appendChild(script);
 
     return () => {
-      if (document.getElementById('stripe-connect-script')) {
-        document.getElementById('stripe-connect-script')?.remove();
+      if (document.getElementById('stripe-js')) {
+        document.getElementById('stripe-js')?.remove();
       }
     };
-  }, [clientSecret, onComplete, toast]);
+  }, [clientSecret, toast]);
+
+  const mountStripeConnect = () => {
+    try {
+      const targetElement = document.getElementById('stripe-connect-mount');
+      if (!targetElement) {
+        throw new Error('Mount point not found');
+      }
+
+      window.StripeConnect?.EmbeddedComponents.mount({
+        clientSecret,
+        appearance: {
+          theme: 'flat',
+          variables: {
+            colorPrimary: '#0F172A',
+            colorBackground: '#ffffff',
+            colorText: '#1e293b',
+            fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+            borderRadius: '0.5rem',
+            spacingUnit: '5px',
+          },
+        },
+        onComplete: () => {
+          toast({
+            title: "Success",
+            description: "Account setup completed successfully",
+          });
+          setIsLoading(false);
+          if (onComplete) {
+            onComplete();
+          }
+        },
+        onError: (error: Error) => {
+          toast({
+            title: "Error",
+            description: error.message || "Failed to complete account setup",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+        },
+      });
+    } catch (error) {
+      setIsLoading(false);
+      toast({
+        title: "Error",
+        description: "Failed to initialize Stripe Connect",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
-    <div id="stripe-connect-mount" className="w-full min-h-[600px] border rounded-lg bg-background"></div>
+    <div className="relative min-h-[600px]">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      )}
+      <div id="stripe-connect-mount" className="w-full min-h-[600px] border rounded-lg bg-background" />
+    </div>
   );
-}
-
-// TypeScript declaration
-declare global {
-  interface Window {
-    StripeConnect?: {
-      EmbeddedComponents: {
-        mount: (options: any) => void;
-      };
-    };
-  }
 }

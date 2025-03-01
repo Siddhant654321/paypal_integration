@@ -133,7 +133,6 @@ const SellerDashboard = () => {
             <StripeConnect
               clientSecret={clientSecret}
               onComplete={() => {
-                console.log("Stripe Connect setup completed successfully");
                 setClientSecret(null);
                 window.location.reload();
               }}
@@ -178,10 +177,7 @@ const SellerDashboard = () => {
               </div>
               <Button
                 className="w-full"
-                onClick={() => {
-                  console.log("Initiating Stripe Connect setup");
-                  connectWithStripeMutation.mutate();
-                }}
+                onClick={() => connectWithStripeMutation.mutate()}
                 disabled={connectWithStripeMutation.isPending}
               >
                 {connectWithStripeMutation.isPending ? (
@@ -212,14 +208,9 @@ const SellerDashboard = () => {
             <CardContent>
               <Button
                 className="w-full"
-                onClick={() => {
-                  console.log("Continuing Stripe Connect setup");
-                  connectWithStripeMutation.mutate();
-                }}
-                disabled={connectWithStripeMutation.isPending}
+                onClick={() => connectWithStripeMutation.mutate()}
               >
-                {connectWithStripeMutation.isPending ? 
-                  "Loading..." : "Continue Setup"}
+                Continue Setup
               </Button>
             </CardContent>
           </Card>
@@ -297,18 +288,10 @@ const SellerDashboard = () => {
             <CardContent>
               <Button
                 className="w-full"
-                onClick={() => {
-                  console.log("Resuming Stripe Connect setup after rejection");
-                  // Force clear any cached state by adding a timestamp
-                  connectWithStripeMutation.mutate();
-                }}
-                disabled={connectWithStripeMutation.isPending}
+                onClick={() => connectWithStripeMutation.mutate()}
                 variant="destructive"
               >
-                {connectWithStripeMutation.isPending ? 
-                  <span className="flex items-center">
-                    <span className="animate-spin mr-2">⟳</span> Loading...
-                  </span> : "Complete Required Information"}
+                Complete Required Information
               </Button>
             </CardContent>
           </Card>
