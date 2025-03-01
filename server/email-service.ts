@@ -5,7 +5,7 @@ import { User } from '@shared/schema';
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // true for 465, false for other ports
+  secure: false,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD,
@@ -14,21 +14,45 @@ const transporter = nodemailer.createTransport({
 
 // Email templates for different notification types
 const emailTemplates = {
-  bid: (data: { auctionTitle: string; bidAmount: number }) => ({
-    subject: `New Bid on ${data.auctionTitle}`,
-    html: `
-      <h2>New Bid Received</h2>
-      <p>A new bid of $${data.bidAmount} has been placed on your auction "${data.auctionTitle}".</p>
-      <p>Log in to your account to view the details.</p>
-    `,
+  bid: (data: { auctionTitle: string; bidAmount: number; isOutbid?: boolean }) => ({
+    subject: data.isOutbid 
+      ? `You've been outbid on ${data.auctionTitle}`
+      : `New Bid on ${data.auctionTitle}`,
+    html: data.isOutbid
+      ? `
+        <h2>You've Been Outbid!</h2>
+        <p>Someone has placed a higher bid of $${data.bidAmount} on "${data.auctionTitle}".</p>
+        <p>Log in now to place a new bid!</p>
+      `
+      : `
+        <h2>New Bid Received</h2>
+        <p>A new bid of $${data.bidAmount} has been placed on your auction "${data.auctionTitle}".</p>
+        <p>Log in to your account to view the details.</p>
+      `,
   }),
-  auction: (data: { auctionTitle: string; status: string }) => ({
-    subject: `Auction Update: ${data.auctionTitle}`,
-    html: `
-      <h2>Auction Status Update</h2>
-      <p>Your auction "${data.auctionTitle}" has been ${data.status}.</p>
-      <p>Log in to your account to view the details.</p>
-    `,
+  auction: (data: { auctionTitle: string; status: string; isWinner?: boolean }) => ({
+    subject: `Auction ${data.status === 'ending soon' 
+      ? 'Ending Soon' 
+      : data.isWinner 
+        ? 'Won!' 
+        : 'Ended'}: ${data.auctionTitle}`,
+    html: data.status === 'ending soon'
+      ? `
+        <h2>Auction Ending Soon</h2>
+        <p>The auction "${data.auctionTitle}" will end in 12 hours.</p>
+        <p>Log in now to check the current status and place your final bids!</p>
+      `
+      : data.isWinner
+        ? `
+          <h2>Congratulations! You've Won!</h2>
+          <p>You are the winning bidder for "${data.auctionTitle}"!</p>
+          <p>Log in to your account to complete the payment and arrange delivery.</p>
+        `
+        : `
+          <h2>Auction Has Ended</h2>
+          <p>The auction "${data.auctionTitle}" has ended.</p>
+          <p>Log in to your account to view the final results.</p>
+        `,
   }),
   payment: (data: { amount: number; status: string }) => ({
     subject: 'Payment Notification',
@@ -36,6 +60,13 @@ const emailTemplates = {
       <h2>Payment Update</h2>
       <p>A payment of $${data.amount} has been ${data.status}.</p>
       <p>Log in to your account to view the transaction details.</p>
+    `,
+  }),
+  admin: (data: { message: string }) => ({
+    subject: 'Administrative Notification',
+    html: `
+      <h2>Administrative Notice</h2>
+      <p>${data.message}</p>
     `,
   }),
   fulfillment: (data: { 
@@ -63,35 +94,15 @@ const emailTemplates = {
   }),
 };
 
-// Types for email notification data
-type EmailNotificationData = {
-  bid: { auctionTitle: string; bidAmount: number };
-  auction: { auctionTitle: string; status: string };
-  payment: { amount: number; status: string };
-  admin: { message: string };
-  fulfillment: {
-    auctionTitle: string;
-    shippingCarrier: string;
-    trackingNumber: string;
-    shippingDate: string;
-    estimatedDeliveryDate?: string;
-  };
-};
-
 export class EmailService {
-  static async sendNotification<T extends keyof EmailNotificationData>(
+  static async sendNotification<T extends keyof typeof emailTemplates>(
     type: T,
     user: User,
-    data: EmailNotificationData[T]
+    data: Parameters<typeof emailTemplates[T]>[0]
   ) {
     try {
       // Get the email template based on notification type
-      const template = type === 'admin' 
-        ? {
-            subject: 'Administrative Notification',
-            html: `<h2>Administrative Notice</h2><p>${(data as any).message}</p>`,
-          }
-        : emailTemplates[type](data as any);
+      const template = emailTemplates[type](data as any);
 
       // Send the email
       await transporter.sendMail({
@@ -107,7 +118,6 @@ export class EmailService {
     }
   }
 
-  // Verify email configuration
   static async verifyConnection() {
     try {
       await transporter.verify();

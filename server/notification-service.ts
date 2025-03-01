@@ -2,8 +2,57 @@ import { storage } from "./storage";
 import { EmailService } from "./email-service";
 import { type InsertNotification, type User } from "@shared/schema";
 import { log } from "./vite";
+import { WebSocketServer, WebSocket } from 'ws';
+import type { Server } from 'http';
 
 export class NotificationService {
+  private static wss: WebSocketServer;
+  private static userSockets: Map<number, WebSocket[]> = new Map();
+
+  static initialize(server: Server) {
+    this.wss = new WebSocketServer({ server, path: '/ws' });
+
+    this.wss.on('connection', (ws: WebSocket) => {
+      ws.on('message', async (message: string) => {
+        try {
+          const data = JSON.parse(message);
+          if (data.type === 'auth' && data.userId) {
+            const userSockets = this.userSockets.get(data.userId) || [];
+            userSockets.push(ws);
+            this.userSockets.set(data.userId, userSockets);
+          }
+        } catch (error) {
+          log(`WebSocket message error: ${error}`, "notification");
+        }
+      });
+
+      ws.on('close', () => {
+        for (const [userId, sockets] of this.userSockets.entries()) {
+          const index = sockets.indexOf(ws);
+          if (index !== -1) {
+            sockets.splice(index, 1);
+            if (sockets.length === 0) {
+              this.userSockets.delete(userId);
+            }
+            break;
+          }
+        }
+      });
+    });
+  }
+
+  private static async sendWebSocketMessage(userId: number, notification: any) {
+    const sockets = this.userSockets.get(userId);
+    if (sockets) {
+      const message = JSON.stringify(notification);
+      sockets.forEach(socket => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(message);
+        }
+      });
+    }
+  }
+
   static async createNotificationAndSendEmail(
     userId: number,
     notification: Omit<InsertNotification, "userId">,
@@ -20,24 +69,120 @@ export class NotificationService {
       }
 
       // Create in-app notification
-      await storage.createNotification({
+      const createdNotification = await storage.createNotification({
         ...notification,
         userId,
       });
 
-      // Send email notification
-      await EmailService.sendNotification(
-        emailData.type,
-        user,
-        emailData.data
-      );
+      // Send websocket notification
+      await this.sendWebSocketMessage(userId, createdNotification);
+
+      // Send email notification if enabled
+      if (user.emailNotificationsEnabled) {
+        await EmailService.sendNotification(
+          emailData.type,
+          user,
+          emailData.data
+        );
+      }
     } catch (error) {
       log(`Error creating notification and sending email: ${error}`, "notification");
       throw error;
     }
   }
 
-  // Convenience methods for different notification types
+  // Auction specific notifications
+  static async notifyNewBid(
+    sellerId: number,
+    auctionTitle: string,
+    bidAmount: number
+  ): Promise<void> {
+    return this.createNotificationAndSendEmail(
+      sellerId,
+      {
+        type: "bid",
+        title: "New Bid Received",
+        message: `A new bid of $${bidAmount/100} has been placed on your auction "${auctionTitle}"`,
+      },
+      {
+        type: "bid",
+        data: {
+          auctionTitle,
+          bidAmount: bidAmount/100,
+        },
+      }
+    );
+  }
+
+  static async notifyOutbid(
+    previousBidderId: number,
+    auctionTitle: string,
+    newBidAmount: number
+  ): Promise<void> {
+    return this.createNotificationAndSendEmail(
+      previousBidderId,
+      {
+        type: "bid",
+        title: "You've Been Outbid",
+        message: `Someone has placed a higher bid of $${newBidAmount/100} on "${auctionTitle}"`,
+      },
+      {
+        type: "bid",
+        data: {
+          auctionTitle,
+          bidAmount: newBidAmount/100,
+        },
+      }
+    );
+  }
+
+  static async notifyAuctionEnding(
+    bidderId: number,
+    auctionTitle: string
+  ): Promise<void> {
+    return this.createNotificationAndSendEmail(
+      bidderId,
+      {
+        type: "auction",
+        title: "Auction Ending Soon",
+        message: `The auction "${auctionTitle}" will end in 12 hours`,
+      },
+      {
+        type: "auction",
+        data: {
+          auctionTitle,
+          status: "ending soon",
+        },
+      }
+    );
+  }
+
+  static async notifyAuctionEnd(
+    userId: number,
+    auctionTitle: string,
+    status: string,
+    isWinner: boolean
+  ): Promise<void> {
+    const message = isWinner 
+      ? `Congratulations! You've won the auction "${auctionTitle}"`
+      : `The auction "${auctionTitle}" has ended`;
+
+    return this.createNotificationAndSendEmail(
+      userId,
+      {
+        type: "auction",
+        title: isWinner ? "Auction Won" : "Auction Ended",
+        message,
+      },
+      {
+        type: "auction",
+        data: {
+          auctionTitle,
+          status: isWinner ? "won" : "ended",
+        },
+      }
+    );
+  }
   static async notifyBid(
     userId: number,
     auctionTitle: string,
@@ -60,7 +205,7 @@ export class NotificationService {
     );
   }
 
-  static async notifyAuctionEnd(
+  static async notifyAuctionEndOld(
     userId: number,
     auctionTitle: string,
     status: string
