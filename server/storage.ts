@@ -148,14 +148,16 @@ export class DatabaseStorage implements IStorage {
           new Date(insertAuction.startDate) : insertAuction.startDate,
         endDate: typeof insertAuction.endDate === 'string' ? 
           new Date(insertAuction.endDate) : insertAuction.endDate,
-        currentPrice: insertAuction.startPrice // Set initial current price to start price
+        currentPrice: insertAuction.startPrice, // Set initial current price to start price
+        status: insertAuction.status || "pending" // Set default status to pending
       };
       
       console.log("[STORAGE] Creating auction with formatted data:", {
         title: formattedAuction.title,
         sellerId: formattedAuction.sellerId,
         startDate: formattedAuction.startDate,
-        endDate: formattedAuction.endDate
+        endDate: formattedAuction.endDate,
+        status: formattedAuction.status
       });
       
       const [auction] = await db
@@ -210,7 +212,9 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      return await query;
+      const results = await query;
+      console.log(`Retrieved ${results.length} auctions with filters:`, filters);
+      return results;
     } catch (error) {
       log(`Error getting auctions: ${error}`);
       throw error;
