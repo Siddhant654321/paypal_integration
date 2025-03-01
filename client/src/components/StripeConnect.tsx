@@ -1,7 +1,6 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
 
 interface StripeConnectProps {
   clientSecret: string;
@@ -18,9 +17,13 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
       try {
         setLoading(true);
         
+        // Log the client secret (first 10 chars only for security)
+        const secretPreview = clientSecret.substring(0, 10) + '...';
+        console.log('Initializing Stripe Connect with client secret starting with:', secretPreview);
+        
         // Load the Stripe Connect script
         const script = document.createElement('script');
-        script.src = 'https://connect.stripe.com/connect-js/v1';
+        script.src = 'https://connect.stripe.com/connect-js';
         script.async = true;
 
         // Create a promise to handle script loading
@@ -31,44 +34,37 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
 
         document.body.appendChild(script);
         await scriptLoaded;
+        
+        console.log('Stripe Connect script loaded successfully');
 
-        // Wait for Stripe Connect to initialize
-        setTimeout(() => {
-          if (!window.StripeConnect) {
-            throw new Error('Stripe Connect failed to initialize');
+        // Ensure we have StripeConnect in window
+        if (typeof window.StripeConnect === 'undefined') {
+          console.error('StripeConnect not found in window object');
+          throw new Error('Stripe Connect failed to initialize');
+        }
+
+        console.log('Mounting Stripe Connect with client secret');
+        
+        // Mount the Connect account onboarding form
+        window.StripeConnect.accountLinking({
+          clientSecret: clientSecret,
+          onComplete: () => {
+            console.log('Stripe Connect onboarding completed successfully');
+            setLoading(false);
+            if (onComplete) {
+              onComplete();
+            }
+          },
+          onError: (error: any) => {
+            console.error('Stripe Connect error:', error);
+            setLoading(false);
+            setError(error?.message || 'An error occurred during the onboarding process');
           }
-
-          // Mount the Connect onboarding form
-          window.StripeConnect.EmbeddedComponents.mount({
-            clientSecret,
-            appearance: {
-              theme: 'flat',
-              variables: {
-                colorPrimary: '#0F172A',
-                colorBackground: '#ffffff',
-                colorText: '#1e293b',
-                fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-                borderRadius: '0.5rem',
-                spacingUnit: '5px',
-              },
-            },
-            onComplete: () => {
-              setLoading(false);
-              console.log('Stripe Connect onboarding completed successfully');
-              if (onComplete) {
-                onComplete();
-              }
-            },
-            onError: (error: Error) => {
-              setLoading(false);
-              setError(error.message || 'An error occurred during the onboarding process');
-              console.error('Stripe Connect error:', error);
-            },
-          }, '#stripe-connect-mount');
-        }, 1000);
+        }).mount('#stripe-connect-mount');
+        
       } catch (error) {
-        setLoading(false);
         console.error('Stripe Connect initialization error:', error);
+        setLoading(false);
         setError(error instanceof Error ? error.message : 'Failed to initialize Stripe Connect');
       }
     };
@@ -104,7 +100,7 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
           <span className="ml-2">Loading Stripe Connect...</span>
         </div>
       )}
-      <div id="stripe-connect-mount" className="w-full min-h-[600px] border rounded-lg bg-background" />
+      <div id="stripe-connect-mount" className="w-full min-h-[600px] border rounded-lg bg-background"></div>
     </div>
   );
 }
@@ -113,16 +109,12 @@ export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) 
 declare global {
   interface Window {
     StripeConnect?: {
-      EmbeddedComponents: {
-        mount: (options: {
-          clientSecret: string;
-          appearance?: {
-            theme: 'flat' | 'stripe' | 'night';
-            variables?: Record<string, string>;
-          };
-          onComplete?: () => void;
-          onError?: (error: Error) => void;
-        }, elementId: string) => void;
+      accountLinking: (options: {
+        clientSecret: string;
+        onComplete?: () => void;
+        onError?: (error: any) => void;
+      }) => {
+        mount: (elementId: string) => void;
       };
     };
   }
