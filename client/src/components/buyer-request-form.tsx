@@ -84,7 +84,7 @@ export function BuyerRequestForm() {
     },
     onError: (error: any) => {
       console.error("Mutation error:", error);
-      
+
       if (error.message === "Unauthorized") {
         toast({
           title: "Authentication Required",
@@ -106,7 +106,7 @@ export function BuyerRequestForm() {
 
   function onSubmit(data: InsertBuyerRequest) {
     console.log("Form submitted with values:", data);
-    
+
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -116,12 +116,12 @@ export function BuyerRequestForm() {
       navigate("/auth");
       return;
     }
-    
+
     // Make sure species is using the correct format
     if (data.species) {
       data.species = data.species.toLowerCase();
     }
-    
+
     // Add proper validation for required fields
     if (!data.title || !data.species || !data.category || !data.description) {
       toast({
@@ -131,7 +131,7 @@ export function BuyerRequestForm() {
       });
       return;
     }
-    
+
     createRequest.mutate(data);
   }
 
@@ -230,10 +230,12 @@ export function BuyerRequestForm() {
         />
 
         <Button type="submit" disabled={createRequest.isPending}>
-          {createRequest.isPending && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          )}
-          Submit Request
+          {createRequest.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Submitting...
+            </>
+          ) : "Submit Request"}
         </Button>
       </form>
     </Form>
