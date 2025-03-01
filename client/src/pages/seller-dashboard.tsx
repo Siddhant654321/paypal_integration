@@ -8,7 +8,6 @@ import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatDistanceToNow } from "date-fns";
 import { formatPrice } from '../utils/formatters';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -279,7 +278,24 @@ const SellerDashboard = () => {
         );
 
       default:
-        return null;
+        return (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Set Up Your Seller Account</CardTitle>
+              <CardDescription>
+                Connect your account to receive payments for your auctions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                className="w-full"
+                onClick={() => connectWithStripeMutation.mutate()}
+              >
+                Set Up Payments Account
+              </Button>
+            </CardContent>
+          </Card>
+        );
     }
   };
 
