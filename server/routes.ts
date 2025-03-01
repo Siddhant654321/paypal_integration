@@ -30,30 +30,32 @@ const requireProfile = async (req: any, res: any, next: any) => {
     isAuthenticated: req.isAuthenticated()
   });
 
-  // Check if user has a profile (for all user types)
-  const profile = await storage.getProfile(req.user.id);
-  const hasProfile = !!profile;
-  
+  // Check if profile exists 
+  const hasProfile = await storage.hasProfile(req.user.id);
   console.log("[PROFILE CHECK] Profile check result:", {
-    userId: req.user.id,
+    userId: req.user.id, 
     role: req.user.role,
-    hasProfile,
-    profile: profile ? 'exists' : 'not found'
+    hasProfile
   });
 
+  // For buyers, no profile is required
   if (req.user.role === "buyer") {
-    // Buyers can proceed even without a profile
     console.log("[PROFILE CHECK] Skipping profile check for buyer");
     return next();
   }
 
-  // For sellers, seller_admin, and admins, require a profile
-  if (!hasProfile) {
-    console.log("[PROFILE CHECK] Profile required but not found");
-    return res.status(403).json({ message: "Profile completion required" });
+  // For sellers and seller_admin, check profile status
+  const isSeller = req.user.role === "seller" || req.user.role === "seller_admin";
+  if (isSeller) {
+    // For sellers without a profile, return an error
+    if (!hasProfile) {
+      console.log("[PROFILE CHECK] Seller missing required profile");
+      return res.status(403).json({ message: "Profile completion required" });
+    }
+    console.log("[PROFILE CHECK] Seller profile verified");
   }
 
-  // Profile exists, allow to proceed
+  // Profile exists or not required, proceed
   next();
 };
 
