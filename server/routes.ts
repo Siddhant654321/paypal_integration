@@ -271,6 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const bid = await storage.createBid(bidData);
       
+
       // Send notification to the seller about the new bid
       try {
         const { NotificationService } = await import('./notification-service');
@@ -280,6 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           amount
         );
         
+
         // If there was a previous highest bidder, notify them that they've been outbid
         const previousBids = await storage.getBidsForAuction(auction.id);
         if (previousBids.length > 1) {
@@ -287,6 +289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const sortedBids = previousBids.sort((a, b) => b.amount - a.amount);
           const secondHighestBid = sortedBids[1];
           
+
           // Only notify if it's a different bidder
           if (secondHighestBid.bidderId !== req.user.id) {
             await NotificationService.notifyOutbid(
@@ -301,6 +304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue with the response even if notification fails
       }
       
+
       res.status(201).json(bid);
     } catch (error) {
       console.error("Bid error:", error);
@@ -909,177 +913,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add these routes after the existing seller routes
-  app.get("/api/seller/account", requireAuth, async (req, res) => {
+  // Add these notification routes after the existing routes
+  app.get("/api/notifications", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(404).json({ message: "No Stripe account found" });
-      }
-
-      const accountDetails = await SellerPaymentService.getAccountDetails(profile.stripeAccountId);
-      res.json(accountDetails);
+      const notifications = await storage.getNotificationsByUserId(req.user.id);
+      res.json(notifications);
     } catch (error) {
-      console.error("Error getting account details:", error);
-      res.status(500).json({ message: "Failed to get account details" });
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
     }
   });
 
-  app.post("/api/seller/connect", requireAuth, async (req, res) => {
+  app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile) {
-        return res.status(400).json({ message: "Profile not found. Please complete your profile first." });
-      }
-
-      // Create Stripe Connect account and get onboarding URL
-      console.log("Creating Stripe Connect account for user:", req.user.id);
-      const result = await SellerPaymentService.createSellerAccount(profile);
-      console.log("Stripe Connect account created:", result);
-
-      if (!result.url) {
-        console.error("No URL returned from Stripe:", result);
-        return res.status(500).json({ 
-          message: "Failed to get onboarding URL from Stripe",
-          accountId: result.accountId
-        });
-      }
-
-      // Send both the account ID and the onboarding URL
-      res.json({ 
-        accountId: result.accountId, 
-        url: result.url
-      });
+      const notification = await storage.markNotificationAsRead(parseInt(req.params.id));
+      res.json(notification);
     } catch (error) {
-      console.error("Error creating Stripe Connect account:", error);
-      // Ensure we always return valid JSON
-      res.status(500).json({ 
-        message: "Failed to create Stripe Connect account",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ message: "Failed to mark notification as read" });
     }
   });
 
-  app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
+  app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(404).json({ message: "No Stripe account found" });
-      }
-
-      const url = await SellerPaymentService.refreshOnboarding(profile.stripeAccountId);
-      res.json({ url });
+      const notifications = await storage.getNotificationsByUserId(req.user.id);
+      await Promise.all(
+        notifications.map(notification => 
+          storage.markNotificationAsRead(notification.id)
+        )
+      );
+      res.json({ success: true });
     } catch (error) {
-      console.error("Error refreshing onboarding:", error);
-      res.status(500).json({ message: "Failed to refresh onboarding" });
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ message: "Failed to mark all notifications as read" });
     }
   });
 
-  app.get("/api/seller/status", requireAuth, async (req, res) => {
+  // Add notification count endpoint
+  app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.json({ status: "not_started" });
-      }
-
-      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
-      res.json({ status });
+      const count = await storage.getUnreadNotificationsCount(req.user.id);
+      res.json({ count });
     } catch (error) {
-      console.error("Error checking account status:", error);
-      res.status(500).json({ message: "Failed to check account status" });
-    }
-  });
-
-  app.get("/api/seller/balance", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(404).json({ message: "No Stripe account found" });
-      }
-
-      const balance = await SellerPaymentService.getBalance(profile.stripeAccountId);
-      res.json(balance);
-    } catch (error) {
-      console.error("Error getting balance:", error);
-      res.status(500).json({ message: "Failed to get balance" });
-    }
-  });
-
-  app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(404).json({ message: "No Stripe account found" });
-      }
-
-      const clientSecret = await SellerPaymentService.refreshAccountSession(profile.stripeAccountId);
-
-      res.json({ clientSecret });
-    } catch (error) {
-      console.error("Error refreshing onboarding:", error);
-      res.status(500).json({ message: "Failed to refresh onboarding" });
-    }
-  });
-
-  app.get("/api/seller/payout-schedule", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(404).json({ message: "No Stripe account found" });
-      }
-
-      const schedule = await SellerPaymentService.getPayoutSchedule(profile.stripeAccountId);
-      res.json(schedule);
-    } catch (error) {
-      console.error("Error getting payout schedule:", error);
-      res.status(500).json({ message: "Failed to get payout schedule" });
-    }
-  });
-
-  app.get("/api/seller/payouts", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(404).json({ message: "No Stripe account found" });
-      }
-
-      const payouts = await SellerPaymentService.getPayouts(profile.stripeAccountId);
-      res.json(payouts);
-    } catch (error) {
-      console.error("Error getting payouts:", error);
-      res.status(500).json({ message: "Failed to get payouts" });
+      console.error("Error getting unread notifications count:", error);
+      res.status(500).json({ message: "Failed to get unread notifications count" });
     }
   });
 
@@ -1532,6 +1421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Existing profile:", existingProfile ? "found" : "not found", 
                    "Stripe account ID:", existingProfile?.stripeAccountId || "none");
       
+
       if (existingProfile?.stripeAccountId) {
         console.log("User already has Stripe account:", existingProfile.stripeAccountId);
 
