@@ -1,6 +1,5 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer, WebSocket } from 'ws';
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema } from "@shared/schema";
@@ -16,9 +15,6 @@ import {insertFulfillmentSchema} from "@shared/schema";
 import { EmailService } from "./email";
 import { NotificationService } from "./notification-service";
 import { AuctionReminderService } from "./auction-reminder-service";
-
-// WebSocket clients map
-const clients = new Map<number, WebSocket>();
 
 // Middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -42,70 +38,84 @@ const requireProfile = async (req: any, res: any, next: any) => {
   next();
 };
 
+// Define middleware first
+const requireAuth = (req: any, res: any, next: any) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  next();
+};
+
+const requireAdmin = (req: any, res: any, next: any) => {
+  if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "seller_admin")) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  next();
+};
+
+const requireApprovedSeller = (req: any, res: any, next: any) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  // Allow seller_admin without approval check
+  if (req.user.role === "seller_admin") {
+    return next();
+  }
+
+  // Check approval for regular sellers
+  if (req.user.role !== "seller" || !req.user.approved) {
+    return res.status(403).json({ message: "Only approved sellers can perform this action" });
+  }
+
+  next();
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
   // Create HTTP server
   const httpServer = createServer(app);
 
-  // Initialize WebSocket server (single instance)
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-
-  // WebSocket connection handler
-  wss.on('connection', (ws: WebSocket, req: any) => {
-    if (!req.session?.passport?.user) {
-      ws.close();
-      return;
-    }
-
-    const userId = req.session.passport.user;
-    clients.set(userId, ws);
-
-    ws.on('close', () => {
-      clients.delete(userId);
-    });
-  });
-
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+  // New notification routes
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const notifications = await storage.getNotifications(req.user.id);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      await Promise.all([
+        storage.getNotifications(req.user.id).then(notifications =>
+          Promise.all(notifications.map(n => storage.markNotificationAsRead(n.id)))
+        )
+      ]);
+
+      res.json({ message: "All notifications marked as read" });
+    } catch (error) {
+      console.error("Error marking notifications as read:", error);
+      res.status(500).json({ message: "Failed to mark notifications as read" });
+    }
+  });
+
   // Return the server instance
   return httpServer;
-
-  // Middleware to check if user is authenticated
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    next();
-  };
-
-  // Middleware to check if user is an admin
-  const requireAdmin = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "seller_admin")) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    next();
-  };
-
-  // Middleware to check if user is an approved seller or seller_admin
-  const requireApprovedSeller = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    // Allow seller_admin without approval check
-    if (req.user.role === "seller_admin") {
-      return next();
-    }
-
-    // Check approval for regular sellers
-    if (req.user.role !== "seller" || !req.user.approved) {
-      return res.status(403).json({ message: "Only approved sellers can perform this action" });
-    }
-
-    next();
-  };
 
   // Update the getAuctions endpoint to include seller profiles
   app.get("/api/auctions", async (req, res) => {
@@ -307,41 +317,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bid = await storage.createBid(bidData);
 
       // Notify the seller about the new bid
-      await NotificationService.notifyBid({
-        userId: auction.sellerId,
-        auctionTitle: auction.title,
-        bidAmount: Number(amount) / 100,
-        type: 'new_bid'
-      });
+      await NotificationService.notifyBid(
+        auction.sellerId,
+        auction.title,
+        Number(amount) / 100,
+        'new_bid'
+      );
 
-      // If someone was outbid, notify them  
+      // If someone was outbid, notify them
       if (highestBid && highestBid.bidderId !== req.user.id) {
-        await NotificationService.notifyBid({
-          userId: highestBid.bidderId,
-          auctionTitle: auction.title,
-          bidAmount: Number(amount) / 100,
-          type: 'outbid'
-        });
-
-        // Send real-time notification via WebSocket
-        const outbidUserWs = clients.get(highestBid.bidderId);
-        if (outbidUserWs?.readyState === WebSocket.OPEN) {
-          outbidUserWs.send(JSON.stringify({
-            type: 'outbid',
-            auctionId,
-            newAmount: amount
-          }));
-        }
-      }
-
-      // Send real-time notification to seller via WebSocket
-      const sellerWs = clients.get(auction.sellerId);
-      if (sellerWs?.readyState === WebSocket.OPEN) {
-        sellerWs.send(JSON.stringify({
-          type: 'new_bid',
-          auctionId,
-          amount
-        }));
+        await NotificationService.notifyBid(
+          highestBid.bidderId,
+          auction.title,
+          Number(amount) / 100,
+          'outbid'
+        );
       }
 
       res.status(201).json(bid);

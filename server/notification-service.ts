@@ -41,14 +41,20 @@ export class NotificationService {
   static async notifyBid(
     userId: number,
     auctionTitle: string,
-    bidAmount: number
+    bidAmount: number,
+    type: 'new_bid' | 'outbid'
   ): Promise<void> {
+    const title = type === 'new_bid' ? "New Bid Received" : "You've Been Outbid";
+    const message = type === 'new_bid' 
+      ? `A new bid of $${bidAmount} has been placed on your auction "${auctionTitle}"`
+      : `Someone has placed a higher bid of $${bidAmount} on "${auctionTitle}"`;
+
     return this.createNotificationAndSendEmail(
       userId,
       {
         type: "bid",
-        title: "New Bid Received",
-        message: `A new bid of $${bidAmount} has been placed on your auction "${auctionTitle}"`,
+        title,
+        message,
       },
       {
         type: "bid",
@@ -104,55 +110,10 @@ export class NotificationService {
     );
   }
 
-  static async notifyFulfillment(
-    userId: number,
-    fulfillmentData: {
-      auctionTitle: string;
-      shippingCarrier: string;
-      trackingNumber: string;
-      shippingDate: string;
-      estimatedDeliveryDate?: string;
-    }
-  ): Promise<void> {
-    return this.createNotificationAndSendEmail(
-      userId,
-      {
-        type: "fulfillment",
-        title: "Shipping Update",
-        message: `Your item from auction "${fulfillmentData.auctionTitle}" has been shipped`,
-      },
-      {
-        type: "fulfillment",
-        data: fulfillmentData,
-      }
-    );
-  }
-
-  static async notifyAdmin(
-    userId: number,
-    message: string
-  ): Promise<void> {
-    return this.createNotificationAndSendEmail(
-      userId,
-      {
-        type: "admin",
-        title: "Administrative Notice",
-        message,
-      },
-      {
-        type: "admin",
-        data: {
-          message,
-        },
-      }
-    );
-  }
-
   static async notifyAuctionReminder(
     userId: number,
     auctionTitle: string,
-    hoursRemaining: number,
-    auctionId: number
+    hoursRemaining: number
   ): Promise<void> {
     return this.createNotificationAndSendEmail(
       userId,
@@ -166,7 +127,6 @@ export class NotificationService {
         data: {
           auctionTitle,
           hoursRemaining,
-          auctionId,
         },
       }
     );
