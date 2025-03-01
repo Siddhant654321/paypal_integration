@@ -30,7 +30,7 @@ export default function BuyerRequestsPage() {
               <SheetHeader>
                 <SheetTitle>Create a New Request</SheetTitle>
               </SheetHeader>
-              <div className="mt-6">
+              <div className="mt-6 overflow-y-auto max-h-[calc(100vh-120px)] pr-2">
                 <BuyerRequestForm />
               </div>
             </SheetContent>
