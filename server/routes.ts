@@ -911,9 +911,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Profile not found. Please complete your profile first." });
       }
 
-      const { accountId, clientSecret } = await SellerPaymentService.createSellerAccount(profile);
+      // Create Stripe Connect account and get onboarding URL
+      const { accountId, url } = await SellerPaymentService.createSellerAccount(profile);
 
-      res.json({ accountId, clientSecret });
+      // Send both the account ID and the onboarding URL
+      res.json({ accountId, url });
     } catch (error) {
       console.error("Error creating Stripe Connect account:", error);
       res.status(500).json({ 
