@@ -312,7 +312,7 @@ const SellerDashboard = () => {
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Seller Dashboard</h1>
-        <Link href="/seller/new-auction">
+        <Link href="/seller/auction/new">
           <Button>
             <Plus className="w-4 h-4 mr-2" />
             Create New Auction

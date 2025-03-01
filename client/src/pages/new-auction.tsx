@@ -26,18 +26,55 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function NewAuction() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
-  // Redirect if not a seller or seller_admin
-  if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
+  // Add debug logging
+  useEffect(() => {
+    console.log("NewAuction component mounted", {
+      user,
+      isLoading,
+      auth: {
+        isAuthenticated: !!user,
+        role: user?.role,
+        hasProfile: user?.has_profile,
+        approved: user?.approved
+      }
+    });
+  }, [user, isLoading]);
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    console.log("NewAuction: Loading auth state");
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Check if user is authenticated and has correct role
+  if (!user) {
+    console.log("NewAuction: No authenticated user, redirecting");
+    return <Redirect to="/auth" />;
+  }
+
+  if (user.role !== "seller" && user.role !== "seller_admin") {
+    console.log("NewAuction: User not a seller/admin, redirecting", { role: user.role });
     return <Redirect to="/" />;
   }
+
+  console.log("NewAuction: User authorized", {
+    id: user.id,
+    role: user.role,
+    hasProfile: user.has_profile,
+    approved: user.approved
+  });
 
   const form = useForm({
     resolver: zodResolver(insertAuctionSchema),
@@ -45,7 +82,7 @@ export default function NewAuction() {
       title: "",
       description: "",
       species: "",
-      category: "Show Quality", // Default to "show" category
+      category: "Show Quality",
       startPrice: 0,
       reservePrice: 0,
       startDate: `${new Date().toISOString().split("T")[0]}T00:00`,
@@ -57,25 +94,20 @@ export default function NewAuction() {
     mutationFn: async (auctionData: any) => {
       console.log("Form data before submission:", auctionData);
 
-      // Create FormData for the multipart/form-data request
       const formData = new FormData();
 
-      // Append all form fields
       Object.keys(auctionData).forEach(key => {
         if (key !== 'files' && key !== 'images') {
-          // Prices are now passed directly as dollars; server-side conversion is assumed.
           formData.append(key, auctionData[key].toString());
         }
       });
 
-      // Handle file uploads
       selectedFiles.forEach(file => {
         formData.append('images', file);
       });
 
       console.log("Submitting FormData with files:", selectedFiles.length);
 
-      // Use fetch directly to properly handle FormData with files
       const res = await fetch("/api/auctions", {
         method: "POST",
         body: formData,
@@ -97,6 +129,7 @@ export default function NewAuction() {
       setLocation("/seller/dashboard");
     },
     onError: (error: Error) => {
+      console.error("Auction creation error:", error);
       toast({
         title: "Error creating auction",
         description: error.message,
@@ -113,7 +146,7 @@ export default function NewAuction() {
         <form
           onSubmit={form.handleSubmit((data) => {
             console.log("Form data before submission:", data);
-            createAuctionMutation.mutate({...data});
+            createAuctionMutation.mutate(data);
           })}
           className="space-y-6"
           encType="multipart/form-data"
@@ -278,10 +311,8 @@ export default function NewAuction() {
                         type="datetime-local"
                         {...field}
                         min={new Date().toISOString().split("T")[0] + "T00:00"}
-
                       />
                     </FormControl>
-
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -300,10 +331,8 @@ export default function NewAuction() {
                         type="datetime-local"
                         {...field}
                         min={form.watch("startDate")}
-
                       />
                     </FormControl>
-
                   </div>
                   <FormMessage />
                 </FormItem>

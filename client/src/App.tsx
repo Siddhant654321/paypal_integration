@@ -31,10 +31,10 @@ function Router() {
         <Route path="/auction/:id" component={AuctionPage} />
         <Route path="/auction/:id/pay" component={PaymentPage} />
         <Route path="/seller/dashboard" component={SellerDashboard} />
+        <Route path="/seller/auction/new" component={NewAuction} />
         <Route path="/seller/fulfill/:id" component={FulfillmentPage} />
         <Route path="/seller/:id" component={SellerProfilePage} />
         <Route path="/buyer/dashboard" component={BuyerDashboard} />
-        <Route path="/seller/new-auction" component={NewAuction} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/analytics" component={AnalyticsPage} />
         <Route path="/buyer-requests/:id" component={BuyerRequestPage} />
