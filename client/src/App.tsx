@@ -33,7 +33,6 @@ function Router() {
         <Route path="/seller/fulfill/:id" component={FulfillmentPage} />
         <Route path="/seller/:id" component={SellerProfilePage} />
         <Route path="/buyer/dashboard" component={BuyerDashboard} />
-        <Route path="/new-auction" component={NewAuction} />
         <Route path="/seller/new-auction" component={NewAuction} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/analytics" component={AnalyticsPage} />

@@ -671,7 +671,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update the buyer request status update endpoint to allow sellers to fulfill requests
   app.patch("/api/buyer-requests/:id/status", requireAuth, async (req, res) => {
     try {
       const requestId = parseInt(req.params.id);
@@ -686,14 +685,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Buyer request not found" });
       }
 
-      // Allow buyer, admin, seller_admin, or any seller to update status
-      const canUpdate = 
-        req.user!.id === request.buyerId || 
-        req.user!.role === "admin" || 
-        req.user!.role === "seller_admin" ||
-        req.user!.role === "seller";
-
-      if (!canUpdate) {
+      // Only allow buyer or admin to update status
+      if (req.user!.id !== request.buyerId && req.user!.role !== "admin") {
         return res.status(403).json({ message: "Not authorized to update this request" });
       }
 
@@ -963,7 +956,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               (auction.status === "ended" && auction.winningBidderId)
             )
           };
-        })      );
+        })
+      );
 
       // Only return sellers who have profiles and active/successful auctions
       const activeSellers = sellersWithDetails.filter(

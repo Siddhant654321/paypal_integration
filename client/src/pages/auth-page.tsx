@@ -154,6 +154,8 @@ export default function AuthPage() {
                       <SelectContent>
                         <SelectItem value="buyer">Buyer</SelectItem>
                         <SelectItem value="seller">Seller</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="seller_admin">Seller Admin</SelectItem>
                       </SelectContent>
                     </Select>
                     {registerForm.formState.errors.role && (
