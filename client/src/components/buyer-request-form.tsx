@@ -56,24 +56,35 @@ export function BuyerRequestForm() {
 
   const createRequest = useMutation({
     mutationFn: async (data: InsertBuyerRequest) => {
-      const response = await apiRequest("/api/buyer-requests", {
-        method: "POST",
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      });
-      return response;
+      console.log("Submitting buyer request with data:", data);
+      try {
+        const response = await apiRequest("/api/buyer-requests", {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+        console.log("Buyer request creation response:", response);
+        return response;
+      } catch (error) {
+        console.error("Error creating buyer request:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
+      console.log("Successfully created buyer request");
       queryClient.invalidateQueries({ queryKey: ["/api/buyer-requests"] });
       toast({
         title: "Request Created",
         description: "Your request has been created successfully.",
       });
       form.reset();
+      navigate("/buyer-requests");
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Mutation error:", error);
+      
       if (error.message === "Unauthorized") {
         toast({
           title: "Authentication Required",
@@ -82,9 +93,11 @@ export function BuyerRequestForm() {
         });
         navigate("/auth");
       } else {
+        // Show more detailed error if available
+        const errorMessage = error.response?.data?.message || error.message || "Failed to create request";
         toast({
           title: "Error",
-          description: "Failed to create request. Please try again.",
+          description: errorMessage + ". Please try again.",
           variant: "destructive",
         });
       }
@@ -92,6 +105,8 @@ export function BuyerRequestForm() {
   });
 
   function onSubmit(data: InsertBuyerRequest) {
+    console.log("Form submitted with values:", data);
+    
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -101,6 +116,22 @@ export function BuyerRequestForm() {
       navigate("/auth");
       return;
     }
+    
+    // Make sure species is using the correct format
+    if (data.species) {
+      data.species = data.species.toLowerCase();
+    }
+    
+    // Add proper validation for required fields
+    if (!data.title || !data.species || !data.category || !data.description) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     createRequest.mutate(data);
   }
 
