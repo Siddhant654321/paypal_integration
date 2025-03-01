@@ -20,8 +20,8 @@ const requireProfile = async (req: any, res: any, next: any) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  // Skip profile check for buyers
-  if (req.user.role === "buyer") {
+  // Skip profile check for buyers and all seller roles
+  if (req.user.role === "buyer" || req.user.role === "seller" || req.user.role === "seller_admin") {
     return next();
   }
 
