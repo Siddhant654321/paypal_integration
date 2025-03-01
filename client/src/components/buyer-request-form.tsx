@@ -96,7 +96,7 @@ export function BuyerRequestForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="title"
@@ -104,8 +104,32 @@ export function BuyerRequestForm() {
             <FormItem>
               <FormLabel>Title</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Looking for Silver Laced Wyandottes" {...field} />
+                <Input placeholder="E.g., Looking for Show Quality Bantam Chickens" {...field} />
               </FormControl>
+              <FormDescription>
+                A brief title describing what you're looking for
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Describe what you're looking for in detail" 
+                  className="min-h-[120px]" 
+                  {...field} 
+                />
+              </FormControl>
+              <FormDescription>
+                Provide details about what you're looking for
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -124,13 +148,16 @@ export function BuyerRequestForm() {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {SPECIES_OPTIONS.map((species) => (
-                    <SelectItem key={species} value={species.toLowerCase()}>
-                      {species}
+                  {SPECIES_OPTIONS.map(option => (
+                    <SelectItem key={option} value={option.toLowerCase()}>
+                      {option.charAt(0).toUpperCase() + option.slice(1)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <FormDescription>
+                The type of animal you're looking for
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -156,23 +183,6 @@ export function BuyerRequestForm() {
                   ))}
                 </SelectContent>
               </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Describe what you're looking for..."
-                  {...field}
-                />
-              </FormControl>
               <FormMessage />
             </FormItem>
           )}
