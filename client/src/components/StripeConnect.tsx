@@ -1,125 +1,84 @@
 import { useEffect, useState } from 'react';
-import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js';
+import { EmbeddedCheckoutProvider, EmbeddedAccountOnboarding } from '@stripe/react-stripe-js';
 
+// Interface for component props
 interface StripeConnectProps {
   clientSecret: string;
   onComplete?: () => void;
 }
 
-declare global {
-  interface Window {
-    StripeConnect?: {
-      EmbeddedComponents: {
-        mount: (options: {
-          clientSecret: string;
-          appearance?: {
-            theme: 'flat' | 'stripe' | 'night';
-            variables?: Record<string, string>;
-          };
-          onComplete?: () => void;
-          onError?: (error: Error) => void;
-        }) => void;
-      };
-    };
-  }
-}
-
 export function StripeConnect({ clientSecret, onComplete }: StripeConnectProps) {
-  const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(true);
+  const [stripePromise, setStripePromise] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-
-    const loadAndMount = async () => {
+    // Initialize Stripe
+    const initializeStripe = async () => {
       try {
-        // Load the Stripe Connect script
-        const script = document.createElement('script');
-        script.src = 'https://b.stripecdn.com/connect-js/v1/connect-js-v1.min.js';
-        script.async = true;
+        setLoading(true);
+        // Get publishable key from environment variable
+        const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 
-        // Create a promise to handle script loading
-        const scriptLoaded = new Promise((resolve, reject) => {
-          script.onload = resolve;
-          script.onerror = () => reject(new Error('Failed to load Stripe Connect script'));
-        });
+        if (!publishableKey) {
+          throw new Error('Stripe publishable key not found');
+        }
 
-        document.body.appendChild(script);
-        await scriptLoaded;
-
-        // Wait for StripeConnect to be available
-        timeoutId = setTimeout(() => {
-          if (!window.StripeConnect) {
-            throw new Error('Stripe Connect failed to initialize');
-          }
-
-          // Mount the Connect components
-          window.StripeConnect.EmbeddedComponents.mount({
-            clientSecret,
-            appearance: {
-              theme: 'flat',
-              variables: {
-                colorPrimary: '#0F172A',
-                colorBackground: '#ffffff',
-                colorText: '#1e293b',
-                fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-                borderRadius: '0.5rem',
-                spacingUnit: '5px',
-              },
-            },
-            onComplete: () => {
-              setIsLoading(false);
-              toast({
-                title: "Success",
-                description: "Account setup completed successfully",
-              });
-              if (onComplete) {
-                onComplete();
-              }
-            },
-            onError: (error: Error) => {
-              setIsLoading(false);
-              toast({
-                title: "Error",
-                description: error.message || "Failed to complete account setup",
-                variant: "destructive",
-              });
-            },
-          });
-        }, 1000);
-      } catch (error) {
-        setIsLoading(false);
-        console.error('Stripe Connect error:', error);
-        toast({
-          title: "Error",
-          description: "Failed to initialize Stripe Connect. Please try again.",
-          variant: "destructive",
-        });
+        const stripeInstance = await loadStripe(publishableKey);
+        setStripePromise(stripeInstance as any);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error initializing Stripe:', err);
+        setError('Failed to initialize payment system. Please try again later.');
+        setLoading(false);
       }
     };
 
-    loadAndMount();
+    initializeStripe();
+  }, []);
 
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      const script = document.querySelector('script[src*="connect-js"]');
-      if (script) {
-        document.body.removeChild(script);
-      }
-    };
-  }, [clientSecret, toast, onComplete]);
+  // Handle onboarding completion
+  const handleOnboardingComplete = () => {
+    console.log('Stripe onboarding completed');
+    if (onComplete) {
+      onComplete();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Loading payment system...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 border border-red-300 bg-red-50 text-red-700 rounded-md">
+        <p>{error}</p>
+        <p className="mt-2 text-sm">
+          If this issue persists, please contact support.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative min-h-[600px]">
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+    <div className="w-full">
+      {stripePromise && clientSecret ? (
+        <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
+          <EmbeddedAccountOnboarding 
+            onComplete={handleOnboardingComplete}
+            style={{ height: '600px' }}
+          />
+        </EmbeddedCheckoutProvider>
+      ) : (
+        <p>Unable to load Stripe. Missing configuration.</p>
       )}
-      <div id="stripe-connect-mount" className="w-full min-h-[600px] border rounded-lg bg-background" />
     </div>
   );
 }
