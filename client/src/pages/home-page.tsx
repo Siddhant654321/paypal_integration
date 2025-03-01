@@ -75,107 +75,121 @@ export default function HomePage() {
   }, [auctions, filters.searchTerm, filters.sortBy]);
 
   return (
-    <div>
+    <div className="min-h-screen">
+      {/* Hero Section */}
       <div
-        className="bg-cover bg-center h-64 relative"
+        className="relative h-[300px] md:h-[400px] bg-cover bg-center"
         style={{
           backgroundImage: 'url("/images/hero-chicken.jpg")',
-          backgroundPosition: 'center',
-          backgroundSize: 'cover'
         }}
       >
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
-          <h1 className="text-4xl font-bold text-white text-center">
-            Pips 'n Chicks Auctions
-          </h1>
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px]">
+          <div className="container h-full mx-auto px-4 flex flex-col justify-center items-center text-center">
+            <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">
+              Pips 'n Chicks Auctions
+            </h1>
+            <p className="text-lg md:text-xl text-white/90 max-w-2xl">
+              Your trusted marketplace for premium poultry and hatching eggs
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="container mx-auto py-8">
-        <AuctionFilters filters={filters} onFilterChange={setFilters} />
+      <main className="container mx-auto px-4 py-8 space-y-8">
+        {/* Filters Section */}
+        <div className="bg-card rounded-lg shadow-sm p-4">
+          <AuctionFilters filters={filters} onFilterChange={setFilters} />
+        </div>
 
-        {isLoadingAuctions ? (
-          <div className="flex justify-center my-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : !activeAuctions?.length && !completedAuctions?.length ? (
-          <div className="text-center my-8 text-muted-foreground">
-            No auctions found{filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
-          </div>
-        ) : (
-          <>
+        {/* Active Auctions Section */}
+        <section className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">Active Auctions</h2>
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button size="sm" variant="outline" className="gap-2">
-                      <Search className="h-4 w-4" />
-                      Not seeing what you're looking for? Put a request out!
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent className="w-[400px] sm:w-[540px]">
-                    <SheetHeader>
-                      <SheetTitle>Create a Buyer Request</SheetTitle>
-                    </SheetHeader>
-                    <div className="mt-6">
-                      <BuyerRequestForm />
-                    </div>
-                  </SheetContent>
-                </Sheet>
-              </div>
-              <div className="mt-4 mb-2 text-sm text-muted-foreground">
+              <h2 className="text-2xl font-bold">Active Auctions</h2>
+              <p className="text-sm text-muted-foreground mt-1">
                 Showing {activeAuctions.length} active {activeAuctions.length === 1 ? "auction" : "auctions"}
                 {filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-2">
-                {activeAuctions.map((auction) => (
+              </p>
+            </div>
+
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button size="sm" variant="outline" className="whitespace-nowrap">
+                  <Search className="h-4 w-4 mr-2" />
+                  Create Buyer Request
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="w-full sm:max-w-lg">
+                <SheetHeader>
+                  <SheetTitle>Create a Buyer Request</SheetTitle>
+                </SheetHeader>
+                <div className="mt-6">
+                  <BuyerRequestForm />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+
+          {isLoadingAuctions ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : !activeAuctions.length ? (
+            <div className="text-center py-12 bg-muted/50 rounded-lg">
+              <p className="text-muted-foreground">
+                No auctions found{filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeAuctions.map((auction) => (
+                <AuctionCard key={auction.id} auction={auction} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Featured Sellers Section */}
+        {activeSellers && activeSellers.length > 0 && (
+          <section className="pt-8 space-y-6">
+            <h2 className="text-2xl font-bold">Featured Sellers</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeSellers.map((seller) => (
+                <SellerShowcase key={seller.id} seller={seller} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Archives Section */}
+        <section className="pt-8 space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h2 className="text-2xl font-bold">Archives</h2>
+            <Button
+              variant="outline"
+              onClick={() => setShowArchives(!showArchives)}
+              className="whitespace-nowrap"
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              {showArchives ? "Hide Archives" : "Show Archives"}
+            </Button>
+          </div>
+
+          {showArchives && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Showing {completedAuctions.length} completed {completedAuctions.length === 1 ? "auction" : "auctions"}
+                {filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {completedAuctions.map((auction) => (
                   <AuctionCard key={auction.id} auction={auction} />
                 ))}
               </div>
-            </div>
-
-            {activeSellers && activeSellers.length > 0 && (
-              <div className="mt-16">
-                <h2 className="text-2xl font-bold mb-6">Featured Sellers</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {activeSellers.map((seller) => (
-                    <SellerShowcase key={seller.id} seller={seller} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-12">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">Archives</h2>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowArchives(!showArchives)}
-                  className="flex items-center gap-2"
-                >
-                  <Archive className="h-4 w-4" />
-                  {showArchives ? "Hide Archives" : "Show Archives"}
-                </Button>
-              </div>
-
-              {showArchives && (
-                <>
-                  <div className="mt-4 mb-2 text-sm text-muted-foreground">
-                    Showing {completedAuctions.length} completed {completedAuctions.length === 1 ? "auction" : "auctions"}
-                    {filters.searchTerm ? ` matching "${filters.searchTerm}"` : ""}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-2">
-                    {completedAuctions.map((auction) => (
-                      <AuctionCard key={auction.id} auction={auction} />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+            </>
+          )}
+        </section>
+      </main>
     </div>
   );
 }
