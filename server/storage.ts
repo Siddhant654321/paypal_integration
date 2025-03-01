@@ -160,6 +160,25 @@ export class DatabaseStorage implements IStorage {
 
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
+      // Log the incoming data
+      log(`Creating auction with data: ${JSON.stringify({
+        ...insertAuction,
+        startPrice: insertAuction.startPrice,
+        reservePrice: insertAuction.reservePrice || 0
+      })}`, "storage");
+
+      // First verify the seller exists
+      const seller = await this.getUser(insertAuction.sellerId);
+      log(`Found seller for auction: ${JSON.stringify(seller)}`, "storage");
+
+      if (!seller) {
+        throw new Error(`Seller with ID ${insertAuction.sellerId} not found`);
+      }
+
+      if (seller.role !== 'seller' && seller.role !== 'seller_admin') {
+        throw new Error(`User ${insertAuction.sellerId} is not a seller (role: ${seller.role})`);
+      }
+
       // Map legacy categories to new format if present
       let category = insertAuction.category;
       const categoryMap = {
@@ -170,7 +189,7 @@ export class DatabaseStorage implements IStorage {
 
       if (categoryMap[category as keyof typeof categoryMap]) {
         category = categoryMap[category as keyof typeof categoryMap];
-        console.log(`Mapped category from ${insertAuction.category} to ${category}`);
+        log(`Mapped category from ${insertAuction.category} to ${category}`, "storage");
       }
 
       // Prepare auction data
@@ -182,8 +201,6 @@ export class DatabaseStorage implements IStorage {
         startDate: new Date(insertAuction.startDate),
         endDate: new Date(insertAuction.endDate),
       };
-
-      log(`Creating auction with data: ${JSON.stringify(auctionData)}`, "storage");
 
       // Insert the auction
       const [auction] = await db
@@ -971,8 +988,7 @@ export class DatabaseStorage implements IStorage {
         .orderBy(desc(notifications.createdAt))
         .limit(1);
 
-      log(`[STORAGE] Last notification:`, notification, "notification");
-      return notification;
+      log(`[STORAGE] Last notification:`, notification, "notification");      return notification;
     } catch (error) {
       log(`[STORAGE] Error getting last notification: ${error}`, "notification");
       throw error;
