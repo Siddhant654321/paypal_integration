@@ -148,7 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedData = {
         ...auctionData,
         sellerId: userId, // Explicitly set the sellerId
-        // Convert price from dollars to cents for storage (multiply by 100)
+        // Convert price from dollars to cents for storage (multiply by 100) 
         startPrice: Number(auctionData.startPrice || 0) * 100,
         reservePrice: Number(auctionData.reservePrice || 0) * 100,
         startDate: auctionData.startDate || new Date().toISOString(),

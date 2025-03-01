@@ -167,15 +167,21 @@ export class DatabaseStorage implements IStorage {
         reservePrice: insertAuction.reservePrice || 0
       })}`, "storage");
 
-      // First verify the seller exists
-      const seller = await this.getUser(insertAuction.sellerId);
+      // First verify the seller exists and their role
+      const [seller] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, insertAuction.sellerId));
+
       log(`Found seller for auction: ${JSON.stringify(seller)}`, "storage");
 
       if (!seller) {
+        log(`No seller found with ID ${insertAuction.sellerId}`, "storage");
         throw new Error(`Seller with ID ${insertAuction.sellerId} not found`);
       }
 
       if (seller.role !== 'seller' && seller.role !== 'seller_admin') {
+        log(`Invalid seller role: ${seller.role}`, "storage");
         throw new Error(`User ${insertAuction.sellerId} is not a seller (role: ${seller.role})`);
       }
 
