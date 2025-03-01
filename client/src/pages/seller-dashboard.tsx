@@ -35,16 +35,22 @@ const SellerDashboard = () => {
     return <Redirect to="/" />;
   }
 
-  const { data: auctions = [], isLoading: auctionsLoading } = useQuery<Auction[]>({
-    queryKey: [`/api/seller/auctions`],
+  // Fetch auctions with isLoading state
+  const { data: auctions, isLoading: auctionsLoading } = useQuery<Auction[]>({
+    queryKey: ["/api/seller/auctions"],
+    select: (data) => data || [], // Ensure we always have an array
   });
 
-  const { data: biddingOn = [], isLoading: bidsLoading } = useQuery<Auction[]>({
+  // Fetch bids with isLoading state
+  const { data: biddingOn, isLoading: bidsLoading } = useQuery<Auction[]>({
     queryKey: ["/api/user/bids"],
+    select: (data) => data || [], // Ensure we always have an array
   });
 
-  const { data: payouts = [], isLoading: payoutsLoading } = useQuery<Payout[]>({
+  // Fetch payouts with isLoading state
+  const { data: payouts, isLoading: payoutsLoading } = useQuery<Payout[]>({
     queryKey: ["/api/seller/payouts"],
+    select: (data) => data || [], // Ensure we always have an array
   });
 
   const { data: stripeStatus } = useQuery<StripeStatus>({
@@ -96,21 +102,22 @@ const SellerDashboard = () => {
     },
   });
 
-  const filteredAuctions = auctions.filter(auction => 
-    auction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    auction.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Safe filtering functions
+  const safeFilter = (auction: Auction) => {
+    const searchLower = searchTerm.toLowerCase();
+    const titleMatch = auction.title?.toLowerCase().includes(searchLower) || false;
+    const descMatch = auction.description?.toLowerCase().includes(searchLower) || false;
+    return titleMatch || descMatch;
+  };
 
-  const filteredBiddingOn = biddingOn.filter(auction =>
-    auction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    auction.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter auctions only if we have data
+  const filteredAuctions = auctions ? auctions.filter(safeFilter) : [];
+  const filteredBiddingOn = biddingOn ? biddingOn.filter(safeFilter) : [];
 
+  // Categorize auctions
   const pendingAuctions = filteredAuctions.filter(auction => !auction.approved);
   const approvedAuctions = filteredAuctions.filter(auction => auction.approved);
-  const endedAuctions = filteredAuctions.filter(auction => 
-    auction.status === "ended"
-  );
+  const endedAuctions = filteredAuctions.filter(auction => auction.status === "ended");
 
   // Render Stripe Connect status and actions
   const renderStripeConnectStatus = () => {
@@ -205,8 +212,13 @@ const SellerDashboard = () => {
     </div>
   );
 
+  // Show loading state while data is being fetched
   if (auctionsLoading || bidsLoading || payoutsLoading) {
-    return <div className="container mx-auto py-8">Loading...</div>;
+    return (
+      <div className="container mx-auto py-8">
+        <div className="text-center">Loading your dashboard...</div>
+      </div>
+    );
   }
 
   return (
@@ -255,7 +267,7 @@ const SellerDashboard = () => {
             </TabsList>
 
             <TabsContent value="approved">
-              {!approvedAuctions.length ? (
+              {approvedAuctions.length === 0 ? (
                 <div className="text-center text-muted-foreground">
                   No approved auctions found
                 </div>
@@ -267,7 +279,7 @@ const SellerDashboard = () => {
             </TabsContent>
 
             <TabsContent value="pending">
-              {!pendingAuctions.length ? (
+              {pendingAuctions.length === 0 ? (
                 <div className="text-center text-muted-foreground">
                   No pending auctions found
                 </div>
@@ -279,7 +291,7 @@ const SellerDashboard = () => {
             </TabsContent>
 
             <TabsContent value="ended">
-              {!endedAuctions.length ? (
+              {endedAuctions.length === 0 ? (
                 <div className="text-center text-muted-foreground">
                   No ended auctions found
                 </div>
@@ -296,7 +308,7 @@ const SellerDashboard = () => {
           {renderStripeConnectStatus()}
           {payoutsLoading ? (
             <div className="text-center">Loading your payouts...</div>
-          ) : !payouts.length ? (
+          ) : payouts.length === 0 ? (
             <div className="text-center text-muted-foreground">
               No payouts found. Completed auction payments will appear here.
             </div>
