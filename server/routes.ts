@@ -144,15 +144,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         auctionData
       });
 
-      // Verify seller exists first
-      const seller = await storage.getUser(userId);
-      if (!seller) {
-        console.error(`Seller with ID ${userId} not found`);
-        return res.status(404).json({ message: "Seller not found" });
-      }
-
-      console.log("Found seller:", seller);
-
       // Convert string values to appropriate types and ensure required fields
       const parsedData = {
         ...auctionData,
