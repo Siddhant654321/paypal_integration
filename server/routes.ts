@@ -270,6 +270,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const bid = await storage.createBid(bidData);
+      
+      // Send notification to the seller about the new bid
+      try {
+        const { NotificationService } = await import('./notification-service');
+        await NotificationService.notifyNewBid(
+          auction.sellerId,
+          auction.title,
+          amount
+        );
+        
+        // If there was a previous highest bidder, notify them that they've been outbid
+        const previousBids = await storage.getBidsForAuction(auction.id);
+        if (previousBids.length > 1) {
+          // Sort by amount in descending order to get the second highest bid
+          const sortedBids = previousBids.sort((a, b) => b.amount - a.amount);
+          const secondHighestBid = sortedBids[1];
+          
+          // Only notify if it's a different bidder
+          if (secondHighestBid.bidderId !== req.user.id) {
+            await NotificationService.notifyOutbid(
+              secondHighestBid.bidderId,
+              auction.title,
+              amount
+            );
+          }
+        }
+      } catch (notifyError) {
+        console.error("Failed to send bid notification:", notifyError);
+        // Continue with the response even if notification fails
+      }
+      
       res.status(201).json(bid);
     } catch (error) {
       console.error("Bid error:", error);
