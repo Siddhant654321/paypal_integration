@@ -22,6 +22,14 @@ const SPECIES_OPTIONS = [
   "Other",
 ];
 
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+
 const CATEGORY_OPTIONS = [
   "Show Quality",
   "Purebred & Production",
@@ -45,14 +53,23 @@ export function BuyerRequestForm() {
   });
 
   const createRequest = useMutation({
-    mutationFn: async (data: InsertBuyerRequest) =>
-      apiRequest("/api/buyer-requests", {
-        method: "POST",
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      }),
+    mutationFn: async (data: InsertBuyerRequest) => {
+      console.log("Submitting buyer request:", data);
+      try {
+        const response = await apiRequest("/api/buyer-requests", {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+        console.log("Server response:", response);
+        return response;
+      } catch (error) {
+        console.error("Request submission error:", error);
+        throw error;
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/buyer-requests"] });
       toast({
@@ -61,7 +78,8 @@ export function BuyerRequestForm() {
       });
       form.reset();
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Mutation error:", error);
       if (error.message === "Unauthorized") {
         toast({
           title: "Authentication Required",
@@ -72,7 +90,7 @@ export function BuyerRequestForm() {
       } else {
         toast({
           title: "Error",
-          description: "Failed to create request. Please try again.",
+          description: `Failed to create request: ${error.message || "Please try again"}`,
           variant: "destructive",
         });
       }
@@ -89,6 +107,7 @@ export function BuyerRequestForm() {
       navigate("/auth");
       return;
     }
+    console.log("Form data to submit:", data);
     createRequest.mutate(data);
   }
 
@@ -111,6 +130,56 @@ export function BuyerRequestForm() {
             </FormItem>
           )}
         />
+
+        <FormField
+          control={form.control}
+          name="species"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Species</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Chicken, Duck, Goat" {...field} />
+              </FormControl>
+              <FormDescription>
+                The type of animal you're looking for
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="category"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Category</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                The quality or purpose category
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
 
         <FormField
           control={form.control}
