@@ -46,19 +46,23 @@ export class SellerPaymentService {
   static async getOnboardingLink(accountId: string, baseUrl: string): Promise<string> {
     try {
       console.log("Creating onboarding link for account:", accountId);
-
+      
+      // Make sure URLs don't have double slashes
+      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      
       // Create an account link with type=account_onboarding
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        refresh_url: `${baseUrl}/seller/dashboard?refresh_onboarding=true`,
-        return_url: `${baseUrl}/seller/dashboard?onboarding_complete=true`,
+        refresh_url: `${cleanBaseUrl}/#/seller/dashboard?refresh_onboarding=true`,
+        return_url: `${cleanBaseUrl}/#/seller/dashboard?onboarding_complete=true`,
         type: 'account_onboarding',
       });
 
       if (!accountLink.url) {
         throw new Error('Stripe did not return a valid onboarding URL');
       }
-
+      
+      console.log("Generated onboarding URL with return path:", `${cleanBaseUrl}/#/seller/dashboard`);
       return accountLink.url;
     } catch (error) {
       console.error("Error creating onboarding link:", error);

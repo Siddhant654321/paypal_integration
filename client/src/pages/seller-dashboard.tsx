@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign, Package, ExternalLink, AlertCircle, CheckCirc
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
 import { formatPrice } from '../utils/formatters';
@@ -54,6 +54,8 @@ const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const searchParams = new URLSearchParams(window.location.search);
+
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -78,7 +80,7 @@ const SellerDashboard = () => {
     select: (data) => data || [], // Ensure we always have an array
   });
 
-  const { data: stripeStatus, isLoading: stripeStatusLoading, error: stripeStatusError } = useQuery<StripeStatus>({
+  const stripeStatusQuery = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
     onSuccess: (data) => console.log("Stripe status data:", data),
     onError: (error) => console.error("Stripe status error:", error)
@@ -169,17 +171,17 @@ const SellerDashboard = () => {
   // Add these new query hooks after the existing queries
   const { data: payoutSchedule, isLoading: scheduleLoading } = useQuery<PayoutSchedule>({
     queryKey: ["/api/seller/payout-schedule"],
-    enabled: stripeStatus?.status === "verified",
+    enabled: stripeStatusQuery?.data?.status === "verified",
   });
 
   const { data: balance, isLoading: balanceLoading } = useQuery<Balance>({
     queryKey: ["/api/seller/balance"],
-    enabled: stripeStatus?.status === "verified",
+    enabled: stripeStatusQuery?.data?.status === "verified",
   });
 
   const { data: stripePayouts, isLoading: stripePayoutsLoading } = useQuery<StripePayout>({
     queryKey: ["/api/seller/stripe-payouts"],
-    enabled: stripeStatus?.status === "verified",
+    enabled: stripeStatusQuery?.data?.status === "verified",
   });
 
   // Safe filtering functions
@@ -201,7 +203,7 @@ const SellerDashboard = () => {
 
   // Render Stripe Connect status and actions
   const renderStripeConnectStatus = () => {
-    if (stripeStatusLoading) {
+    if (stripeStatusQuery.isLoading) {
       return (
         <Card className="mb-6">
           <CardHeader>
@@ -211,7 +213,7 @@ const SellerDashboard = () => {
       );
     }
 
-    if (!stripeStatus) {
+    if (!stripeStatusQuery.data) {
       return (
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
@@ -224,7 +226,7 @@ const SellerDashboard = () => {
     }
 
     // Safely access status with optional chaining
-    switch (stripeStatus?.status) {
+    switch (stripeStatusQuery.data?.status) {
       case "not_started":
         return (
           <Card className="mb-6">
@@ -321,9 +323,9 @@ const SellerDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="mb-4 p-3 bg-muted rounded-md text-sm">
-                <p>Status: {stripeStatus?.status}</p>
-                {stripeStatusError && (
-                  <p className="text-red-500 mt-1">Error: {(stripeStatusError as Error).message}</p>
+                <p>Status: {stripeStatusQuery.data?.status}</p>
+                {stripeStatusQuery.error && (
+                  <p className="text-red-500 mt-1">Error: {(stripeStatusQuery.error as Error).message}</p>
                 )}
                 {connectWithStripeMutation.error && (
                   <p className="text-red-500 mt-1">Connection Error: {(connectWithStripeMutation.error as Error).message}</p>
@@ -449,13 +451,31 @@ const SellerDashboard = () => {
 
 
   // Show loading state while data is being fetched
-  if (auctionsLoading || bidsLoading || payoutsLoading || stripeStatusLoading || scheduleLoading || balanceLoading || stripePayoutsLoading) {
+  if (auctionsLoading || bidsLoading || payoutsLoading || stripeStatusQuery.isLoading || scheduleLoading || balanceLoading || stripePayoutsLoading) {
     return (
       <div className="container mx-auto py-8">
         <div className="text-center">Loading your dashboard...</div>
       </div>
     );
   }
+
+  useEffect(() => {
+    // Handle return from Stripe onboarding
+    if (searchParams.get('onboarding_complete') === 'true') {
+      toast({
+        title: "Onboarding Status",
+        description: "Checking your Stripe account status...",
+        variant: "default",
+      });
+      // Refresh the stripe status
+      stripeStatusQuery.refetch();
+    }
+
+    // Handle refresh onboarding parameter
+    if (searchParams.get('refresh_onboarding') === 'true') {
+      refreshOnboardingMutation.mutate();
+    }
+  }, [searchParams, stripeStatusQuery, refreshOnboardingMutation, toast]);
 
   return (
     <div className="container mx-auto py-8">
@@ -543,7 +563,7 @@ const SellerDashboard = () => {
         <TabsContent value="payouts">
           {renderStripeConnectStatus()}
 
-          {stripeStatus?.status === "verified" && (
+          {stripeStatusQuery.data?.status === "verified" && (
             <>
               {renderBalanceInfo()}
               {renderPayoutSchedule()}
@@ -606,6 +626,27 @@ const SellerDashboard = () => {
                 )}
               </div>
             </>
+          )}
+          {stripeStatusQuery.data?.status === "rejected" && (
+            <div className="text-center">
+              <div className="text-destructive font-semibold mb-2">Account Verification Failed</div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Your Stripe verification could not be completed. This may be due to missing information or verification issues.
+              </p>
+              <Button 
+                onClick={() => {
+                  toast({
+                    title: "Reconnecting to Stripe",
+                    description: "Please complete all required information in the Stripe form",
+                    variant: "default",
+                  });
+                  refreshOnboardingMutation.mutate();
+                }} 
+                disabled={refreshOnboardingMutation.isPending}
+              >
+                {refreshOnboardingMutation.isPending ? "Loading..." : "Try Again"}
+              </Button>
+            </div>
           )}
         </TabsContent>
       </Tabs>
