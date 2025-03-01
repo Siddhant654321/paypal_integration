@@ -89,25 +89,33 @@ const SellerDashboard = () => {
     mutationFn: async () => {
       console.log("Initiating Stripe Connect...");
       try {
-        const response = await apiRequest('/api/seller/connect', { 
+        const response = await fetch('/api/seller/connect', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
-          }
+          },
+          credentials: 'include'
         });
-        console.log("Stripe Connect response:", response);
-        
-        if (!response) {
-          throw new Error('No response received from server');
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Stripe Connect error response:", {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          });
+          throw new Error(`Server error: ${response.status} ${response.statusText}`);
         }
-        
-        if (!response.url) {
-          throw new Error('No onboarding URL received: ' + JSON.stringify(response));
+
+        const data = await response.json();
+        console.log("Stripe Connect response:", data);
+
+        if (!data?.url) {
+          throw new Error('No onboarding URL received');
         }
-        
-        return response;
+        return data;
       } catch (err) {
-        console.error("Error in Stripe Connect request:", err);
+        console.error("Fetch error:", err);
         throw err;
       }
     },

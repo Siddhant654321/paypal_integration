@@ -70,18 +70,53 @@ export class SellerPaymentService {
     try {
       console.log("Checking account status for:", accountId);
 
-      const account = await stripe.accounts.retrieve(accountId);
-
-      if (account.charges_enabled && account.payouts_enabled) {
-        return "verified";
-      } else if (account.requirements?.disabled_reason) {
-        return "rejected";
+      // Handle empty or invalid account ID
+      if (!accountId || typeof accountId !== 'string' || accountId.trim() === '') {
+        console.error("Invalid account ID provided:", accountId);
+        return "not_started";
       }
 
-      return "pending";
+      // Attempt to retrieve the account
+      try {
+        const account = await stripe.accounts.retrieve(accountId);
+        console.log("Account status details:", {
+          id: account.id,
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          requirements_disabled_reason: account.requirements?.disabled_reason,
+          capabilities: account.capabilities
+        });
+
+        if (account.charges_enabled && account.payouts_enabled) {
+          return "verified";
+        } else if (account.requirements?.disabled_reason) {
+          console.log("Account rejected reason:", account.requirements.disabled_reason);
+          return "rejected";
+        }
+
+        return "pending";
+      } catch (stripeError) {
+        // Handle specific Stripe errors
+        if (stripeError instanceof Stripe.errors.StripeError) {
+          console.error("Stripe API Error:", {
+            type: stripeError.type,
+            code: stripeError.code,
+            message: stripeError.message
+          });
+          
+          // If the account doesn't exist or was deleted
+          if (stripeError.code === 'resource_missing' || 
+              stripeError.message.includes('No such account')) {
+            return "not_started";
+          }
+        }
+        
+        // Re-throw for general error handling
+        throw stripeError;
+      }
     } catch (error) {
       console.error("Error checking account status:", error);
-      throw error;
+      return "rejected"; // Return rejected instead of throwing to avoid breaking the UI
     }
   }
 
