@@ -2,7 +2,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, DollarSign, Package, ExternalLink, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Search, DollarSign, ExternalLink, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,11 @@ interface PayoutSchedule {
   interval: string;
 }
 
+interface StripeConnectResponse {
+  url: string;
+  accountId: string;
+}
+
 const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -71,15 +76,25 @@ const SellerDashboard = () => {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('/api/seller/connect', {
+      const response = await fetch('/api/seller/connect', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
       });
 
-      if (!response?.url) {
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to connect with Stripe');
+      }
+
+      const data = await response.json() as StripeConnectResponse;
+      if (!data.url) {
         throw new Error('No onboarding URL received');
       }
 
-      return response;
+      return data;
     },
     onSuccess: (data) => {
       // Redirect to Stripe's hosted onboarding
