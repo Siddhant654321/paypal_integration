@@ -744,6 +744,33 @@ export default function AdminDashboard() {
                           <Badge variant="outline">{user.role}</Badge>
                         </div>
                         <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              fetch(`/api/admin/users/${user.id}/approve`, {
+                                method: "POST",
+                              })
+                                .then((res) => res.json())
+                                .then(() => {
+                                  queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+                                  toast({
+                                    title: "Seller approved",
+                                    description: `${user.username} has been approved as a seller.`,
+                                  });
+                                })
+                                .catch((error) => {
+                                  console.error("Error approving seller:", error);
+                                  toast({
+                                    title: "Error",
+                                    description: "Failed to approve seller. Please try again.",
+                                    variant: "destructive",
+                                  });
+                                });
+                            }}
+                          >
+                            Approve
+                          </Button>
                           {user.hasProfile && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
