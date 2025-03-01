@@ -196,26 +196,42 @@ export class DatabaseStorage implements IStorage {
         reservePrice: insertAuction.reservePrice || 0
       })}`, "storage");
 
+      // Ensure sellerId is a valid number
+      const sellerId = typeof insertAuction.sellerId === 'string' 
+        ? parseInt(insertAuction.sellerId, 10) 
+        : insertAuction.sellerId;
+      
+      if (isNaN(sellerId)) {
+        log(`[STORAGE] Invalid seller ID format: ${insertAuction.sellerId}`, "storage");
+        throw new Error(`Invalid seller ID format: ${insertAuction.sellerId}`);
+      }
+      
+      // Use the validated sellerId
+      insertAuction.sellerId = sellerId;
+
+      // Log the lookup attempt
+      log(`[STORAGE] Looking up seller with ID: ${sellerId}`, "storage");
+
       // First verify the seller exists and their role
       const [seller] = await db
         .select()
         .from(users)
-        .where(eq(users.id, insertAuction.sellerId));
+        .where(eq(users.id, sellerId));
 
       log(`[STORAGE] Seller lookup result:`, {
-        sellerId: insertAuction.sellerId,
+        sellerId: sellerId,
         found: !!seller,
         role: seller?.role
       });
 
       if (!seller) {
-        log(`[STORAGE] No seller found with ID ${insertAuction.sellerId}`, "storage");
-        throw new Error(`Seller with ID ${insertAuction.sellerId} not found`);
+        log(`[STORAGE] No seller found with ID ${sellerId}`, "storage");
+        throw new Error(`Seller with ID ${sellerId} not found`);
       }
 
       if (seller.role !== 'seller' && seller.role !== 'seller_admin') {
         log(`[STORAGE] Invalid seller role: ${seller.role}`, "storage");
-        throw new Error(`User ${insertAuction.sellerId} is not a seller (role: ${seller.role})`);
+        throw new Error(`User ${sellerId} is not a seller (role: ${seller.role})`);
       }
 
       // Map legacy categories to new format if present

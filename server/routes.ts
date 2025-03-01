@@ -202,17 +202,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       try {
-        // Skip the manual verification since we already know the user exists
-        // The authenticated user is by definition already in the database
-        // This prevents mismatches between session user and database lookups
-        const seller = req.user;
+        // Log that we're using the authenticated user directly
         console.log("[AUCTION CREATE] Using authenticated user as seller:", {
           userId,
-          role: seller?.role
+          role: req.user?.role,
+          authenticated: true
         });
 
-        const validatedData = insertAuctionSchema.parse(parsedData);
-        console.log("[AUCTION CREATE] Validation successful:", validatedData);
+        // Log the data we're about to validate
+        console.log("[AUCTION CREATE] Data to validate:", {
+          ...parsedData,
+          sellerId: userId
+        });
+
+        try {
+          const validatedData = insertAuctionSchema.parse(parsedData);
+          console.log("[AUCTION CREATE] Validation successful:", validatedData);
+        } catch (validationError) {
+          console.error("[AUCTION CREATE] Validation error:", validationError);
+          return res.status(400).json({ 
+            message: "Invalid auction data", 
+            errors: validationError instanceof ZodError ? validationError.errors : String(validationError)
+          });
+        }
       } catch (error) {
         if (error instanceof ZodError) {
           console.error("[AUCTION CREATE] Validation error:", error.errors);
