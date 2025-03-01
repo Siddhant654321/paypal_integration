@@ -1,26 +1,36 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { insertBuyerRequestSchema, type InsertBuyerRequest } from "@shared/schema";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { InsertBuyerRequest, insertBuyerRequestSchema } from "@shared/schema";
 
-const SPECIES_OPTIONS = [
-  "Bantam",
-  "Standard",
-  "Waterfowl",
-  "Quail",
-  "Other",
-];
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
+import { useState } from "react";
+
+const SPECIES_OPTIONS = ["bantam", "standard", "waterfowl", "quail", "other"];
 
 const CATEGORY_OPTIONS = [
   "Show Quality",
@@ -149,7 +159,7 @@ export function BuyerRequestForm() {
                 </FormControl>
                 <SelectContent>
                   {SPECIES_OPTIONS.map(option => (
-                    <SelectItem key={option} value={option.toLowerCase()}>
+                    <SelectItem key={option} value={option}>
                       {option.charAt(0).toUpperCase() + option.slice(1)}
                     </SelectItem>
                   ))}
