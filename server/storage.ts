@@ -145,15 +145,18 @@ export class DatabaseStorage implements IStorage {
 
   async createProfile(insertProfile: InsertProfile): Promise<Profile> {
     try {
+      log(`Creating profile for user ${insertProfile.userId}`);
+
+      // First, create the profile
       const [profile] = await db
         .insert(profiles)
         .values(insertProfile)
         .returning();
 
-      // Update user's has_profile flag
+      // Then, update the user's has_profile flag
       await db
         .update(users)
-        .set({ has_profile: true })
+        .set({ hasProfile: true })
         .where(eq(users.id, insertProfile.userId));
 
       log(`Profile created and user updated for user ${insertProfile.userId}`);
@@ -175,7 +178,7 @@ export class DatabaseStorage implements IStorage {
       // Ensure user's has_profile flag is set
       await db
         .update(users)
-        .set({ has_profile: true })
+        .set({ hasProfile: true })
         .where(eq(users.id, userId));
 
       log(`Profile updated and user flag verified for user ${userId}`);

@@ -53,9 +53,14 @@ export function setupAuth(app: Express) {
       try {
         const user = await storage.getUserByUsername(username);
         if (!user || !(await comparePasswords(password, user.password))) {
+          console.log("[AUTH] Authentication failed for username:", username);
           return done(null, false, { message: "Invalid username or password" });
         }
-        console.log("[AUTH] User authenticated:", { id: user.id, role: user.role });
+        console.log("[AUTH] User authenticated:", { 
+          id: user.id, 
+          role: user.role,
+          hasProfile: user.hasProfile 
+        });
         return done(null, user);
       } catch (error) {
         console.error("[AUTH] Authentication error:", error);
@@ -65,7 +70,11 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => {
-    console.log("[AUTH] Serializing user:", { id: user.id, role: user.role });
+    console.log("[AUTH] Serializing user:", { 
+      id: user.id, 
+      role: user.role,
+      hasProfile: user.hasProfile 
+    });
     done(null, user.id);
   });
 
@@ -81,7 +90,11 @@ export function setupAuth(app: Express) {
         return done(null, false);
       }
 
-      console.log("[AUTH] User deserialized successfully:", { id: user.id, role: user.role });
+      console.log("[AUTH] User deserialized successfully:", { 
+        id: user.id, 
+        role: user.role,
+        hasProfile: user.hasProfile
+      });
       done(null, user);
     } catch (error) {
       console.error("[AUTH] Deserialization error:", error);
@@ -93,12 +106,20 @@ export function setupAuth(app: Express) {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
+        console.log("[AUTH] Registration failed - username exists:", req.body.username);
         return res.status(400).json({ message: "Username already exists" });
       }
 
       const user = await storage.createUser({
         ...req.body,
         password: await hashPassword(req.body.password),
+        hasProfile: false // Explicitly set hasProfile to false for new users
+      });
+
+      console.log("[AUTH] User registered successfully:", {
+        id: user.id,
+        role: user.role,
+        hasProfile: user.hasProfile
       });
 
       req.login(user, (err) => {
@@ -106,32 +127,58 @@ export function setupAuth(app: Express) {
         res.status(201).json(user);
       });
     } catch (error) {
+      console.error("[AUTH] Registration error:", error);
       next(error);
     }
   });
 
   app.post("/api/login", (req, res, next) => {
     passport.authenticate("local", (err, user, info) => {
-      if (err) return next(err);
+      if (err) {
+        console.error("[AUTH] Login error:", err);
+        return next(err);
+      }
       if (!user) {
+        console.log("[AUTH] Login failed:", info?.message);
         return res.status(401).json({ message: info?.message || "Authentication failed" });
       }
       req.login(user, (err) => {
-        if (err) return next(err);
+        if (err) {
+          console.error("[AUTH] Login session error:", err);
+          return next(err);
+        }
+        console.log("[AUTH] User logged in successfully:", {
+          id: user.id,
+          role: user.role,
+          hasProfile: user.hasProfile
+        });
         res.status(200).json(user);
       });
     })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
+    const userId = req.user?.id;
     req.logout((err) => {
-      if (err) return next(err);
+      if (err) {
+        console.error("[AUTH] Logout error:", err);
+        return next(err);
+      }
+      console.log("[AUTH] User logged out successfully:", { userId });
       res.sendStatus(200);
     });
   });
 
   app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    if (!req.isAuthenticated()) {
+      console.log("[AUTH] Unauthorized access to /api/user");
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    console.log("[AUTH] User data retrieved:", {
+      id: req.user.id,
+      role: req.user.role,
+      hasProfile: req.user.hasProfile
+    });
     res.json(req.user);
   });
 }

@@ -155,15 +155,15 @@ export const fulfillments = pgTable("fulfillments", {
 export const insertProfileSchema = createInsertSchema(profiles)
   .omit({
     id: true,
-    userId: true,
     stripeAccountId: true,
     stripeAccountStatus: true,
     createdAt: true,
     updatedAt: true,
   })
   .extend({
+    userId: z.number(),
     fullName: z.string().min(2, "Full name must be at least 2 characters"),
-    email: z.string().email(),
+    email: z.string().email("Invalid email format"),
     phoneNumber: z.string().regex(/^\+?[\d\s-()]{10,}$/, "Invalid phone number format"),
     address: z.string().min(5, "Address must be at least 5 characters"),
     city: z.string().min(2, "City must be at least 2 characters"),

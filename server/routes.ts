@@ -2,7 +2,7 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertAuctionSchema, insertBidSchema, insertProfileSchema } from "@shared/schema";
+import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema, insertFulfillmentSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import path from "path";
 import multer from 'multer';
@@ -11,6 +11,7 @@ import { PaymentService } from "./payments";
 import { SellerPaymentService } from "./seller-payments";
 import { EmailService } from "./email";
 import { AuctionService } from "./auction-service";
+import Stripe from "stripe";
 
 // Modified to not block auction form access
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -35,7 +36,7 @@ const requireProfile = async (req: any, res: any, next: any) => {
 
   // For sellers and seller_admin, check profile status
   const isSeller = req.user.role === "seller" || req.user.role === "seller_admin";
-  if (isSeller && !req.user.has_profile) {
+  if (isSeller && !req.user.hasProfile) {
     console.log("[PROFILE CHECK] Seller missing required profile");
     return res.status(403).json({ message: "Profile completion required" });
   }
@@ -46,6 +47,11 @@ const requireProfile = async (req: any, res: any, next: any) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize services
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2023-10-16"
+  });
+
   setupAuth(app);
 
   // Serve static files from uploads directory
@@ -406,7 +412,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
   // Profile routes
   app.post("/api/profile", requireAuth, async (req, res) => {
     try {
@@ -414,34 +419,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const profileData = insertProfileSchema.parse(req.body);
+      console.log("[PROFILE CREATE] Starting profile creation for user:", {
+        userId: req.user.id,
+        role: req.user.role,
+        data: req.body
+      });
+
+      const profileData = {
+        ...req.body,
+        userId: req.user.id
+      };
+
+      // Validate the profile data
+      try {
+        const validatedData = insertProfileSchema.parse(profileData);
+        console.log("[PROFILE CREATE] Data validation successful");
+      } catch (validationError) {
+        console.error("[PROFILE CREATE] Validation failed:", validationError);
+        return res.status(400).json({
+          message: "Invalid profile data",
+          errors: validationError instanceof ZodError ? validationError.errors : String(validationError)
+        });
+      }
 
       // Check if profile exists
       const existingProfile = await storage.getProfile(req.user.id);
-
       let profile;
+
       if (existingProfile) {
-        // Update existing profile
+        console.log("[PROFILE CREATE] Updating existing profile");
         profile = await storage.updateProfile(req.user.id, profileData);
       } else {
-        // Create new profile
-        profile = await storage.createProfile({
-          ...profileData,
-          userId: req.user.id,
-        });
+        console.log("[PROFILE CREATE] Creating new profile");
+        profile = await storage.createProfile(profileData);
       }
 
+      console.log("[PROFILE CREATE] Profile saved successfully");
       res.status(201).json(profile);
     } catch (error) {
-      if (error instanceof ZodError) {
-        res.status(400).json({
-          message: "Invalid profile data",
-          errors: error.errors,
-        });
-      } else {
-        console.error("Error saving profile:", error);
-        res.status(500).json({ message: "Failed to save profile" });
-      }
+      console.error("[PROFILE CREATE] Error:", error);
+      res.status(500).json({
+        message: "Failed to save profile",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
@@ -831,19 +851,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add admin delete route for buyer requests
-  app.delete("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
-    try {
-      const requestId = parseInt(req.params.id);
-      await storage.deleteBuyerRequest(requestId);
-      res.sendStatus(200);
-    } catch (error) {
-      console.error("Error deleting buyer request:", error);
-      res.status(500).json({ message: "Failed to delete buyer request" });
-    }
-  });
-
-  // Add admin update route for buyer requests
   app.patch("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
     try {
       const requestId = parseInt(req.params.id);
@@ -1715,26 +1722,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting balance:", error);
       res.status(500).json({ message: "Failed to get balance" });
-    }
-  });
-
-  // Get seller's recent payouts
-  app.get("/api/seller/stripe-payouts", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(400).json({ message: "No Stripe account found" });
-      }
-
-      const payouts = awaitSellerPaymentService.getPayouts(profile.stripeAccountId);
-      res.json(payouts);
-    } catch (error) {
-      console.error("Error getting payouts:", error);
-      res.status(500).json({ message: "Failed to get payouts" });
     }
   });
 
