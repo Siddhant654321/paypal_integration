@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign, Package, ExternalLink, AlertCircle, CheckCirc
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react"; 
+import { useState } from "react"; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow } from "date-fns";
 import { formatPrice } from '../utils/formatters';
@@ -29,20 +29,10 @@ interface StripeStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
 }
 
-interface StripeWindow extends Window {
-  Stripe?: any;
-}
-
-declare global {
-  interface Window extends StripeWindow {}
-}
-
 const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [stripeLoaded, setStripeLoaded] = useState(false);
-  const [stripeInstance, setStripeInstance] = useState<any>(null);
 
   // Redirect if not a seller or seller_admin
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -73,8 +63,14 @@ const SellerDashboard = () => {
 
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
-    mutationFn: () => apiRequest('/api/seller/connect', { method: 'POST' }),
-    onSuccess: (data: { url: string }) => {
+    mutationFn: async () => {
+      const response = await apiRequest('/api/seller/connect', { method: 'POST' });
+      if (!response?.url) {
+        throw new Error('No onboarding URL received');
+      }
+      return response;
+    },
+    onSuccess: (data) => {
       if (data.url) {
         window.location.href = data.url;
       }
@@ -90,8 +86,14 @@ const SellerDashboard = () => {
 
   // Refresh onboarding mutation
   const refreshOnboardingMutation = useMutation({
-    mutationFn: () => apiRequest('/api/seller/onboarding/refresh', { method: 'POST' }),
-    onSuccess: (data: { url: string }) => {
+    mutationFn: async () => {
+      const response = await apiRequest('/api/seller/onboarding/refresh', { method: 'POST' });
+      if (!response?.url) {
+        throw new Error('No onboarding URL received');
+      }
+      return response;
+    },
+    onSuccess: (data) => {
       if (data.url) {
         window.location.href = data.url;
       }

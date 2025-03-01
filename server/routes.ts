@@ -881,7 +881,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this new endpoint after the existing seller-related routes
+  // Add these routes after the existing seller routes
+  // Stripe Connect integration routes
+  app.post("/api/seller/connect", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Get user profile
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile) {
+        return res.status(400).json({ message: "Profile not found. Please complete your profile first." });
+      }
+
+      // Create Stripe Connect account
+      const accountId = await SellerPaymentService.createSellerAccount(profile);
+
+      // Get the base URL
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+      // Get onboarding link
+      const onboardingUrl = await SellerPaymentService.getOnboardingLink(accountId, baseUrl);
+
+      res.json({ url: onboardingUrl });
+    } catch (error) {
+      console.error("Error creating Stripe Connect account:", error);
+      res.status(500).json({ 
+        message: "Failed to create Stripe Connect account",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Get user profile with Stripe account ID
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile?.stripeAccountId) {
+        return res.status(400).json({ message: "No Stripe account found" });
+      }
+
+      // Get the base URL
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+      // Get fresh onboarding link
+      const onboardingUrl = await SellerPaymentService.getOnboardingLink(profile.stripeAccountId, baseUrl);
+
+      res.json({ url: onboardingUrl });
+    } catch (error) {
+      console.error("Error refreshing onboarding link:", error);
+      res.status(500).json({ 
+        message: "Failed to refresh onboarding link",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Add Stripe Connect account status endpoint
+  app.get("/api/seller/status", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Get user profile
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile) {
+        return res.json({ status: "not_started" });
+      }
+
+      if (!profile.stripeAccountId) {
+        return res.json({ status: "not_started" });
+      }
+
+      // Check account status with Stripe
+      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
+      res.json({ status });
+    } catch (error) {
+      console.error("Error checking Stripe account status:", error);
+      res.status(500).json({ 
+        message: "Failed to check account status",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   app.get("/api/sellers/active", async (req, res) => {
     try {
       // Get approved sellers with profiles
@@ -1020,7 +1109,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // No bids placed, void the auction
         await storage.updateAuction(auctionId, {
           status: "voided",
-          // Add a dummy field to avoid empty update error
           updatedAt: new Date()
         });
         return res.json({ message: "Auction ended with no bids" });
@@ -1036,7 +1124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           winningBidderId: highestBid.bidderId,
           reserveMet: true,
           paymentStatus: "pending",
-          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
           updatedAt: new Date() 
         });
         return res.json({
