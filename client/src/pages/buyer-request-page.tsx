@@ -43,15 +43,17 @@ export default function BuyerRequestPage() {
     navigate(`/seller/new-auction?fulfill=${id}`);
   };
 
-  // Check if user is an approved seller
-  const isApprovedSeller = user && user.role === "seller" && user.approved === true;
-  const isAdmin = user && (user.role === "admin" || user.role === "seller_admin");
+  // Check if user is an approved seller or seller_admin
+  const canFulfillRequest = user && (
+    (user.role === "seller" && user.approved) ||
+    user.role === "seller_admin"
+  );
 
   console.log("User role and approval status:", {
     userRole: user?.role,
     isApproved: user?.approved,
-    isApprovedSeller,
-    isAdmin
+    canFulfillRequest,
+    isAdmin: user?.role === "admin" || user?.role === "seller_admin"
   });
 
   if (isLoading) {
@@ -88,12 +90,12 @@ export default function BuyerRequestPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isApprovedSeller && request.status === "open" && (
+              {canFulfillRequest && request.status === "open" && (
                 <Button onClick={handleFulfill}>
                   Fulfill Request
                 </Button>
               )}
-              {isAdmin && (
+              {(user?.role === "admin" || user?.role === "seller_admin") && (
                 <Button
                   variant="destructive"
                   size="icon"
