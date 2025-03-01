@@ -55,19 +55,36 @@ export function setupAuth(app: Express) {
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false, { message: "Invalid username or password" });
         }
+        console.log("[AUTH] User authenticated:", { id: user.id, role: user.role });
         return done(null, user);
       } catch (error) {
+        console.error("[AUTH] Authentication error:", error);
         return done(error);
       }
     }),
   );
 
-  passport.serializeUser((user, done) => done(null, user.id));
-  passport.deserializeUser(async (id: number, done) => {
+  passport.serializeUser((user, done) => {
+    console.log("[AUTH] Serializing user:", { id: user.id, role: user.role });
+    done(null, user.id);
+  });
+
+  passport.deserializeUser(async (id: string | number, done) => {
     try {
-      const user = await storage.getUser(id);
+      // Ensure id is a number
+      const userId = typeof id === 'string' ? parseInt(id, 10) : id;
+      console.log("[AUTH] Deserializing user:", { userId, type: typeof userId });
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        console.error("[AUTH] User not found during deserialization:", { userId });
+        return done(null, false);
+      }
+
+      console.log("[AUTH] User deserialized successfully:", { id: user.id, role: user.role });
       done(null, user);
     } catch (error) {
+      console.error("[AUTH] Deserialization error:", error);
       done(error);
     }
   });

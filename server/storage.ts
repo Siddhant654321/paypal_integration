@@ -168,22 +168,30 @@ export class DatabaseStorage implements IStorage {
         "fun": "Fun & Mixed"
       };
 
-      if (categoryMap[category]) {
-        category = categoryMap[category];
+      if (categoryMap[category as keyof typeof categoryMap]) {
+        category = categoryMap[category as keyof typeof categoryMap];
         console.log(`Mapped category from ${insertAuction.category} to ${category}`);
       }
 
+      // Prepare auction data
+      const auctionData = {
+        ...insertAuction,
+        category,
+        currentPrice: insertAuction.startPrice,
+        approved: false,
+        startDate: new Date(insertAuction.startDate),
+        endDate: new Date(insertAuction.endDate),
+      };
+
+      log(`Creating auction with data: ${JSON.stringify(auctionData)}`, "storage");
+
+      // Insert the auction
       const [auction] = await db
         .insert(auctions)
-        .values({
-          ...insertAuction,
-          category: category,
-          currentPrice: insertAuction.startPrice,
-          approved: false,
-          startDate: new Date(insertAuction.startDate),
-          endDate: new Date(insertAuction.endDate),
-        })
+        .values(auctionData)
         .returning();
+
+      log(`Successfully created auction: ${JSON.stringify(auction)}`, "storage");
       return auction;
     } catch (error) {
       log(`Error creating auction: ${error}`, "storage");
