@@ -294,30 +294,7 @@ export const buyerRequests = pgTable("buyer_requests", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Add notifications table after buyerRequests table and before types
-
-export const notifications = pgTable("notifications", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  type: text("type", {
-    enum: ["bid", "auction_end", "payment", "fulfillment", "admin"]
-  }).notNull(),
-  title: text("title").notNull(),
-  message: text("message").notNull(),
-  read: boolean("read").notNull().default(false),
-  entityType: text("entity_type", {
-    enum: ["auction", "bid", "payment", "fulfillment", "user"]
-  }).notNull(),
-  entityId: integer("entity_id").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-// Add notification schema
-export const insertNotificationSchema = createInsertSchema(notifications)
-  .omit({
-    id: true,
-    createdAt: true,
-  });
+// Notifications schema is already defined above
 
 // Add insert schema for buyer requests
 export const insertBuyerRequestSchema = createInsertSchema(buyerRequests)
