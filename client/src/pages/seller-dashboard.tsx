@@ -83,43 +83,36 @@ const SellerDashboard = () => {
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/seller/connect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to connect with Stripe");
-      }
-      const data = await response.json();
-      console.log("Stripe Connect response:", data);
-
-      // Log full response for debugging
-      console.log("Full Stripe Connect response data:", data);
-      
-      // Try to extract URL from different possible response formats
-      let url = data.url;
-      
-      if (!url && data.accountId) {
-        // If no URL but we have an account ID, try to get the onboarding link
-        const refreshResponse = await fetch(`/api/seller/onboarding/refresh`, {
+      try {
+        console.log("Starting Stripe Connect process...");
+        const response = await fetch("/api/seller/connect", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
         });
         
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json();
-          url = refreshData.url;
-          console.log("Got URL from refresh endpoint:", url);
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("Error response from server:", errorData);
+          throw new Error(errorData.message || "Failed to connect with Stripe");
         }
-      }
-      
-      if (!url) {
-        throw new Error('No URL received from Stripe Connect');
+        
+        const data = await response.json();
+        console.log("Stripe Connect response:", data);
+        
+        // Get the URL directly from the response
+        const url = data.url;
+        
+        if (!url) {
+          console.error("No URL in response:", data);
+          throw new Error('No URL received from Stripe Connect');
+        }
+        
+        return url;
+      } catch (error) {
+        console.error("Stripe Connect error:", error);
+        throw error;
       }
 
       return url;

@@ -130,6 +130,23 @@ export class SellerPaymentService {
       throw error;
     }
   }
+  
+  static async refreshAccountSession(accountId: string): Promise<string> {
+    try {
+      // This is similar to getOnboardingLink but specifically for refreshing sessions
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
+        return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
+        type: 'account_onboarding',
+      });
+
+      return accountLink.url;
+    } catch (error) {
+      console.error("Error refreshing account session:", error);
+      throw error;
+    }
+  }
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
       const profile = await storage.getProfile(sellerId);
