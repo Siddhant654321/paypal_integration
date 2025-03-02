@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid } from "@shared/schema";
+import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 import { Store } from "express-session";
@@ -463,32 +463,102 @@ export class DatabaseStorage implements IStorage {
     return undefined;
   }
 
-  async createBuyerRequest(requestData: any): Promise<any> {
-    return requestData;
+  async createBuyerRequest(requestData: InsertBuyerRequest & { buyerId: number }): Promise<BuyerRequest> {
+    try {
+      log(`Creating buyer request for user ${requestData.buyerId}`);
+      const [request] = await db
+        .insert(buyerRequests)
+        .values({
+          ...requestData,
+          status: "open",
+          views: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      log(`Successfully created buyer request ${request.id}`);
+      return request;
+    } catch (error) {
+      log(`Error creating buyer request: ${error}`);
+      throw error;
+    }
   }
 
-  async getBuyerRequests(filters?: any): Promise<any[]> {
-    return [];
+  async getBuyerRequests(filters?: { status?: string }): Promise<BuyerRequest[]> {
+    try {
+      log(`Getting buyer requests with filters: ${JSON.stringify(filters)}`);
+      let query = db.select().from(buyerRequests);
+
+      if (filters?.status) {
+        query = query.where(eq(buyerRequests.status, filters.status));
+      }
+
+      query = query.orderBy(desc(buyerRequests.createdAt));
+
+      const requests = await query;
+      log(`Found ${requests.length} buyer requests`);
+      return requests;
+    } catch (error) {
+      log(`Error getting buyer requests: ${error}`);
+      throw error;
+    }
   }
 
-  async getBuyerRequest(id: number): Promise<any | undefined> {
-    return undefined;
+  async getBuyerRequest(id: number): Promise<BuyerRequest | undefined> {
+    try {
+      const [request] = await db
+        .select()
+        .from(buyerRequests)
+        .where(eq(buyerRequests.id, id));
+      return request;
+    } catch (error) {
+      log(`Error getting buyer request ${id}: ${error}`);
+      throw error;
+    }
   }
 
-  async incrementBuyerRequestViews(id: number): Promise<void> {
-    return;
-  }
-
-  async updateBuyerRequestStatus(id: number, status: string): Promise<any> {
-    return { id, status };
+  async updateBuyerRequest(id: number, data: Partial<InsertBuyerRequest>): Promise<BuyerRequest> {
+    try {
+      const [request] = await db
+        .update(buyerRequests)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(buyerRequests.id, id))
+        .returning();
+      return request;
+    } catch (error) {
+      log(`Error updating buyer request ${id}: ${error}`);
+      throw error;
+    }
   }
 
   async deleteBuyerRequest(id: number): Promise<void> {
-    return;
+    try {
+      await db
+        .delete(buyerRequests)
+        .where(eq(buyerRequests.id, id));
+    } catch (error) {
+      log(`Error deleting buyer request ${id}: ${error}`);
+      throw error;
+    }
   }
 
-  async updateBuyerRequest(id: number, data: any): Promise<any> {
-    return { id, ...data };
+  async incrementBuyerRequestViews(id: number): Promise<void> {
+    try {
+      await db
+        .update(buyerRequests)
+        .set({
+          views: db.raw('views + 1'),
+          updatedAt: new Date(),
+        })
+        .where(eq(buyerRequests.id, id));
+    } catch (error) {
+      log(`Error incrementing views for buyer request ${id}: ${error}`);
+      throw error;
+    }
   }
 
   async getPayoutsBySeller(sellerId: number): Promise<any[]> {

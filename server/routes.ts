@@ -842,23 +842,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/buyer-requests", async (req, res) => {
     try {
       const filters = {
-        status: req.query.status as string | undefined,
-        buyerId: req.query.buyerId ? parseInt(req.query.buyerId as string) : undefined,
+        status: req.query.status as string || "open",
       };
 
+      console.log("[BUYER REQUESTS] Fetching with filters:", filters);
       const requests = await storage.getBuyerRequests(filters);
+      console.log(`[BUYER REQUESTS] Found ${requests.length} requests`);
 
       // Get buyer profiles for each request
       const requestsWithProfiles = await Promise.all(
         requests.map(async (request) => {
           const buyerProfile = await storage.getProfile(request.buyerId);
+          console.log(`[BUYER REQUESTS] Found profile for buyer ${request.buyerId}:`, 
+            buyerProfile ? "yes" : "no");
           return { ...request, buyerProfile };
         })
       );
 
+      console.log(`[BUYER REQUESTS] Returning ${requestsWithProfiles.length} requests with profiles`);
       res.json(requestsWithProfiles);
     } catch (error) {
-      console.error("Error fetching buyer requests:", error);
+      console.error("[BUYER REQUESTS] Error fetching requests:", error);
       res.status(500).json({ message: "Failed to fetch buyer requests" });
     }
   });
@@ -1152,6 +1156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  
 
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
@@ -1377,6 +1382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   app.get("/api/analytics/auction-bids", async (req, res) => {
     try {
       // Get all auctions with their bids
@@ -1397,6 +1403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   app.get("/api/analytics/top-performers", async (req, res) => {
     try {
       // Get all auctions with their bids
