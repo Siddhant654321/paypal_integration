@@ -36,26 +36,27 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
   const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#8884d8';
   const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#ccc';
   const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#82ca9d';
+  const tealColor = '#43AA8B'; // Added teal color
 
   // Format data for display
   const [formattedData, setFormattedData] = useState(data);
-  
+
   useEffect(() => {
     if (data && data.length > 0) {
       // Sort data by date to ensure proper timeline
       const sortedData = [...data].sort((a, b) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
-      
+
       // Format dates for better display
       const formatted = sortedData.map(item => ({
         ...item,
         // Keep original date for X-axis but add formatted date for display
         formattedDate: new Date(item.date).toLocaleDateString()
       }));
-      
+
       setFormattedData(formatted);
-      
+
       console.log("Price trend data (formatted):", {
         dataPoints: formatted.length,
         firstPoint: formatted[0],
@@ -70,7 +71,7 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
     if (active && payload && payload.length) {
       // Find the complete data point to get additional info like auction title
       const dataPoint = formattedData.find(item => item.date === label);
-      
+
       return (
         <div className="bg-background border rounded p-2 shadow-lg">
           <p className="font-medium">{new Date(label).toLocaleDateString()}</p>
@@ -175,7 +176,7 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
               <Scatter
                 name="Auction Price"
                 dataKey="price"
-                fill={primaryColor}
+                fill={tealColor} // Changed to teal
                 opacity={0.8}
                 shape="circle"
                 size={60}
