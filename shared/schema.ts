@@ -51,8 +51,8 @@ const sellerDecisionEnum = z.enum(["accept", "void"]);
 export const notifications = pgTable('notifications', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull().references(() => users.id),
-  type: text('type', { 
-    enum: ['bid', 'auction', 'payment', 'fulfillment', 'admin'] 
+  type: text('type', {
+    enum: ['bid', 'auction', 'payment', 'fulfillment', 'admin']
   }).notNull(),
   title: text('title').notNull(),
   message: text('message').notNull(),
@@ -185,7 +185,6 @@ export const insertProfileSchema = createInsertSchema(profiles)
     emailAdminNotifications: z.boolean().default(true),
   });
 
-// Create insert schema for auction
 export const insertAuctionSchema = createInsertSchema(auctions)
   .omit({
     id: true,
@@ -198,43 +197,28 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     status: true,
     sellerDecision: true,
     reserveMet: true,
-    fulfillmentRequired:true
+    fulfillmentRequired: true
   })
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),
     description: z.string().min(20, "Description must be at least 20 characters"),
-    startPrice: z
-      .number()
-      .min(0.01, "Start price must be at least $0.01")
-      .transform((price) => Math.round(price * 100)), // Convert dollars to cents - only for NEW auctions
-    reservePrice: z
-      .number()
-      .min(0.01, "Reserve price must be at least $0.01")
-      .transform((price) => Math.round(price * 100)), // Convert dollars to cents - only for NEW auctions
-    startDate: z.string().transform((str) => {
-      try {
-        // Handle both string and Date object string representations
-        return new Date(str).toISOString();
-      } catch (error) {
-        console.error("Error parsing startDate:", error);
-        return new Date().toISOString();
-      }
-    }),
-    endDate: z.string().transform((str) => {
-      try {
-        // Handle both string and Date object string representations
-        return new Date(str).toISOString();
-      } catch (error) {
-        console.error("Error parsing endDate:", error);
-        // Default to 7 days from now if parsing fails
-        return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      }
-    }),
+    species: z.string(),
+    category: z.string(),
+    startPrice: z.number().or(z.string().transform(val => Number(val)))
+      .refine(val => !isNaN(val) && val > 0, "Start price must be greater than 0"),
+    reservePrice: z.number().or(z.string().transform(val => Number(val)))
+      .refine(val => !isNaN(val) && val >= 0, "Reserve price must be valid"),
+    startDate: z.date().or(z.string().transform(val => new Date(val))),
+    endDate: z.date().or(z.string().transform(val => new Date(val))),
     imageUrl: z.string().optional(),
     images: z.array(z.string()).optional().default([]),
   })
   .refine(
-    (data) => data.reservePrice >= data.startPrice,
+    (data) => {
+      const reservePrice = Number(data.reservePrice);
+      const startPrice = Number(data.startPrice);
+      return reservePrice >= startPrice;
+    },
     "Reserve price must be greater than or equal to start price"
   )
   .refine(
