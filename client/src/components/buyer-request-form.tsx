@@ -68,6 +68,7 @@ export function BuyerRequestForm({ onClose, initialData, isEditing }: BuyerReque
       return apiRequest(method, endpoint, data);
     },
     onSuccess: () => {
+      // Invalidate all buyer request queries to ensure lists are updated
       queryClient.invalidateQueries({ queryKey: ["/api/buyer-requests"] });
       if (isEditing) {
         queryClient.invalidateQueries({ queryKey: [`/api/buyer-requests/${initialData?.id}`] });

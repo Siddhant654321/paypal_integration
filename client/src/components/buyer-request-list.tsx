@@ -14,7 +14,8 @@ interface BuyerRequestWithProfile extends BuyerRequest {
 export function BuyerRequestList() {
   const { user } = useAuth();
   const { data: requests, isLoading } = useQuery<BuyerRequestWithProfile[]>({
-    queryKey: ["/api/buyer-requests"],
+    queryKey: ["/api/buyer-requests", { status: "open" }], // Only fetch open requests
+    refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
 
   if (isLoading) {
@@ -39,7 +40,7 @@ export function BuyerRequestList() {
     return (
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
-          No buyer requests found
+          No open buyer requests found
         </CardContent>
       </Card>
     );
