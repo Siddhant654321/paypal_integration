@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Search, Trash2, Edit } from "lucide-react";
+import { Loader2, CheckCircle2, Search, Trash2, Edit, Mail, Phone, User } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -1033,43 +1033,44 @@ export default function AdminDashboard() {
                               >
                                 {approveAuctionMutation.isPending && (
                                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />)}
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Approve
-                          </Button>
-
-                          <EditAuctionDialog auction={auction} />
-
-                          <ViewBidsDialog
-                            auctionId={auction.id}
-                            auctionTitle={auction.title}
-                          />
-
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm">
-                                <Trash2 className="h-4 w-4" />
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                                Approve
                               </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Auction</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this auction? This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => deleteAuctionMutation.mutate(auction.id)}
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </div>
-                    ))}
+
+                              <EditAuctionDialog auction={auction} />
+
+                              <ViewBidsDialog
+                                auctionId={auction.id}
+                                auctionTitle={auction.title}
+                              />
+
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="destructive" size="sm">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this auction? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </div>
+                        )
+                      })}
                   </div>
                 )}
               </TabsContent>
