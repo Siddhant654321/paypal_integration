@@ -851,6 +851,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return { ...request, buyerProfile };
         })
       );
+      
 
       console.log(`[BUYER REQUESTS] Returning ${requestsWithProfiles.length} requests with profiles`);
       res.json(requestsWithProfiles);} catch (error) {
@@ -1155,11 +1156,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const category = req.query.category as string;
       const species = req.query.species as string;
 
+      console.log("[ANALYTICS] Fetching market stats with params:", { timeFrame, category, species });
+
       // Get all auctions based on filters
       const auctions = await storage.getAuctions({
         category: category === 'all' ? undefined : category,
         species: species === 'all' ? undefined : species,
+        approved: true
       });
+
+      console.log("[ANALYTICS] Found auctions:", auctions.length);
 
       // Filter and transform auction data for the price trend
       const now = new Date();
@@ -1177,29 +1183,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Include both active and ended auctions that have prices
       const validAuctions = auctions.filter(auction => 
-        new Date(auction.createdAt) >= cutoffDate &&
+        (auction.endDate >= cutoffDate.toISOString()) &&
         (auction.currentPrice > 0 || auction.startPrice > 0)
       );
 
+      console.log("[ANALYTICS] Valid auctions after filtering:", validAuctions.length);
+
       // Sort auctions by date
       const sortedAuctions = validAuctions.sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        (a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime()
       );
 
       // Create price data points
       const priceData = sortedAuctions.map(auction => {
         const price = auction.currentPrice || auction.startPrice;
         return {
-          date: auction.createdAt,
+          date: auction.endDate,
           price: price,
           // Calculate moving average for trend line
           medianPrice: calculateMovingAverage(
             sortedAuctions,
-            new Date(auction.createdAt),
+            new Date(auction.endDate),
             price
           )
         };
       });
+
+      console.log("[ANALYTICS] Generated price data points:", priceData.length);
 
       // Calculate other stats
       const activeAuctions = auctions.filter(
@@ -1207,7 +1217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ).length;
 
       const activeBidders = new Set(auctions.map(a => a.winningBidderId).filter(Boolean)).size;
-      const totalBids = await storage.getTotalBidsCount();
+      const totalBids = auctions.reduce((acc, auction) => acc + (auction.totalBids || 0), 0);
 
       // Calculate average prices by species
       const speciesPrices = validAuctions.reduce((acc, auction) => {
@@ -1225,16 +1235,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         averagePrice: Math.round(data.total / data.count)
       }));
 
-      // Calculate popular categories
-      const categoryCount = validAuctions.reduce((acc, auction) => {
-        acc[auction.category] = (acc[auction.category] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const popularCategories = Object.entries(categoryCount)
-        .map(([category, count]) => ({ category, count }))
-        .sort((a, b) => b.count - a.count);
-
       const response = {
         activeBidders,
         totalBids,
@@ -1242,12 +1242,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeAuctions,
         species: [...new Set(auctions.map(a => a.species))],
         averagePrices,
-        popularCategories,
         topPerformers: {
           seller: null,
           buyer: null
-        }
+        },
+        popularCategories: []
       };
+
+      console.log("[ANALYTICS] Response generated with price data points:", 
+        response.priceData.length);
 
       res.json(response);
     } catch (error) {
@@ -1268,7 +1271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const windowPrices = auctions
       .filter(a => {
-        const auctionDate = new Date(a.createdAt);
+        const auctionDate = new Date(a.endDate);
         return auctionDate >= windowStart && auctionDate <= currentDate;
       })
       .map(a => a.currentPrice || a.startPrice);
