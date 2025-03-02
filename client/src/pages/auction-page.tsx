@@ -34,12 +34,12 @@ export default function AuctionPage() {
   const queryClient = useQueryClient();
   const [timeLeft, setTimeLeft] = useState("");
 
-  const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
+  const { data: auction, isLoading: isLoadingAuction, refetch: refetchAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
     queryKey: [`/api/auctions/${params?.id}`],
     refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
 
-  const { data: bids = [] } = useQuery<Bid[]>({
+  const { data: bids = [], isLoading: isLoadingBids, refetch: refetchBids } = useQuery<Bid[]>({
     queryKey: [`/api/auctions/${params?.id}/bids`],
     enabled: !!auction,
     refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
@@ -299,6 +299,7 @@ export default function AuctionPage() {
             <BidForm
               auctionId={auction.id}
               currentPrice={auction.currentPrice}
+              onBidSuccess={() => {refetchAuction(); refetchBids();}} //Added this line to refetch after bid
             />
           )}
 
