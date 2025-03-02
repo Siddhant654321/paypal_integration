@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Loader2, Trophy } from "lucide-react";
 import {
-  BarChart,
-  Bar,
   LineChart,
   Line,
   XAxis,
@@ -10,12 +9,11 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+  BarChart,
+  Bar,
 } from "recharts";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { formatCurrency } from "@/utils/money-utils";
+import { formatPrice } from "@/utils/formatters";
+import { BuyerRequestList } from "@/components/buyer-request-list";
 
 interface MarketStats {
   activeBuyers: number;
@@ -46,16 +44,6 @@ interface MarketStats {
     count: number;
   }[];
 }
-
-// Theme colors from the new color scheme
-const THEME_COLORS = {
-  primary: "#E63946", // Deep Red
-  secondary: "#FFBA08", // Golden Yellow
-  tertiary: "#F77F00", // Vibrant Orange
-  heading: "#1D3557", // Deep Blue
-  text: "#43AA8B", // Rich Teal
-  accent: "#FFBA08", // Golden Yellow for highlights
-};
 
 export default function AnalyticsPage() {
   const { data: marketStats, isLoading } = useQuery<MarketStats>({
@@ -112,81 +100,72 @@ export default function AnalyticsPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Price History Chart */}
-        <Card className="col-span-full md:col-span-1">
+        {/* Top Performers Card */}
+        <Card className="col-span-full">
           <CardHeader className="space-y-1.5 p-4 md:p-6">
-            <CardTitle className="text-lg md:text-xl">Price Trends</CardTitle>
-            <CardDescription>Average price over time</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+              Top Performers (Last 30 Days)
+            </CardTitle>
           </CardHeader>
-          <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={marketStats?.priceHistory || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis
-                  tickFormatter={(value) => `$${value}`}
-                />
-                <Tooltip
-                  formatter={(value) => [`$${value}`, "Average Price"]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="averagePrice"
-                  stroke={THEME_COLORS.primary}
-                  strokeWidth={2}
-                  dot={{ fill: THEME_COLORS.primary, r: 4 }}
-                  activeDot={{ r: 8, fill: THEME_COLORS.tertiary }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <CardContent className="p-4 md:p-6 pt-0">
+            <div className="grid gap-6 sm:grid-cols-2">
+              {/* Top Seller */}
+              <div className="space-y-3">
+                <h3 className="font-semibold">Top Seller</h3>
+                {marketStats?.topPerformers.seller ? (
+                  <div className="bg-muted p-4 rounded-lg">
+                    <div className="font-medium">{marketStats.topPerformers.seller.name}</div>
+                    <div className="text-sm text-muted-foreground mt-2">
+                      Total Sales: {formatPrice(marketStats.topPerformers.seller.total)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Auctions Completed: {marketStats.topPerformers.seller.auctionsWon}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No sales data available</div>
+                )}
+              </div>
+
+              {/* Top Buyer */}
+              <div className="space-y-3">
+                <h3 className="font-semibold">Top Buyer</h3>
+                {marketStats?.topPerformers.buyer ? (
+                  <div className="bg-muted p-4 rounded-lg">
+                    <div className="font-medium">{marketStats.topPerformers.buyer.name}</div>
+                    <div className="text-sm text-muted-foreground mt-2">
+                      Total Spent: {formatPrice(marketStats.topPerformers.buyer.total)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Auctions Won: {marketStats.topPerformers.buyer.auctionsWon}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No purchase data available</div>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Average Price by Species */}
-        <Card className="col-span-full md:col-span-1">
+        {/* Average Prices by Species */}
+        <Card className="col-span-full sm:col-span-1">
           <CardHeader className="space-y-1.5 p-4 md:p-6">
-            <CardTitle className="text-lg md:text-xl">
-              Average Price by Species
-            </CardTitle>
+            <CardTitle className="text-lg md:text-xl">Average Prices by Species</CardTitle>
           </CardHeader>
           <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={marketStats?.averagePrices || []}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label={({ species, averagePrice }) => 
-                    `${species}: ${formatCurrency(averagePrice)}`
-                  }
-                  labelLine={false}
-                  dataKey="averagePrice"
-                  nameKey="species"
-                >
-                  {marketStats?.averagePrices.map((entry, index) => {
-                    const colors = [
-                      THEME_COLORS.primary,
-                      THEME_COLORS.secondary,
-                      THEME_COLORS.tertiary,
-                      THEME_COLORS.heading,
-                      THEME_COLORS.text,
-                    ];
-                    return (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={colors[index % colors.length]}
-                      />
-                    );
-                  })}
-                </Pie>
+              <BarChart data={marketStats?.averagePrices || []}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="species" />
+                <YAxis tickFormatter={(value) => formatPrice(value)} />
                 <Tooltip
-                  formatter={(value) => [formatCurrency(value as number), "Average Price"]}
+                  formatter={(value) => [formatPrice(value as number), "Average Price"]}
                 />
-              </PieChart>
+                <Bar dataKey="averagePrice" fill="#8884d8" />
+              </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
@@ -203,26 +182,22 @@ export default function AnalyticsPage() {
                 <XAxis dataKey="category" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="count" fill={THEME_COLORS.text} radius={[4, 4, 0, 0]}>
-                  {marketStats?.popularCategories.map((entry, index) => {
-                    const colors = [
-                      THEME_COLORS.text,
-                      THEME_COLORS.secondary,
-                      THEME_COLORS.tertiary,
-                      THEME_COLORS.primary
-                    ];
-                    return (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={colors[index % colors.length]}
-                      />
-                    );
-                  })}
-                </Bar>
+                <Bar dataKey="count" fill="#82ca9d" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Market Demand Section */}
+      <div className="mt-8 space-y-4">
+        <h2 className="text-xl md:text-2xl font-bold">Market Demand</h2>
+        <p className="text-sm md:text-base text-muted-foreground">
+          Current buyer requests and market demand for specific breeds and varieties
+        </p>
+        <div className="mt-6">
+          <BuyerRequestList />
+        </div>
       </div>
     </div>
   );
