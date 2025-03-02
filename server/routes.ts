@@ -374,8 +374,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         approved
       });
 
+      // Get seller profiles for each auction
+      const auctionsWithSellerProfiles = await Promise.all(
+        auctions.map(async (auction) => {
+          const sellerProfile = await storage.getProfile(auction.sellerId);
+          return { ...auction, sellerProfile };
+        })
+      );
+
       console.log(`[ADMIN] Found ${auctions.length} auctions`);
-      res.json(auctions);
+      res.json(auctionsWithSellerProfiles);
     } catch (error) {
       console.error("[ADMIN] Error fetching auctions:", error);
       res.status(500).json({ message: "Failed to fetch auctions" });

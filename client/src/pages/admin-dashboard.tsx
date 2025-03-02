@@ -987,26 +987,52 @@ export default function AdminDashboard() {
                   <p className="text-muted-foreground">No pending auctions</p>
                 ) : (
                   <div className="space-y-4">
-                    {pendingAuctions.map((auction) => (
-                      <div
-                        key={auction.id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium">{auction.title}</p>
-                          <div className="flex gap-2 mt-1">
-                            <Badge>{auction.species}</Badge>
-                            <Badge variant="outline">{auction.category}</Badge>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => approveAuctionMutation.mutate(auction.id)}
-                            disabled={approveAuctionMutation.isPending}
+                    {pendingAuctions.map((auction) => {
+                        // Find the seller in the approvedSellers array
+                        const seller = approvedSellers?.find(seller => seller.id === auction.sellerId);
+                        return (
+                          <div
+                            key={auction.id}
+                            className="flex items-center justify-between p-4 border rounded-lg"
                           >
-                            {approveAuctionMutation.isPending && (
-                              <Loader2 className="mr-2 h-4 w-4animate-spin" />)}
+                            <div>
+                              <p className="font-medium">{auction.title}</p>
+                              <div className="flex gap-2 mt-1">
+                                <Badge>{auction.species}</Badge>
+                                <Badge variant="outline">{auction.category}</Badge>
+                              </div>
+                              <div className="mt-2 text-sm text-muted-foreground">
+                                <p>
+                                  <span className="font-semibold">Seller: </span>
+                                  {seller ? seller.username : "Unknown"}
+                                  {seller?.email && ` (${seller.email})`}
+                                </p>
+                                {auction.sellerProfile && (
+                                  <>
+                                    <p>
+                                      <span className="font-semibold">Business: </span>
+                                      {auction.sellerProfile.businessName || "Not specified"}
+                                    </p>
+                                    <p>
+                                      <span className="font-semibold">Contact: </span>
+                                      {auction.sellerProfile.phoneNumber || "Not specified"}
+                                    </p>
+                                    <p>
+                                      <span className="font-semibold">Location: </span>
+                                      {auction.sellerProfile.state ? `${auction.sellerProfile.city}, ${auction.sellerProfile.state}` : "Not specified"}
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => approveAuctionMutation.mutate(auction.id)}
+                                disabled={approveAuctionMutation.isPending}
+                              >
+                                {approveAuctionMutation.isPending && (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />)}
                             <CheckCircle2 className="mr-2 h-4 w-4" />
                             Approve
                           </Button>
