@@ -75,22 +75,30 @@ const SellerDashboard = () => {
 
   // Check for Stripe success return
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const success = urlParams.get('success');
-    const refresh = urlParams.get('refresh');
+    const checkStripeStatus = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const success = urlParams.get('success');
+      const refresh = urlParams.get('refresh');
 
-    if (success === 'true' || refresh === 'true') {
-      // Clear the query params
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
+      if (success === 'true' || refresh === 'true') {
+        // Clear the query params
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
 
-      // Refresh the seller status
-      refetchStripeStatus();
-      toast({
-        title: "Account update",
-        description: "Your Stripe account status has been updated.",
-      });
-    }
+        // Add a slight delay to allow Stripe to process the account update
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Refresh the seller status
+        await refetchStripeStatus();
+
+        toast({
+          title: "Account update",
+          description: "Your account status has been updated. If you completed all required steps, your account will be verified shortly.",
+        });
+      }
+    };
+
+    checkStripeStatus();
   }, []);
 
   // Connect with Stripe mutation

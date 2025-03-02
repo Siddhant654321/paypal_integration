@@ -1,4 +1,3 @@
-
 import Stripe from "stripe";
 import { storage } from "./storage";
 import { Profile } from "@shared/schema";
@@ -8,17 +7,13 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16"
+  apiVersion: "2025-02-24.acacia"
 });
 
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
       console.log("Creating seller account for:", profile.email);
-      console.log("Stripe API Version:", stripe.getApiField('version'));
-      
-      // Check if STRIPE_SECRET_KEY is set (but don't log the actual key)
-      console.log("STRIPE_SECRET_KEY is set:", !!process.env.STRIPE_SECRET_KEY);
 
       // Clean up any existing account first
       if (profile.stripeAccountId) {
@@ -27,8 +22,7 @@ export class SellerPaymentService {
           await stripe.accounts.del(profile.stripeAccountId);
           console.log("Successfully deleted existing account");
         } catch (error) {
-          console.log("Could not delete existing account, might already be deleted:", error);
-          console.log("Error details:", error instanceof Error ? error.message : String(error));
+          console.warn("Could not delete existing account:", error);
         }
       }
 
@@ -50,21 +44,24 @@ export class SellerPaymentService {
       });
       console.log("Stripe account created with ID:", account.id);
 
+      // Get the base URL from environment or use a default
+      const baseUrl = process.env.BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      console.log("Using base URL:", baseUrl);
+
       // Create an account link for onboarding
-      console.log("Creating account link for onboarding");
-      console.log("BASE_URL:", process.env.BASE_URL || 'http://localhost:5000');
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
-        refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
-        return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
+        refresh_url: `${baseUrl}/seller-dashboard?refresh=true`,
+        return_url: `${baseUrl}/seller-dashboard?success=true`,
         type: 'account_onboarding',
+        collect: 'eventually_due',
       });
       console.log("Account link created:", accountLink.url ? "Success" : "Failed");
 
       // Update profile with Stripe account ID and initial status
       await storage.updateSellerStripeAccount(profile.userId, {
         accountId: account.id,
-        status: "not_started"
+        status: "pending"
       });
       console.log("Profile updated with Stripe account ID");
 
@@ -74,9 +71,6 @@ export class SellerPaymentService {
       };
     } catch (error) {
       console.error("Error creating seller account:", error);
-      if (error instanceof Error) {
-        console.error("Stack trace:", error.stack);
-      }
       throw error;
     }
   }
@@ -88,8 +82,22 @@ export class SellerPaymentService {
       }
 
       const account = await stripe.accounts.retrieve(accountId);
+      console.log("Retrieved account status:", {
+        charges_enabled: account.charges_enabled,
+        payouts_enabled: account.payouts_enabled,
+        details_submitted: account.details_submitted,
+        requirements: account.requirements
+      });
 
       if (account.charges_enabled && account.payouts_enabled) {
+        // Update the local status if verified
+        const profile = await storage.findProfileByStripeAccountId(accountId);
+        if (profile) {
+          await storage.updateSellerStripeAccount(profile.userId, {
+            accountId: accountId,
+            status: "verified"
+          });
+        }
         return "verified";
       } else if (account.details_submitted) {
         return "pending";
@@ -97,9 +105,12 @@ export class SellerPaymentService {
         return "rejected";
       }
 
-      return "not_started";
+      return "pending";
     } catch (error) {
       console.error("Error checking account status:", error);
+      if (error instanceof Stripe.errors.PermissionError) {
+        return "rejected";
+      }
       return "not_started";
     }
   }
