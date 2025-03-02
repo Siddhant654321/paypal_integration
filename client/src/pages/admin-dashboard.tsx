@@ -54,7 +54,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import React, { useEffect } from "react";
-
+import { FileUpload } from "@/components/file-upload";
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -308,20 +308,24 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
 function EditAuctionDialog({ auction }: { auction: Auction }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [imagesToRemove, setImagesToRemove] = useState<string[]>([]);
+
   const form = useForm({
     resolver: zodResolver(insertAuctionSchema),
     defaultValues: {
       title: auction.title,
       description: auction.description,
       species: auction.species,
-      // Ensure category is one of the allowed values
-      category: ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(auction.category) ? auction.category : "Purebred & Production",
-      startPrice: auction.startPrice, // Corrected: Removed division by 100
-      reservePrice: auction.reservePrice, // Corrected: Removed division by 100
+      category: ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(auction.category)
+        ? auction.category
+        : "Purebred & Production",
+      startPrice: auction.startPrice,
+      reservePrice: auction.reservePrice,
       startDate: new Date(auction.startDate).toISOString(),
       endDate: new Date(auction.endDate).toISOString(),
       imageUrl: auction.imageUrl || "",
-      images: auction.images,
+      images: auction.images || [],
     },
   });
 
@@ -335,30 +339,36 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
     }
   };
 
+  const handleImageRemove = (imageUrl: string) => {
+    setImagesToRemove(prev => [...prev, imageUrl]);
+  };
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Create a copy of data so we can map legacy category values
-      const mappedData = { ...data };
+      const formData = new FormData();
 
-      // Convert dollar values to cents before sending to server
-      // We need to do this because the database stores values in cents
-      if (mappedData.startPrice !== undefined) {
-        // Make sure we're actually sending the value as entered without multiplying again
-        mappedData.startPrice = Number(mappedData.startPrice);
-      }
+      // Add basic auction data
+      Object.keys(data).forEach(key => {
+        if (key !== 'files' && key !== 'images') {
+          formData.append(key, data[key].toString());
+        }
+      });
 
-      if (mappedData.reservePrice !== undefined) {
-        // Make sure we're actually sending the value as entered without multiplying again
-        mappedData.reservePrice = Number(mappedData.reservePrice);
-      }
+      // Add new images
+      selectedFiles.forEach(file => {
+        formData.append('images', file);
+      });
+
+      // Add list of images to remove
+      formData.append('imagesToRemove', JSON.stringify(imagesToRemove));
+
+      // Keep existing images that weren't removed
+      const remainingImages = auction.images?.filter(img => !imagesToRemove.includes(img)) || [];
+      formData.append('existingImages', JSON.stringify(remainingImages));
 
       const response = await fetch(`/api/admin/auctions/${auction.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(mappedData),
+        body: formData,
       });
 
       if (!response.ok) {
@@ -368,18 +378,12 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       return await response.json();
     },
     onSuccess: (data) => {
-      // Invalidate all related queries to ensure data refresh
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
-
-      // Close the dialog
       setOpen(false);
-
-      // Show success toast
       toast({
         title: "Auction updated",
-        description: `Successfully updated "${data.title}" with new prices: Start $${data.startPrice/100}, Reserve $${data.reservePrice/100}`,
-        variant: "success",
+        description: `Successfully updated "${data.title}"`,
       });
     },
     onError: (error: Error) => {
@@ -398,7 +402,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
           <Edit className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Auction</DialogTitle>
           <DialogDescription>
@@ -553,6 +557,44 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <FormLabel>Current Images</FormLabel>
+                <div className="grid grid-cols-3 gap-4 mt-2">
+                  {auction.images?.map((imageUrl, index) => (
+                    !imagesToRemove.includes(imageUrl) && (
+                      <div key={index} className="relative group">
+                        <img
+                          src={imageUrl}
+                          alt={`Auction image ${index + 1}`}
+                          className="w-full h-32 object-cover rounded-lg"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleImageRemove(imageUrl)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <FormLabel>Upload New Images</FormLabel>
+                <FileUpload
+                  multiple
+                  onFilesChange={setSelectedFiles}
+                  accept="image/*"
+                  maxFiles={5}
+                />
+              </div>
             </div>
 
             <DialogFooter>
