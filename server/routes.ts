@@ -77,37 +77,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auctions", requireAuth, upload.array('images', 5), async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
-        console.log("[AUCTION CREATE] Not authenticated");
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      // Enhanced logging for debugging
-      const userId = typeof req.user.id === 'string' ? parseInt(req.user.id, 10) : req.user.id;
-      console.log("[AUCTION CREATE] Full user details:", {
-        user: {
-          id: req.user.id,
-          role: req.user.role,
-          username: req.user.username,
-          approved: req.user.approved,
-          has_profile: req.user.has_profile
-        },
-        userId,
-        isAuthenticated: req.isAuthenticated()
-      });
-
       // Allow both seller and seller_admin to create auctions
       if (req.user.role !== "seller" && req.user.role !== "seller_admin") {
-        console.log("[AUCTION CREATE] Invalid role:", req.user.role);
         return res.status(403).json({ message: "Only sellers can create auctions" });
       }
 
-      // Check if seller has required profile
-      if (!req.user.has_profile) {
-        console.log("[AUCTION CREATE] Seller missing required profile");
-        return res.status(403).json({ message: "Profile completion required" });
-      }
-
       const auctionData = req.body;
+      const userId = typeof req.user.id === 'string' ? parseInt(req.user.id, 10) : req.user.id;
 
       // Convert string values to appropriate types
       const parsedData = {
@@ -122,9 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         const validatedData = insertAuctionSchema.parse(parsedData);
-        console.log("[AUCTION CREATE] Validation successful:", validatedData);
       } catch (validationError) {
-        console.error("[AUCTION CREATE] Validation error:", validationError);
         return res.status(400).json({
           message: "Invalid auction data",
           errors: validationError instanceof ZodError ? validationError.errors : String(validationError)
@@ -138,7 +115,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (uploadedFiles && uploadedFiles.length > 0) {
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         imageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
-        console.log("[AUCTION CREATE] Image URLs created:", imageUrls);
       }
 
       // Create the auction
@@ -154,14 +130,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const result = await storage.createAuction(newAuction);
         return res.status(201).json(result);
       } catch (dbError) {
-        console.error("[AUCTION CREATE] Database error:", dbError);
         return res.status(500).json({
           message: `Failed to save auction: ${(dbError as Error).message}`,
           details: dbError instanceof Error ? dbError.message : String(dbError)
         });
       }
     } catch (error) {
-      console.error("[AUCTION CREATE] Error:", error);
       return res.status(500).json({
         message: `Failed to create auction: ${(error as Error).message}`,
         details: error
@@ -846,7 +820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const requestId = parseInt(req.params.id);
       const { status } = req.body;
 
-      if (!status || !["open", "fulfilled","closed"].includes(status)) {
+      if (!status || !["open", "fulfilled", "closed"].includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
       }
 
@@ -881,7 +855,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
+  app.post("/api/auctions/:id/pay", requireAuth, async (req, res) => {
     try {
       // Log authentication state
       console.log('Payment request authentication:', {
@@ -1511,7 +1485,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Seller onboarding and payout routes
-  app.post("/api/seller/connect", requireAuth, requireProfile, async (req, res) => {
+  app.post("/api/seller/connect", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -1873,6 +1847,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error in auction notification check:", error);
     }
   }, NOTIFICATION_CHECK_INTERVAL);
+
+  app.post("/api/register", async (req, res, next) => {
+    try {
+      const existingUser = await storage.getUserByUsername(req.body.username);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+
+      // Create the user first
+      const user = await storage.createUser({
+        ...req.body,
+        password: await hashPassword(req.body.password),
+        hasProfile: true // Set profile as complete by default
+      });
+
+      // Create profile with the provided information
+      const profile = await storage.createProfile({
+        userId: user.id,
+        fullName: req.body.fullName,
+        email: req.body.email,
+        phoneNumber: req.body.phoneNumber,
+        address: req.body.address,
+        city: req.body.city,
+        state: req.body.state,
+        zipCode: req.body.zipCode,
+        businessName: req.body.businessName,
+        breedSpecialty: req.body.breedSpecialty,
+        npipNumber: req.body.npipNumber,
+        // Set default notification preferences
+        emailBidNotifications: true,
+        emailAuctionNotifications: true,
+        emailPaymentNotifications: true,
+        emailAdminNotifications: true,
+      });
+
+      // Log the user in
+      req.login(user, (err) => {
+        if (err) return next(err);
+        res.status(201).json({ user, profile });
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;
