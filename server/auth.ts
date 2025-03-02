@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express, Request, Response, NextFunction } from "express";
+import { Express } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -10,15 +10,7 @@ import { User as SelectUser } from "@shared/schema";
 declare global {
   namespace Express {
     interface User extends SelectUser {}
-    interface Request {
-      userProfile?: any; // To be replaced with proper Profile type
-    }
   }
-}
-
-interface AuthError {
-  message: string;
-  code: string;
 }
 
 const scryptAsync = promisify(scrypt);
@@ -37,12 +29,8 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
-  if (!process.env.SESSION_SECRET) {
-    throw new Error("SESSION_SECRET environment variable must be set");
-  }
-
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET!,
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -61,39 +49,27 @@ export function setupAuth(app: Express) {
   app.use(passport.session());
 
   passport.use(
-    new LocalStrategy(async (username: string, password: string, done: (error: any, user?: any, options?: any) => void) => {
+    new LocalStrategy(async (username, password, done) => {
       try {
         const user = await storage.getUserByUsername(username);
-        if (!user) {
-          console.log("[AUTH] Login failed - user not found:", username);
+        if (!user || !(await comparePasswords(password, user.password))) {
+          console.log("[AUTH] Authentication failed for username:", username);
           return done(null, false, { message: "Invalid username or password" });
         }
-
-        const isValidPassword = await comparePasswords(password, user.password);
-        if (!isValidPassword) {
-          console.log("[AUTH] Login failed - invalid password:", username);
-          return done(null, false, { message: "Invalid username or password" });
-        }
-
-        // Get profile status
-        const profile = await storage.getProfile(user.id);
-
-        console.log("[AUTH] Login successful:", { 
+        console.log("[AUTH] User authenticated:", { 
           id: user.id, 
           role: user.role,
-          hasProfile: user.hasProfile,
-          profileComplete: profile?.isComplete 
+          hasProfile: user.hasProfile 
         });
-
         return done(null, user);
       } catch (error) {
         console.error("[AUTH] Authentication error:", error);
         return done(error);
       }
-    })
+    }),
   );
 
-  passport.serializeUser((user: Express.User, done: (err: any, id?: number) => void) => {
+  passport.serializeUser((user, done) => {
     console.log("[AUTH] Serializing user:", { 
       id: user.id, 
       role: user.role,
@@ -102,27 +78,23 @@ export function setupAuth(app: Express) {
     done(null, user.id);
   });
 
-  passport.deserializeUser(async (id: string | number, done: (err: any, user?: Express.User | false) => void) => {
+  passport.deserializeUser(async (id: string | number, done) => {
     try {
+      // Ensure id is a number
       const userId = typeof id === 'string' ? parseInt(id, 10) : id;
-      console.log("[AUTH] Deserializing user:", userId);
+      console.log("[AUTH] Deserializing user:", { userId, type: typeof userId });
 
       const user = await storage.getUser(userId);
       if (!user) {
-        console.error("[AUTH] Deserialization failed - user not found:", userId);
+        console.error("[AUTH] User not found during deserialization:", { userId });
         return done(null, false);
       }
 
-      // Get profile status during deserialization
-      const profile = await storage.getProfile(userId);
-
-      console.log("[AUTH] User deserialized:", {
-        id: user.id,
+      console.log("[AUTH] User deserialized successfully:", { 
+        id: user.id, 
         role: user.role,
-        hasProfile: user.hasProfile,
-        profileComplete: profile?.isComplete
+        hasProfile: user.hasProfile
       });
-
       done(null, user);
     } catch (error) {
       console.error("[AUTH] Deserialization error:", error);
@@ -130,41 +102,29 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/register", async (req: Request, res: Response, next: NextFunction) => {
+  app.post("/api/register", async (req, res, next) => {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
         console.log("[AUTH] Registration failed - username exists:", req.body.username);
-        return res.status(400).json({ 
-          message: "Username already exists",
-          code: "USERNAME_EXISTS"
-        } as AuthError);
+        return res.status(400).json({ message: "Username already exists" });
       }
 
-      const hashedPassword = await hashPassword(req.body.password);
       const user = await storage.createUser({
         ...req.body,
-        password: hashedPassword,
-        hasProfile: false
+        password: await hashPassword(req.body.password),
+        hasProfile: false // Explicitly set hasProfile to false for new users
       });
 
-      console.log("[AUTH] Registration successful:", {
+      console.log("[AUTH] User registered successfully:", {
         id: user.id,
         role: user.role,
         hasProfile: user.hasProfile
       });
 
       req.login(user, (err) => {
-        if (err) {
-          console.error("[AUTH] Login after registration failed:", err);
-          return next(err);
-        }
-        res.status(201).json({
-          id: user.id,
-          username: user.username,
-          role: user.role,
-          hasProfile: user.hasProfile
-        });
+        if (err) return next(err);
+        res.status(201).json(user);
       });
     } catch (error) {
       console.error("[AUTH] Registration error:", error);
@@ -172,71 +132,53 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", (req: Request, res: Response, next: NextFunction) => {
-    passport.authenticate("local", (err: any, user: Express.User | false, info: { message: string } | undefined) => {
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err, user, info) => {
       if (err) {
         console.error("[AUTH] Login error:", err);
         return next(err);
       }
       if (!user) {
         console.log("[AUTH] Login failed:", info?.message);
-        return res.status(401).json({ 
-          message: info?.message || "Authentication failed",
-          code: "AUTH_FAILED"
-        } as AuthError);
+        return res.status(401).json({ message: info?.message || "Authentication failed" });
       }
       req.login(user, (err) => {
         if (err) {
-          console.error("[AUTH] Session creation error:", err);
+          console.error("[AUTH] Login session error:", err);
           return next(err);
         }
-        console.log("[AUTH] Login successful:", {
+        console.log("[AUTH] User logged in successfully:", {
           id: user.id,
           role: user.role,
           hasProfile: user.hasProfile
         });
-        res.json({
-          id: user.id,
-          username: user.username,
-          role: user.role,
-          hasProfile: user.hasProfile
-        });
+        res.status(200).json(user);
       });
     })(req, res, next);
   });
 
-  app.post("/api/logout", (req: Request, res: Response, next: NextFunction) => {
+  app.post("/api/logout", (req, res, next) => {
     const userId = req.user?.id;
     req.logout((err) => {
       if (err) {
         console.error("[AUTH] Logout error:", err);
         return next(err);
       }
-      console.log("[AUTH] Logout successful:", { userId });
+      console.log("[AUTH] User logged out successfully:", { userId });
       res.sendStatus(200);
     });
   });
 
-  app.get("/api/user", (req: Request, res: Response) => {
+  app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) {
       console.log("[AUTH] Unauthorized access to /api/user");
-      return res.status(401).json({ 
-        message: "Not authenticated",
-        code: "NOT_AUTHENTICATED"
-      } as AuthError);
+      return res.status(401).json({ message: "Not authenticated" });
     }
-
     console.log("[AUTH] User data retrieved:", {
       id: req.user.id,
       role: req.user.role,
       hasProfile: req.user.hasProfile
     });
-
-    res.json({
-      id: req.user.id,
-      username: req.user.username,
-      role: req.user.role,
-      hasProfile: req.user.hasProfile
-    });
+    res.json(req.user);
   });
 }

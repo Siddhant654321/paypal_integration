@@ -14,22 +14,6 @@ if (!process.env.STRIPE_WEBHOOK_SECRET) {
 }
 
 const app = express();
-
-// Security headers
-app.use((req, res, next) => {
-  // Content Security Policy
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;"
-  );
-  // Other security headers
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  next();
-});
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -44,17 +28,6 @@ app.use((req, res, next) => {
     capturedJsonResponse = bodyJson;
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
-
-  // Enhance authentication logging
-  if (req.path.startsWith('/api/auth') || req.path === '/api/user') {
-    console.log('[AUTH] Request:', {
-      path: req.path,
-      method: req.method,
-      isAuthenticated: req.isAuthenticated?.(),
-      sessionID: req.sessionID,
-      userId: req.user?.id
-    });
-  }
 
   res.on("finish", () => {
     const duration = Date.now() - start;
@@ -96,8 +69,7 @@ app.use((req, res, next) => {
       'DATABASE_URL',
       'STRIPE_SECRET_KEY',
       'STRIPE_PUBLISHABLE_KEY',
-      'STRIPE_WEBHOOK_SECRET',
-      'SESSION_SECRET' // Add SESSION_SECRET to required vars
+      'STRIPE_WEBHOOK_SECRET'
     ];
 
     const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -111,19 +83,12 @@ app.use((req, res, next) => {
     const server = await registerRoutes(app);
     log("Routes registered successfully");
 
-    // Global error handling with improved logging
+    // Global error handling
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
-      const errorDetails = app.get('env') === 'development' ? err.stack : undefined;
-
       log(`Error handler caught: ${err.stack || err}`);
-
-      res.status(status).json({ 
-        message,
-        code: err.code || 'INTERNAL_ERROR',
-        details: errorDetails
-      });
+      res.status(status).json({ message });
     });
 
     // Setup Vite or static serving
@@ -142,14 +107,18 @@ app.use((req, res, next) => {
 
     const startServer = async () => {
       try {
+        // First try to kill any existing process on this port
         log(`Checking if port ${port} is in use...`);
+        // Import child_process using dynamic import instead of require
         const childProcess = await import('child_process');
         const { execSync } = childProcess;
         try {
           execSync(`lsof -i :${port} -t | xargs kill -9`);
           log(`Freed port ${port}`);
+          // Wait a moment before starting
           setTimeout(() => bindServer(), 1000);
         } catch (err) {
+          // No process was using the port or couldn't be killed
           bindServer();
         }
       } catch (error) {

@@ -15,11 +15,10 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(insertUser: InsertUser): Promise<User>;
-  updateUser(userId: number, data: Partial<User>): Promise<User>;
   hasProfile(userId: number): Promise<boolean>;
   getProfile(userId: number): Promise<Profile | undefined>;
   createProfile(insertProfile: InsertProfile): Promise<Profile>;
-  updateProfile(userId: number, profile: Partial<Profile>): Promise<Profile>;
+  updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile>;
   createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction>;
   getAuction(id: number): Promise<Auction | undefined>;
   getAuctions(filters?: { 
@@ -88,15 +87,6 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(users)
         .where(eq(users.id, id));
-
-      // Log user retrieval
-      log(`Retrieved user ${id}: ${user ? JSON.stringify({
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        hasProfile: user.hasProfile
-      }) : 'not found'}`);
-
       return user;
     } catch (error) {
       log(`Error getting user ${id}: ${error}`);
@@ -121,30 +111,11 @@ export class DatabaseStorage implements IStorage {
     try {
       const [user] = await db
         .insert(users)
-        .values({
-          ...insertUser,
-          hasProfile: false // Explicitly set hasProfile to false for new users
-        })
+        .values(insertUser)
         .returning();
       return user;
     } catch (error) {
       log(`Error creating user: ${error}`);
-      throw error;
-    }
-  }
-
-  async updateUser(userId: number, data: Partial<User>): Promise<User> {
-    try {
-      log(`Updating user ${userId} with data: ${JSON.stringify(data)}`);
-      const [updatedUser] = await db
-        .update(users)
-        .set(data)
-        .where(eq(users.id, userId))
-        .returning();
-
-      return updatedUser;
-    } catch (error) {
-      log(`Error updating user ${userId}: ${error}`);
       throw error;
     }
   }
@@ -165,10 +136,6 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(profiles)
         .where(eq(profiles.userId, userId));
-
-      // Log profile retrieval
-      log(`Retrieved profile for user ${userId}: ${profile ? 'found' : 'not found'}`);
-
       return profile;
     } catch (error) {
       log(`Error getting profile for user ${userId}: ${error}`);
@@ -176,102 +143,37 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async isProfileComplete(profile: Profile, userRole?: string): Promise<boolean> {
-    // Base requirements for all users
-    const hasBasicInfo = !!(
-      profile.fullName &&    // Name is required
-      profile.email &&       // Email is required
-      profile.address &&     // Address is required for shipping
-      profile.city &&        // City is required for shipping
-      profile.state &&       // State is required for shipping
-      profile.zipCode        // ZIP code is required for shipping
-    );
-
-    // If user is a seller or seller admin, check additional requirements
-    if (userRole && ['seller', 'seller_admin'].includes(userRole)) {
-      return hasBasicInfo && !!(
-        profile.npipNumber && // NPIP number required for sellers
-        profile.bio          // Bio required for sellers
-      );
-    }
-
-    // For buyers or other roles, basic info is sufficient
-    return hasBasicInfo;
-  }
-
   async createProfile(insertProfile: InsertProfile): Promise<Profile> {
     try {
       log(`Creating profile for user ${insertProfile.userId}`);
 
-      // Get user role for profile completion check
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, insertProfile.userId));
-
       // First, create the profile
       const [profile] = await db
         .insert(profiles)
-        .values({
-          ...insertProfile,
-          isComplete: false // Start with incomplete
-        })
+        .values(insertProfile)
         .returning();
 
-      // Check if profile has essential fields based on role
-      const isComplete = await this.isProfileComplete(profile, user?.role);
-
-      // Update completion status if needed
-      if (isComplete) {
-        await db
-          .update(profiles)
-          .set({ isComplete: true })
-          .where(eq(profiles.userId, insertProfile.userId))
-          .returning();
-      }
-
-      // Update the user's has_profile flag
+      // Then, update the user's has_profile flag
       await db
         .update(users)
         .set({ hasProfile: true })
         .where(eq(users.id, insertProfile.userId));
 
-      log(`Profile created successfully for user ${insertProfile.userId}`);
-      return {
-        ...profile,
-        isComplete
-      };
+      log(`Profile created and user updated for user ${insertProfile.userId}`);
+      return profile;
     } catch (error) {
       log(`Error creating profile: ${error}`);
       throw error;
     }
   }
 
-  async updateProfile(userId: number, profileData: Partial<Profile>): Promise<Profile> {
+  async updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile> {
     try {
-      // Get user for role check
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, userId));
-
-      // First update the profile
       const [updatedProfile] = await db
         .update(profiles)
-        .set(profileData)
+        .set(profile)
         .where(eq(profiles.userId, userId))
         .returning();
-
-      // Check if profile is now complete based on role
-      const isComplete = await this.isProfileComplete(updatedProfile, user?.role);
-
-      // Update completion status if needed
-      if (isComplete !== updatedProfile.isComplete) {
-        await db
-          .update(profiles)
-          .set({ isComplete })
-          .where(eq(profiles.userId, userId));
-      }
 
       // Ensure user's has_profile flag is set
       await db
@@ -279,11 +181,8 @@ export class DatabaseStorage implements IStorage {
         .set({ hasProfile: true })
         .where(eq(users.id, userId));
 
-      log(`Profile updated and completion status verified for user ${userId}`);
-      return {
-        ...updatedProfile,
-        isComplete
-      };
+      log(`Profile updated and user flag verified for user ${userId}`);
+      return updatedProfile;
     } catch (error) {
       log(`Error updating profile: ${error}`);
       throw error;

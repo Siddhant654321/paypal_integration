@@ -25,8 +25,7 @@ const requireProfile = async (req: any, res: any, next: any) => {
     userId: req.user?.id,
     role: req.user?.role,
     username: req.user?.username,
-    isAuthenticated: req.isAuthenticated(),
-    hasProfile: req.user?.hasProfile
+    isAuthenticated: req.isAuthenticated()
   });
 
   // For buyers, no profile is required
@@ -36,18 +35,10 @@ const requireProfile = async (req: any, res: any, next: any) => {
   }
 
   // For sellers and seller_admin, check profile status
-  const profile = await storage.getProfile(req.user.id);
   const isSeller = req.user.role === "seller" || req.user.role === "seller_admin";
-
-  if (isSeller && !profile) {
+  if (isSeller && !req.user.hasProfile) {
     console.log("[PROFILE CHECK] Seller missing required profile");
     return res.status(403).json({ message: "Profile completion required" });
-  }
-
-  // Update user's hasProfile flag
-  if (profile && !req.user.hasProfile) {
-    await storage.updateUser(req.user.id, { hasProfile: true });
-    req.user.hasProfile = true;
   }
 
   // Profile exists or not required, proceed
@@ -82,7 +73,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Modify the auction creation endpoint to be more flexible with profiles
+  // Create new auction (sellers only)
   app.post("/api/auctions", requireAuth, upload.array('images', 5), async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -90,9 +81,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
+      // Enhanced logging for debugging
       const userId = typeof req.user.id === 'string' ? parseInt(req.user.id, 10) : req.user.id;
       console.log("[AUCTION CREATE] Full user details:", {
-        user: req.user,
+        user: {
+          id: req.user.id,
+          role: req.user.role,
+          username: req.user.username,
+          approved: req.user.approved,
+          has_profile: req.user.has_profile
+        },
         userId,
         isAuthenticated: req.isAuthenticated()
       });
@@ -103,12 +101,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only sellers can create auctions" });
       }
 
-      // Check profile but don't block
-      const profile = await storage.getProfile(userId);
-      if (!profile) {
-        console.log("[AUCTION CREATE] Warning: Seller creating auction without profile");
-        // Set warning header
-        res.set('X-Profile-Warning', 'Please complete your seller profile');
+      // Check if seller has required profile
+      if (!req.user.has_profile) {
+        console.log("[AUCTION CREATE] Seller missing required profile");
+        return res.status(403).json({ message: "Profile completion required" });
       }
 
       const auctionData = req.body;
@@ -156,15 +152,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         const result = await storage.createAuction(newAuction);
-
-        // If profile is missing, include a warning in the response
-        if (!profile) {
-          return res.status(201).json({
-            auction: result,
-            warning: "Please complete your seller profile for better visibility and trust"
-          });
-        }
-
         return res.status(201).json(result);
       } catch (dbError) {
         console.error("[AUCTION CREATE] Database error:", dbError);
@@ -436,6 +423,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[PROFILE] Processing profile update for user:", {
         userId: req.user.id,
         role: req.user.role,
+        hasProfile: req.user.hasProfile,
         receivedData: req.body
       });
 
@@ -502,13 +490,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!profile) {
         console.log("[PROFILE] No profile found for user:", req.user.id);
         return res.status(404).json({ message: "Profile not found" });
-      }
-
-      // Update user's hasProfile flag if needed
-      if (!req.user.hasProfile) {
-        await storage.updateUser(req.user.id, { hasProfile: true });
-        req.user.hasProfile = true;
-        console.log("[PROFILE] Updated hasProfile flag for user:", req.user.id);
       }
 
       console.log("[PROFILE] Profile retrieved successfully");
@@ -845,7 +826,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const request = await storage.getBuyerRequest(parseInt(req.params.id));
       if (!request) {
-        return res.status(404).json({ message: "Buyer request not found" });      }
+        return res.status(404).json({ message: "Buyer request not found" });
+      }
 
       // Increment views
       await storage.incrementBuyerRequestViews(request.id);
@@ -859,7 +841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/buyer-requests/:id/status", requireAuth, async (req, res) =>{
+  app.patch("/api/buyer-requests/:id/status", requireAuth, async (req, res) => {
     try {
       const requestId = parseInt(req.params.id);
       const { status } = req.body;
@@ -1736,7 +1718,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(schedule);
     } catch (error) {
       console.error("Error getting payout schedule:", error);
-      res.status(500).json({ message: "Failed to get payoutschedule" });
+      res.status(500).json({ message: "Failed to get payout schedule" });
     }
   });
 
