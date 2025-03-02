@@ -27,6 +27,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
 import { useState, useEffect } from 'react';
+import { dollarsToCents, formatDollarInput, formatPrice, centsToDollars } from "../utils/formatters";
 
 export default function NewAuction() {
   const { user, isLoading } = useAuth();
@@ -96,9 +97,16 @@ export default function NewAuction() {
 
       const formData = new FormData();
 
-      Object.keys(auctionData).forEach(key => {
+      // Convert dollar amounts to cents before submission
+      const dataWithCents = {
+        ...auctionData,
+        startPrice: dollarsToCents(auctionData.startPrice),
+        reservePrice: dollarsToCents(auctionData.reservePrice)
+      };
+
+      Object.keys(dataWithCents).forEach(key => {
         if (key !== 'files' && key !== 'images') {
-          formData.append(key, auctionData[key].toString());
+          formData.append(key, dataWithCents[key].toString());
         }
       });
 
@@ -106,7 +114,10 @@ export default function NewAuction() {
         formData.append('images', file);
       });
 
-      console.log("Submitting FormData with files:", selectedFiles.length);
+      console.log("Submitting FormData with monetary values (in cents):", {
+        startPrice: dataWithCents.startPrice,
+        reservePrice: dataWithCents.reservePrice
+      });
 
       const res = await fetch("/api/auctions", {
         method: "POST",
@@ -172,8 +183,8 @@ export default function NewAuction() {
               <FormItem>
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Textarea 
-                    {...field} 
+                  <Textarea
+                    {...field}
                     placeholder="Provide detailed description of your auction item"
                   />
                 </FormControl>
@@ -257,12 +268,18 @@ export default function NewAuction() {
                   <FormLabel>Starting Price ($)</FormLabel>
                   <FormControl>
                     <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                      type="text"
                       placeholder="0.00"
                       value={field.value}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => {
+                        const formatted = formatDollarInput(e.target.value);
+                        field.onChange(formatted);
+                      }}
+                      onBlur={(e) => {
+                        // Format to proper dollar amount on blur
+                        const value = parseFloat(e.target.value) || 0;
+                        field.onChange(value.toFixed(2));
+                      }}
                     />
                   </FormControl>
                   <FormDescription>
@@ -281,12 +298,18 @@ export default function NewAuction() {
                   <FormLabel>Reserve Price ($)</FormLabel>
                   <FormControl>
                     <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                      type="text"
                       placeholder="0.00"
                       value={field.value}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => {
+                        const formatted = formatDollarInput(e.target.value);
+                        field.onChange(formatted);
+                      }}
+                      onBlur={(e) => {
+                        // Format to proper dollar amount on blur
+                        const value = parseFloat(e.target.value) || 0;
+                        field.onChange(value.toFixed(2));
+                      }}
                     />
                   </FormControl>
                   <FormDescription>

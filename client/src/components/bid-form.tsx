@@ -7,6 +7,7 @@ import { insertBidSchema } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { dollarsToCents, formatDollarInput, formatPrice, centsToDollars } from "@/utils/formatters";
 
 type Props = {
   auctionId: number;
@@ -19,10 +20,9 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
 
   const bidMutation = useMutation({
     mutationFn: async (bidAmount: number) => {
-      // We don't need to include bidderId here as it will be set by the server from the authenticated user
       const bidData = {
         auctionId,
-        amount: bidAmount,
+        amount: dollarsToCents(bidAmount), // Convert dollars to cents for storage
       };
       const res = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, bidData);
       return res.json();
@@ -38,12 +38,11 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
     },
     onError: (error: any) => {
       let errorMessage = "An unexpected error occurred";
-      
+
       if (error.message) {
         errorMessage = error.message;
       }
-      
-      // Try to extract more detailed error from response if available
+
       if (error.response) {
         try {
           const responseData = error.response.json();
@@ -54,7 +53,7 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
           // Ignore JSON parsing errors
         }
       }
-      
+
       toast({
         title: "Failed to place bid",
         description: errorMessage,
@@ -65,8 +64,10 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const bidAmount = parseInt(amount);
-    if (isNaN(bidAmount) || bidAmount <= currentPrice) {
+    const bidAmount = parseFloat(amount);
+    const currentPriceInDollars = centsToDollars(currentPrice);
+
+    if (isNaN(bidAmount) || bidAmount <= currentPriceInDollars) {
       toast({
         title: "Invalid bid amount",
         description: "Bid must be higher than the current price",
@@ -83,11 +84,15 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
         <Label htmlFor="bid-amount">Your Bid Amount ($)</Label>
         <Input
           id="bid-amount"
-          type="number"
-          min={currentPrice + 1}
+          type="text"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder={`Enter amount higher than $${currentPrice}`}
+          onChange={(e) => setAmount(formatDollarInput(e.target.value))}
+          onBlur={() => {
+            // Format to proper dollar amount on blur
+            const value = parseFloat(amount) || 0;
+            setAmount(value.toFixed(2));
+          }}
+          placeholder={`Enter amount higher than ${formatPrice(currentPrice)}`}
           required
         />
       </div>

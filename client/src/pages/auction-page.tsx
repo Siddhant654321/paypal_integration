@@ -8,6 +8,7 @@ import { Loader2, ArrowLeft, Clock, Store, User, MapPin } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+import { formatPrice, centsToDollars } from "../utils/formatters";
 import {
   Card,
   CardHeader,
@@ -26,7 +27,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { formatPrice } from "../utils/formatters";
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
@@ -144,12 +144,12 @@ export default function AuctionPage() {
         <div className="space-y-4 md:space-y-6">
           <div className="aspect-square w-full overflow-hidden rounded-lg bg-muted">
             <img
-              src={auction.imageUrl && auction.imageUrl.trim() !== '' ? 
-                (auction.imageUrl.startsWith('http') || auction.imageUrl.startsWith('/') ? 
-                  auction.imageUrl : `/uploads/${auction.imageUrl}`) : 
-                (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ? 
-                  (auction.images[0].startsWith('http') || auction.images[0].startsWith('/') ? 
-                    auction.images[0] : `/uploads/${auction.images[0]}`) : 
+              src={auction.imageUrl && auction.imageUrl.trim() !== '' ?
+                (auction.imageUrl.startsWith('http') || auction.imageUrl.startsWith('/') ?
+                  auction.imageUrl : `/uploads/${auction.imageUrl}`) :
+                (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ?
+                  (auction.images[0].startsWith('http') || auction.images[0].startsWith('/') ?
+                    auction.images[0] : `/uploads/${auction.images[0]}`) :
                   '/images/placeholder.jpg')}
               alt={auction.title}
               className="w-full h-full object-cover"
