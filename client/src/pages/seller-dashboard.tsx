@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign, ExternalLink, AlertCircle, CheckCircle2 } fro
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatPrice } from '../utils/formatters';
 import { useToast } from "@/hooks/use-toast";
@@ -58,7 +58,7 @@ const SellerDashboard = () => {
     select: (data) => data || [],
   });
 
-  const { data: stripeStatus, isLoading: stripeStatusLoading } = useQuery<StripeStatus>({
+  const { data: stripeStatus, isLoading: stripeStatusLoading, refetch: refetchStripeStatus } = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
     retry: false,
   });
@@ -73,6 +73,26 @@ const SellerDashboard = () => {
     enabled: stripeStatus?.status === "verified",
   });
 
+  // Check for Stripe success return
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const refresh = urlParams.get('refresh');
+
+    if (success === 'true' || refresh === 'true') {
+      // Clear the query params
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+
+      // Refresh the seller status
+      refetchStripeStatus();
+      toast({
+        title: "Account update",
+        description: "Your Stripe account status has been updated.",
+      });
+    }
+  }, []);
+
   // Connect with Stripe mutation
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
@@ -84,7 +104,7 @@ const SellerDashboard = () => {
             "Content-Type": "application/json",
           },
         });
-        
+
         if (!response.ok) {
           const contentType = response.headers.get("content-type");
           if (contentType && contentType.indexOf("application/json") !== -1) {

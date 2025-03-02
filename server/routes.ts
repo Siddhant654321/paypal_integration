@@ -1601,6 +1601,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get seller's Stripe account status
+  app.get("/api/seller/status", requireAuth, async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      if (!profile.stripeAccountId) {
+        return res.json({ status: "not_started" });
+      }
+
+      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
+      
+      // Update profile with latest status from Stripe if it's changed
+      if (profile.stripeAccountStatus !== status) {
+        await storage.updateSellerStripeAccount(req.user.id, {
+          accountId: profile.stripeAccountId,
+          status
+        });
+      }
+
+      return res.json({ 
+        status,
+        accountId: profile.stripeAccountId
+      });
+    } catch (error) {
+      console.error("[Seller Status] Error:", error);
+      return res.status(500).json({ 
+        message: "Failed to fetch seller status",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
