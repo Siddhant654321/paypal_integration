@@ -1,6 +1,6 @@
-import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile } from "@shared/schema";
+import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { Store } from "express-session";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
@@ -212,30 +212,66 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getBidsForAuction(auctionId: number): Promise<any[]> {
+  async getBidsForAuction(auctionId: number): Promise<Bid[]> {
     try {
       log(`Getting bids for auction ${auctionId}`);
-      return []; 
+      const results = await db
+        .select()
+        .from(bids)
+        .where(eq(bids.auctionId, auctionId))
+        .orderBy(desc(bids.timestamp));
+
+      log(`Found ${results.length} bids for auction ${auctionId}`);
+      return results;
     } catch (error) {
       log(`Error getting bids for auction ${auctionId}: ${error}`);
       throw error;
     }
   }
 
-  async getBidsByUser(userId: number): Promise<any[]> {
+  async getBidsByUser(userId: number): Promise<Bid[]> {
     try {
       log(`Getting bids for user ${userId}`);
-      return []; 
+      const results = await db
+        .select()
+        .from(bids)
+        .where(eq(bids.bidderId, userId))
+        .orderBy(desc(bids.timestamp));
+
+      log(`Found ${results.length} bids for user ${userId}`);
+      return results;
     } catch (error) {
       log(`Error getting bids for user ${userId}: ${error}`);
       throw error;
     }
   }
 
-  async createBid(bid: any): Promise<any> {
+  async createBid(bidData: InsertBid): Promise<Bid> {
     try {
-      log(`Creating bid for auction ${bid.auctionId}`);
-      return bid; 
+      log(`Creating bid for auction ${bidData.auctionId}`);
+
+      // Start a transaction to ensure bid creation and auction price update are atomic
+      const result = await db.transaction(async (tx) => {
+        // Insert the bid
+        const [bid] = await tx
+          .insert(bids)
+          .values({
+            ...bidData,
+            timestamp: new Date(),
+          })
+          .returning();
+
+        // Update the auction's current price
+        await tx
+          .update(auctions)
+          .set({ currentPrice: bidData.amount })
+          .where(eq(auctions.id, bidData.auctionId));
+
+        return bid;
+      });
+
+      log(`Successfully created bid ${result.id} for amount ${result.amount}`);
+      return result;
     } catch (error) {
       log(`Error creating bid: ${error}`);
       throw error;
