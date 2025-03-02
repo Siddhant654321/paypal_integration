@@ -797,17 +797,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update the buyer request endpoint
-  app.post("/api/buyer-requests", requireAuth, async (req, res) => {
+  // Create buyer request (no auth required)
+  app.post("/api/buyer-requests", async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      console.log("Creating buyer request with data:", {
-        ...req.body,
-        buyerId: req.user.id
-      });
+      console.log("Creating buyer request with data:", req.body);
 
       try {
         const requestData = insertBuyerRequestSchema.parse(req.body);
@@ -815,7 +808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const buyerRequest = await storage.createBuyerRequest({
           ...requestData,
-          buyerId: req.user.id,
+          buyerId: req.user?.id || 0, // Use 0 for anonymous requests
         });
 
         console.log("Successfully created buyer request:", buyerRequest);
@@ -907,19 +900,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Add admin delete route for buyer requests
-  app.delete("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
-    try {
-      const requestId = parseInt(req.params.id);
-      await storage.deleteBuyerRequest(requestId);
-      res.sendStatus(200);
-    } catch (error) {
-      console.error("Error deleting buyer request:", error);
-      res.status(500).json({ message: "Failed to delete buyer request" });
-    }
-  });
-  
-  // Add admin update route for buyer requests
+
+  // Update buyer request (admin only)
   app.patch("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
     try {
       const requestId = parseInt(req.params.id);
@@ -931,7 +913,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to update buyer request" });
     }
   });
-  
+
+  // Delete buyer request (admin only)
+  app.delete("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      await storage.deleteBuyerRequest(requestId);
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Error deleting buyer request:", error);
+      res.status(500).json({ message: "Failed to delete buyer request" });
+    }
+  });
+
   app.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
     try {
       // Log authentication state
@@ -1155,7 +1149,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch active sellers" });
     }
   });
-  
   
 
   app.get("/api/analytics/market-stats", async (req, res) => {

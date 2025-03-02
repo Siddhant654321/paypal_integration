@@ -88,35 +88,15 @@ export function BuyerRequestForm({ onClose, initialData, isEditing }: BuyerReque
     },
     onError: (error: any) => {
       console.error("Mutation error:", error);
-
-      if (error.message === "Unauthorized") {
-        toast({
-          title: "Authentication Required",
-          description: "Please sign in or create an account to submit a request.",
-          variant: "destructive",
-        });
-        navigate("/auth");
-      } else {
-        toast({
-          title: isEditing ? "Error Updating Request" : "Error Creating Request",
-          description: error.message || "Failed to save request",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: isEditing ? "Error Updating Request" : "Error Creating Request",
+        description: error.message || "Failed to save request",
+        variant: "destructive",
+      });
     },
   });
 
   function onSubmit(data: InsertBuyerRequest) {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in or create an account to submit a request.",
-        variant: "destructive",
-      });
-      navigate("/auth");
-      return;
-    }
-
     mutation.mutate(data);
   }
 
