@@ -22,12 +22,23 @@ export default {
           foreground: "hsl(var(--popover-foreground))",
         },
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "#E63946", /* Deep Red */
+          foreground: "#FFFFFF",
+          hover: "#F77F00", /* Vibrant Orange */
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+          DEFAULT: "#FFBA08", /* Golden Yellow */
+          foreground: "#1D3557", /* Deep Blue */
+          hover: "#F77F00", /* Vibrant Orange */
+        },
+        heading: {
+          DEFAULT: "#1D3557", /* Deep Blue */
+        },
+        body: {
+          DEFAULT: "#43AA8B", /* Rich Teal */
+        },
+        accent: {
+          DEFAULT: "#FFBA08", /* Golden Yellow */
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
