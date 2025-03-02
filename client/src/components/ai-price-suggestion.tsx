@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/utils/formatters";
 import { apiRequest } from "@/lib/queryClient";
@@ -151,7 +151,11 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
             className="flex-1"
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <img 
+                src="/attached_assets/ezgif-473fbbe233db36.gif" 
+                alt="Loading..." 
+                className="h-4 w-4 mr-2"
+              />
             ) : (
               <Sparkles className="h-4 w-4 mr-2" />
             )}
@@ -164,7 +168,11 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
             className="flex-1"
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <img 
+                src="/attached_assets/ezgif-473fbbe233db36.gif" 
+                alt="Loading..." 
+                className="h-4 w-4 mr-2"
+              />
             ) : (
               <Sparkles className="h-4 w-4 mr-2" />
             )}
