@@ -104,7 +104,7 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
       <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
         {data && data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+            <ComposedChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
               <XAxis
                 dataKey="date"
@@ -112,11 +112,23 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
                 type="category"
                 scale="time"
               />
-              <YAxis 
+              <YAxis
                 tickFormatter={(value) => formatPrice(value)}
                 domain={['auto', 'auto']}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip
+                formatter={(value, name) => {
+                  if (name === 'price') return [`$${(Number(value) / 100).toFixed(2)}`, 'Auction Price'];
+                  if (name === 'medianPrice') return [`$${(Number(value) / 100).toFixed(2)}`, 'Market Average'];
+                  return [value, name];
+                }}
+                labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                contentStyle={{
+                  backgroundColor: 'var(--background)',
+                  border: '1px solid var(--border)'
+                }}
+                wrapperStyle={{ zIndex: 1000 }}
+              />
               <Legend />
               {/* Scatter plot for individual auction prices */}
               <Scatter

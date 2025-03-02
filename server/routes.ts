@@ -1181,29 +1181,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
           cutoffDate.setMonth(cutoffDate.getMonth() - 1);
       }
 
+      // Log the date filtering
+      console.log("[ANALYTICS] Cutoff date:", cutoffDate);
+      console.log("[ANALYTICS] Current date:", now);
+
       // Include both active and ended auctions that have prices
-      const validAuctions = auctions.filter(auction => 
-        (auction.endDate >= cutoffDate.toISOString()) &&
-        (auction.currentPrice > 0 || auction.startPrice > 0)
-      );
+      // For active auctions, we'll use their current data
+      const validAuctions = auctions.filter(auction => {
+        // Convert string dates to Date objects for accurate comparison
+        const auctionEndDate = new Date(auction.endDate);
+        const auctionStartDate = new Date(auction.startDate);
+        
+        // Check if the auction has a valid price
+        const hasValidPrice = auction.currentPrice > 0 || auction.startPrice > 0;
+        
+        // Include if auction is after cutoff date OR is currently active
+        const isAfterCutoff = auctionEndDate >= cutoffDate;
+        const isActive = auctionEndDate >= now;
+        
+        return hasValidPrice && (isAfterCutoff || isActive);
+      });
 
       console.log("[ANALYTICS] Valid auctions after filtering:", validAuctions.length);
 
-      // Sort auctions by date
-      const sortedAuctions = validAuctions.sort(
-        (a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime()
+      // Sort auctions by date - use end date for completed auctions or current date for active ones
+      const sortedAuctions = validAuctions.sort((a, b) => {
+        const dateA = new Date(a.endDate).getTime();
+        const dateB = new Date(b.endDate).getTime();
+        return dateA - dateB;
+      });
+      
+      console.log("[ANALYTICS] Sorted auctions dates:", sortedAuctions.map(a => 
+        ({ id: a.id, title: a.title, start: a.startDate, end: a.endDate, price: a.currentPrice || a.startPrice }))
       );
 
       // Create price data points
       const priceData = sortedAuctions.map(auction => {
-        const price = auction.currentPrice || auction.startPrice;
+        // Use current price if available, otherwise use start price
+        const price = auction.currentPrice > 0 ? auction.currentPrice : auction.startPrice;
+        
+        // For active auctions, use today's date instead of end date
+        const auctionEndDate = new Date(auction.endDate);
+        const dateForPoint = auctionEndDate > now ? new Date() : auctionEndDate;
+        
         return {
-          date: auction.endDate,
+          date: dateForPoint.toISOString(),
           price: price,
+          title: auction.title,
           // Calculate moving average for trend line
           medianPrice: calculateMovingAverage(
             sortedAuctions,
-            new Date(auction.endDate),
+            dateForPoint,
             price
           )
         };
