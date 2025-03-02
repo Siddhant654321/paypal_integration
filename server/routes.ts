@@ -82,7 +82,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Create new auction (sellers only)
+  // Modify the auction creation endpoint to be more flexible with profiles
   app.post("/api/auctions", requireAuth, upload.array('images', 5), async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -90,7 +90,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      // Enhanced logging for debugging
       const userId = typeof req.user.id === 'string' ? parseInt(req.user.id, 10) : req.user.id;
       console.log("[AUCTION CREATE] Full user details:", {
         user: req.user,
@@ -104,11 +103,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only sellers can create auctions" });
       }
 
-      // Check if seller has required profile
+      // Check profile but don't block
       const profile = await storage.getProfile(userId);
       if (!profile) {
-        console.log("[AUCTION CREATE] Seller missing required profile");
-        return res.status(403).json({ message: "Profile completion required" });
+        console.log("[AUCTION CREATE] Warning: Seller creating auction without profile");
+        // Set warning header
+        res.set('X-Profile-Warning', 'Please complete your seller profile');
       }
 
       const auctionData = req.body;
@@ -156,6 +156,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         const result = await storage.createAuction(newAuction);
+
+        // If profile is missing, include a warning in the response
+        if (!profile) {
+          return res.status(201).json({
+            auction: result,
+            warning: "Please complete your seller profile for better visibility and trust"
+          });
+        }
+
         return res.status(201).json(result);
       } catch (dbError) {
         console.error("[AUCTION CREATE] Database error:", dbError);
@@ -427,7 +436,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[PROFILE] Processing profile update for user:", {
         userId: req.user.id,
         role: req.user.role,
-        hasProfile: req.user.hasProfile,
         receivedData: req.body
       });
 
@@ -461,10 +469,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("[PROFILE] Creating new profile");
           profile = await storage.createProfile(profileData);
         }
-
-        // Update user's hasProfile flag
-        await storage.updateUser(req.user.id, { hasProfile: true });
-        req.user.hasProfile = true;
 
         console.log("[PROFILE] Profile saved successfully:", profile);
         res.status(201).json(profile);
@@ -841,8 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const request = await storage.getBuyerRequest(parseInt(req.params.id));
       if (!request) {
-        return res.status(404).json({ message: "Buyer request not found" });
-      }
+        return res.status(404).json({ message: "Buyer request not found" });      }
 
       // Increment views
       await storage.incrementBuyerRequestViews(request.id);

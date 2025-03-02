@@ -19,22 +19,28 @@ export async function checkSellerProfile(
 
     const profile = await storage.getProfile(req.user.id);
 
-    if (!profile) {
-      console.log("[PROFILE CHECK] Profile not found for seller:", req.user.id);
+    // Instead of blocking, attach profile status to request
+    req.userProfile = profile || null;
+
+    // For critical operations that absolutely require a profile
+    if (req.path.includes('/api/payments') && !profile) {
+      console.log("[PROFILE CHECK] Profile required for payment operations");
       return res.status(403).json({
-        message: "Please complete your seller profile before proceeding",
+        message: "Please complete your seller profile before processing payments",
         code: "PROFILE_REQUIRED"
       });
     }
 
-    // Add profile to request for use in routes
-    req.userProfile = profile;
+    // For auction creation, allow but with a warning
+    if (req.path.includes('/api/auctions') && req.method === 'POST' && !profile) {
+      console.log("[PROFILE CHECK] Missing profile for auction creation");
+      res.set('X-Profile-Warning', 'Seller profile incomplete');
+    }
+
     next();
   } catch (error) {
     console.error("[PROFILE CHECK] Error checking profile:", error);
-    res.status(500).json({
-      message: "Error checking profile status",
-      code: "PROFILE_CHECK_ERROR"
-    });
+    // Don't block the request on profile check errors
+    next();
   }
 }

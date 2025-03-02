@@ -37,6 +37,7 @@ export const profiles = pgTable("profiles", {
   stripeAccountStatus: text("stripe_account_status", {
     enum: ["pending", "verified", "not_started"]
   }),
+  isComplete: boolean("is_complete").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -226,6 +227,7 @@ export const insertProfileSchema = createInsertSchema(profiles)
     id: true,
     stripeAccountId: true,
     stripeAccountStatus: true,
+    isComplete: true,
     createdAt: true,
     updatedAt: true,
   })
@@ -234,10 +236,10 @@ export const insertProfileSchema = createInsertSchema(profiles)
     fullName: z.string().min(2, "Full name must be at least 2 characters"),
     email: z.string().email("Invalid email format"),
     phoneNumber: z.string().regex(/^\+?[\d\s-()]{10,}$/, "Invalid phone number format"),
-    address: z.string().min(5, "Address must be at least 5 characters"),
-    city: z.string().min(2, "City must be at least 2 characters"),
-    state: z.string().min(2, "State must be at least 2 characters"),
-    zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, "Invalid ZIP code format"),
+    address: z.string().min(5, "Address must be at least 5 characters").optional(),
+    city: z.string().min(2, "City must be at least 2 characters").optional(),
+    state: z.string().min(2, "State must be at least 2 characters").optional(),
+    zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, "Invalid ZIP code format").optional(),
     bio: z.string().optional(),
     isPublicBio: z.boolean().default(true),
     profilePicture: z.string().optional(),
@@ -248,52 +250,6 @@ export const insertProfileSchema = createInsertSchema(profiles)
     emailAuctionNotifications: z.boolean().default(true),
     emailPaymentNotifications: z.boolean().default(true),
     emailAdminNotifications: z.boolean().default(true),
-  });
-
-export type Profile = typeof profiles.$inferSelect;
-export type InsertProfile = z.infer<typeof insertProfileSchema>;
-
-export const insertPaymentSchema = createInsertSchema(payments)
-  .omit({
-    id: true,
-    stripePaymentIntentId: true,
-    stripeTransferId: true,
-    status: true,
-    createdAt: true,
-    updatedAt: true,
-  });
-
-export const insertPayoutSchema = createInsertSchema(payouts).omit({
-  id: true,
-  stripeTransferId: true,
-  status: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertUserSchema = createInsertSchema(users)
-  .pick({
-    username: true,
-    password: true,
-    role: true,
-    email: true,
-  })
-  .extend({
-    email: z.string().email("Invalid email format"),
-  });
-
-export const insertFulfillmentSchema = createInsertSchema(fulfillments)
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    shippingCarrier: z.string().min(2, "Shipping carrier is required"),
-    trackingNumber: z.string().min(5, "Valid tracking number is required"),
-    shippingDate: z.string().transform(str => new Date(str)),
-    estimatedDeliveryDate: z.string().optional().transform(str => str ? new Date(str) : undefined),
-    additionalNotes: z.string().optional(),
   });
 
 export const buyerRequests = pgTable("buyer_requests", {
@@ -344,6 +300,49 @@ export type Bid = typeof bids.$inferSelect;
 export type InsertBid = z.infer<typeof insertBidSchema>;
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
+export const insertPaymentSchema = createInsertSchema(payments)
+  .omit({
+    id: true,
+    stripePaymentIntentId: true,
+    stripeTransferId: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+  });
+
+export const insertPayoutSchema = createInsertSchema(payouts).omit({
+  id: true,
+  stripeTransferId: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserSchema = createInsertSchema(users)
+  .pick({
+    username: true,
+    password: true,
+    role: true,
+    email: true,
+  })
+  .extend({
+    email: z.string().email("Invalid email format"),
+  });
+
+export const insertFulfillmentSchema = createInsertSchema(fulfillments)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    shippingCarrier: z.string().min(2, "Shipping carrier is required"),
+    trackingNumber: z.string().min(5, "Valid tracking number is required"),
+    shippingDate: z.string().transform(str => new Date(str)),
+    estimatedDeliveryDate: z.string().optional().transform(str => str ? new Date(str) : undefined),
+    additionalNotes: z.string().optional(),
+  });
+
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payout = typeof payouts.$inferSelect;

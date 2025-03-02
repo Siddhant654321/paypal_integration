@@ -176,6 +176,19 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async isProfileComplete(profile: Profile): Promise<boolean> {
+    // Check for required fields that make a profile "complete"
+    return !!(
+      profile.fullName &&
+      profile.email &&
+      profile.phoneNumber &&
+      profile.address &&
+      profile.city &&
+      profile.state &&
+      profile.zipCode
+    );
+  }
+
   async createProfile(insertProfile: InsertProfile): Promise<Profile> {
     try {
       log(`Creating profile for user ${insertProfile.userId}`);
@@ -183,8 +196,23 @@ export class DatabaseStorage implements IStorage {
       // First, create the profile
       const [profile] = await db
         .insert(profiles)
-        .values(insertProfile)
+        .values({
+          ...insertProfile,
+          isComplete: false // Start with incomplete
+        })
         .returning();
+
+      // Check if profile is complete
+      const isComplete = await this.isProfileComplete(profile);
+
+      // Update completion status if needed
+      if (isComplete) {
+        await db
+          .update(profiles)
+          .set({ isComplete: true })
+          .where(eq(profiles.userId, insertProfile.userId))
+          .returning();
+      }
 
       // Then, update the user's has_profile flag
       await db
@@ -200,13 +228,25 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateProfile(userId: number, profile: Partial<Profile>): Promise<Profile> {
+  async updateProfile(userId: number, profileData: Partial<Profile>): Promise<Profile> {
     try {
+      // First update the profile
       const [updatedProfile] = await db
         .update(profiles)
-        .set(profile)
+        .set(profileData)
         .where(eq(profiles.userId, userId))
         .returning();
+
+      // Check if profile is now complete
+      const isComplete = await this.isProfileComplete(updatedProfile);
+
+      // Update completion status if needed
+      if (isComplete !== updatedProfile.isComplete) {
+        await db
+          .update(profiles)
+          .set({ isComplete })
+          .where(eq(profiles.userId, userId));
+      }
 
       // Ensure user's has_profile flag is set
       await db
@@ -214,8 +254,11 @@ export class DatabaseStorage implements IStorage {
         .set({ hasProfile: true })
         .where(eq(users.id, userId));
 
-      log(`Profile updated and user flag verified for user ${userId}`);
-      return updatedProfile;
+      log(`Profile updated and completion status verified for user ${userId}`);
+      return {
+        ...updatedProfile,
+        isComplete
+      };
     } catch (error) {
       log(`Error updating profile: ${error}`);
       throw error;
