@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -10,7 +10,15 @@ import { User as SelectUser } from "@shared/schema";
 declare global {
   namespace Express {
     interface User extends SelectUser {}
+    interface Request {
+      userProfile?: any; // To be replaced with proper Profile type
+    }
   }
+}
+
+interface AuthError {
+  message: string;
+  code: string;
 }
 
 const scryptAsync = promisify(scrypt);
@@ -28,23 +36,13 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-async function updateUserProfileStatus(userId: number): Promise<void> {
-  try {
-    const profile = await storage.getProfile(userId);
-    const hasProfile = !!profile;
-
-    if (hasProfile) {
-      await storage.updateUser(userId, { hasProfile: true });
-      console.log("[AUTH] Updated user profile status:", { userId, hasProfile });
-    }
-  } catch (error) {
-    console.error("[AUTH] Error updating profile status:", error);
-  }
-}
-
 export function setupAuth(app: Express) {
+  if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET environment variable must be set");
+  }
+
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -63,37 +61,39 @@ export function setupAuth(app: Express) {
   app.use(passport.session());
 
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
+    new LocalStrategy(async (username: string, password: string, done: (error: any, user?: any, options?: any) => void) => {
       try {
         const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
-          console.log("[AUTH] Authentication failed for username:", username);
+        if (!user) {
+          console.log("[AUTH] Login failed - user not found:", username);
           return done(null, false, { message: "Invalid username or password" });
         }
 
-        // Check and update profile status
-        await updateUserProfileStatus(user.id);
-
-        // Refresh user data after profile status update
-        const updatedUser = await storage.getUser(user.id);
-        if (!updatedUser) {
-          return done(null, false, { message: "User not found after update" });
+        const isValidPassword = await comparePasswords(password, user.password);
+        if (!isValidPassword) {
+          console.log("[AUTH] Login failed - invalid password:", username);
+          return done(null, false, { message: "Invalid username or password" });
         }
 
-        console.log("[AUTH] User authenticated:", { 
-          id: updatedUser.id, 
-          role: updatedUser.role,
-          hasProfile: updatedUser.hasProfile 
+        // Get profile status
+        const profile = await storage.getProfile(user.id);
+
+        console.log("[AUTH] Login successful:", { 
+          id: user.id, 
+          role: user.role,
+          hasProfile: user.hasProfile,
+          profileComplete: profile?.isComplete 
         });
-        return done(null, updatedUser);
+
+        return done(null, user);
       } catch (error) {
         console.error("[AUTH] Authentication error:", error);
         return done(error);
       }
-    }),
+    })
   );
 
-  passport.serializeUser((user, done) => {
+  passport.serializeUser((user: Express.User, done: (err: any, id?: number) => void) => {
     console.log("[AUTH] Serializing user:", { 
       id: user.id, 
       role: user.role,
@@ -102,62 +102,69 @@ export function setupAuth(app: Express) {
     done(null, user.id);
   });
 
-  passport.deserializeUser(async (id: string | number, done) => {
+  passport.deserializeUser(async (id: string | number, done: (err: any, user?: Express.User | false) => void) => {
     try {
-      // Ensure id is a number
       const userId = typeof id === 'string' ? parseInt(id, 10) : id;
-      console.log("[AUTH] Deserializing user:", { userId, type: typeof userId });
+      console.log("[AUTH] Deserializing user:", userId);
 
       const user = await storage.getUser(userId);
       if (!user) {
-        console.error("[AUTH] User not found during deserialization:", { userId });
+        console.error("[AUTH] Deserialization failed - user not found:", userId);
         return done(null, false);
       }
 
-      // Update profile status during deserialization
-      await updateUserProfileStatus(userId);
+      // Get profile status during deserialization
+      const profile = await storage.getProfile(userId);
 
-      // Refresh user data after profile status update
-      const updatedUser = await storage.getUser(userId);
-      if (!updatedUser) {
-        return done(null, false);
-      }
-
-      console.log("[AUTH] User deserialized successfully:", { 
-        id: updatedUser.id, 
-        role: updatedUser.role,
-        hasProfile: updatedUser.hasProfile
+      console.log("[AUTH] User deserialized:", {
+        id: user.id,
+        role: user.role,
+        hasProfile: user.hasProfile,
+        profileComplete: profile?.isComplete
       });
-      done(null, updatedUser);
+
+      done(null, user);
     } catch (error) {
       console.error("[AUTH] Deserialization error:", error);
       done(error);
     }
   });
 
-  app.post("/api/register", async (req, res, next) => {
+  app.post("/api/register", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
         console.log("[AUTH] Registration failed - username exists:", req.body.username);
-        return res.status(400).json({ message: "Username already exists" });
+        return res.status(400).json({ 
+          message: "Username already exists",
+          code: "USERNAME_EXISTS"
+        } as AuthError);
       }
 
+      const hashedPassword = await hashPassword(req.body.password);
       const user = await storage.createUser({
         ...req.body,
-        password: await hashPassword(req.body.password),
-        hasProfile: false // Explicitly set hasProfile to false for new users
+        password: hashedPassword,
+        hasProfile: false
       });
 
-      console.log("[AUTH] User registered successfully:", {
+      console.log("[AUTH] Registration successful:", {
         id: user.id,
         role: user.role,
         hasProfile: user.hasProfile
       });
 
       req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(201).json(user);
+        if (err) {
+          console.error("[AUTH] Login after registration failed:", err);
+          return next(err);
+        }
+        res.status(201).json({
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          hasProfile: user.hasProfile
+        });
       });
     } catch (error) {
       console.error("[AUTH] Registration error:", error);
@@ -165,53 +172,71 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
+  app.post("/api/login", (req: Request, res: Response, next: NextFunction) => {
+    passport.authenticate("local", (err: any, user: Express.User | false, info: { message: string } | undefined) => {
       if (err) {
         console.error("[AUTH] Login error:", err);
         return next(err);
       }
       if (!user) {
         console.log("[AUTH] Login failed:", info?.message);
-        return res.status(401).json({ message: info?.message || "Authentication failed" });
+        return res.status(401).json({ 
+          message: info?.message || "Authentication failed",
+          code: "AUTH_FAILED"
+        } as AuthError);
       }
       req.login(user, (err) => {
         if (err) {
-          console.error("[AUTH] Login session error:", err);
+          console.error("[AUTH] Session creation error:", err);
           return next(err);
         }
-        console.log("[AUTH] User logged in successfully:", {
+        console.log("[AUTH] Login successful:", {
           id: user.id,
           role: user.role,
           hasProfile: user.hasProfile
         });
-        res.status(200).json(user);
+        res.json({
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          hasProfile: user.hasProfile
+        });
       });
     })(req, res, next);
   });
 
-  app.post("/api/logout", (req, res, next) => {
+  app.post("/api/logout", (req: Request, res: Response, next: NextFunction) => {
     const userId = req.user?.id;
     req.logout((err) => {
       if (err) {
         console.error("[AUTH] Logout error:", err);
         return next(err);
       }
-      console.log("[AUTH] User logged out successfully:", { userId });
+      console.log("[AUTH] Logout successful:", { userId });
       res.sendStatus(200);
     });
   });
 
-  app.get("/api/user", (req, res) => {
+  app.get("/api/user", (req: Request, res: Response) => {
     if (!req.isAuthenticated()) {
       console.log("[AUTH] Unauthorized access to /api/user");
-      return res.status(401).json({ message: "Not authenticated" });
+      return res.status(401).json({ 
+        message: "Not authenticated",
+        code: "NOT_AUTHENTICATED"
+      } as AuthError);
     }
+
     console.log("[AUTH] User data retrieved:", {
       id: req.user.id,
       role: req.user.role,
       hasProfile: req.user.hasProfile
     });
-    res.json(req.user);
+
+    res.json({
+      id: req.user.id,
+      username: req.user.username,
+      role: req.user.role,
+      hasProfile: req.user.hasProfile
+    });
   });
 }
