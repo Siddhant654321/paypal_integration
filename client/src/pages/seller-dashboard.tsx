@@ -84,6 +84,12 @@ const SellerDashboard = () => {
             "Content-Type": "application/json",
           },
         });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("Stripe Connect error:", errorData);
+          throw new Error(errorData.message || "Failed to connect with Stripe");
+        }
 
         if (!response.ok) {
           const contentType = response.headers.get("content-type");
