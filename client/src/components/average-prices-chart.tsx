@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { formatPrice } from '@/utils/formatters';
 
@@ -8,20 +7,6 @@ interface AveragePricesChartProps {
     averagePrice: number;
   }>;
 }
-
-// Function to get a color based on index
-const getColorForIndex = (index: number): string => {
-  // Colors from your theme
-  const colors = [
-    '#43AA8B', // rich-teal
-    '#FFBA08', // golden-yellow
-    '#F77F00', // vibrant-orange
-    '#E63946', // deep-red
-    '#1D3557'  // deep-blue
-  ];
-  
-  return colors[index % colors.length];
-};
 
 export function AveragePricesChart({ averagePrices }: AveragePricesChartProps) {
   if (!averagePrices || averagePrices.length === 0) {
@@ -37,21 +22,21 @@ export function AveragePricesChart({ averagePrices }: AveragePricesChartProps) {
 
   return (
     <div className="space-y-4">
-      {averagePrices.map((item, index) => (
-        <div key={item.species} className="flex flex-col">
-          <div className="flex justify-between mb-1">
-            <span className="text-sm font-medium">{item.species}</span>
-            <span className="text-sm font-medium">{formatPrice(item.averagePrice)}</span>
+      {averagePrices.map((item) => (
+        <div key={item.species} className="flex items-center">
+          <div className="mr-2 w-32 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
+            {item.species}
           </div>
-          <div className="relative h-2 w-full rounded-full bg-muted">
+          <div className="relative h-2 flex-1 rounded-full bg-muted">
             <div 
               className="absolute inset-y-0 left-0 rounded-full"
               style={{ 
                 width: `${(item.averagePrice / maxPrice) * 100}%`,
-                backgroundColor: getColorForIndex(index) 
+                backgroundColor: '#FFBA08' // golden-yellow from theme
               }}
             />
           </div>
+          <span className="ml-2 text-sm font-medium">{formatPrice(item.averagePrice)}</span>
         </div>
       ))}
     </div>

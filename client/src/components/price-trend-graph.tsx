@@ -37,6 +37,9 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
   const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#ccc';
   const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#82ca9d';
   const tealColor = '#43AA8B'; // Added teal color
+  const goldenYellow = '#FFD700'; // Added golden yellow
+  const deepRed = '#FF0000'; // Added deep red
+
 
   // Format data for display
   const [formattedData, setFormattedData] = useState(data);
@@ -186,7 +189,7 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
                 name="Market Average"
                 type="monotone"
                 dataKey="medianPrice"
-                stroke={accentColor}
+                stroke={goldenYellow} // Changed to golden yellow
                 strokeWidth={2.5}
                 dot={false}
                 activeDot={{ r: 6 }}

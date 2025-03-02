@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom button hover styles */
+@layer components {
+  .btn-primary, 
+  .btn-secondary,
+  button[type="button"],
+  button[type="submit"] {
+    @apply hover:bg-[#43AA8B] hover:border-[#43AA8B] transition-colors duration-200;
+  }
+}

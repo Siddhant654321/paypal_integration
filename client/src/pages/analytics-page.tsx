@@ -16,6 +16,8 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { PopularCategoriesChart } from "@/components/popular-categories-chart";
+import { AveragePricesChart } from "@/components/average-prices-chart";
 
 interface MarketStats {
   activeBidders: number;
@@ -176,46 +178,11 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Average Prices by Species with color updates */}
-        <Card className="col-span-full sm:col-span-1">
-          <CardHeader className="space-y-1.5 p-4 md:p-6">
-            <CardTitle className="text-lg md:text-xl">Average Prices by Species</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={marketStats?.averagePrices || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
-                <XAxis dataKey="species" />
-                <YAxis tickFormatter={(value) => formatPrice(value)} />
-                <Tooltip
-                  formatter={(value) => [formatPrice(value as number), "Average Price"]}
-                  contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
-                />
-                <Bar dataKey="averagePrice" fill={tertiaryColor} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        {/* Average Prices by Species */}
+        <AveragePricesChart averagePrices={marketStats?.averagePrices || []} />
 
-        {/* Popular Categories with color updates */}
-        <Card className="col-span-full sm:col-span-1">
-          <CardHeader className="space-y-1.5 p-4 md:p-6">
-            <CardTitle className="text-lg md:text-xl">Popular Categories</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={marketStats?.popularCategories || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
-                <XAxis dataKey="category" />
-                <YAxis />
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
-                />
-                <Bar dataKey="count" fill={secondaryColor} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        {/* Popular Categories */}
+        <PopularCategoriesChart categories={marketStats?.popularCategories || []} />
       </div>
 
       {/* Market Demand Section */}
