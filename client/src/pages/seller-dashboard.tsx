@@ -86,17 +86,16 @@ const SellerDashboard = () => {
         });
         
         if (!response.ok) {
-          const errorData = await response.json();
-          console.error("Stripe Connect error:", errorData);
-          throw new Error(errorData.message || "Failed to connect with Stripe");
-        }
-
-        if (!response.ok) {
           const contentType = response.headers.get("content-type");
           if (contentType && contentType.indexOf("application/json") !== -1) {
-            const errorData = await response.json();
-            console.error("Error response from server:", errorData);
-            throw new Error(errorData.message || "Failed to connect with Stripe");
+            try {
+              const errorData = await response.json();
+              console.error("Stripe Connect error:", errorData);
+              throw new Error(errorData.message || "Failed to connect with Stripe");
+            } catch (parseError) {
+              console.error("Error parsing JSON response:", parseError);
+              throw new Error(`Failed to connect with Stripe. Status: ${response.status}`);
+            }
           } else {
             const text = await response.text();
             console.error("Non-JSON error response:", text.substring(0, 200) + "...");

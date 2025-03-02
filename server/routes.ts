@@ -728,39 +728,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to update auction" });
     }
   });
-  
+
 
   // Admin endpoint for managing auction photos
   app.post("/api/admin/auctions/:id/photos", requireAdmin, upload.array('images', 5), async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
-      
+
       // Check if auction exists
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
       }
-      
+
       // Handle image uploads
       const uploadedFiles = req.files as Express.Multer.File[];
       if (!uploadedFiles || uploadedFiles.length === 0) {
         return res.status(400).json({ message: "No files uploaded" });
       }
-      
+
       // Generate URLs for uploaded images
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       const imageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
-      
+
       // Get existing images and append new ones
       const existingImages = Array.isArray(auction.images) ? auction.images : [];
       const updatedImages = [...existingImages, ...imageUrls];
-      
+
       // Update auction with new images
       const updatedAuction = await storage.updateAuction(auctionId, {
         images: updatedImages,
         imageUrl: updatedImages[0] || auction.imageUrl // Set first image as primary if available
       });
-      
+
       res.status(200).json({
         message: "Photos added successfully",
         auction: updatedAuction
@@ -770,39 +770,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to add photos to auction" });
     }
   });
-  
+
 
   // Admin endpoint for deleting a specific auction photo
   app.delete("/api/admin/auctions/:id/photos/:photoIndex", requireAdmin, async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
       const photoIndex = parseInt(req.params.photoIndex);
-      
+
       // Check if auction exists
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
       }
-      
+
       // Validate that the auction has images and the index is valid
       if (!Array.isArray(auction.images) || auction.images.length === 0) {
         return res.status(400).json({ message: "Auction has no images" });
       }
-      
+
       if (photoIndex < 0 || photoIndex >= auction.images.length) {
         return res.status(400).json({ message: "Invalid photo index" });
       }
-      
+
       // Remove the image at the specified index
       const updatedImages = [...auction.images];
       updatedImages.splice(photoIndex, 1);
-      
+
       // Update the auction
       const updatedAuction = await storage.updateAuction(auctionId, {
         images: updatedImages,
         imageUrl: updatedImages.length > 0 ? updatedImages[0] : "" // Update primary image if needed
       });
-      
+
       res.status(200).json({
         message: "Photo deleted successfully",
         auction: updatedAuction
@@ -997,7 +997,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-  
+
 
   // Endpoint to retrieve a checkout session URL
   app.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
@@ -1016,7 +1016,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to retrieve checkout session" });
     }
   });
-  
+
 
   // Update the webhook handling section
   app.post("/api/webhooks/stripe", async (req, res) => {
@@ -1067,7 +1067,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ message: "Webhook error" });
     }
   });
-  
+
 
   // Get payment status for an auction
   app.get("/api/auctions/:id/payment", requireAuth, async (req, res) => {
@@ -1087,7 +1087,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch payment status" });
     }
   });
-  
+
 
   // Add these notification routes after the existing routes
   app.get("/api/notifications", requireAuth, async (req, res) => {
@@ -1102,7 +1102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch notifications" });
     }
   });
-  
+
 
   app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
     try {
@@ -1113,7 +1113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to mark notification as read" });
     }
   });
-  
+
 
   app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
     try {
@@ -1132,7 +1132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to mark all notifications as read" });
     }
   });
-  
+
 
   // Add notification count endpoint
   app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
@@ -1147,7 +1147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get unread notifications count" });
     }
   });
-  
+
 
   // Add this new route after the existing /api/sellers/status route
   app.get("/api/sellers/active", async (req, res) => {
@@ -1182,8 +1182,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch active sellers" });
     }
   });
-  
-  
+
+
 
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
@@ -1226,14 +1226,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Convert string dates to Date objects for accurate comparison
         const auctionEndDate = new Date(auction.endDate);
         const auctionStartDate = new Date(auction.startDate);
-        
+
         // Check if the auction has a valid price
         const hasValidPrice = auction.currentPrice > 0 || auction.startPrice > 0;
-        
+
         // Include if auction is after cutoff date OR is currently active
         const isAfterCutoff = auctionEndDate >= cutoffDate;
         const isActive = auctionEndDate >= now;
-        
+
         return hasValidPrice && (isAfterCutoff || isActive);
       });
 
@@ -1245,7 +1245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const dateB = new Date(b.endDate).getTime();
         return dateA - dateB;
       });
-      
+
       console.log("[ANALYTICS] Sorted auctions dates:", sortedAuctions.map(a => 
         ({ id: a.id, title: a.title, start: a.startDate, end: a.endDate, price: a.currentPrice || a.startPrice }))
       );
@@ -1254,11 +1254,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const priceData = sortedAuctions.map(auction => {
         // Use current price if available, otherwise use start price
         const price = auction.currentPrice > 0 ? auction.currentPrice : auction.startPrice;
-        
+
         // For active auctions, use today's date instead of end date
         const auctionEndDate = new Date(auction.endDate);
         const dateForPoint = auctionEndDate > now ? new Date() : auctionEndDate;
-        
+
         return {
           date: dateForPoint.toISOString(),
           price: price,
@@ -1290,14 +1290,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate active bidders (unique bidders across all auctions)
       const allBidders = new Set();
       let totalBidsCount = 0;
-      
+
       allBids.forEach(({ bids }) => {
         bids.forEach(bid => {
           allBidders.add(bid.bidderId);
           totalBidsCount++;
         });
       });
-      
+
       const activeBidders = allBidders.size;
       const totalBids = totalBidsCount;
 
@@ -1412,7 +1412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch active sellers" });
     }
   });
-  
+
 
   app.get("/api/analytics/auction-bids", async (req, res) => {
     try {
@@ -1433,7 +1433,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch auction bids" });
     }
   });
-  
+
 
   app.get("/api/analytics/top-performers", async (req, res) => {
     try {
@@ -1490,7 +1490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch top performers" });
     }
   });
-  
+
 
   // Set up periodic checks for auction notifications
   const NOTIFICATION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
@@ -1502,7 +1502,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error in auction notification check:", error);
     }
   }, NOTIFICATION_CHECK_INTERVAL);
-  
+
 
   app.post("/api/ai/price-suggestion", requireAuth, requireApprovedSeller, async (req, res) => {
     try {
@@ -1569,3 +1569,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 const log = (message: string, context: string = 'general') => {
   console.log(`[${context}] ${message}`);
 }
+
+// Stripe Connect for sellers
+app.post("/api/seller/connect", requireAuth, async (req, res) => {
+  try {
+    console.log("[Stripe Connect] Starting connect process");
+    const user = req.user as User;
+    console.log("[Stripe Connect] User:", user.id);
+
+    const profile = await storage.getProfile(user.id);
+    if (!profile) {
+      console.log("[Stripe Connect] Profile not found for user:", user.id);
+      return res.status(404).json({ message: "Profile not found" });
+    }
+    console.log("[Stripe Connect] Profile found:", profile.email);
+
+    console.log("[Stripe Connect] Creating seller account");
+    const { accountId, url } = await SellerPaymentService.createSellerAccount(
+      profile
+    );
+    console.log("[Stripe Connect] Account created, ID:", accountId);
+    console.log("[Stripe Connect] Redirect URL generated");
+
+    return res.json({ accountId, url });
+  } catch (error) {
+    console.error("[Stripe Connect] Error:", error);
+    if (error instanceof Error) {
+      console.error("[Stripe Connect] Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
+    return res.status(500).json({
+      message: "Failed to connect with Stripe",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
