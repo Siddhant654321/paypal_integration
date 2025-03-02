@@ -267,10 +267,10 @@ export class DatabaseStorage implements IStorage {
           .set({ currentPrice: bidData.amount })
           .where(eq(auctions.id, bidData.auctionId));
 
-        log(`Successfully created bid ${bid.id} for amount ${bid.amount}`);
         return bid;
       });
 
+      log(`Successfully created bid ${result.id} for amount ${result.amount}`);
       return result;
     } catch (error) {
       log(`Error creating bid: ${error}`);
