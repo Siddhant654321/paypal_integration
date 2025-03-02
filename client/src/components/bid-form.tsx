@@ -12,9 +12,10 @@ import { dollarsToCents, formatDollarInput, formatPrice, centsToDollars } from "
 type Props = {
   auctionId: number;
   currentPrice: number;
+  onBidSuccess?: () => void;
 };
 
-export default function BidForm({ auctionId, currentPrice }: Props) {
+export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props) {
   const [amount, setAmount] = useState("");
   const { toast } = useToast();
 
@@ -29,11 +30,16 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
     },
     onSuccess: () => {
       setAmount("");
-      // Invalidate both the auction and bids queries
+      // Invalidate the relevant queries
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
-      // Also invalidate any potential parent auction lists
       queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
+
+      // Notify parent component
+      if (onBidSuccess) {
+        onBidSuccess();
+      }
+
       toast({
         title: "Bid placed successfully",
         description: "Your bid has been recorded",

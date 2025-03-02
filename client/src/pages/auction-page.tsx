@@ -299,7 +299,10 @@ export default function AuctionPage() {
             <BidForm
               auctionId={auction.id}
               currentPrice={auction.currentPrice}
-              onBidSuccess={() => {refetchAuction(); refetchBids();}} //Added this line to refetch after bid
+              onBidSuccess={() => {
+                refetchAuction();
+                refetchBids();
+              }}
             />
           )}
 
