@@ -3,7 +3,7 @@ import { storage } from "./storage";
 import { type Auction } from "@shared/schema";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI();
 
 interface PriceSuggestion {
   startPrice: number;
@@ -31,6 +31,11 @@ export class AIPricingService {
         quality,
         additionalDetails: additionalDetails.substring(0, 100) + "..."
       });
+
+      // Check if we have an API key
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error("OpenAI API key is not configured");
+      }
 
       // Get historical auction data
       const pastAuctions = await storage.getAuctions({
@@ -67,11 +72,6 @@ Based on this information, provide a pricing strategy in JSON format with:
 
       console.log("[AI PRICING] Sending request to OpenAI");
 
-      // Check if we have an API key
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OpenAI API key is not configured");
-      }
-
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
@@ -98,6 +98,9 @@ Based on this information, provide a pricing strategy in JSON format with:
       return suggestion;
     } catch (error) {
       console.error("[AI PRICING] Error getting price suggestion:", error);
+      if (error instanceof Error && error.message.includes("API key")) {
+        throw new Error("OpenAI API key configuration error. Please check the API key.");
+      }
       throw new Error(error instanceof Error ? error.message : "Failed to generate price suggestion");
     }
   }
@@ -164,6 +167,9 @@ Important guidelines:
       return suggestion;
     } catch (error) {
       console.error("[AI PRICING] Error generating description:", error);
+      if (error instanceof Error && error.message.includes("API key")) {
+        throw new Error("OpenAI API key configuration error. Please check the API key.");
+      }
       throw new Error(error instanceof Error ? error.message : "Failed to generate description");
     }
   }
