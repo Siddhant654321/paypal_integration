@@ -2,8 +2,11 @@ import OpenAI from "openai";
 import { storage } from "./storage";
 import { type Auction } from "@shared/schema";
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI();
+// Initialize xAI client with Grok model
+const xai = new OpenAI({ 
+  baseURL: "https://api.x.ai/v1", 
+  apiKey: process.env.XAI_API_KEY 
+});
 
 interface PriceSuggestion {
   startPrice: number;
@@ -33,8 +36,8 @@ export class AIPricingService {
       });
 
       // Check if we have an API key
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OpenAI API key is not configured");
+      if (!process.env.XAI_API_KEY) {
+        throw new Error("xAI API key is not configured");
       }
 
       // Get historical auction data
@@ -70,16 +73,16 @@ Based on this information, provide a pricing strategy in JSON format with:
   "reasoning": "<detailed explanation for the recommendation>"
 }`;
 
-      console.log("[AI PRICING] Sending request to OpenAI");
+      console.log("[AI PRICING] Sending request to xAI");
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+      const response = await xai.chat.completions.create({
+        model: "grok-2-1212",
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" }
       });
 
       if (!response.choices[0].message.content) {
-        throw new Error("No response content from OpenAI");
+        throw new Error("No response content from xAI");
       }
 
       const suggestion = JSON.parse(response.choices[0].message.content) as PriceSuggestion;
@@ -99,7 +102,7 @@ Based on this information, provide a pricing strategy in JSON format with:
     } catch (error) {
       console.error("[AI PRICING] Error getting price suggestion:", error);
       if (error instanceof Error && error.message.includes("API key")) {
-        throw new Error("OpenAI API key configuration error. Please check the API key.");
+        throw new Error("xAI API key configuration error. Please check the API key.");
       }
       throw new Error(error instanceof Error ? error.message : "Failed to generate price suggestion");
     }
@@ -120,8 +123,8 @@ Based on this information, provide a pricing strategy in JSON format with:
       });
 
       // Check if we have an API key
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OpenAI API key is not configured");
+      if (!process.env.XAI_API_KEY) {
+        throw new Error("xAI API key is not configured");
       }
 
       const prompt = `As a poultry auction expert, create an optimized listing description for:
@@ -144,15 +147,15 @@ Important guidelines:
 - Use professional terminology appropriate for the category
 - Keep the description concise but comprehensive`;
 
-      console.log("[AI PRICING] Sending request to OpenAI");
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+      console.log("[AI PRICING] Sending request to xAI");
+      const response = await xai.chat.completions.create({
+        model: "grok-2-1212",
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" }
       });
 
       if (!response.choices[0].message.content) {
-        throw new Error("No response content from OpenAI");
+        throw new Error("No response content from xAI");
       }
 
       const suggestion = JSON.parse(response.choices[0].message.content) as DescriptionSuggestion;
@@ -168,7 +171,7 @@ Important guidelines:
     } catch (error) {
       console.error("[AI PRICING] Error generating description:", error);
       if (error instanceof Error && error.message.includes("API key")) {
-        throw new Error("OpenAI API key configuration error. Please check the API key.");
+        throw new Error("xAI API key configuration error. Please check the API key.");
       }
       throw new Error(error instanceof Error ? error.message : "Failed to generate description");
     }

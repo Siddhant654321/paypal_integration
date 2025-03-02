@@ -63,9 +63,8 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
     } catch (error) {
       console.error("[AI PRICE] Error:", error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to get price suggestion",
-        variant: "destructive",
+        title: "AI Feature Coming Soon",
+        description: "This feature is not working yet, but will be available soon!",
       });
     } finally {
       setIsLoading(false);
@@ -112,9 +111,8 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
     } catch (error) {
       console.error("[AI DESC] Error:", error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to generate description",
-        variant: "destructive",
+        title: "AI Feature Coming Soon",
+        description: "This feature is not working yet, but will be available soon!",
       });
     } finally {
       setIsLoading(false);
