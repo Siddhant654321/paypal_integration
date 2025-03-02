@@ -36,8 +36,8 @@ export default function NavBar() {
           <Link href="/">
             <div className="flex items-center gap-2">
               <img 
-                src="/images/logo.png"
-                alt="Pips 'n Chicks"
+                src="/favicon.png"
+                alt="Pips 'n Chicks Auctions"
                 className="h-10 w-auto object-contain"
               />
             </div>
