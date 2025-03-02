@@ -22,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatDollars } from "@/utils/money-utils"; // Added import
 
 interface StripeStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
@@ -241,13 +240,13 @@ const SellerDashboard = () => {
                     <div className="p-4 rounded-lg border">
                       <div className="text-sm text-muted-foreground">Available</div>
                       <div className="text-2xl font-bold">
-                        {formatDollars(balance.available[0]?.amount || 0)}
+                        {formatPrice(balance.available[0]?.amount || 0)}
                       </div>
                     </div>
                     <div className="p-4 rounded-lg border">
                       <div className="text-sm text-muted-foreground">Pending</div>
                       <div className="text-2xl font-bold">
-                        {formatDollars(balance.pending[0]?.amount || 0)}
+                        {formatPrice(balance.pending[0]?.amount || 0)}
                       </div>
                     </div>
                   </div>

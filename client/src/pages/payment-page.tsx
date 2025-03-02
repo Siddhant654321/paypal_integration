@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { formatDollars, parseDollars } from "@/utils/money-utils"; // Import money formatting functions
+import { formatPrice } from "../utils/formatters"; // Added import for the formatter
 
 // Verify Stripe key is available and in test mode
 if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
@@ -147,9 +147,9 @@ export default function PaymentPage() {
     );
   }
 
-  const baseAmountDollars = formatDollars(auction.currentPrice); 
-  const insuranceAmountDollars = formatDollars(INSURANCE_FEE); 
-  const totalAmountDollars = formatDollars(auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)); 
+  const baseAmountDollars = formatPrice(auction.currentPrice); // Use the formatter
+  const insuranceAmountDollars = formatPrice(INSURANCE_FEE); // Use the formatter
+  const totalAmountDollars = formatPrice(auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)); // Use the formatter
 
   return (
     <div className="container mx-auto py-8">
