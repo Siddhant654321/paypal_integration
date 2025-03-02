@@ -24,12 +24,12 @@ export default {
         primary: {
           DEFAULT: "#E63946", /* Deep Red */
           foreground: "#FFFFFF",
-          hover: "#F77F00", /* Vibrant Orange */
+          hover: "#43AA8B", /* Rich Teal */
         },
         secondary: {
           DEFAULT: "#FFBA08", /* Golden Yellow */
           foreground: "#1D3557", /* Deep Blue */
-          hover: "#F77F00", /* Vibrant Orange */
+          hover: "#43AA8B", /* Rich Teal */
         },
         heading: {
           DEFAULT: "#1D3557", /* Deep Blue */
