@@ -1,5 +1,19 @@
 import React from 'react';
 
+// Function to get a color based on index
+const getColorForIndex = (index: number): string => {
+  // Colors from your theme
+  const colors = [
+    '#FFBA08', // golden-yellow
+    '#F77F00', // vibrant-orange
+    '#43AA8B', // rich-teal
+    '#E63946', // deep-red
+    '#1D3557'  // deep-blue
+  ];
+  
+  return colors[index % colors.length];
+};
+
 interface PopularCategoriesChartProps {
   categories: Array<{
     category: string;
@@ -28,9 +42,10 @@ export function PopularCategoriesChart({ categories }: PopularCategoriesChartPro
           </div>
           <div className="relative h-2 flex-1 rounded-full bg-muted">
             <div 
-              className="absolute inset-y-0 left-0 rounded-full bg-primary"
+              className="absolute inset-y-0 left-0 rounded-full"
               style={{ 
-                width: `${(cat.count / maxCount) * 100}%` 
+                width: `${(cat.count / maxCount) * 100}%`,
+                backgroundColor: getColorForIndex(index) 
               }}
             />
           </div>

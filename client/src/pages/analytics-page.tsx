@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart2, Loader2, Users, Trophy } from "lucide-react"; // Trophy import added
+import { BarChart2, Loader2, Users, Trophy } from "lucide-react";
 import { PriceTrendGraph } from "@/components/price-trend-graph";
 import { formatPrice } from "@/utils/formatters";
 import { BuyerRequestList } from "@/components/buyer-request-list";
@@ -58,10 +58,13 @@ export default function AnalyticsPage() {
     queryKey: ["/api/analytics/market-stats", timeFrame, category, selectedSpecies],
   });
 
-  // Get theme colors from CSS variables
+  // Get theme colors from CSS variables.  These should be defined in your CSS.
   const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#8884d8';
   const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--secondary').trim() || '#82ca9d';
+  const tertiaryColor = getComputedStyle(document.documentElement).getPropertyValue('--tertiary').trim() || '#6c757d';
+  const tealColor = '#008080';
   const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#ccc';
+
 
   if (isLoading) {
     return (
@@ -75,10 +78,11 @@ export default function AnalyticsPage() {
     <div className="container mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
       <h1 className="text-2xl md:text-3xl font-bold">Market Analytics</h1>
 
-      {/* Price Trend Graph with updated data format */}
+      {/* Price Trend Graph with updated data format and teal dots */}
       <PriceTrendGraph
         data={marketStats?.priceData || []}
         species={marketStats?.species || []}
+        dotColor={tealColor}
         onTimeFrameChange={setTimeFrame}
         onCategoryChange={setCategory}
         onSpeciesChange={setSelectedSpecies}
@@ -172,7 +176,7 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Average Prices by Species */}
+        {/* Average Prices by Species with color updates */}
         <Card className="col-span-full sm:col-span-1">
           <CardHeader className="space-y-1.5 p-4 md:p-6">
             <CardTitle className="text-lg md:text-xl">Average Prices by Species</CardTitle>
@@ -187,13 +191,13 @@ export default function AnalyticsPage() {
                   formatter={(value) => [formatPrice(value as number), "Average Price"]}
                   contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
                 />
-                <Bar dataKey="averagePrice" fill={primaryColor} />
+                <Bar dataKey="averagePrice" fill={tertiaryColor} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Popular Categories */}
+        {/* Popular Categories with color updates */}
         <Card className="col-span-full sm:col-span-1">
           <CardHeader className="space-y-1.5 p-4 md:p-6">
             <CardTitle className="text-lg md:text-xl">Popular Categories</CardTitle>
