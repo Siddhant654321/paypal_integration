@@ -170,40 +170,43 @@ export class DatabaseStorage implements IStorage {
 
   async updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile> {
     try {
+      // Get user role first
       const [user] = await db
         .select()
         .from(users)
         .where(eq(users.id, userId));
 
+      // Update profile
       const [updatedProfile] = await db
         .update(profiles)
         .set(profile)
         .where(eq(profiles.userId, userId))
         .returning();
 
-      // Define required fields based on user role
-      const baseRequiredFields = [
-        'fullName', 
-        'email', 
-        'phoneNumber', 
-        'address', 
-        'city', 
-        'state', 
+      // Simple required fields check
+      let requiredFields = [
+        'fullName',
+        'email',
+        'phoneNumber',
+        'address',
+        'city',
+        'state',
         'zipCode'
       ];
 
-      const isSeller = user.role === "seller" || user.role === "seller_admin";
-      const requiredFields = isSeller 
-        ? [...baseRequiredFields, 'businessName', 'breedSpecialty', 'npipNumber']
-        : baseRequiredFields;
+      // Add seller fields if needed
+      if (user.role === "seller" || user.role === "seller_admin") {
+        requiredFields = requiredFields.concat(['businessName', 'breedSpecialty', 'npipNumber']);
+      }
 
-      // Check if all required fields are present and non-empty
+      // Check if all required fields are filled
       const isComplete = requiredFields.every(field => {
         const value = updatedProfile[field as keyof Profile];
-        return value !== null && value !== undefined && value !== '';
+        return value && value.toString().trim() !== '';
       });
 
-      if (isComplete) {
+      // Update hasProfile flag if profile is complete
+      if (isComplete && !user.hasProfile) {
         await db
           .update(users)
           .set({ hasProfile: true })
@@ -211,7 +214,6 @@ export class DatabaseStorage implements IStorage {
         log(`Profile completed for user ${userId}`);
       }
 
-      log(`Profile updated for user ${userId}`);
       return updatedProfile;
     } catch (error) {
       log(`Error updating profile: ${error}`);
