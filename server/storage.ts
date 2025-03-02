@@ -138,6 +138,24 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async updateSellerStripeAccount(userId: number, data: { accountId: string; status: string }): Promise<Profile> {
+    try {
+      log(`Updating Stripe account for user ${userId} with account ID ${data.accountId}`);
+      const [updatedProfile] = await db
+        .update(profiles)
+        .set({
+          stripeAccountId: data.accountId,
+          stripeAccountStatus: data.status
+        })
+        .where(eq(profiles.userId, userId))
+        .returning();
+      return updatedProfile;
+    } catch (error) {
+      log(`Error updating seller Stripe account: ${error}`);
+      throw error;
+    }
+  }
+
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
       const auctionData = {
