@@ -53,14 +53,21 @@ app.use((req, res, next) => {
     // Log startup process
     log("Starting server initialization...");
 
-    // Test database connection
+    // Test database connection with improved error handling
     try {
       log("Testing database connection...");
       await db.execute(sql`SELECT 1`);
       log("Database connection successful");
     } catch (dbError) {
       log(`Database connection failed: ${dbError}`);
-      throw dbError;
+      console.error("Database connection error details:", dbError);
+      console.error("Connection details:", {
+        host: process.env.DATABASE_HOST || 'not set',
+        database: process.env.DATABASE_NAME || 'not set',
+        user: process.env.DATABASE_USER || 'not set', //Added to show user if available. Sensitive data is masked in production.
+        hasPassword: !!process.env.DATABASE_PASSWORD, //Indicates if password is set.
+      });
+      throw dbError; // Re-throw the error to stop server startup
     }
 
     // Verify required environment variables

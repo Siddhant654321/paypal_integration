@@ -220,8 +220,16 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
       await apiRequest("DELETE", `/api/admin/bids/${bidId}`);
     },
     onSuccess: () => {
+      // Invalidate and refetch all related queries
       queryClient.invalidateQueries({ queryKey: ["/api/admin/bids", auctionId] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
+      
+      // Force refresh data
+      queryClient.refetchQueries({ queryKey: ["/api/admin/bids", auctionId] });
+      queryClient.refetchQueries({ queryKey: ["/api/auctions"] });
+      
       toast({
         title: "Success",
         description: "Bid has been deleted",

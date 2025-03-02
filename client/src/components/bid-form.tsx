@@ -30,15 +30,24 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
     },
     onSuccess: () => {
       setAmount("");
-      // Notify parent component
-      if (onBidSuccess) {
-        onBidSuccess();
-      }
-
-      // Invalidate the relevant queries
+      // Log success message
+      console.log("Bid placed successfully for auction:", auctionId);
+      
+      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
       queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
+      
+      // Force refetch the auction and bids data
+      queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}`] });
+      queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
+      
+      // Notify parent component after the invalidation
+      if (onBidSuccess) {
+        setTimeout(() => {
+          onBidSuccess();
+        }, 100); // Small delay to ensure invalidation completes
+      }
 
       toast({
         title: "Bid placed successfully",
