@@ -140,11 +140,10 @@ export class DatabaseStorage implements IStorage {
 
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
+      // Prices are already in cents from schema validation
       const auctionData = {
         ...insertAuction,
-        startPrice: Number(insertAuction.startPrice),
-        reservePrice: Number(insertAuction.reservePrice),
-        currentPrice: Number(insertAuction.startPrice),
+        currentPrice: insertAuction.startPrice,
         status: "pending_review",
         approved: false,
       };
@@ -277,7 +276,6 @@ export class DatabaseStorage implements IStorage {
   }
   async approveAuction(auctionId: number): Promise<Auction> {
     try {
-      // First check if the auction exists
       const existingAuction = await this.getAuction(auctionId);
       if (!existingAuction) {
         throw new Error(`Auction ${auctionId} not found`);
@@ -294,7 +292,7 @@ export class DatabaseStorage implements IStorage {
           .update(auctions)
           .set({ 
             approved: true,
-            status: "active"
+            status: "active" // Ensure status is set to active when approved
           })
           .where(eq(auctions.id, auctionId))
           .returning();

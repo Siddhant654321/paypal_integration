@@ -110,19 +110,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filters = {
         species: req.query.species as string | undefined,
         category: req.query.category as string | undefined,
-        approved: true, 
+        approved: true,
+        status: "active" // Only show active auctions
       };
+
       const auctions = await storage.getAuctions(filters);
 
-      // Get seller profiles for each auction
-      const auctionsWithProfiles = await Promise.all(
-        auctions.map(async (auction) => {
-          const sellerProfile = await storage.getProfile(auction.sellerId);
-          return { ...auction, sellerProfile };
-        })
-      );
+      // Convert prices to dollars for response
+      const auctionsWithDollarPrices = auctions.map(auction => ({
+        ...auction,
+        startPrice: auction.startPrice / 100,
+        reservePrice: auction.reservePrice / 100,
+        currentPrice: auction.currentPrice / 100
+      }));
 
-      res.json(auctionsWithProfiles);
+      res.json(auctionsWithDollarPrices);
     } catch (error) {
       console.error("Error fetching auctions:", error);
       res.status(500).json({ message: "Failed to fetch auctions" });
@@ -180,8 +182,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedData = {
         ...auctionData,
         sellerId: userId,
-        startPrice: Number(auctionData.startPrice),
-        reservePrice: Number(auctionData.reservePrice || auctionData.startPrice),
+        startPrice: parseFloat(auctionData.startPrice), // Will be converted to cents by schema
+        reservePrice: parseFloat(auctionData.reservePrice || auctionData.startPrice), // Will be converted to cents by schema
         startDate: new Date(auctionData.startDate),
         endDate: new Date(auctionData.endDate),
         images: imageUrls,
@@ -194,7 +196,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...validatedData,
           sellerId: userId
         });
-        return res.status(201).json(result);
+
+        // Convert prices back to dollars for response
+        const responseData = {
+          ...result,
+          startPrice: result.startPrice / 100,
+          reservePrice: result.reservePrice / 100,
+          currentPrice: result.currentPrice / 100
+        };
+
+        return res.status(201).json(responseData);
       } catch (validationError) {
         return res.status(400).json({
           message: "Invalid auction data",
@@ -697,7 +708,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Admin endpoint for managing auction photos
-  app.post("/api/admin/auctions/:id/photos", requireAdmin, upload.array('images', 5), async (req, res) => {
+  app.post("/api/admin/auctions/:id/images", requireAdmin, upload.array('images', 5), async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
       
@@ -737,44 +748,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Admin endpoint for deleting a specific auction photo
-  app.delete("/api/admin/auctions/:id/photos/:photoIndex", requireAdmin, async (req, res) => {
+
+  app.delete("/api/admin/auctions/:id/images/:index", requireAdmin, async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
-      const photoIndex = parseInt(req.params.photoIndex);
-      
-      // Check if auction exists
+      const imageIndex = parseInt(req.params.index);
+
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
       }
-      
-      // Validate that the auction has images and the index is valid
-      if (!Array.isArray(auction.images) || auction.images.length === 0) {
-        return res.status(400).json({ message: "Auction has no images" });
+
+      if (!Array.isArray(auction.images) || imageIndex >= auction.images.length) {
+        return res.status(400).json({ message: "Invalid image index" });
       }
-      
-      if (photoIndex < 0 || photoIndex >= auction.images.length) {
-        return res.status(400).json({ message: "Invalid photo index" });
-      }
-      
-      // Remove the image at the specified index
+
       const updatedImages = [...auction.images];
-      updatedImages.splice(photoIndex, 1);
-      
-      // Update the auction
+      updatedImages.splice(imageIndex, 1);
+
       const updatedAuction = await storage.updateAuction(auctionId, {
         images: updatedImages,
-        imageUrl: updatedImages.length > 0 ? updatedImages[0] : "" // Update primary image if needed
+        imageUrl: updatedImages[0] || ""
       });
-      
-      res.status(200).json({
-        message: "Photo deleted successfully",
-        auction: updatedAuction
-      });
+
+      res.json(updatedAuction);
     } catch (error) {
-      console.error("Error deleting auction photo:", error);
-      res.status(500).json({ message: "Failed to delete auction photo" });
+      console.error("Error deleting image:", error);
+      res.status(500).json({ message: "Failed to delete image" });
     }
   });
 
@@ -855,7 +855,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-app.get("/api/buyer-requests/:id", async (req, res) => {
+  app.get("/api/buyer-requests/:id", async (req, res) => {
     try {
       const request = await storage.getBuyerRequest(parseInt(req.params.id));
       if (!request) {
@@ -872,6 +872,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.patch("/api/buyer-requests/:id/status", requireAuth, async (req, res) => {
     try {
       const requestId = parseInt(req.params.id);
@@ -895,6 +896,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Add admin delete route for buyer requests
   app.delete("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
     try {
@@ -907,6 +909,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Add admin update route for buyer requests
   app.patch("/api/buyer-requests/:id", requireAdmin, async (req, res) => {
     try {
@@ -920,6 +923,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
     try {
       // Log authentication state
@@ -967,6 +971,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Endpoint to retrieve a checkout session URL
   app.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
     try {
@@ -985,6 +990,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Update the webhook handling section
   app.post("/api/webhooks/stripe", async (req, res) => {
     const sig = req.headers["stripe-signature"];
@@ -1035,6 +1041,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Get payment status for an auction
   app.get("/api/auctions/:id/payment", requireAuth, async (req, res) => {
     try {
@@ -1054,6 +1061,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Add these notification routes after the existing routes
   app.get("/api/notifications", requireAuth, async (req, res) => {
     try {
@@ -1068,6 +1076,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
     try {
       const notification = await storage.markNotificationAsRead(parseInt(req.params.id));
@@ -1078,6 +1087,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
@@ -1096,6 +1106,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Add notification count endpoint
   app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
     try {
@@ -1110,6 +1121,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Add this new route after the existing /api/sellers/status route
   app.get("/api/sellers/active", async (req, res) => {
     try {
@@ -1144,6 +1156,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
       // Get all approved auctions
@@ -1263,6 +1276,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Get winner details for seller
   app.get("/api/auctions/:id/winner", requireAuth, async (req, res) => {
     try {
@@ -1290,6 +1304,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Submit fulfillment details
   app.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
     try {
@@ -1344,6 +1359,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Get fulfillment status
   app.get("/api/auctions/:id/fulfillment", requireAuth, async (req, res) => {
     try {
@@ -1364,6 +1380,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Add this new endpoint for handling auction end
   app.post("/api/auctions/:id/end", requireAuth, async (req, res) => {
     try {
@@ -1423,6 +1440,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Add endpoint for seller decision
   app.post("/api/auctions/:id/seller-decision", requireAuth, async (req, res) => {
     try {
@@ -1473,6 +1491,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Seller onboarding and payout routes
   app.post("/api/seller/connect", requireAuth, requireProfile, async (req, res) => {
     try {
@@ -1587,6 +1606,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.get("/api/seller/status", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
@@ -1604,6 +1624,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
@@ -1627,6 +1648,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.get("/api/seller/payouts", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
@@ -1640,6 +1662,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Get seller's payout schedule
   app.get("/api/seller/payout-schedule", requireAuth, async (req, res) => {
     try {
@@ -1658,6 +1681,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Get seller's balance
   app.get("/api/seller/balance", requireAuth, async (req, res) => {
     try {
@@ -1676,6 +1700,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Get seller's recent payouts
   app.get("/api/seller/stripe-payouts", requireAuth, async (req, res) => {
     try {
@@ -1694,6 +1719,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Add this new route after the existing /api/sellers/status route
   app.get("/api/sellers/active", async (req, res) => {
     try {
@@ -1728,6 +1754,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.get("/api/analytics/auction-bids", async (req, res) => {
     try {
       // Get all auctions with their bids
@@ -1748,6 +1775,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   app.get("/api/analytics/top-performers", async (req, res) => {
     try {
       // Get all auctions with their bids
@@ -1804,6 +1832,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     }
   });
   
+
   // Set up periodic checks for auction notifications
   const NOTIFICATION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
   setInterval(async () => {

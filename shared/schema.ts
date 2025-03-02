@@ -204,9 +204,9 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     description: z.string().min(20, "Description must be at least 20 characters"),
     species: z.string(),
     category: z.string(),
-    startPrice: z.number().or(z.string().transform(val => Number(val)))
+    startPrice: z.number().or(z.string().transform(val => Math.round(parseFloat(val) * 100)))
       .refine(val => !isNaN(val) && val > 0, "Start price must be greater than 0"),
-    reservePrice: z.number().or(z.string().transform(val => Number(val)))
+    reservePrice: z.number().or(z.string().transform(val => Math.round(parseFloat(val) * 100)))
       .refine(val => !isNaN(val) && val >= 0, "Reserve price must be valid"),
     startDate: z.date().or(z.string().transform(val => new Date(val))),
     endDate: z.date().or(z.string().transform(val => new Date(val))),
@@ -215,8 +215,8 @@ export const insertAuctionSchema = createInsertSchema(auctions)
   })
   .refine(
     (data) => {
-      const reservePrice = Number(data.reservePrice);
-      const startPrice = Number(data.startPrice);
+      const reservePrice = typeof data.reservePrice === 'string' ? Math.round(parseFloat(data.reservePrice) * 100) : data.reservePrice;
+      const startPrice = typeof data.startPrice === 'string' ? Math.round(parseFloat(data.startPrice) * 100) : data.startPrice;
       return reservePrice >= startPrice;
     },
     "Reserve price must be greater than or equal to start price"
