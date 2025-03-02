@@ -24,8 +24,9 @@ interface MarketStats {
     species: string;
     averagePrice: number;
   }[];
-  medianPrices: {
+  priceData: {
     date: string;
+    price: number;
     medianPrice: number;
   }[];
   species: string[];
@@ -74,9 +75,9 @@ export default function AnalyticsPage() {
     <div className="container mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
       <h1 className="text-2xl md:text-3xl font-bold">Market Analytics</h1>
 
-      {/* Price Trend Graph */}
+      {/* Price Trend Graph with updated data format */}
       <PriceTrendGraph
-        data={marketStats?.medianPrices || []}
+        data={marketStats?.priceData || []}
         species={marketStats?.species || []}
         onTimeFrameChange={setTimeFrame}
         onCategoryChange={setCategory}
