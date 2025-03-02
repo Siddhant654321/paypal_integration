@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart2, Loader2, Users, Trophy } from "lucide-react";
+import { BarChart2, Loader2, Users, Trophy } from "lucide-react"; // Trophy import added
 import { PriceTrendGraph } from "@/components/price-trend-graph";
 import { formatPrice } from "@/utils/formatters";
 import { BuyerRequestList } from "@/components/buyer-request-list";
@@ -16,8 +16,6 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-import { PopularCategoriesChart } from "@/components/popular-categories-chart";
-import { AveragePricesChart } from "@/components/average-prices-chart";
 
 interface MarketStats {
   activeBidders: number;
@@ -60,13 +58,10 @@ export default function AnalyticsPage() {
     queryKey: ["/api/analytics/market-stats", timeFrame, category, selectedSpecies],
   });
 
-  // Get theme colors from CSS variables.  These should be defined in your CSS.
+  // Get theme colors from CSS variables
   const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#8884d8';
   const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--secondary').trim() || '#82ca9d';
-  const tertiaryColor = getComputedStyle(document.documentElement).getPropertyValue('--tertiary').trim() || '#6c757d';
-  const tealColor = '#008080';
   const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#ccc';
-
 
   if (isLoading) {
     return (
@@ -80,11 +75,10 @@ export default function AnalyticsPage() {
     <div className="container mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
       <h1 className="text-2xl md:text-3xl font-bold">Market Analytics</h1>
 
-      {/* Price Trend Graph with updated data format and teal dots */}
+      {/* Price Trend Graph with updated data format */}
       <PriceTrendGraph
         data={marketStats?.priceData || []}
         species={marketStats?.species || []}
-        dotColor={tealColor}
         onTimeFrameChange={setTimeFrame}
         onCategoryChange={setCategory}
         onSpeciesChange={setSelectedSpecies}
@@ -179,10 +173,45 @@ export default function AnalyticsPage() {
         </Card>
 
         {/* Average Prices by Species */}
-        <AveragePricesChart averagePrices={marketStats?.averagePrices || []} />
+        <Card className="col-span-full sm:col-span-1">
+          <CardHeader className="space-y-1.5 p-4 md:p-6">
+            <CardTitle className="text-lg md:text-xl">Average Prices by Species</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={marketStats?.averagePrices || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
+                <XAxis dataKey="species" />
+                <YAxis tickFormatter={(value) => formatPrice(value)} />
+                <Tooltip
+                  formatter={(value) => [formatPrice(value as number), "Average Price"]}
+                  contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
+                />
+                <Bar dataKey="averagePrice" fill={primaryColor} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
         {/* Popular Categories */}
-        <PopularCategoriesChart categories={marketStats?.popularCategories || []} />
+        <Card className="col-span-full sm:col-span-1">
+          <CardHeader className="space-y-1.5 p-4 md:p-6">
+            <CardTitle className="text-lg md:text-xl">Popular Categories</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={marketStats?.popularCategories || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
+                <XAxis dataKey="category" />
+                <YAxis />
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
+                />
+                <Bar dataKey="count" fill={secondaryColor} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Market Demand Section */}
