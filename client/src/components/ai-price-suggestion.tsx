@@ -36,16 +36,16 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
 
     try {
       setIsLoading(true);
-      console.log("Requesting price suggestion for:", { species, category, quality, details });
+      console.log("[AI PRICE] Requesting price suggestion for:", { species, category, quality, details });
 
       const response = await apiRequest("POST", "/api/ai/price-suggestion", {
         species,
         category,
-        quality,
-        additionalDetails: details,
+        quality: quality || "Standard", // Provide default value
+        additionalDetails: details || "" // Make optional
       });
 
-      console.log("Received AI suggestion:", response);
+      console.log("[AI PRICE] Received response:", response);
 
       if (!response || typeof response.startPrice !== 'number' || typeof response.reservePrice !== 'number') {
         throw new Error("Invalid price suggestion format received");
@@ -61,7 +61,7 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
         reservePrice: response.reservePrice,
       });
     } catch (error) {
-      console.error("Price suggestion error:", error);
+      console.error("[AI PRICE] Error:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to get price suggestion",
@@ -73,10 +73,10 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
   };
 
   const getDescriptionSuggestion = async () => {
-    if (!species || !category || !details) {
+    if (!species || !category) {
       toast({
         title: "Missing Information",
-        description: "Please provide species, category, and details before generating a description",
+        description: "Please select a species and category first",
         variant: "destructive",
       });
       return;
@@ -84,16 +84,16 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
 
     try {
       setIsLoading(true);
-      console.log("Requesting description suggestion for:", { species, category, details });
+      console.log("[AI DESC] Requesting description for:", { species, category, details });
 
       const response = await apiRequest("POST", "/api/ai/description-suggestion", {
         title: `${species} - ${category}`,
         species,
         category,
-        details,
+        details: details || "" // Optional but use if provided
       });
 
-      console.log("Received AI description:", response);
+      console.log("[AI DESC] Received response:", response);
 
       if (!response || typeof response.description !== 'string') {
         throw new Error("Invalid description format received");
@@ -110,7 +110,7 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
         description: response.description,
       });
     } catch (error) {
-      console.error("Description suggestion error:", error);
+      console.error("[AI DESC] Error:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to generate description",
@@ -140,7 +140,7 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
             onChange={(e) => setQuality(e.target.value)}
           />
           <Textarea
-            placeholder="Additional details about the birds or eggs..."
+            placeholder="Additional details about the birds or eggs (optional)"
             value={details}
             onChange={(e) => setDetails(e.target.value)}
           />
@@ -149,7 +149,7 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
         <div className="flex gap-2">
           <Button
             onClick={getPriceSuggestion}
-            disabled={isLoading || !quality}
+            disabled={isLoading || !species || !category}
             className="flex-1"
           >
             {isLoading ? (
@@ -161,7 +161,7 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
           </Button>
           <Button
             onClick={getDescriptionSuggestion}
-            disabled={isLoading || !details}
+            disabled={isLoading || !species || !category}
             variant="secondary"
             className="flex-1"
           >

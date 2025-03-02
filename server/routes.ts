@@ -89,21 +89,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Middleware to check if user is an approved seller or seller_admin
   const requireApprovedSeller = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    try {
+      console.log("[SELLER CHECK] Checking seller authorization:", {
+        isAuthenticated: req.isAuthenticated(),
+        user: req.user ? {
+          id: req.user.id,
+          role: req.user.role,
+          approved: req.user.approved
+        } : null
+      });
 
-    // Allow seller_admin without approval check
-    if (req.user.role === "seller_admin") {
-      return next();
-    }
+      if (!req.isAuthenticated()) {
+        console.log("[SELLER CHECK] User not authenticated");
+        return res.status(401).json({ message: "Unauthorized" });
+      }
 
-    // Check approval for regular sellers - removed the role check since it's redundant
-    if (!req.user.approved) {
-      return res.status(403).json({ message: "Only approved sellers can perform this action" });
-    }
+      // Allow seller_admin without approval check
+      if (req.user.role === "seller_admin") {
+        console.log("[SELLER CHECK] User is seller_admin, access granted");
+        return next();
+      }
 
-    next();
+      if (req.user.role !== "seller") {
+        console.log("[SELLER CHECK] User is not a seller", { role: req.user.role });
+        return res.status(403).json({ message: "Only sellers can perform this action" });
+      }
+
+      // Check approval for regular sellers
+      if (!req.user.approved) {
+        console.log("[SELLER CHECK] Seller not approved");
+        return res.status(403).json({ message: "Only approved sellers can perform this action" });
+      }
+
+      console.log("[SELLER CHECK] Access granted to approved seller");
+      next();
+    } catch (error) {
+      console.error("[SELLER CHECK] Error in seller authorization:", error);
+      res.status(500).json({ message: "Authorization check failed" });
+    }
   };
 
   // Update the getAuctions endpoint to include seller profiles
@@ -706,6 +729,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   // Admin endpoint for managing auction photos
   app.post("/api/admin/auctions/:id/photos", requireAdmin, upload.array('images', 5), async (req, res) => {
     try {
@@ -747,6 +771,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   // Admin endpoint for deleting a specific auction photo
   app.delete("/api/admin/auctions/:id/photos/:photoIndex", requireAdmin, async (req, res) => {
     try {
@@ -973,6 +998,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   // Endpoint to retrieve a checkout session URL
   app.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
     try {
@@ -991,6 +1017,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   // Update the webhook handling section
   app.post("/api/webhooks/stripe", async (req, res) => {
     const sig = req.headers["stripe-signature"];
@@ -1041,6 +1068,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   // Get payment status for an auction
   app.get("/api/auctions/:id/payment", requireAuth, async (req, res) => {
     try {
@@ -1060,6 +1088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   // Add these notification routes after the existing routes
   app.get("/api/notifications", requireAuth, async (req, res) => {
     try {
@@ -1074,6 +1103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
     try {
       const notification = await storage.markNotificationAsRead(parseInt(req.params.id));
@@ -1084,6 +1114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
     try {
       if (!req.user) {
@@ -1102,6 +1133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   // Add notification count endpoint
   app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
     try {
@@ -1116,6 +1148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   // Add this new route after the existing /api/sellers/status route
   app.get("/api/sellers/active", async (req, res) => {
     try {
@@ -1473,6 +1506,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/ai/price-suggestion", requireAuth, requireApprovedSeller, async (req, res) => {
     try {
+      console.log("[AI ENDPOINT] Received price suggestion request:", {
+        body: req.body,
+        user: {
+          id: req.user.id,
+          role: req.user.role
+        }
+      });
+
       const { species, category, quality, additionalDetails } = req.body;
 
       const suggestion = await AIPricingService.getPriceSuggestion(
@@ -1482,15 +1523,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         additionalDetails || ""
       );
 
+      console.log("[AI ENDPOINT] Generated price suggestion:", suggestion);
       res.json(suggestion);
     } catch (error) {
-      console.error("[AI] Error getting price suggestion:", error);
-      res.status(500).json({ message: "Failed to generate price suggestion" });
+      console.error("[AI ENDPOINT] Error getting price suggestion:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to generate price suggestion" 
+      });
     }
   });
 
   app.post("/api/ai/description-suggestion", requireAuth, requireApprovedSeller, async (req, res) => {
     try {
+      console.log("[AI ENDPOINT] Received description suggestion request:", {
+        body: req.body,
+        user: {
+          id: req.user.id,
+          role: req.user.role
+        }
+      });
+
       const { title, species, category, details } = req.body;
 
       const suggestion = await AIPricingService.getDescriptionSuggestion(
@@ -1500,10 +1552,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details || ""
       );
 
+      console.log("[AI ENDPOINT] Generated description suggestion:", suggestion);
       res.json(suggestion);
     } catch (error) {
-      console.error("[AI] Error generating description:", error);
-      res.status(500).json({ message: "Failed to generate description suggestion" });
+      console.error("[AI ENDPOINT] Error generating description:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to generate description" 
+      });
     }
   });
 

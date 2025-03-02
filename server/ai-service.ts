@@ -66,6 +66,12 @@ Based on this information, provide a pricing strategy in JSON format with:
 }`;
 
       console.log("[AI PRICING] Sending request to OpenAI");
+
+      // Check if we have an API key
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error("OpenAI API key is not configured");
+      }
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
@@ -109,6 +115,11 @@ Based on this information, provide a pricing strategy in JSON format with:
         category,
         details: details.substring(0, 100) + "..."
       });
+
+      // Check if we have an API key
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error("OpenAI API key is not configured");
+      }
 
       const prompt = `As a poultry auction expert, create an optimized listing description for:
 
