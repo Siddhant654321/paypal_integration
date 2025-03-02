@@ -92,27 +92,21 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (auctionData: any) => {
-      console.log("Creating auction with data:", auctionData);
+      console.log("Form data before submission:", auctionData);
 
       const formData = new FormData();
 
-      // Handle price fields specifically
-      const priceFields = ['startPrice', 'reservePrice'];
       Object.keys(auctionData).forEach(key => {
-        if (priceFields.includes(key)) {
-          // Ensure price is submitted as a number with 2 decimal places
-          formData.append(key, parseFloat(auctionData[key]).toFixed(2));
-        } else if (key !== 'files' && key !== 'images') {
+        if (key !== 'files' && key !== 'images') {
           formData.append(key, auctionData[key].toString());
         }
       });
 
-      // Handle image uploads
       selectedFiles.forEach(file => {
         formData.append('images', file);
       });
 
-      console.log("Submitting auction with images:", selectedFiles.length);
+      console.log("Submitting FormData with files:", selectedFiles.length);
 
       const res = await fetch("/api/auctions", {
         method: "POST",
@@ -130,7 +124,7 @@ export default function NewAuction() {
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Your auction has been created and is pending review",
+        description: "Your auction has been created and is pending approval",
       });
       setLocation("/seller/dashboard");
     },
@@ -151,7 +145,7 @@ export default function NewAuction() {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit((data) => {
-            console.log("Form submission data:", data);
+            console.log("Form data before submission:", data);
             createAuctionMutation.mutate(data);
           })}
           className="space-y-6"
@@ -178,8 +172,8 @@ export default function NewAuction() {
               <FormItem>
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Textarea
-                    {...field}
+                  <Textarea 
+                    {...field} 
                     placeholder="Provide detailed description of your auction item"
                   />
                 </FormControl>
@@ -264,18 +258,15 @@ export default function NewAuction() {
                   <FormControl>
                     <Input
                       type="number"
-                      min="0.01"
+                      min="0"
                       step="0.01"
                       placeholder="0.00"
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value) || 0;
-                        field.onChange(value);
-                      }}
                       value={field.value}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                     />
                   </FormControl>
                   <FormDescription>
-                    Enter the starting bid amount in dollars
+                    The starting bid amount in dollars
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -291,14 +282,11 @@ export default function NewAuction() {
                   <FormControl>
                     <Input
                       type="number"
-                      min="0.01"
+                      min="0"
                       step="0.01"
                       placeholder="0.00"
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value) || 0;
-                        field.onChange(value);
-                      }}
                       value={field.value}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                     />
                   </FormControl>
                   <FormDescription>

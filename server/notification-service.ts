@@ -22,6 +22,8 @@ export class NotificationService {
       const createdNotification = await storage.createNotification({
         ...notification,
         userId,
+        read: false, // Explicitly set read status
+        createdAt: new Date(),
       });
 
       log(`Successfully created notification:`, createdNotification);
@@ -59,7 +61,7 @@ export class NotificationService {
       {
         type: "bid",
         title: "New Bid Received",
-        message: `A new bid of $${bidAmount.toFixed(2)} has been placed on your auction "${auctionTitle}"`,
+        message: `A new bid of $${(bidAmount/100).toFixed(2)} has been placed on your auction "${auctionTitle}"`,
       }
     );
   }
@@ -75,18 +77,67 @@ export class NotificationService {
       {
         type: "bid",
         title: "You've Been Outbid",
-        message: `Someone has placed a higher bid of $${newBidAmount.toFixed(2)} on "${auctionTitle}"`,
+        message: `Someone has placed a higher bid of $${(newBidAmount/100).toFixed(2)} on "${auctionTitle}"`,
       }
     );
   }
 
   static async notifyAuctionEnding(
     bidderId: number,
-    auctionTitle: string,
-    endTime: Date
+    auctionTitle: string
   ): Promise<void> {
     return this.createNotification(
       bidderId,
+      {
+        type: "auction",
+        title: "Auction Ending Soon",
+        message: `The auction "${auctionTitle}" will end in 12 hours`,
+      }
+    );
+  }
+
+  static async notifyAuctionEnd(
+    userId: number,
+    auctionTitle: string,
+    isWinner: boolean
+  ): Promise<void> {
+    const message = isWinner 
+      ? `Congratulations! You've won the auction "${auctionTitle}"`
+      : `The auction "${auctionTitle}" has ended`;
+
+    return this.createNotification(
+      userId,
+      {
+        type: "auction",
+        title: isWinner ? "Auction Won!" : "Auction Ended",
+        message,
+      }
+    );
+  }
+
+  static async notifyPayment(
+    userId: number,
+    amount: number,
+    status: string
+  ): Promise<void> {
+    return this.createNotification(
+      userId,
+      {
+        type: "payment",
+        title: "Payment Update",
+        message: `Payment of $${(amount/100).toFixed(2)} has been ${status}`,
+      }
+    );
+  }
+
+  static async notifyAuctionOneHourRemaining(
+    userId: number,
+    auctionTitle: string,
+    endTime: Date
+  ): Promise<void> {
+    log(`Notifying user ${userId} about auction "${auctionTitle}" ending in one hour`);
+    return this.createNotification(
+      userId,
       {
         type: "auction",
         title: "Auction Ending Soon",
@@ -107,13 +158,13 @@ export class NotificationService {
 
     if (isSeller) {
       title = "Auction Completed";
-      message = `Your auction "${auctionTitle}" has ended with a final price of $${finalPrice.toFixed(2)}`;
+      message = `Your auction "${auctionTitle}" has ended with a final price of $${(finalPrice/100).toFixed(2)}`;
     } else if (isWinner) {
       title = "Congratulations! You Won";
-      message = `You won the auction "${auctionTitle}" with a final bid of $${finalPrice.toFixed(2)}`;
+      message = `You won the auction "${auctionTitle}" with a final bid of $${(finalPrice/100).toFixed(2)}`;
     } else {
       title = "Auction Ended";
-      message = `The auction "${auctionTitle}" has ended. The winning bid was $${finalPrice.toFixed(2)}`;
+      message = `The auction "${auctionTitle}" has ended. The winning bid was $${(finalPrice/100).toFixed(2)}`;
     }
 
     log(`Notifying user ${userId} about auction completion`, {
@@ -129,21 +180,6 @@ export class NotificationService {
         type: "auction",
         title,
         message,
-      }
-    );
-  }
-
-  static async notifyPayment(
-    userId: number,
-    amount: number,
-    status: string
-  ): Promise<void> {
-    return this.createNotification(
-      userId,
-      {
-        type: "payment",
-        title: "Payment Update",
-        message: `Payment of $${amount.toFixed(2)} has been ${status}`,
       }
     );
   }

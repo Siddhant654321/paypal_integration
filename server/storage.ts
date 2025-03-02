@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, notifications, type InsertNotification } from "@shared/schema";
+import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { Store } from "express-session";
@@ -26,44 +26,7 @@ export interface IStorage {
     approved?: boolean;
     species?: string;
     category?: string;
-    status?: string;
   }): Promise<Auction[]>;
-  getPendingAuctions(): Promise<Auction[]>;
-  approveAuction(auctionId: number, reviewerId: number): Promise<Auction>;
-  updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction>;
-  createBid(bid: InsertBid): Promise<Bid>;
-  getBidsForAuction(auctionId: number): Promise<Bid[]>;
-  getBidsByUser(userId: number): Promise<Bid[]>;
-  deleteBid(bidId: number): Promise<void>;
-  getUsers(filters?: { 
-    approved?: boolean;
-    role?: string;
-    lastLoginAfter?: Date;
-  }): Promise<User[]>;
-  approveUser(userId: number): Promise<User>;
-  deleteProfile(userId: number): Promise<void>;
-  createNotification(notification: InsertNotification): Promise<any>;
-  getNotificationsByUserId(userId: number): Promise<any[]>;
-  getLastNotification(): Promise<any | undefined>;
-  markNotificationAsRead(notificationId: number): Promise<any>;
-  markAllNotificationsAsRead(userId: number): Promise<void>;
-  getUnreadNotificationsCount(userId: number): Promise<number>;
-  getPaymentBySessionId(sessionId: string): Promise<any | undefined>;
-  updatePaymentBySessionId(sessionId: string, data: any): Promise<any>;
-  updatePaymentByIntentId(intentId: string, data: any): Promise<any>;
-  getWinnerDetails(auctionId: number): Promise<any | undefined>;
-  createFulfillment(fulfillmentData: any): Promise<any>;
-  getFulfillment(auctionId: number): Promise<any | undefined>;
-  createBuyerRequest(requestData: any): Promise<any>;
-  getBuyerRequests(filters?: any): Promise<any[]>;
-  getBuyerRequest(id: number): Promise<any | undefined>;
-  incrementBuyerRequestViews(id: number): Promise<void>;
-  updateBuyerRequestStatus(id: number, status: string): Promise<any>;
-  deleteBuyerRequest(id: number): Promise<void>;
-  updateBuyerRequest(id: number, data: any): Promise<any>;
-  getPayoutsBySeller(sellerId: number): Promise<any[]>;
-  deleteAuction(auctionId: number): Promise<void>;
-  updateUser(userId: number, data: Partial<User>): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -71,14 +34,19 @@ export class DatabaseStorage implements IStorage {
 
   constructor() {
     const PostgresStore = connectPg(session);
+
+    // Create a new pg Pool using the DATABASE_URL
     const pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
     });
+
+    // Initialize the session store with the pool
     this.sessionStore = new PostgresStore({
       pool,
       createTableIfMissing: true,
       tableName: 'session'
     });
+
     log("Session store initialized");
   }
 
@@ -146,21 +114,10 @@ export class DatabaseStorage implements IStorage {
 
   async createProfile(insertProfile: InsertProfile): Promise<Profile> {
     try {
-      log(`Creating profile for user ${insertProfile.userId}`);
-
-      // First, create the profile
       const [profile] = await db
         .insert(profiles)
         .values(insertProfile)
         .returning();
-
-      // Then, update the user's has_profile flag
-      await db
-        .update(users)
-        .set({ hasProfile: true })
-        .where(eq(users.id, insertProfile.userId));
-
-      log(`Profile created and user updated for user ${insertProfile.userId}`);
       return profile;
     } catch (error) {
       log(`Error creating profile: ${error}`);
@@ -170,50 +127,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile> {
     try {
-      // Get user role first
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, userId));
-
-      // Update profile
       const [updatedProfile] = await db
         .update(profiles)
         .set(profile)
         .where(eq(profiles.userId, userId))
         .returning();
-
-      // Simple required fields check
-      let requiredFields = [
-        'fullName',
-        'email',
-        'phoneNumber',
-        'address',
-        'city',
-        'state',
-        'zipCode'
-      ];
-
-      // Add seller fields if needed
-      if (user.role === "seller" || user.role === "seller_admin") {
-        requiredFields = requiredFields.concat(['businessName', 'breedSpecialty', 'npipNumber']);
-      }
-
-      // Check if all required fields are filled
-      const isComplete = requiredFields.every(field => {
-        const value = updatedProfile[field as keyof Profile];
-        return value && value.toString().trim() !== '';
-      });
-
-      // Update hasProfile flag if profile is complete
-      if (isComplete && !user.hasProfile) {
-        await db
-          .update(users)
-          .set({ hasProfile: true })
-          .where(eq(users.id, userId));
-        log(`Profile completed for user ${userId}`);
-      }
-
       return updatedProfile;
     } catch (error) {
       log(`Error updating profile: ${error}`);
@@ -223,30 +141,25 @@ export class DatabaseStorage implements IStorage {
 
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
-      // Ensure dates and numeric values are properly formatted
+      // Ensure dates are properly formatted by creating actual Date objects
       const formattedAuction = {
         ...insertAuction,
-        startDate: new Date(insertAuction.startDate),
-        endDate: new Date(insertAuction.endDate),
-        startPrice: typeof insertAuction.startPrice === 'string' ? 
-          parseFloat(insertAuction.startPrice) : insertAuction.startPrice,
-        reservePrice: typeof insertAuction.reservePrice === 'string' ? 
-          parseFloat(insertAuction.reservePrice) : insertAuction.reservePrice,
-        currentPrice: typeof insertAuction.startPrice === 'string' ? 
-          parseFloat(insertAuction.startPrice) : insertAuction.startPrice, // Set initial current price to start price
-        status: "pending_review" // New auctions start in pending_review state
+        startDate: typeof insertAuction.startDate === 'string' ? 
+          new Date(insertAuction.startDate) : insertAuction.startDate,
+        endDate: typeof insertAuction.endDate === 'string' ? 
+          new Date(insertAuction.endDate) : insertAuction.endDate,
+        currentPrice: insertAuction.startPrice, // Set initial current price to start price
+        status: insertAuction.status || "pending" // Set default status to pending
       };
-
-      log("Creating auction with formatted data:", {
+      
+      console.log("[STORAGE] Creating auction with formatted data:", {
         title: formattedAuction.title,
         sellerId: formattedAuction.sellerId,
-        startPrice: formattedAuction.startPrice,
-        reservePrice: formattedAuction.reservePrice,
         startDate: formattedAuction.startDate,
         endDate: formattedAuction.endDate,
         status: formattedAuction.status
       });
-
+      
       const [auction] = await db
         .insert(auctions)
         .values(formattedAuction)
@@ -300,7 +213,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       const results = await query;
-      log(`Retrieved ${results.length} auctions with filters:`, filters);
+      console.log(`Retrieved ${results.length} auctions with filters:`, filters);
       return results;
     } catch (error) {
       log(`Error getting auctions: ${error}`);
@@ -308,158 +221,42 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getPendingAuctions(): Promise<Auction[]> {
-    return this.getAuctions({ status: "pending_review" });
-  }
-
-  async approveAuction(auctionId: number, reviewerId: number): Promise<Auction> {
+  // Implementation for getBidsForAuction
+  async getBidsForAuction(auctionId: number): Promise<any[]> {
     try {
-      const [auction] = await db
-        .update(auctions)
-        .set({ 
-          approved: true,
-          status: "active",
-          reviewedBy: reviewerId,
-          reviewedAt: new Date()
-        })
-        .where(eq(auctions.id, auctionId))
-        .returning();
-
-      return auction;
-    } catch (error) {
-      log(`Error approving auction ${auctionId}: ${error}`);
-      throw error;
-    }
-  }
-
-  async updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction> {
-    try {
-      // First get the current auction data
-      const currentAuction = await this.getAuction(auctionId);
-      if (!currentAuction) {
-        throw new Error(`Auction with id ${auctionId} not found`);
-      }
-
-      // Ensure dates are properly formatted
-      const formattedData = { ...data };
-
-      if (formattedData.startDate) {
-        formattedData.startDate = new Date(formattedData.startDate);
-      }
-
-      if (formattedData.endDate) {
-        formattedData.endDate = new Date(formattedData.endDate);
-      }
-
-      // If startPrice is updated but currentPrice is not, and there are no bids yet,
-      // update currentPrice to match startPrice
-      if (formattedData.startPrice !== undefined && formattedData.currentPrice === undefined) {
-        if (currentAuction.currentPrice === currentAuction.startPrice) {
-          formattedData.currentPrice = formattedData.startPrice;
-        }
-      }
-
-      // Handle images properly
-      if (formattedData.images) {
-        if (!Array.isArray(formattedData.images)) {
-          formattedData.images = [formattedData.images];
-        }
-
-        if (!formattedData.imageUrl && formattedData.images.length > 0) {
-          formattedData.imageUrl = formattedData.images[0];
-        }
-      }
-
-      log(`Updating auction ${auctionId} with formatted data:`, {
-        title: formattedData.title,
-        startDate: formattedData.startDate,
-        endDate: formattedData.endDate,
-        startPrice: formattedData.startPrice,
-        reservePrice: formattedData.reservePrice,
-        currentPrice: formattedData.currentPrice,
-        images: Array.isArray(formattedData.images) ? `${formattedData.images.length} images` : formattedData.images
-      });
-
-      const [auction] = await db
-        .update(auctions)
-        .set(formattedData)
-        .where(eq(auctions.id, auctionId))
-        .returning();
-
-      return auction;
-    } catch (error) {
-      log(`Error updating auction ${auctionId}: ${error}`);
-      throw error;
-    }
-  }
-
-  async createBid(bid: InsertBid): Promise<Bid> {
-    try {
-      log(`Creating bid for auction ${bid.auctionId}`);
-
-      // Validate bid amount is a valid number
-      const bidAmount = parseFloat(bid.amount.toString());
-      if (isNaN(bidAmount)) {
-        throw new Error("Invalid bid amount");
-      }
-
-      const [newBid] = await db
-        .insert(bids)
-        .values({
-          ...bid,
-          amount: bidAmount,
-          timestamp: new Date()
-        })
-        .returning();
-
-      // Update auction's current price
-      await this.updateAuction(bid.auctionId, {
-        currentPrice: bidAmount
-      });
-
-      return newBid;
-    } catch (error) {
-      log(`Error creating bid: ${error}`);
-      throw error;
-    }
-  }
-
-  async getBidsForAuction(auctionId: number): Promise<Bid[]> {
-    try {
-      return await db
-        .select()
-        .from(bids)
-        .where(eq(bids.auctionId, auctionId))
-        .orderBy(bids.timestamp, "desc");
+      // This is a placeholder implementation. 
+      // Implement this with the actual bids table when available
+      log(`Getting bids for auction ${auctionId}`);
+      return []; // Return empty array for now
     } catch (error) {
       log(`Error getting bids for auction ${auctionId}: ${error}`);
       throw error;
     }
   }
 
-  async getBidsByUser(userId: number): Promise<Bid[]> {
+  // Implementation for getBidsByUser
+  async getBidsByUser(userId: number): Promise<any[]> {
     try {
-      return await db
-        .select()
-        .from(bids)
-        .where(eq(bids.bidderId, userId))
-        .orderBy(bids.timestamp, "desc");
+      log(`Getting bids for user ${userId}`);
+      return []; // Return empty array for now
     } catch (error) {
       log(`Error getting bids for user ${userId}: ${error}`);
       throw error;
     }
   }
 
-  async deleteBid(bidId: number): Promise<void> {
+  // Implementation for createBid
+  async createBid(bid: any): Promise<any> {
     try {
-      log(`Deleting bid ${bidId}`);
-      await db.delete(bids).where(eq(bids.id, bidId));
+      log(`Creating bid for auction ${bid.auctionId}`);
+      return bid; // Just return the bid data for now
     } catch (error) {
-      log(`Error deleting bid ${bidId}: ${error}`);
+      log(`Error creating bid: ${error}`);
       throw error;
     }
   }
 
+  // Implementation for getUsers
   async getUsers(filters?: { 
     approved?: boolean;
     role?: string;
@@ -487,56 +284,124 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async approveUser(userId: number): Promise<User> {
+  // Implementation for deleteBid
+  async deleteBid(bidId: number): Promise<void> {
     try {
-      const [user] = await db
-        .update(users)
-        .set({ approved: true })
-        .where(eq(users.id, userId))
-        .returning();
-      return user;
+      log(`Deleting bid ${bidId}`);
+      // Implement actual deletion when bid table is available
     } catch (error) {
-      log(`Error approving user ${userId}: ${error}`);
+      log(`Error deleting bid ${bidId}: ${error}`);
+      throw error;
+    }
+  }
+  async approveAuction(auctionId: number): Promise<Auction> {
+    try {
+      const [auction] = await db
+        .update(auctions)
+        .set({ approved: true })
+        .where(eq(auctions.id, auctionId))
+        .returning();
+      
+      return auction;
+    } catch (error) {
+      log(`Error approving auction ${auctionId}: ${error}`);
       throw error;
     }
   }
 
-  async deleteProfile(userId: number): Promise<void> {
+  async updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction> {
+    try {
+      // First get the current auction data
+      const currentAuction = await this.getAuction(auctionId);
+      if (!currentAuction) {
+        throw new Error(`Auction with id ${auctionId} not found`);
+      }
+      
+      // Ensure dates are properly formatted
+      const formattedData = { ...data };
+      
+      // Convert date strings to Date objects if needed
+      if (formattedData.startDate && !(formattedData.startDate instanceof Date)) {
+        formattedData.startDate = new Date(formattedData.startDate);
+      }
+      
+      if (formattedData.endDate && !(formattedData.endDate instanceof Date)) {
+        formattedData.endDate = new Date(formattedData.endDate);
+      }
+      
+      // Ensure price fields are properly converted to numbers
+      if (formattedData.startPrice !== undefined && typeof formattedData.startPrice === 'string') {
+        formattedData.startPrice = Number(formattedData.startPrice);
+      }
+      
+      if (formattedData.reservePrice !== undefined && typeof formattedData.reservePrice === 'string') {
+        formattedData.reservePrice = Number(formattedData.reservePrice);
+      }
+      
+      if (formattedData.currentPrice !== undefined && typeof formattedData.currentPrice === 'string') {
+        formattedData.currentPrice = Number(formattedData.currentPrice);
+      }
+      
+      // If startPrice is updated but currentPrice is not, and there are no bids yet,
+      // update currentPrice to match startPrice
+      if (formattedData.startPrice !== undefined && formattedData.currentPrice === undefined) {
+        // Only update currentPrice if it currently equals the old startPrice (no bids yet)
+        if (currentAuction.currentPrice === currentAuction.startPrice) {
+          formattedData.currentPrice = formattedData.startPrice;
+        }
+      }
+      
+      // Handle images properly
+      if (formattedData.images) {
+        // Ensure images is always an array
+        if (!Array.isArray(formattedData.images)) {
+          formattedData.images = [formattedData.images];
+        }
+        
+        // If imageUrl is not specified, use the first image as the primary image
+        if (!formattedData.imageUrl && formattedData.images.length > 0) {
+          formattedData.imageUrl = formattedData.images[0];
+        }
+      }
+      
+      log(`Updating auction ${auctionId} with formatted data:`, JSON.stringify({
+        title: formattedData.title,
+        startDate: formattedData.startDate,
+        endDate: formattedData.endDate,
+        startPrice: formattedData.startPrice,
+        reservePrice: formattedData.reservePrice,
+        currentPrice: formattedData.currentPrice,
+        images: Array.isArray(formattedData.images) ? `${formattedData.images.length} images` : formattedData.images
+      }));
+      
+      const [auction] = await db
+        .update(auctions)
+        .set(formattedData)
+        .where(eq(auctions.id, auctionId))
+        .returning();
+      
+      return auction;
+    } catch (error) {
+      log(`Error updating auction ${auctionId}: ${error}`);
+      throw error;
+    }
+  }
+
+  async deleteAuction(auctionId: number): Promise<void> {
     try {
       await db
-        .delete(profiles)
-        .where(eq(profiles.userId, userId));
+        .delete(auctions)
+        .where(eq(auctions.id, auctionId));
     } catch (error) {
-      log(`Error deleting profile for user ${userId}: ${error}`);
+      log(`Error deleting auction ${auctionId}: ${error}`);
       throw error;
     }
   }
 
-  async createNotification(notification: InsertNotification): Promise<any> {
-    try {
-      log(`Creating notification for user ${notification.userId}`);
-      const [newNotification] = await db
-        .insert(notifications)
-        .values(notification)
-        .returning();
-      return newNotification;
-    } catch (error) {
-      log(`Error creating notification: ${error}`);
-      throw error;
-    }
-  }
-
+  // Mock implementations for notification functions
   async getNotificationsByUserId(userId: number): Promise<any[]> {
-    try {
-      return await db
-        .select()
-        .from(notifications)
-        .where(eq(notifications.userId, userId))
-        .orderBy(notifications.createdAt, "desc");
-    } catch (error) {
-      log(`Error getting notifications for user ${userId}: ${error}`);
-      throw error;
-    }
+    log(`Getting notifications for user ${userId}`);
+    return []; // Return empty array for now
   }
 
   async getLastNotification(): Promise<any | undefined> {
@@ -544,45 +409,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markNotificationAsRead(notificationId: number): Promise<any> {
-    try {
-      const [notification] = await db
-        .update(notifications)
-        .set({ read: true })
-        .where(eq(notifications.id, notificationId))
-        .returning();
-      return notification;
-    } catch (error) {
-      log(`Error marking notification ${notificationId} as read: ${error}`);
-      throw error;
-    }
+    return { id: notificationId, read: true };
   }
 
   async markAllNotificationsAsRead(userId: number): Promise<void> {
-    try {
-      await db
-        .update(notifications)
-        .set({ read: true })
-        .where(eq(notifications.userId, userId));
-    } catch (error) {
-      log(`Error marking all notifications as read for user ${userId}: ${error}`);
-      throw error;
-    }
+    // Implementation would mark all user notifications as read
   }
 
   async getUnreadNotificationsCount(userId: number): Promise<number> {
-    try {
-      const unreadNotifications = await db
-        .select()
-        .from(notifications)
-        .where(eq(notifications.userId, userId))
-        .where(eq(notifications.read, false));
-      return unreadNotifications.length;
-    } catch (error) {
-      log(`Error getting unread notification count for user ${userId}: ${error}`);
-      return 0;
-    }
+    return 0;
   }
 
+  // Payment related functions
   async getPaymentBySessionId(sessionId: string): Promise<any | undefined> {
     return undefined;
   }
@@ -595,6 +433,7 @@ export class DatabaseStorage implements IStorage {
     return { id: 1, intentId, ...data };
   }
 
+  // Fulfillment related functions
   async getWinnerDetails(auctionId: number): Promise<any | undefined> {
     return undefined;
   }
@@ -607,6 +446,7 @@ export class DatabaseStorage implements IStorage {
     return undefined;
   }
 
+  // Buyer request related functions
   async createBuyerRequest(requestData: any): Promise<any> {
     return requestData;
   }
@@ -635,29 +475,33 @@ export class DatabaseStorage implements IStorage {
     return { id, ...data };
   }
 
+  // Seller payment related functions
   async getPayoutsBySeller(sellerId: number): Promise<any[]> {
     return [];
   }
-  async deleteAuction(auctionId: number): Promise<void> {
-    try {
-      await db
-        .delete(auctions)
-        .where(eq(auctions.id, auctionId));
-    } catch (error) {
-      log(`Error deleting auction ${auctionId}: ${error}`);
-      throw error;
-    }
-  }
-  async updateUser(userId: number, data: Partial<User>): Promise<User> {
+
+  // User management
+  async approveUser(userId: number): Promise<User> {
     try {
       const [user] = await db
         .update(users)
-        .set(data)
+        .set({ approved: true })
         .where(eq(users.id, userId))
         .returning();
       return user;
     } catch (error) {
-      log(`Error updating user ${userId}: ${error}`);
+      log(`Error approving user ${userId}: ${error}`);
+      throw error;
+    }
+  }
+
+  async deleteProfile(userId: number): Promise<void> {
+    try {
+      await db
+        .delete(profiles)
+        .where(eq(profiles.userId, userId));
+    } catch (error) {
+      log(`Error deleting profile for user ${userId}: ${error}`);
       throw error;
     }
   }

@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express, Request, Response, NextFunction } from "express";
+import { Express } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -40,7 +40,7 @@ export function setupAuth(app: Express) {
       sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     },
-    name: 'poultry.sid'
+    name: 'poultry.sid' // Custom session name
   };
 
   app.set("trust proxy", 1);
@@ -55,98 +55,39 @@ export function setupAuth(app: Express) {
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false, { message: "Invalid username or password" });
         }
+        console.log("[AUTH] User authenticated:", { id: user.id, role: user.role });
         return done(null, user);
       } catch (error) {
         console.error("[AUTH] Authentication error:", error);
         return done(error);
       }
-    })
+    }),
   );
 
   passport.serializeUser((user, done) => {
+    console.log("[AUTH] Serializing user:", { id: user.id, role: user.role });
     done(null, user.id);
   });
 
   passport.deserializeUser(async (id: string | number, done) => {
     try {
+      // Ensure id is a number
       const userId = typeof id === 'string' ? parseInt(id, 10) : id;
+      console.log("[AUTH] Deserializing user:", { userId, type: typeof userId });
+
       const user = await storage.getUser(userId);
       if (!user) {
+        console.error("[AUTH] User not found during deserialization:", { userId });
         return done(null, false);
       }
+
+      console.log("[AUTH] User deserialized successfully:", { id: user.id, role: user.role });
       done(null, user);
     } catch (error) {
+      console.error("[AUTH] Deserialization error:", error);
       done(error);
     }
   });
-
-  function requireCompleteProfile(roles: string[] = []) {
-    return async (req: Request, res: Response, next: NextFunction) => {
-      if (!req.user) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      // Skip profile check for admin users
-      if (req.user.role === "admin") {
-        return next();
-      }
-
-      // Check role authorization
-      if (roles.length > 0 && !roles.includes(req.user.role)) {
-        return res.status(403).json({ message: "Not authorized" });
-      }
-
-      try {
-        const profile = await storage.getProfile(req.user.id);
-        if (!profile) {
-          return res.status(403).json({ 
-            message: "Please complete your profile first",
-            code: "PROFILE_REQUIRED"
-          });
-        }
-
-        // Define required fields based on user role
-        let requiredFields = [
-          'fullName',
-          'email',
-          'phoneNumber',
-          'address',
-          'city',
-          'state',
-          'zipCode'
-        ];
-
-        // Add seller fields if user is a seller
-        if (req.user.role === "seller" || req.user.role === "seller_admin") {
-          requiredFields = requiredFields.concat(['businessName', 'breedSpecialty', 'npipNumber']);
-        }
-
-        // Check for missing fields
-        const missingFields = requiredFields.filter(field => {
-          const value = profile[field as keyof typeof profile];
-          return !value || value.toString().trim() === '';
-        });
-
-        if (missingFields.length > 0) {
-          return res.status(403).json({
-            message: "Please complete all required profile fields",
-            code: "INCOMPLETE_PROFILE",
-            missingFields
-          });
-        }
-
-        // Update hasProfile flag if needed
-        if (!req.user.hasProfile) {
-          await storage.updateUser(req.user.id, { hasProfile: true });
-        }
-
-        next();
-      } catch (error) {
-        console.error("[AUTH] Error checking profile:", error);
-        next(error);
-      }
-    };
-  }
 
   app.post("/api/register", async (req, res, next) => {
     try {
@@ -158,7 +99,6 @@ export function setupAuth(app: Express) {
       const user = await storage.createUser({
         ...req.body,
         password: await hashPassword(req.body.password),
-        hasProfile: false
       });
 
       req.login(user, (err) => {
@@ -191,9 +131,7 @@ export function setupAuth(app: Express) {
   });
 
   app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
     res.json(req.user);
   });
 }

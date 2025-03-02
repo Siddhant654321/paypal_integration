@@ -6,7 +6,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Redirect } from "wouter";
 import { Loader2, Bell } from "lucide-react";
-import { queryClient } from "@/lib/queryClient";
 import {
   Form,
   FormControl,
@@ -24,7 +23,7 @@ import { FileUpload } from "@/components/file-upload";
 import { Separator } from "@/components/ui/separator";
 import React from 'react';
 
-const defaultValues: Partial<InsertProfile> = {
+const defaultValues: InsertProfile = {
   fullName: "",
   email: "",
   phoneNumber: "",
@@ -58,22 +57,36 @@ export default function ProfilePage() {
 
   const form = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
-    defaultValues: { ...defaultValues, userId: user.id },
+    defaultValues,
   });
 
   // Update form values when profile data is loaded
   React.useEffect(() => {
     if (profile) {
       form.reset({
-        ...profile,
-        userId: user.id // Ensure userId is always set
+        fullName: profile.fullName,
+        email: profile.email,
+        phoneNumber: profile.phoneNumber,
+        address: profile.address,
+        city: profile.city,
+        state: profile.state,
+        zipCode: profile.zipCode,
+        bio: profile.bio || "",
+        isPublicBio: profile.isPublicBio,
+        profilePicture: profile.profilePicture || "",
+        businessName: profile.businessName || "",
+        breedSpecialty: profile.breedSpecialty || "",
+        npipNumber: profile.npipNumber || "",
+        emailBidNotifications: profile.emailBidNotifications,
+        emailAuctionNotifications: profile.emailAuctionNotifications,
+        emailPaymentNotifications: profile.emailPaymentNotifications,
+        emailAdminNotifications: profile.emailAdminNotifications,
       });
     }
-  }, [profile, form, user.id]);
+  }, [profile, form]);
 
   const createProfileMutation = useMutation({
     mutationFn: async (data: InsertProfile) => {
-      console.log("Submitting profile data:", data);
       const res = await fetch("/api/profile", {
         method: "POST",
         headers: {
@@ -82,22 +95,16 @@ export default function ProfilePage() {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to save profile");
-      }
+      if (!res.ok) throw new Error("Failed to save profile");
       return res.json();
     },
     onSuccess: () => {
-      // Invalidate the profile query to trigger a refetch
-      queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
       toast({
         title: "Profile saved",
         description: "Your profile has been saved successfully.",
       });
     },
     onError: (error: Error) => {
-      console.error("Profile save error:", error);
       toast({
         title: "Error saving profile",
         description: error.message,
@@ -115,15 +122,6 @@ export default function ProfilePage() {
   }
 
   const isSeller = user.role === "seller" || user.role === "seller_admin";
-
-  const onSubmit = async (data: InsertProfile) => {
-    try {
-      console.log("Form submitted with data:", data);
-      await createProfileMutation.mutateAsync(data);
-    } catch (error) {
-      console.error("Form submission error:", error);
-    }
-  };
 
   return (
     <div className="container max-w-2xl mx-auto py-8">
@@ -147,7 +145,7 @@ export default function ProfilePage() {
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit(onSubmit)}
+          onSubmit={form.handleSubmit((data) => createProfileMutation.mutate(data))}
           className="space-y-6"
         >
           <div className="mb-6">
