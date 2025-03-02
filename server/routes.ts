@@ -1244,8 +1244,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         auction => new Date(auction.endDate) > now
       ).length;
 
-      const activeBidders = new Set(auctions.map(a => a.winningBidderId).filter(Boolean)).size;
-      const totalBids = auctions.reduce((acc, auction) => acc + (auction.totalBids || 0), 0);
+      // Get all bids for the filtered auctions
+      const allBids = await Promise.all(
+        validAuctions.map(async auction => {
+          const bids = await storage.getBidsForAuction(auction.id);
+          return { auctionId: auction.id, bids };
+        })
+      );
+
+      // Calculate active bidders (unique bidders across all auctions)
+      const allBidders = new Set();
+      let totalBidsCount = 0;
+      
+      allBids.forEach(({ bids }) => {
+        bids.forEach(bid => {
+          allBidders.add(bid.bidderId);
+          totalBidsCount++;
+        });
+      });
+      
+      const activeBidders = allBidders.size;
+      const totalBids = totalBidsCount;
+
+      console.log("[ANALYTICS] Active bidders:", activeBidders);
+      console.log("[ANALYTICS] Total bids:", totalBids);
+
+      // Calculate popular categories
+      const categoryCount = validAuctions.reduce((acc, auction) => {
+        const category = auction.category || "Uncategorized";
+        acc[category] = (acc[category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const popularCategories = Object.entries(categoryCount)
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => b.count - a.count);
+
+      console.log("[ANALYTICS] Popular categories:", popularCategories);
 
       // Calculate average prices by species
       const speciesPrices = validAuctions.reduce((acc, auction) => {
@@ -1274,7 +1309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           seller: null,
           buyer: null
         },
-        popularCategories: []
+        popularCategories
       };
 
       console.log("[ANALYTICS] Response generated with price data points:", 

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, Trophy } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BarChart2, Loader2 } from "lucide-react";
 import { PriceTrendGraph } from "@/components/price-trend-graph";
 import { formatPrice } from "@/utils/formatters";
 import { BuyerRequestList } from "@/components/buyer-request-list";
