@@ -223,12 +223,17 @@ export class DatabaseStorage implements IStorage {
 
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
-      // Ensure dates are properly formatted
+      // Ensure dates and numeric values are properly formatted
       const formattedAuction = {
         ...insertAuction,
         startDate: new Date(insertAuction.startDate),
         endDate: new Date(insertAuction.endDate),
-        currentPrice: insertAuction.startPrice, // Set initial current price to start price
+        startPrice: typeof insertAuction.startPrice === 'string' ? 
+          parseFloat(insertAuction.startPrice) : insertAuction.startPrice,
+        reservePrice: typeof insertAuction.reservePrice === 'string' ? 
+          parseFloat(insertAuction.reservePrice) : insertAuction.reservePrice,
+        currentPrice: typeof insertAuction.startPrice === 'string' ? 
+          parseFloat(insertAuction.startPrice) : insertAuction.startPrice, // Set initial current price to start price
         status: "pending_review" // New auctions start in pending_review state
       };
 
@@ -236,6 +241,7 @@ export class DatabaseStorage implements IStorage {
         title: formattedAuction.title,
         sellerId: formattedAuction.sellerId,
         startPrice: formattedAuction.startPrice,
+        reservePrice: formattedAuction.reservePrice,
         startDate: formattedAuction.startDate,
         endDate: formattedAuction.endDate,
         status: formattedAuction.status
