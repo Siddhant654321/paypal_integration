@@ -26,6 +26,7 @@ export interface IStorage {
     approved?: boolean;
     species?: string;
     category?: string;
+    status?: string;
   }): Promise<Auction[]>;
 }
 
@@ -141,29 +142,21 @@ export class DatabaseStorage implements IStorage {
 
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
-      // Ensure dates are properly formatted by creating actual Date objects
-      const formattedAuction = {
+      log(`Creating auction for seller ${insertAuction.sellerId}`);
+
+      const auctionData = {
         ...insertAuction,
-        startDate: typeof insertAuction.startDate === 'string' ? 
-          new Date(insertAuction.startDate) : insertAuction.startDate,
-        endDate: typeof insertAuction.endDate === 'string' ? 
-          new Date(insertAuction.endDate) : insertAuction.endDate,
-        currentPrice: insertAuction.startPrice, // Set initial current price to start price
-        status: insertAuction.status || "pending" // Set default status to pending
+        currentPrice: insertAuction.startPrice,
+        status: "pending_review",
+        approved: false,
       };
-      
-      console.log("[STORAGE] Creating auction with formatted data:", {
-        title: formattedAuction.title,
-        sellerId: formattedAuction.sellerId,
-        startDate: formattedAuction.startDate,
-        endDate: formattedAuction.endDate,
-        status: formattedAuction.status
-      });
-      
+
       const [auction] = await db
         .insert(auctions)
-        .values(formattedAuction)
+        .values(auctionData)
         .returning();
+
+      log(`Created auction ${auction.id} with status ${auction.status}`);
       return auction;
     } catch (error) {
       log(`Error creating auction: ${error}`);
@@ -192,6 +185,7 @@ export class DatabaseStorage implements IStorage {
     status?: string;
   }): Promise<Auction[]> {
     try {
+      log("Getting auctions with filters:", filters);
       let query = db.select().from(auctions);
 
       if (filters) {
@@ -213,7 +207,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       const results = await query;
-      console.log(`Retrieved ${results.length} auctions with filters:`, filters);
+      log(`Retrieved ${results.length} auctions`);
       return results;
     } catch (error) {
       log(`Error getting auctions: ${error}`);

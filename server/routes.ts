@@ -141,12 +141,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Only sellers can view their auctions" });
       }
 
+      console.log(`[AUCTIONS] Fetching auctions for seller ${req.user.id}`);
       const auctions = await storage.getAuctions({
         sellerId: req.user.id
       });
+
+      console.log(`[AUCTIONS] Found ${auctions.length} auctions`);
       res.json(auctions);
     } catch (error) {
-      console.error("Error fetching seller auctions:", error);
+      console.error("[AUCTIONS] Error fetching seller auctions:", error);
       res.status(500).json({ message: "Failed to fetch seller auctions" });
     }
   });
@@ -439,6 +442,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching bids:", error);
       res.status(500).json({ message: "Failed to fetch bids" });
+    }
+  });
+
+  // Get admin auctions (including pending)
+  app.get("/api/admin/auctions", requireAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const approved = req.query.approved === 'true' ? true : 
+                      req.query.approved === 'false' ? false : undefined;
+
+      console.log(`[ADMIN] Fetching auctions with status: ${status}, approved: ${approved}`);
+
+      const auctions = await storage.getAuctions({ 
+        status,
+        approved
+      });
+
+      console.log(`[ADMIN] Found ${auctions.length} auctions`);
+      res.json(auctions);
+    } catch (error) {
+      console.error("[ADMIN] Error fetching auctions:", error);
+      res.status(500).json({ message: "Failed to fetch auctions" });
     }
   });
 
@@ -1701,7 +1726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Failed to create seller account",
         error: error instanceof Error ? error.message : "Unknown error"
       });
-    }
+        }
   });
 
   app.get("/api/seller/status", requireAuth, async (req, res) => {
@@ -1737,15 +1762,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       console.log("Getting onboarding link with base URL:", baseUrl);
 
-
       const onboardingUrl = await SellerPaymentService.getOnboardingLink(
         profile.stripeAccountId,
         baseUrl
       );
 
-
       console.log("Generated onboarding URL:", onboardingUrl);
-
 
       res.json({ url: onboardingUrl });
     } catch (error) {
