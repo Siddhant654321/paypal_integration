@@ -132,21 +132,33 @@ export const insertAuctionSchema = createInsertSchema(auctions)
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),
     description: z.string().min(20, "Description must be at least 20 characters"),
-    startPrice: z
-      .number()
-      .min(0.01, "Start price must be at least $0.01")
-      .transform((price) => parseFloat(price.toFixed(2))),
-    reservePrice: z
-      .number()
-      .min(0.01, "Reserve price must be at least $0.01")
-      .transform((price) => parseFloat(price.toFixed(2))),
-    startDate: z.string().transform((str) => new Date(str)),
-    endDate: z.string().transform((str) => new Date(str)),
+    species: z.string(),
+    category: z.string(),
+    startPrice: z.union([
+      z.number(),
+      z.string().transform(val => parseFloat(val))
+    ]).refine(val => !isNaN(val) && val > 0, "Start price must be greater than 0"),
+    reservePrice: z.union([
+      z.number(),
+      z.string().transform(val => parseFloat(val))
+    ]).refine(val => !isNaN(val) && val >= 0, "Reserve price must be valid"),
+    startDate: z.union([
+      z.date(),
+      z.string().transform(val => new Date(val))
+    ]),
+    endDate: z.union([
+      z.date(),
+      z.string().transform(val => new Date(val))
+    ]),
     imageUrl: z.string().optional(),
     images: z.array(z.string()).optional().default([]),
   })
   .refine(
-    (data) => data.reservePrice >= data.startPrice,
+    (data) => {
+      const reservePrice = typeof data.reservePrice === 'string' ? parseFloat(data.reservePrice) : data.reservePrice;
+      const startPrice = typeof data.startPrice === 'string' ? parseFloat(data.startPrice) : data.startPrice;
+      return reservePrice >= startPrice;
+    },
     "Reserve price must be greater than or equal to start price"
   )
   .refine(

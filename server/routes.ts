@@ -73,7 +73,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Create new auction (sellers only)
+  // Update the auction creation route
   app.post("/api/auctions", requireAuth, upload.array('images', 5), async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -88,25 +88,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auctionData = req.body;
       const userId = typeof req.user.id === 'string' ? parseInt(req.user.id, 10) : req.user.id;
 
-      // Convert string values to appropriate types
-      const parsedData = {
-        ...auctionData,
-        sellerId: userId,
-        startPrice: parseFloat(auctionData.startPrice || 0),
-        reservePrice: parseFloat(auctionData.reservePrice || 0),
-        startDate: auctionData.startDate ? new Date(auctionData.startDate) : new Date(),
-        endDate: auctionData.endDate ? new Date(auctionData.endDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        images: Array.isArray(auctionData.images) ? auctionData.images : [],
-      };
-
-      try {
-        const validatedData = insertAuctionSchema.parse(parsedData);
-      } catch (validationError) {
-        return res.status(400).json({
-          message: "Invalid auction data",
-          errors: validationError instanceof ZodError ? validationError.errors : String(validationError)
-        });
-      }
+      console.log("Received auction data:", auctionData);
 
       // Handle image uploads
       const uploadedFiles = req.files as Express.Multer.File[];
@@ -117,28 +99,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
       }
 
-      // Create the auction
-      const newAuction = {
-        ...parsedData,
+      // Prepare the auction data
+      const parsedData = {
+        ...auctionData,
+        sellerId: userId,
+        startPrice: parseFloat(auctionData.startPrice),
+        reservePrice: parseFloat(auctionData.reservePrice || 0),
+        startDate: new Date(auctionData.startDate),
+        endDate: new Date(auctionData.endDate),
         images: imageUrls,
         imageUrl: imageUrls[0] || "",
-        status: "pending_review",
-        approved: false,
       };
 
+      console.log("Parsed auction data:", parsedData);
+
       try {
+        const validatedData = insertAuctionSchema.parse(parsedData);
+        console.log("Validation passed:", validatedData);
+
+        // Create the auction
+        const newAuction = {
+          ...validatedData,
+          status: "pending_review",
+          approved: false,
+          currentPrice: validatedData.startPrice,
+        };
+
         const result = await storage.createAuction(newAuction);
         return res.status(201).json(result);
-      } catch (dbError) {
-        return res.status(500).json({
-          message: `Failed to save auction: ${(dbError as Error).message}`,
-          details: dbError instanceof Error ? dbError.message : String(dbError)
+      } catch (validationError) {
+        console.error("Validation error details:", validationError);
+        return res.status(400).json({
+          message: "Invalid auction data",
+          errors: validationError instanceof ZodError ? validationError.errors : String(validationError)
         });
       }
     } catch (error) {
+      console.error("Auction creation error:", error);
       return res.status(500).json({
-        message: `Failed to create auction: ${(error as Error).message}`,
-        details: error
+        message: "Failed to create auction",
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   });
@@ -856,8 +856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auctions/:id/pay", requireAuth, async (req, res) => {
-    try {
-      // Log authentication state
+    try {      // Log authentication state
       console.log('Payment request authentication:', {
         isAuthenticated: req.isAuthenticated(),
         userId: req.user?.id,
@@ -1744,7 +1743,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Filter out sellers without profiles or recent auctions
       const activeSellers = sellersWithDetails.filter(
-        seller => seller.profile && seller.auctions.length > 0
+        seller =>seller => seller.profile && seller.auctions.length > 0
       );
 
       res.json(activeSellers);
