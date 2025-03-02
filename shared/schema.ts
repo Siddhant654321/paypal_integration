@@ -250,6 +250,9 @@ export const insertProfileSchema = createInsertSchema(profiles)
     emailAdminNotifications: z.boolean().default(true),
   });
 
+export type Profile = typeof profiles.$inferSelect;
+export type InsertProfile = z.infer<typeof insertProfileSchema>;
+
 export const insertPaymentSchema = createInsertSchema(payments)
   .omit({
     id: true,
