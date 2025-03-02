@@ -10,7 +10,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Scatter,
-  ScatterChart,
   ComposedChart,
 } from "recharts";
 import { formatPrice } from "@/utils/formatters";
@@ -34,6 +33,9 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
   const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#8884d8';
   const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#ccc';
   const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#82ca9d';
+
+  // Log data for debugging
+  console.log("Price trend data:", data);
 
   return (
     <Card>
@@ -79,37 +81,43 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
         </div>
       </CardHeader>
       <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
-            <XAxis
-              dataKey="date"
-              tickFormatter={(value) => new Date(value).toLocaleDateString()}
-            />
-            <YAxis tickFormatter={(value) => formatPrice(value)} />
-            <Tooltip
-              formatter={(value) => [formatPrice(value as number), "Price"]}
-              labelFormatter={(label) => new Date(label).toLocaleDateString()}
-              contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
-            />
-            {/* Scatter plot for individual auction prices */}
-            <Scatter
-              name="Auction Price"
-              dataKey="price"
-              fill={primaryColor}
-              opacity={0.6}
-            />
-            {/* Trend line showing median prices */}
-            <Line
-              name="Price Trend"
-              type="monotone"
-              dataKey="medianPrice"
-              stroke={accentColor}
-              strokeWidth={2}
-              dot={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
+        {data && data.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(value) => new Date(value).toLocaleDateString()}
+              />
+              <YAxis tickFormatter={(value) => formatPrice(value)} />
+              <Tooltip
+                formatter={(value) => [formatPrice(value as number), "Price"]}
+                labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
+              />
+              {/* Scatter plot for individual auction prices */}
+              <Scatter
+                name="Auction Price"
+                dataKey="price"
+                fill={primaryColor}
+                opacity={0.6}
+              />
+              {/* Trend line showing median prices */}
+              <Line
+                name="Price Trend"
+                type="monotone"
+                dataKey="medianPrice"
+                stroke={accentColor}
+                strokeWidth={2}
+                dot={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            No price data available
+          </div>
+        )}
       </CardContent>
     </Card>
   );

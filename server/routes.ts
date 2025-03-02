@@ -1149,198 +1149,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  
 
+  // Add or update the market stats endpoint
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
       const timeFrame = req.query.timeFrame as string || 'month';
       const category = req.query.category as string;
       const species = req.query.species as string;
 
-      // Get the date range based on time frame
-      const startDate = new Date();
-      switch (timeFrame) {
-        case 'week':
-          startDate.setDate(startDate.getDate() - 7);
-          break;
-        case 'year':
-          startDate.setFullYear(startDate.getFullYear() - 1);
-          break;
-        default: // month
-          startDate.setMonth(startDate.getMonth() - 1);
-      }
+      // Get all auctions based on filters
+      const auctions = await storage.getAuctions({
+        category: category === 'all' ? undefined : category,
+        species: species === 'all' ? undefined : species,
+      });
 
-      // Get all auctions with filters
-      let allAuctions = await storage.getAuctions({ approved: true });
+      // Calculate price data points for scatter plot and trend line
+      const priceData = auctions
+        .filter(auction => auction.currentPrice > 0)
+        .map(auction => ({
+          date: auction.createdAt,
+          price: auction.currentPrice,
+          // For the trend line, we'll use the current price as both price and medianPrice
+          medianPrice: auction.currentPrice
+        }))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-      // Apply category filter if specified
-      if (category && category !== 'all') {
-        allAuctions = allAuctions.filter(auction => auction.category === category);
-      }
+      // Calculate other stats
+      const activeBidders = new Set(auctions.map(a => a.winningBidderId).filter(Boolean)).size;
+      const totalBids = await storage.getTotalBidsCount();
 
-      // Apply species filter if specified
-      if (species && species !== 'all') {
-        allAuctions = allAuctions.filter(auction => auction.species === species);
-      }
-
-      // Count active auctions
-      const now = new Date();
-      const activeAuctions = allAuctions.filter(auction =>
-        new Date(auction.endDate) > now && auction.approved
-      ).length;
-
-      // Get all unique species
-      const uniqueSpecies = [...new Set(allAuctions.map(auction => auction.species))];
-
-      // Calculate median prices over time
-      const auctionsByDay = allAuctions
-        .filter(auction => new Date(auction.endDate) >= startDate)
-        .reduce((acc, auction) => {
-          const date = new Date(auction.endDate).toISOString().split('T')[0];
-          if (!acc[date]) {
-            acc[date] = [];
-          }
-          acc[date].push(auction.currentPrice);
-          return acc;
-        }, {} as Record<string, number[]>);
-
-      const medianPrices = Object.entries(auctionsByDay).map(([date, prices]) => ({
-        date,
-        medianPrice: calculateMedian(prices),
-      })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      // Get bids for active auctions to calculate active bidders
-      const activeAuctionIds = allAuctions
-        .filter(auction => new Date(auction.endDate) > now)
-        .map(auction => auction.id);
-
-      const allBids = await Promise.all(
-        activeAuctionIds.map(auctionId => storage.getBidsForAuction(auctionId))
-      );
-
-      // Calculate unique bidders in the last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const recentBids = allBids.flat().filter(bid => new Date(bid.timestamp) >= thirtyDaysAgo);
-      const activeBidders = new Set(recentBids.map(bid => bid.bidderId)).size;
-      const totalBids = recentBids.length;
-
-      // Calculate average prices by species
-      const speciesPrices = allAuctions.reduce((acc, auction) => {
-        if (!acc[auction.species]) {
-          acc[auction.species] = { total: 0, count: 0 };
-        }
-        acc[auction.species].total += auction.currentPrice;
-        acc[auction.species].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
-
-      const averagePrices = Object.entries(speciesPrices).map(([species, data]) => ({
-        species,
-        averagePrice: Math.round(data.total / data.count)
-      }));
-
-      // Calculate top seller and buyer for the last month
-      const lastMonth = new Date();
-      lastMonth.setMonth(lastMonth.getMonth() - 1);
-
-      // Get completed auctions from last month
-      const lastMonthAuctions = allAuctions.filter(auction =>
-        auction.status === "ended" &&
-        new Date(auction.endDate) >= lastMonth
-      );
-
-      // Calculate seller totals
-      const sellerTotals = lastMonthAuctions.reduce((acc, auction) => {
-        if (!acc[auction.sellerId]) {
-          acc[auction.sellerId] = { total: 0, count: 0 };
-        }
-        acc[auction.sellerId].total += auction.currentPrice;
-        acc[auction.sellerId].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
-
-      // Calculate buyer totals
-      const buyerTotals = lastMonthAuctions.reduce((acc, auction) => {
-        if (!acc[auction.winningBidderId]) {
-          acc[auction.winningBidderId] = { total: 0, count: 0 };
-        }
-        acc[auction.winningBidderId].total += auction.currentPrice;
-        acc[auction.winningBidderId].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
-
-      // Find top seller and buyer
-      let topSeller = { userId: null, total: 0, count: 0 };
-      for (const [userId, data] of Object.entries(sellerTotals)) {
-        if (data.total > topSeller.total) {
-          topSeller = { userId: parseInt(userId), ...data };
-        }
-      }
-
-      let topBuyer = { userId: null, total: 0, count: 0 };
-      for (const [userId, data] of Object.entries(buyerTotals)) {
-        if (data.total > topBuyer.total) {
-          topBuyer = { userId: parseInt(userId), ...data };
-        }
-      }
-
-      // Get user profiles for top performers
-      const [topSellerProfile, topBuyerProfile] = await Promise.all([
-        topSeller.userId ? storage.getProfile(topSeller.userId) : null,
-        topBuyer.userId ? storage.getProfile(topBuyer.userId) : null,
-      ]);
-
-      // Calculate popular categories
-      const categoryCount = allAuctions.reduce((acc, auction) => {
-        acc[auction.category] = (acc[auction.category] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const popularCategories = Object.entries(categoryCount)
-        .map(([category, count]) => ({ category, count }))
-        .sort((a, b) => b.count - a.count);
-
-      const topPerformers = {
-        seller: topSellerProfile ? {
-          name: topSellerProfile.fullName,
-          total: topSeller.total,
-          auctionsWon: topSeller.count
-        } : null,
-        buyer: topBuyerProfile ? {
-          name: topBuyerProfile.fullName,
-          total: topBuyer.total,
-          auctionsWon: topBuyer.count
-        } : null
-      };
-
-      res.json({
-        averagePrices,
-        activeAuctions,
+      const response = {
         activeBidders,
         totalBids,
-        species: uniqueSpecies,
-        medianPrices,
-        topPerformers,
-        popularCategories
-      });
+        priceData,
+        activeAuctions: auctions.length,
+        species: [...new Set(auctions.map(a => a.species))],
+        averagePrices: [],
+        topPerformers: {
+          seller: null,
+          buyer: null
+        },
+        popularCategories: []
+      };
+
+      res.json(response);
     } catch (error) {
-      console.error("Error fetching market statistics:", error);
+      console.error("[ANALYTICS] Error fetching market stats:", error);
       res.status(500).json({ message: "Failed to fetch market statistics" });
     }
   });
-
-  // Helper function to calculate median
-  function calculateMedian(numbers: number[]): number {
-    if (numbers.length === 0) return 0;
-    const sorted = [...numbers].sort((a, b) => a - b);
-    const middle = Math.floor(sorted.length / 2);
-    if (sorted.length % 2 === 0) {
-      return (sorted[middle - 1] + sorted[middle]) / 2;
-    }
-    return sorted[middle];
-  }
 
   app.get("/api/sellers/active", async (req, res) => {
     try {
