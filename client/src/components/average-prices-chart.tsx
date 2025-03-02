@@ -48,7 +48,7 @@ export function AveragePricesChart({ averagePrices }: AveragePricesChartProps) {
               className="absolute inset-y-0 left-0 rounded-full"
               style={{ 
                 width: `${(item.averagePrice / maxPrice) * 100}%`,
-                backgroundColor: getColorForIndex(index) 
+                backgroundColor: '#E63946' // deep-red from theme
               }}
             />
           </div>

@@ -10,7 +10,7 @@ const getColorForIndex = (index: number): string => {
     '#E63946', // deep-red
     '#1D3557'  // deep-blue
   ];
-  
+
   return colors[index % colors.length];
 };
 
@@ -35,7 +35,7 @@ export function PopularCategoriesChart({ categories }: PopularCategoriesChartPro
 
   return (
     <div className="space-y-4">
-      {categories.slice(0, 5).map((cat) => (
+      {categories.slice(0, 5).map((cat, index) => (
         <div key={cat.category} className="flex items-center">
           <div className="mr-2 w-32 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
             {cat.category}
@@ -45,7 +45,7 @@ export function PopularCategoriesChart({ categories }: PopularCategoriesChartPro
               className="absolute inset-y-0 left-0 rounded-full"
               style={{ 
                 width: `${(cat.count / maxCount) * 100}%`,
-                backgroundColor: getColorForIndex(index) 
+                backgroundColor: '#FFBA08' // golden-yellow from theme
               }}
             />
           </div>
