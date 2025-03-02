@@ -1152,28 +1152,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
-      // Get all approved auctions
-      const allAuctions = await storage.getAuctions({ approved: true });
+      const timeFrame = req.query.timeFrame as string || 'month';
+      const category = req.query.category as string;
+      const species = req.query.species as string;
 
-      // Count active auctions (not ended and approved)
+      // Get the date range based on time frame
+      const startDate = new Date();
+      switch (timeFrame) {
+        case 'week':
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case 'year':
+          startDate.setFullYear(startDate.getFullYear() - 1);
+          break;
+        default: // month
+          startDate.setMonth(startDate.getMonth() - 1);
+      }
+
+      // Get all auctions with filters
+      let allAuctions = await storage.getAuctions({ approved: true });
+
+      // Apply category filter if specified
+      if (category && category !== 'all') {
+        allAuctions = allAuctions.filter(auction => auction.category === category);
+      }
+
+      // Apply species filter if specified
+      if (species && species !== 'all') {
+        allAuctions = allAuctions.filter(auction => auction.species === species);
+      }
+
+      // Count active auctions
       const now = new Date();
       const activeAuctions = allAuctions.filter(auction =>
         new Date(auction.endDate) > now && auction.approved
       ).length;
 
-      // Get all bids for active auctions to calculate active bidders
+      // Get all unique species
+      const uniqueSpecies = [...new Set(allAuctions.map(auction => auction.species))];
+
+      // Calculate median prices over time
+      const auctionsByDay = allAuctions
+        .filter(auction => new Date(auction.endDate) >= startDate)
+        .reduce((acc, auction) => {
+          const date = new Date(auction.endDate).toISOString().split('T')[0];
+          if (!acc[date]) {
+            acc[date] = [];
+          }
+          acc[date].push(auction.currentPrice);
+          return acc;
+        }, {} as Record<string, number[]>);
+
+      const medianPrices = Object.entries(auctionsByDay).map(([date, prices]) => ({
+        date,
+        medianPrice: calculateMedian(prices),
+      })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // Get bids for active auctions to calculate active bidders
       const activeAuctionIds = allAuctions
         .filter(auction => new Date(auction.endDate) > now)
         .map(auction => auction.id);
 
-      // Get bids for active auctions
       const allBids = await Promise.all(
         activeAuctionIds.map(auctionId => storage.getBidsForAuction(auctionId))
       );
 
-      // Flatten bids array and count unique bidders in the last 30 days
+      // Calculate unique bidders in the last 30 days
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -1257,23 +1304,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .map(([category, count]) => ({ category, count }))
         .sort((a, b) => b.count - a.count);
 
+      const topPerformers = {
+        seller: topSellerProfile ? {
+          name: topSellerProfile.fullName,
+          total: topSeller.total,
+          auctionsWon: topSeller.count
+        } : null,
+        buyer: topBuyerProfile ? {
+          name: topBuyerProfile.fullName,
+          total: topBuyer.total,
+          auctionsWon: topBuyer.count
+        } : null
+      };
+
       res.json({
         averagePrices,
         activeAuctions,
         activeBidders,
         totalBids,
-        topPerformers: {
-          seller: topSellerProfile ? {
-            name: topSellerProfile.fullName,
-            total: topSeller.total,
-            auctionsWon: topSeller.count
-          } : null,
-          buyer: topBuyerProfile ? {
-            name: topBuyerProfile.fullName,
-            total: topBuyer.total,
-            auctionsWon: topBuyer.count
-          } : null
-        },
+        species: uniqueSpecies,
+        medianPrices,
+        topPerformers,
         popularCategories
       });
     } catch (error) {
@@ -1281,6 +1332,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch market statistics" });
     }
   });
+
+  // Helper function to calculate median
+  function calculateMedian(numbers: number[]): number {
+    if (numbers.length === 0) return 0;
+    const sorted = [...numbers].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return (sorted[middle - 1] + sorted[middle]) / 2;
+    }
+    return sorted[middle];
+  }
 
   app.get("/api/sellers/active", async (req, res) => {
     try {
@@ -1391,6 +1453,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+
   // Set up periodic checks for auction notifications
   const NOTIFICATION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
   setInterval(async () => {

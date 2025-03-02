@@ -1,6 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Loader2, Trophy } from "lucide-react";
+import { PriceTrendGraph } from "@/components/price-trend-graph";
+import { formatPrice } from "@/utils/formatters";
+import { BuyerRequestList } from "@/components/buyer-request-list";
+import { useState } from "react";
 import {
   LineChart,
   Line,
@@ -12,8 +16,6 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-import { formatPrice } from "@/utils/formatters";
-import { BuyerRequestList } from "@/components/buyer-request-list";
 
 interface MarketStats {
   activeBidders: number;
@@ -22,6 +24,11 @@ interface MarketStats {
     species: string;
     averagePrice: number;
   }[];
+  medianPrices: {
+    date: string;
+    medianPrice: number;
+  }[];
+  species: string[];
   activeAuctions: number;
   topPerformers: {
     seller: {
@@ -35,10 +42,6 @@ interface MarketStats {
       auctionsWon: number;
     } | null;
   };
-  priceHistory: {
-    date: string;
-    averagePrice: number;
-  }[];
   popularCategories: {
     category: string;
     count: number;
@@ -46,8 +49,12 @@ interface MarketStats {
 }
 
 export default function AnalyticsPage() {
+  const [timeFrame, setTimeFrame] = useState("month");
+  const [category, setCategory] = useState("all");
+  const [selectedSpecies, setSelectedSpecies] = useState("all");
+
   const { data: marketStats, isLoading } = useQuery<MarketStats>({
-    queryKey: ["/api/analytics/market-stats"],
+    queryKey: ["/api/analytics/market-stats", timeFrame, category, selectedSpecies],
   });
 
   // Get theme colors from CSS variables
@@ -66,6 +73,15 @@ export default function AnalyticsPage() {
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
       <h1 className="text-2xl md:text-3xl font-bold">Market Analytics</h1>
+
+      {/* Price Trend Graph */}
+      <PriceTrendGraph
+        data={marketStats?.medianPrices || []}
+        species={marketStats?.species || []}
+        onTimeFrameChange={setTimeFrame}
+        onCategoryChange={setCategory}
+        onSpeciesChange={setSelectedSpecies}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         {/* Active Auctions Card */}
