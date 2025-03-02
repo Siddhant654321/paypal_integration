@@ -14,6 +14,8 @@ import {SellerPaymentService} from "./seller-payments";
 import {insertFulfillmentSchema} from "@shared/schema"; 
 import { EmailService } from "./email"; 
 import { AuctionService } from "./auction-service";
+import { AIPricingService } from "./ai-service"; // Added import
+
 
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -851,10 +853,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return { ...request, buyerProfile };
         })
       );
-      
 
       console.log(`[BUYER REQUESTS] Returning ${requestsWithProfiles.length} requests with profiles`);
-      res.json(requestsWithProfiles);} catch (error) {
+      res.json(requestsWithProfiles);
+    } catch (error) {
       console.error("[BUYER REQUESTS] Error fetching requests:", error);
       res.status(500).json({ message: "Failed to fetch buyer requests" });
     }
@@ -1148,6 +1150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch active sellers" });
     }
   });
+  
   
 
   app.get("/api/analytics/market-stats", async (req, res) => {
@@ -1467,6 +1470,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error in auction notification check:", error);
     }
   }, NOTIFICATION_CHECK_INTERVAL);
+  
+
+  app.post("/api/ai/price-suggestion", requireAuth, requireApprovedSeller, async (req, res) => {
+    try {
+      const { species, category, quality, additionalDetails } = req.body;
+
+      const suggestion = await AIPricingService.getPriceSuggestion(
+        species,
+        category,
+        quality,
+        additionalDetails
+      );
+
+      res.json(suggestion);
+    } catch (error) {
+      console.error("[AI] Error getting price suggestion:", error);
+      res.status(500).json({ message: "Failed to generate price suggestion" });
+    }
+  });
+
+  app.post("/api/ai/description-suggestion", requireAuth, requireApprovedSeller, async (req, res) => {
+    try {
+      const { title, species, category, details } = req.body;
+
+      const suggestion = await AIPricingService.getDescriptionSuggestion(
+        title,
+        species,
+        category,
+        details
+      );
+
+      res.json(suggestion);
+    } catch (error) {
+      console.error("[AI] Error generating description:", error);
+      res.status(500).json({ message: "Failed to generate description suggestion" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

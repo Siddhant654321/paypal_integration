@@ -65,6 +65,7 @@
     "micro": "^10.0.1",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.0",
+    "openai": "^4.86.1",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "react": "^18.3.1",

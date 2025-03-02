@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertAuctionSchema } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { FileUpload } from "@/components/file-upload";
+import { AIPriceSuggestion } from "@/components/ai-price-suggestion";
 import {
   Form,
   FormControl,
@@ -43,7 +44,7 @@ export default function NewAuction() {
       auth: {
         isAuthenticated: !!user,
         role: user?.role,
-        hasProfile: user?.has_profile,
+        hasProfile: user?.hasProfile,
         approved: user?.approved
       }
     });
@@ -73,7 +74,7 @@ export default function NewAuction() {
   console.log("NewAuction: User authorized", {
     id: user.id,
     role: user.role,
-    hasProfile: user.has_profile,
+    hasProfile: user.hasProfile,
     approved: user.approved
   });
 
@@ -149,6 +150,24 @@ export default function NewAuction() {
     },
   });
 
+  // Function to handle AI suggestions
+  const handleSuggestionsReceived = (suggestions: {
+    startPrice: number;
+    reservePrice: number;
+    description?: string;
+  }) => {
+    // Update form with suggestions
+    if (suggestions.startPrice) {
+      form.setValue('startPrice', centsToDollars(suggestions.startPrice));
+    }
+    if (suggestions.reservePrice) {
+      form.setValue('reservePrice', centsToDollars(suggestions.reservePrice));
+    }
+    if (suggestions.description) {
+      form.setValue('description', suggestions.description);
+    }
+  };
+
   return (
     <div className="container max-w-2xl mx-auto py-8">
       <h1 className="text-3xl font-bold mb-8">Create New Auction</h1>
@@ -170,23 +189,6 @@ export default function NewAuction() {
                 <FormLabel>Title</FormLabel>
                 <FormControl>
                   <Input {...field} placeholder="Enter auction title" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Description</FormLabel>
-                <FormControl>
-                  <Textarea
-                    {...field}
-                    placeholder="Provide detailed description of your auction item"
-                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -248,6 +250,30 @@ export default function NewAuction() {
               )}
             />
           </div>
+
+          {/* AI Price Suggestion Component */}
+          <AIPriceSuggestion
+            species={form.watch("species")}
+            category={form.watch("category")}
+            onSuggestionsReceived={handleSuggestionsReceived}
+          />
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="Provide detailed description of your auction item"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <div className="mb-4">
             <FormLabel>Images</FormLabel>
