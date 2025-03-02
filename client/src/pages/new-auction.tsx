@@ -29,6 +29,7 @@ import { Loader2 } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
 import { useState, useEffect } from 'react';
 import { dollarsToCents, formatDollarInput, formatPrice, centsToDollars } from "../utils/formatters";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 export default function NewAuction() {
   const { user, isLoading } = useAuth();
@@ -395,7 +396,7 @@ export default function NewAuction() {
             disabled={createAuctionMutation.isPending}
           >
             {createAuctionMutation.isPending && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <LoadingSpinner className="mr-2 h-4 w-4" />
             )}
             Create Auction
           </Button>

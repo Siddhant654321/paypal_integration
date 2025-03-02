@@ -3,13 +3,14 @@ import { type BuyerRequest, type Profile } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Clock, Edit, Trash, Loader2 } from "lucide-react";
+import { Eye, Clock, Edit, Trash } from "lucide-react";
 import { format } from "date-fns";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
+import { LoadingSpinner } from "@/components/ui/loading-spinner"; // Fixed import path
 
 interface BuyerRequestWithProfile extends BuyerRequest {
   buyerProfile: Profile;
@@ -129,9 +130,10 @@ export function BuyerRequestList() {
                       }}
                       disabled={deleteMutation.isPending}
                     >
-                      {deleteMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
+                      {deleteMutation.isPending && (
+                        <LoadingSpinner className="h-4 w-4 mr-2" />
+                      )}
+                      {!deleteMutation.isPending && (
                         <Trash className="h-4 w-4 mr-2" />
                       )}
                       Delete

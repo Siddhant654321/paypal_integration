@@ -56,6 +56,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import React, { useEffect } from "react";
 import { FileUpload } from "@/components/file-upload";
 import { User } from "lucide-react"; //moved here to remove duplicate
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -98,7 +99,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
 
         {isLoadingProfile ? (
           <div className="flex justify-center p-4">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <LoadingSpinner className="h-6 w-6" />
           </div>
         ) : !profile ? (
           <p className="text-muted-foreground">No profile information found</p>
@@ -139,7 +140,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                 <h3 className="font-semibold mb-4">Bid History</h3>
                 {isLoadingBids ? (
                   <div className="flex justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <LoadingSpinner className="h-6 w-6" />
                   </div>
                 ) : !bids?.length ? (
                   <p className="text-muted-foreground">No bids found</p>
@@ -168,7 +169,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                 <h3 className="font-semibold mb-4">Auctions</h3>
                 {isLoadingAuctions ? (
                   <div className="flex justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <LoadingSpinner className="h-6 w-6" />
                   </div>
                 ) : !auctions?.length ? (
                   <p className="text-muted-foreground">No auctions found</p>
@@ -225,11 +226,11 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
-      
+
       // Force refresh data
       queryClient.refetchQueries({ queryKey: ["/api/admin/bids", auctionId] });
       queryClient.refetchQueries({ queryKey: ["/api/auctions"] });
-      
+
       toast({
         title: "Success",
         description: "Bid has been deleted",
@@ -261,7 +262,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
 
         {isLoading ? (
           <div className="flex justify-center p-4">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <LoadingSpinner className="h-6 w-6" />
           </div>
         ) : !bids?.length ? (
           <p className="text-muted-foreground text-center py-4">No bids found</p>
@@ -616,9 +617,9 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 </Button>
               </DialogClose>
               <Button type="submit" disabled={updateAuctionMutation.isPending}>
-                {updateAuctionMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
+                {updateAuctionMutation.isPending ? (
+                  <LoadingSpinner className="h-4 w-4 mr-2" />
+                ) : null}
                 Save Changes
               </Button>
             </DialogFooter>
@@ -629,7 +630,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
   );
 }
 
-export default function AdminDashboard() {
+function AdminDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
@@ -777,7 +778,7 @@ export default function AdminDashboard() {
               <TabsContent value="pending">
                 {isLoadingPending ? (
                   <div className="flex justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <LoadingSpinner className="h-8 w-8" />
                   </div>
                 ) : !realPendingUsers?.length ? (
                   <p className="text-muted-foreground">No pending sellers</p>
@@ -844,7 +845,7 @@ export default function AdminDashboard() {
 
                   {isLoadingApproved ? (
                     <div className="flex justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <LoadingSpinner className="h-8 w-8" />
                     </div>
                   ) : !filteredSellers?.length ? (
                     <p className="text-muted-foreground">No sellers found</p>
@@ -912,7 +913,7 @@ export default function AdminDashboard() {
 
                   {isLoadingBuyers ? (
                     <div className="flex justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <LoadingSpinner className="h-8 w-8" />
                     </div>
                   ) : !filteredBuyers?.length ? (
                     <p className="text-muted-foreground">No buyers found</p>
@@ -993,7 +994,7 @@ export default function AdminDashboard() {
               <TabsContent value="pending">
                 {isLoadingPendingAuctions ? (
                   <div className="flex justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <LoadingSpinner className="h-8 w-8" />
                   </div>
                 ) : !pendingAuctions?.length ? (
                   <p className="text-muted-foreground">No pending auctions</p>
@@ -1044,7 +1045,7 @@ export default function AdminDashboard() {
                                 disabled={approveAuctionMutation.isPending}
                               >
                                 {approveAuctionMutation.isPending && (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />)}
+                                  <LoadingSpinner className="mr-2 h-4 w-4" />)}
                                 <CheckCircle2 className="mr-2 h-4 w-4" />
                                 Approve
                               </Button>
@@ -1101,7 +1102,7 @@ export default function AdminDashboard() {
 
                   {isLoadingApprovedAuctions ? (
                     <div className="flex justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <LoadingSpinner className="h-8 w-8" />
                     </div>
                   ) : !filteredActiveAuctions?.length ? (
                     <p className="text-muted-foreground">No active auctions found</p>
@@ -1161,7 +1162,7 @@ export default function AdminDashboard() {
 
                   {isLoadingApprovedAuctions ? (
                     <div className="flex justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <LoadingSpinner className="h-8 w-8" />
                     </div>
                   ) : !filteredCompletedAuctions?.length ? (
                     <p className="text-muted-foreground">No completed auctions found</p>
@@ -1220,3 +1221,5 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+export default AdminDashboard;

@@ -1,6 +1,5 @@
-
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Button } from '@/components/ui/button';
 
 interface StripeConnectProps {
@@ -38,7 +37,7 @@ export function StripeConnect({ url, onComplete }: StripeConnectProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+        <LoadingSpinner className="h-6 w-6" />
         <span>Preparing Stripe Connect...</span>
       </div>
     );
