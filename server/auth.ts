@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -101,6 +101,88 @@ export function setupAuth(app: Express) {
       done(error);
     }
   });
+
+  // Add profile validation middleware
+  export function requireCompleteProfile(roles: string[] = []) {
+    return async (req: Request, res: Response, next: NextFunction) => {
+      if (!req.user) {
+        console.log("[AUTH] No user found in requireCompleteProfile middleware");
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      // Skip profile check for admin users
+      if (req.user.role === "admin") {
+        return next();
+      }
+
+      // If roles are specified, check if user has required role
+      if (roles.length > 0 && !roles.includes(req.user.role)) {
+        console.log("[AUTH] User role not authorized:", {
+          userRole: req.user.role,
+          requiredRoles: roles
+        });
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      try {
+        const profile = await storage.getProfile(req.user.id);
+
+        if (!profile) {
+          console.log("[AUTH] No profile found for user:", req.user.id);
+          return res.status(403).json({ 
+            message: "Please complete your profile first",
+            code: "PROFILE_REQUIRED"
+          });
+        }
+
+        // Check required fields based on role
+        const baseRequiredFields = {
+          fullName: profile.fullName,
+          email: profile.email,
+          phoneNumber: profile.phoneNumber,
+          address: profile.address,
+          city: profile.city,
+          state: profile.state,
+          zipCode: profile.zipCode
+        };
+
+        const isSeller = req.user.role === "seller" || req.user.role === "seller_admin";
+        const sellerFields = isSeller ? {
+          businessName: profile.businessName,
+          breedSpecialty: profile.breedSpecialty,
+          npipNumber: profile.npipNumber
+        } : {};
+
+        const requiredFields = { ...baseRequiredFields, ...sellerFields };
+        const missingFields = Object.entries(requiredFields)
+          .filter(([_, value]) => !value)
+          .map(([key]) => key);
+
+        if (missingFields.length > 0) {
+          console.log("[AUTH] Incomplete profile fields:", {
+            userId: req.user.id,
+            missingFields
+          });
+          return res.status(403).json({
+            message: "Please complete all required profile fields",
+            code: "INCOMPLETE_PROFILE",
+            missingFields
+          });
+        }
+
+        // If we get here, profile is complete
+        if (!req.user.hasProfile) {
+          await storage.updateUser(req.user.id, { hasProfile: true });
+          console.log("[AUTH] Updated hasProfile flag for user:", req.user.id);
+        }
+
+        next();
+      } catch (error) {
+        console.error("[AUTH] Error checking profile:", error);
+        next(error);
+      }
+    };
+  }
 
   app.post("/api/register", async (req, res, next) => {
     try {

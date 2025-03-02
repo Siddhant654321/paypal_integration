@@ -63,6 +63,7 @@ export interface IStorage {
   updateBuyerRequest(id: number, data: any): Promise<any>;
   getPayoutsBySeller(sellerId: number): Promise<any[]>;
   deleteAuction(auctionId: number): Promise<void>;
+  updateUser(userId: number, data: Partial<User>): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -169,19 +170,48 @@ export class DatabaseStorage implements IStorage {
 
   async updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile> {
     try {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId));
+
       const [updatedProfile] = await db
         .update(profiles)
         .set(profile)
         .where(eq(profiles.userId, userId))
         .returning();
 
-      // Ensure user's has_profile flag is set
-      await db
-        .update(users)
-        .set({ hasProfile: true })
-        .where(eq(users.id, userId));
+      // Define required fields based on user role
+      const baseRequiredFields = [
+        'fullName', 
+        'email', 
+        'phoneNumber', 
+        'address', 
+        'city', 
+        'state', 
+        'zipCode'
+      ];
 
-      log(`Profile updated and user flag verified for user ${userId}`);
+      const isSeller = user.role === "seller" || user.role === "seller_admin";
+      const requiredFields = isSeller 
+        ? [...baseRequiredFields, 'businessName', 'breedSpecialty', 'npipNumber']
+        : baseRequiredFields;
+
+      // Check if all required fields are present and non-empty
+      const isComplete = requiredFields.every(field => {
+        const value = updatedProfile[field as keyof Profile];
+        return value !== null && value !== undefined && value !== '';
+      });
+
+      if (isComplete) {
+        await db
+          .update(users)
+          .set({ hasProfile: true })
+          .where(eq(users.id, userId));
+        log(`Profile completed for user ${userId}`);
+      }
+
+      log(`Profile updated for user ${userId}`);
       return updatedProfile;
     } catch (error) {
       log(`Error updating profile: ${error}`);
@@ -607,6 +637,19 @@ export class DatabaseStorage implements IStorage {
         .where(eq(auctions.id, auctionId));
     } catch (error) {
       log(`Error deleting auction ${auctionId}: ${error}`);
+      throw error;
+    }
+  }
+  async updateUser(userId: number, data: Partial<User>): Promise<User> {
+    try {
+      const [user] = await db
+        .update(users)
+        .set(data)
+        .where(eq(users.id, userId))
+        .returning();
+      return user;
+    } catch (error) {
+      log(`Error updating user ${userId}: ${error}`);
       throw error;
     }
   }
