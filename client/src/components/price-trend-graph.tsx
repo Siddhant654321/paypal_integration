@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   Scatter,
   ComposedChart,
+  Legend,
 } from "recharts";
 import { formatPrice } from "@/utils/formatters";
 
@@ -35,7 +36,27 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
   const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#82ca9d';
 
   // Log data for debugging
-  console.log("Price trend data:", data);
+  console.log("Price trend data:", {
+    dataPoints: data?.length || 0,
+    firstPoint: data?.[0],
+    lastPoint: data?.[data?.length - 1]
+  });
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-background border rounded p-2 shadow-lg">
+          <p className="font-medium">{new Date(label).toLocaleDateString()}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-sm">
+              {entry.name}: {formatPrice(entry.value)}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <Card>
@@ -83,32 +104,36 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
       <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
         {data && data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data}>
+            <ComposedChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(value) => new Date(value).toLocaleDateString()}
+                type="category"
+                scale="time"
               />
-              <YAxis tickFormatter={(value) => formatPrice(value)} />
-              <Tooltip
-                formatter={(value) => [formatPrice(value as number), "Price"]}
-                labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
+              <YAxis 
+                tickFormatter={(value) => formatPrice(value)}
+                domain={['auto', 'auto']}
               />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
               {/* Scatter plot for individual auction prices */}
               <Scatter
-                name="Auction Price"
+                name="Individual Prices"
                 dataKey="price"
                 fill={primaryColor}
-                opacity={0.6}
+                opacity={0.7}
+                shape="circle"
+                size={20}
               />
-              {/* Trend line showing median prices */}
+              {/* Trend line showing moving average */}
               <Line
                 name="Price Trend"
                 type="monotone"
                 dataKey="medianPrice"
                 stroke={accentColor}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 dot={false}
               />
             </ComposedChart>

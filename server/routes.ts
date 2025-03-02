@@ -853,8 +853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       console.log(`[BUYER REQUESTS] Returning ${requestsWithProfiles.length} requests with profiles`);
-      res.json(requestsWithProfiles);
-    } catch (error) {
+      res.json(requestsWithProfiles);} catch (error) {
       console.error("[BUYER REQUESTS] Error fetching requests:", error);
       res.status(500).json({ message: "Failed to fetch buyer requests" });
     }
@@ -1150,7 +1149,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
 
-  // Add or update the market stats endpoint
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
       const timeFrame = req.query.timeFrame as string || 'month';
@@ -1163,33 +1161,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: species === 'all' ? undefined : species,
       });
 
-      // Calculate price data points for scatter plot and trend line
-      const priceData = auctions
-        .filter(auction => auction.currentPrice > 0)
-        .map(auction => ({
+      // Filter and transform auction data for the price trend
+      const now = new Date();
+      const cutoffDate = new Date();
+      switch (timeFrame) {
+        case 'week':
+          cutoffDate.setDate(cutoffDate.getDate() - 7);
+          break;
+        case 'year':
+          cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+          break;
+        default: // month
+          cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+      }
+
+      // Include both active and ended auctions that have prices
+      const validAuctions = auctions.filter(auction => 
+        new Date(auction.createdAt) >= cutoffDate &&
+        (auction.currentPrice > 0 || auction.startPrice > 0)
+      );
+
+      // Sort auctions by date
+      const sortedAuctions = validAuctions.sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+      // Create price data points
+      const priceData = sortedAuctions.map(auction => {
+        const price = auction.currentPrice || auction.startPrice;
+        return {
           date: auction.createdAt,
-          price: auction.currentPrice,
-          // For the trend line, we'll use the current price as both price and medianPrice
-          medianPrice: auction.currentPrice
-        }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          price: price,
+          // Calculate moving average for trend line
+          medianPrice: calculateMovingAverage(
+            sortedAuctions,
+            new Date(auction.createdAt),
+            price
+          )
+        };
+      });
 
       // Calculate other stats
+      const activeAuctions = auctions.filter(
+        auction => new Date(auction.endDate) > now
+      ).length;
+
       const activeBidders = new Set(auctions.map(a => a.winningBidderId).filter(Boolean)).size;
       const totalBids = await storage.getTotalBidsCount();
+
+      // Calculate average prices by species
+      const speciesPrices = validAuctions.reduce((acc, auction) => {
+        const price = auction.currentPrice || auction.startPrice;
+        if (!acc[auction.species]) {
+          acc[auction.species] = { total: 0, count: 0 };
+        }
+        acc[auction.species].total += price;
+        acc[auction.species].count += 1;
+        return acc;
+      }, {} as Record<string, { total: number; count: number }>);
+
+      const averagePrices = Object.entries(speciesPrices).map(([species, data]) => ({
+        species,
+        averagePrice: Math.round(data.total / data.count)
+      }));
+
+      // Calculate popular categories
+      const categoryCount = validAuctions.reduce((acc, auction) => {
+        acc[auction.category] = (acc[auction.category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const popularCategories = Object.entries(categoryCount)
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => b.count - a.count);
 
       const response = {
         activeBidders,
         totalBids,
         priceData,
-        activeAuctions: auctions.length,
+        activeAuctions,
         species: [...new Set(auctions.map(a => a.species))],
-        averagePrices: [],
+        averagePrices,
+        popularCategories,
         topPerformers: {
           seller: null,
           buyer: null
-        },
-        popularCategories: []
+        }
       };
 
       res.json(response);
@@ -1198,6 +1255,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch market statistics" });
     }
   });
+
+  // Helper function to calculate moving average for trend line
+  function calculateMovingAverage(
+    auctions: any[],
+    currentDate: Date,
+    currentPrice: number,
+    windowDays = 7
+  ): number {
+    const windowStart = new Date(currentDate);
+    windowStart.setDate(windowStart.getDate() - windowDays);
+
+    const windowPrices = auctions
+      .filter(a => {
+        const auctionDate = new Date(a.createdAt);
+        return auctionDate >= windowStart && auctionDate <= currentDate;
+      })
+      .map(a => a.currentPrice || a.startPrice);
+
+    if (windowPrices.length === 0) return currentPrice;
+
+    const sum = windowPrices.reduce((acc, price) => acc + price, 0);
+    return Math.round(sum / windowPrices.length);
+  }
 
   app.get("/api/sellers/active", async (req, res) => {
     try {
