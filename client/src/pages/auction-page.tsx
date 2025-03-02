@@ -36,11 +36,13 @@ export default function AuctionPage() {
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
     queryKey: [`/api/auctions/${params?.id}`],
+    refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
 
-  const { data: bids } = useQuery<Bid[]>({
+  const { data: bids = [] } = useQuery<Bid[]>({
     queryKey: [`/api/auctions/${params?.id}/bids`],
     enabled: !!auction,
+    refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
 
   useEffect(() => {

@@ -29,8 +29,11 @@ export default function BidForm({ auctionId, currentPrice }: Props) {
     },
     onSuccess: () => {
       setAmount("");
+      // Invalidate both the auction and bids queries
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
+      // Also invalidate any potential parent auction lists
+      queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
       toast({
         title: "Bid placed successfully",
         description: "Your bid has been recorded",
