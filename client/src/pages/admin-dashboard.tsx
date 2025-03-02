@@ -568,9 +568,12 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                     !imagesToRemove.includes(imageUrl) && (
                       <div key={index} className="relative group">
                         <img
-                          src={imageUrl}
+                          src={imageUrl.startsWith('http') || imageUrl.startsWith('/') ? imageUrl : `/uploads/${imageUrl}`}
                           alt={`Auction image ${index + 1}`}
                           className="w-full h-32 object-cover rounded-lg"
+                          onError={(e) => {
+                            e.currentTarget.src = '/images/placeholder.jpg';
+                          }}
                         />
                         <Button
                           type="button"

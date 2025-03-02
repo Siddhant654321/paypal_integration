@@ -9,7 +9,7 @@ function getValidImageUrl(auction: any): string {
   if (auction.imageUrl && auction.imageUrl.trim() !== '') {
     // Ensure URL has proper protocol
     if (!auction.imageUrl.startsWith('http') && !auction.imageUrl.startsWith('/')) {
-      return `/${auction.imageUrl}`;
+      return `/uploads/${auction.imageUrl}`;
     }
     return auction.imageUrl;
   }
@@ -20,7 +20,7 @@ function getValidImageUrl(auction: any): string {
     if (firstImage && firstImage.trim() !== '') {
       // Ensure URL has proper protocol
       if (!firstImage.startsWith('http') && !firstImage.startsWith('/')) {
-        return `/${firstImage}`;
+        return `/uploads/${firstImage}`;
       }
       return firstImage;
     }
