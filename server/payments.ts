@@ -9,7 +9,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16",
+  apiVersion: "2025-02-24.acacia",
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
@@ -103,14 +103,14 @@ export class PaymentService {
       });
 
       // Update the payment with the Stripe session ID
-      const payment = await storage.createPayment({
+      const payment = await storage.insertPayment({
         ...paymentData,
         stripePaymentIntentId: session.payment_intent as string,
       });
 
       // Mark auction as payment processing
       await storage.updateAuction(auctionId, {
-        status: "payment_processing",
+        status: "pending_payment",
       });
 
       return {
@@ -133,19 +133,17 @@ export class PaymentService {
 
   static async handlePaymentSuccess(paymentIntentId: string): Promise<void> {
     try {
-      const payment = await storage.getPaymentByStripeId(paymentIntentId);
+      const payment = await storage.findPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
       }
 
       // Update payment status
-      await storage.updatePayment(payment.id, {
-        status: "completed",
-      });
+      await storage.updatePaymentStatus(payment.id, "completed");
 
       // Update auction status
       await storage.updateAuction(payment.auctionId, {
-        status: "payment_completed",
+        status: "pending_fulfillment",
       });
 
       // Notify the seller
@@ -169,19 +167,17 @@ export class PaymentService {
 
   static async handlePaymentFailure(paymentIntentId: string): Promise<void> {
     try {
-      const payment = await storage.getPaymentByStripeId(paymentIntentId);
+      const payment = await storage.findPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
       }
 
       // Update payment status
-      await storage.updatePayment(payment.id, {
-        status: "failed",
-      });
+      await storage.updatePaymentStatus(payment.id, "failed");
 
       // Update auction status
       await storage.updateAuction(payment.auctionId, {
-        status: "payment_failed",
+        status: "active",
       });
 
       // Notify the seller
@@ -194,13 +190,5 @@ export class PaymentService {
       console.error("Error handling payment failure:", error);
       throw error;
     }
-  }
-}
-
-// Placeholder for SellerPaymentService -  Replace with actual implementation
-class SellerPaymentService {
-  static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
-    console.log(`Creating payout for seller ${sellerId} for payment ${paymentId}, amount: ${amount}`);
-    // Add your actual payout logic here.  This might involve another API call or database interaction.
   }
 }

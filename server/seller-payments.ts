@@ -14,7 +14,7 @@ export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
       console.log("Creating seller account for:", profile.email);
-      
+
       // Clean up any existing account first
       if (profile.stripeAccountId) {
         try {
@@ -55,7 +55,10 @@ export class SellerPaymentService {
       console.log("Account link created:", accountLink.url ? "Success" : "Failed");
 
       // Update profile with Stripe account ID and initial status
-      await storage.updateProfileStripeAccount(profile.userId, account.id, "not_started");
+      await storage.updateSellerStripeAccount(profile.userId, {
+        accountId: account.id,
+        status: "not_started"
+      });
       console.log("Profile updated with Stripe account ID");
 
       return {
@@ -68,7 +71,7 @@ export class SellerPaymentService {
     }
   }
 
-  static async getAccountStatus(accountId: string): Promise<"not_started" | "pending" | "verified"> {
+  static async getAccountStatus(accountId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
     try {
       if (!accountId) {
         return "not_started";
@@ -80,6 +83,8 @@ export class SellerPaymentService {
         return "verified";
       } else if (account.details_submitted) {
         return "pending";
+      } else if (account.requirements?.disabled_reason) {
+        return "rejected";
       }
 
       return "not_started";
@@ -127,11 +132,12 @@ export class SellerPaymentService {
         transfer_group: `payment_${paymentId}`,
       });
 
-      await storage.createPayout({
+      await storage.createSellerPayout({
         sellerId,
         paymentId,
         amount,
         stripeTransferId: transfer.id,
+        status: 'pending'
       });
     } catch (error) {
       console.error("Error creating payout:", error);
