@@ -1608,38 +1608,3 @@ export async function registerRoutes(app: Express): Promise<Server> {
 const log = (message: string, context: string = 'general') => {
   console.log(`[${context}] ${message}`);
 }
-  try {
-    console.log("[Stripe Connect] Starting connect process");
-    const user = req.user as User;
-    console.log("[Stripe Connect] User:", user.id);
-
-    const profile = await storage.getProfile(user.id);
-    if (!profile) {
-      console.log("[Stripe Connect] Profile not found for user:", user.id);
-      return res.status(404).json({ message: "Profile not found" });
-    }
-    console.log("[Stripe Connect] Profile found:", profile.email);
-
-    console.log("[Stripe Connect] Creating seller account");
-    const { accountId, url } = await SellerPaymentService.createSellerAccount(
-      profile
-    );
-    console.log("[Stripe Connect] Account created, ID:", accountId);
-    console.log("[Stripe Connect] Redirect URL generated");
-
-    return res.json({ accountId, url });
-  } catch (error) {
-    console.error("[Stripe Connect] Error:", error);
-    if (error instanceof Error) {
-      console.error("[Stripe Connect] Error details:", {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-    }
-    return res.status(500).json({
-      message: "Failed to connect with Stripe",
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-});
