@@ -25,31 +25,46 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
   const [isLoading, setIsLoading] = useState(false);
 
   const getPriceSuggestion = async () => {
+    if (!species || !category) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a species and category first",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsLoading(true);
-      const result = await apiRequest("POST", "/api/ai/price-suggestion", {
+      console.log("Requesting price suggestion for:", { species, category, quality, details });
+
+      const response = await apiRequest("POST", "/api/ai/price-suggestion", {
         species,
         category,
         quality,
         additionalDetails: details,
       });
 
-      // Format the response
-      const suggestion = {
-        startPrice: result.startPrice,
-        reservePrice: result.reservePrice,
-      };
+      console.log("Received AI suggestion:", response);
+
+      if (!response || typeof response.startPrice !== 'number' || typeof response.reservePrice !== 'number') {
+        throw new Error("Invalid price suggestion format received");
+      }
 
       toast({
         title: "Price Suggestion Generated",
-        description: `Recommended start price: ${formatPrice(result.startPrice)}`,
+        description: `Recommended prices: Start at ${formatPrice(response.startPrice)}, Reserve at ${formatPrice(response.reservePrice)}`,
       });
 
-      onSuggestionsReceived(suggestion);
+      onSuggestionsReceived({
+        startPrice: response.startPrice,
+        reservePrice: response.reservePrice,
+      });
     } catch (error) {
+      console.error("Price suggestion error:", error);
       toast({
         title: "Error",
-        description: "Failed to get price suggestion",
+        description: error instanceof Error ? error.message : "Failed to get price suggestion",
         variant: "destructive",
       });
     } finally {
@@ -58,14 +73,31 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
   };
 
   const getDescriptionSuggestion = async () => {
+    if (!species || !category || !details) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide species, category, and details before generating a description",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsLoading(true);
-      const result = await apiRequest("POST", "/api/ai/description-suggestion", {
+      console.log("Requesting description suggestion for:", { species, category, details });
+
+      const response = await apiRequest("POST", "/api/ai/description-suggestion", {
         title: `${species} - ${category}`,
         species,
         category,
         details,
       });
+
+      console.log("Received AI description:", response);
+
+      if (!response || typeof response.description !== 'string') {
+        throw new Error("Invalid description format received");
+      }
 
       toast({
         title: "Description Generated",
@@ -75,12 +107,13 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
       onSuggestionsReceived({
         startPrice: 0, // Keep existing price
         reservePrice: 0, // Keep existing price
-        description: result.description,
+        description: response.description,
       });
     } catch (error) {
+      console.error("Description suggestion error:", error);
       toast({
         title: "Error",
-        description: "Failed to generate description",
+        description: error instanceof Error ? error.message : "Failed to generate description",
         variant: "destructive",
       });
     } finally {

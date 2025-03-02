@@ -849,8 +849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         requests.map(async (request) => {
           const buyerProfile = await storage.getProfile(request.buyerId);
           console.log(`[BUYER REQUESTS] Found profile for buyer ${request.buyerId}:`, 
-            buyerProfile ? "yes" : "no");
-          return { ...request, buyerProfile };
+            buyerProfile ? "yes" : "no");          return { ...request, buyerProfile };
         })
       );
 
@@ -1479,8 +1478,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const suggestion = await AIPricingService.getPriceSuggestion(
         species,
         category,
-        quality,
-        additionalDetails
+        quality || "Standard",
+        additionalDetails || ""
       );
 
       res.json(suggestion);
@@ -1495,10 +1494,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { title, species, category, details } = req.body;
 
       const suggestion = await AIPricingService.getDescriptionSuggestion(
-        title,
+        title || `${species} - ${category}`,
         species,
         category,
-        details
+        details || ""
       );
 
       res.json(suggestion);

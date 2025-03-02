@@ -13,7 +13,6 @@ interface PriceSuggestion {
 }
 
 interface DescriptionSuggestion {
-  title: string;
   description: string;
   suggestedTags: string[];
 }
@@ -29,7 +28,8 @@ export class AIPricingService {
       console.log("[AI PRICING] Getting price suggestion for:", {
         species,
         category,
-        quality
+        quality,
+        additionalDetails: additionalDetails.substring(0, 100) + "..."
       });
 
       // Get historical auction data
@@ -48,21 +48,22 @@ export class AIPricingService {
 
 Species: ${species}
 Category: ${category}
-Quality: ${quality}
-Additional Details: ${additionalDetails}
+Quality Level: ${quality}
+Details: ${additionalDetails}
 
 Historical Market Data:
-- Average Selling Price: ${formatPrice(auctionStats.averagePrice)}
+- Average Price: ${formatPrice(auctionStats.averagePrice)}
 - Median Price: ${formatPrice(auctionStats.medianPrice)}
 - Price Range: ${formatPrice(auctionStats.minPrice)} - ${formatPrice(auctionStats.maxPrice)}
-- Success Rate: ${auctionStats.successRate}%
-- Average Days to Sell: ${auctionStats.avgDaysToSell}
+- Success Rate: ${Math.round(auctionStats.successRate)}%
 
-Please provide a JSON response with:
-- startPrice: recommended starting price in cents
-- reservePrice: recommended reserve price in cents
-- confidence: confidence score between 0 and 1
-- reasoning: detailed explanation for the recommendation`;
+Based on this information, provide a pricing strategy in JSON format with:
+{
+  "startPrice": <recommended starting price in cents>,
+  "reservePrice": <recommended reserve price in cents>,
+  "confidence": <confidence score between 0 and 1>,
+  "reasoning": "<detailed explanation for the recommendation>"
+}`;
 
       console.log("[AI PRICING] Sending request to OpenAI");
       const response = await openai.chat.completions.create({
@@ -75,16 +76,23 @@ Please provide a JSON response with:
         throw new Error("No response content from OpenAI");
       }
 
-      const suggestion = JSON.parse(response.choices[0].message.content);
-      console.log("[AI PRICING] Received suggestion:", suggestion);
+      const suggestion = JSON.parse(response.choices[0].message.content) as PriceSuggestion;
+
+      // Validate suggestion format
+      if (!suggestion.startPrice || !suggestion.reservePrice) {
+        throw new Error("Invalid price suggestion format from AI");
+      }
+
+      console.log("[AI PRICING] Generated suggestion:", {
+        startPrice: formatPrice(suggestion.startPrice),
+        reservePrice: formatPrice(suggestion.reservePrice),
+        confidence: suggestion.confidence
+      });
 
       return suggestion;
     } catch (error) {
       console.error("[AI PRICING] Error getting price suggestion:", error);
-      if (error instanceof Error) {
-        throw new Error(`Failed to generate price suggestion: ${error.message}`);
-      }
-      throw new Error("Failed to generate price suggestion");
+      throw new Error(error instanceof Error ? error.message : "Failed to generate price suggestion");
     }
   }
 
@@ -98,20 +106,29 @@ Please provide a JSON response with:
       console.log("[AI PRICING] Getting description suggestion for:", {
         title,
         species,
-        category
+        category,
+        details: details.substring(0, 100) + "..."
       });
 
-      const prompt = `As a poultry auction expert, help create an optimized listing for:
+      const prompt = `As a poultry auction expert, create an optimized listing description for:
 
 Title: ${title}
 Species: ${species}
 Category: ${category}
 Details: ${details}
 
-Please provide a JSON response with:
-- title: an optimized, attention-grabbing title
-- description: a detailed, well-structured description highlighting key features and value
-- suggestedTags: array of relevant keywords for searchability`;
+Provide a response in JSON format with:
+{
+  "description": "<a detailed, well-structured description highlighting key features and value>",
+  "suggestedTags": ["<array of relevant keywords for searchability>"]
+}
+
+Important guidelines:
+- Be specific about breed characteristics and quality indicators
+- Highlight unique selling points
+- Include relevant care and breeding information
+- Use professional terminology appropriate for the category
+- Keep the description concise but comprehensive`;
 
       console.log("[AI PRICING] Sending request to OpenAI");
       const response = await openai.chat.completions.create({
@@ -124,16 +141,19 @@ Please provide a JSON response with:
         throw new Error("No response content from OpenAI");
       }
 
-      const suggestion = JSON.parse(response.choices[0].message.content);
-      console.log("[AI PRICING] Received description suggestion");
+      const suggestion = JSON.parse(response.choices[0].message.content) as DescriptionSuggestion;
+
+      // Validate suggestion format
+      if (!suggestion.description || !Array.isArray(suggestion.suggestedTags)) {
+        throw new Error("Invalid description suggestion format from AI");
+      }
+
+      console.log("[AI PRICING] Generated description suggestion");
 
       return suggestion;
     } catch (error) {
       console.error("[AI PRICING] Error generating description:", error);
-      if (error instanceof Error) {
-        throw new Error(`Failed to generate description suggestion: ${error.message}`);
-      }
-      throw new Error("Failed to generate description suggestion");
+      throw new Error(error instanceof Error ? error.message : "Failed to generate description");
     }
   }
 
@@ -149,13 +169,7 @@ Please provide a JSON response with:
       minPrice: prices.length ? Math.min(...prices) : 0,
       maxPrice: prices.length ? Math.max(...prices) : 0,
       successRate: auctions.length ? 
-        (successfulAuctions.length / auctions.length) * 100 : 0,
-      avgDaysToSell: successfulAuctions.length ?
-        successfulAuctions.reduce((sum, auction) => {
-          const start = new Date(auction.startDate);
-          const end = new Date(auction.endDate);
-          return sum + (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-        }, 0) / successfulAuctions.length : 0
+        (successfulAuctions.length / auctions.length) * 100 : 0
     };
   }
 }
