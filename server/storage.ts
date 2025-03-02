@@ -176,22 +176,38 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async isProfileComplete(profile: Profile): Promise<boolean> {
-    // Check for required fields that make a profile "complete"
-    return !!(
-      profile.fullName &&
-      profile.email &&
-      profile.phoneNumber &&
-      profile.address &&
-      profile.city &&
-      profile.state &&
-      profile.zipCode
+  async isProfileComplete(profile: Profile, userRole?: string): Promise<boolean> {
+    // Base requirements for all users
+    const hasBasicInfo = !!(
+      profile.fullName &&    // Name is required
+      profile.email &&       // Email is required
+      profile.address &&     // Address is required for shipping
+      profile.city &&        // City is required for shipping
+      profile.state &&       // State is required for shipping
+      profile.zipCode        // ZIP code is required for shipping
     );
+
+    // If user is a seller or seller admin, check additional requirements
+    if (userRole && ['seller', 'seller_admin'].includes(userRole)) {
+      return hasBasicInfo && !!(
+        profile.npipNumber && // NPIP number required for sellers
+        profile.bio          // Bio required for sellers
+      );
+    }
+
+    // For buyers or other roles, basic info is sufficient
+    return hasBasicInfo;
   }
 
   async createProfile(insertProfile: InsertProfile): Promise<Profile> {
     try {
       log(`Creating profile for user ${insertProfile.userId}`);
+
+      // Get user role for profile completion check
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, insertProfile.userId));
 
       // First, create the profile
       const [profile] = await db
@@ -202,8 +218,8 @@ export class DatabaseStorage implements IStorage {
         })
         .returning();
 
-      // Check if profile is complete
-      const isComplete = await this.isProfileComplete(profile);
+      // Check if profile has essential fields based on role
+      const isComplete = await this.isProfileComplete(profile, user?.role);
 
       // Update completion status if needed
       if (isComplete) {
@@ -214,14 +230,17 @@ export class DatabaseStorage implements IStorage {
           .returning();
       }
 
-      // Then, update the user's has_profile flag
+      // Update the user's has_profile flag
       await db
         .update(users)
         .set({ hasProfile: true })
         .where(eq(users.id, insertProfile.userId));
 
-      log(`Profile created and user updated for user ${insertProfile.userId}`);
-      return profile;
+      log(`Profile created successfully for user ${insertProfile.userId}`);
+      return {
+        ...profile,
+        isComplete
+      };
     } catch (error) {
       log(`Error creating profile: ${error}`);
       throw error;
@@ -230,6 +249,12 @@ export class DatabaseStorage implements IStorage {
 
   async updateProfile(userId: number, profileData: Partial<Profile>): Promise<Profile> {
     try {
+      // Get user for role check
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId));
+
       // First update the profile
       const [updatedProfile] = await db
         .update(profiles)
@@ -237,8 +262,8 @@ export class DatabaseStorage implements IStorage {
         .where(eq(profiles.userId, userId))
         .returning();
 
-      // Check if profile is now complete
-      const isComplete = await this.isProfileComplete(updatedProfile);
+      // Check if profile is now complete based on role
+      const isComplete = await this.isProfileComplete(updatedProfile, user?.role);
 
       // Update completion status if needed
       if (isComplete !== updatedProfile.isComplete) {
