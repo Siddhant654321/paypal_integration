@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Search, Trash2, Edit, Mail, Phone, User } from "lucide-react";
+import { Loader2, CheckCircle2, Search, Trash2, Edit, Mail, Phone } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { User, Auction, insertAuctionSchema, type Bid } from "@shared/schema";
+import { Auction, insertAuctionSchema, type Bid } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +55,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import React, { useEffect } from "react";
 import { FileUpload } from "@/components/file-upload";
+import { User } from "lucide-react"; //moved here to remove duplicate
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
