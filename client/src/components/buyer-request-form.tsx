@@ -65,14 +65,7 @@ export function BuyerRequestForm({ onClose, initialData, isEditing }: BuyerReque
         : "/api/buyer-requests";
       const method = isEditing ? "PATCH" : "POST";
 
-      const response = await apiRequest(endpoint, {
-        method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      });
-      return response.json();
+      return apiRequest(method, endpoint, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/buyer-requests"] });
