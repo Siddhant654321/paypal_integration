@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -12,6 +12,7 @@ import {
   Scatter,
   ComposedChart,
   Legend,
+  Label
 } from "recharts";
 import { formatPrice } from "@/utils/formatters";
 
@@ -19,6 +20,7 @@ interface PriceData {
   date: string;
   price: number;
   medianPrice: number;
+  title?: string;
 }
 
 interface Props {
@@ -35,21 +37,49 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
   const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#ccc';
   const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#82ca9d';
 
-  // Log data for debugging
-  console.log("Price trend data:", {
-    dataPoints: data?.length || 0,
-    firstPoint: data?.[0],
-    lastPoint: data?.[data?.length - 1]
-  });
+  // Format data for display
+  const [formattedData, setFormattedData] = useState(data);
+  
+  useEffect(() => {
+    if (data && data.length > 0) {
+      // Sort data by date to ensure proper timeline
+      const sortedData = [...data].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      
+      // Format dates for better display
+      const formatted = sortedData.map(item => ({
+        ...item,
+        // Keep original date for X-axis but add formatted date for display
+        formattedDate: new Date(item.date).toLocaleDateString()
+      }));
+      
+      setFormattedData(formatted);
+      
+      console.log("Price trend data (formatted):", {
+        dataPoints: formatted.length,
+        firstPoint: formatted[0],
+        lastPoint: formatted[formatted.length - 1]
+      });
+    } else {
+      setFormattedData([]);
+    }
+  }, [data]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      // Find the complete data point to get additional info like auction title
+      const dataPoint = formattedData.find(item => item.date === label);
+      
       return (
         <div className="bg-background border rounded p-2 shadow-lg">
           <p className="font-medium">{new Date(label).toLocaleDateString()}</p>
+          {dataPoint?.title && (
+            <p className="text-sm font-medium text-primary">{dataPoint.title}</p>
+          )}
           {payload.map((entry: any, index: number) => (
             <p key={index} className="text-sm">
-              {entry.name}: {formatPrice(entry.value)}
+              {entry.name === "price" ? "Auction Price" : "Market Average"}: {formatPrice(entry.value)}
             </p>
           ))}
         </div>
@@ -102,57 +132,70 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
         </div>
       </CardHeader>
       <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
-        {data && data.length > 0 ? (
+        {formattedData && formattedData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <ComposedChart 
+              data={formattedData} 
+              margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
               <XAxis
                 dataKey="date"
-                tickFormatter={(value) => new Date(value).toLocaleDateString()}
+                tickFormatter={(value) => {
+                  const date = new Date(value);
+                  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                }}
                 type="category"
-                scale="time"
-              />
+                angle={-30}
+                textAnchor="end"
+                height={60}
+                tick={{ fontSize: 12 }}
+              >
+                <Label
+                  value="Auction Date"
+                  position="insideBottom"
+                  offset={-10}
+                  style={{ textAnchor: 'middle', fontSize: '12px' }}
+                />
+              </XAxis>
               <YAxis
                 tickFormatter={(value) => formatPrice(value)}
                 domain={['auto', 'auto']}
-              />
-              <Tooltip
-                formatter={(value, name) => {
-                  if (name === 'price') return [`$${(Number(value) / 100).toFixed(2)}`, 'Auction Price'];
-                  if (name === 'medianPrice') return [`$${(Number(value) / 100).toFixed(2)}`, 'Market Average'];
-                  return [value, name];
-                }}
-                labelFormatter={(date) => new Date(date).toLocaleDateString()}
-                contentStyle={{
-                  backgroundColor: 'var(--background)',
-                  border: '1px solid var(--border)'
-                }}
-                wrapperStyle={{ zIndex: 1000 }}
-              />
-              <Legend />
+              >
+                <Label
+                  value="Price"
+                  position="insideLeft"
+                  angle={-90}
+                  style={{ textAnchor: 'middle', fontSize: '12px' }}
+                />
+              </YAxis>
+              <Tooltip content={<CustomTooltip />} />
+              <Legend verticalAlign="top" height={36} />
               {/* Scatter plot for individual auction prices */}
               <Scatter
-                name="Individual Prices"
+                name="Auction Price"
                 dataKey="price"
                 fill={primaryColor}
-                opacity={0.7}
+                opacity={0.8}
                 shape="circle"
-                size={20}
+                size={60}
               />
               {/* Trend line showing moving average */}
               <Line
-                name="Price Trend"
+                name="Market Average"
                 type="monotone"
                 dataKey="medianPrice"
                 stroke={accentColor}
                 strokeWidth={2.5}
                 dot={false}
+                activeDot={{ r: 6 }}
               />
             </ComposedChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            No price data available
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <p>No price data available</p>
+            <p className="text-sm mt-2">Try selecting a different time frame or category</p>
           </div>
         )}
       </CardContent>
