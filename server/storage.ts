@@ -149,6 +149,8 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(profiles.userId, userId))
         .returning();
+      
+      log(`Successfully updated Stripe account. New status: ${data.status}`);
       return updatedProfile;
     } catch (error) {
       log(`Error updating seller Stripe account: ${error}`);
