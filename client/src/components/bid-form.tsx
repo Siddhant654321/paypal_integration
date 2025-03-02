@@ -12,7 +12,7 @@ import { dollarsToCents, formatDollarInput, formatPrice, centsToDollars } from "
 type Props = {
   auctionId: number;
   currentPrice: number;
-  onBidSuccess?: () => void;
+  onBidSuccess?: (newPrice: number) => void;
 };
 
 export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props) {
@@ -25,17 +25,21 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
         auctionId,
         amount: dollarsToCents(bidAmount), // Convert dollars to cents for storage
       };
+
+      console.log("[BID] Submitting bid:", bidData);
       const res = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, bidData);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("[BID] Bid successful:", data);
       setAmount("");
-      // Notify parent component
-      if (onBidSuccess) {
-        onBidSuccess();
+
+      // Notify parent component with new price
+      if (onBidSuccess && data.currentPrice) {
+        onBidSuccess(data.currentPrice);
       }
 
-      // Invalidate the relevant queries
+      // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
       queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
@@ -46,6 +50,7 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
       });
     },
     onError: (error: any) => {
+      console.error("[BID] Error placing bid:", error);
       let errorMessage = "An unexpected error occurred";
 
       if (error.message) {
@@ -84,6 +89,7 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
       });
       return;
     }
+    console.log("[BID] Placing bid:", { amount: bidAmount, currentPrice: currentPriceInDollars });
     bidMutation.mutate(bidAmount);
   };
 

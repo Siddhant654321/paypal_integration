@@ -234,13 +234,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You cannot bid on your own auction" });
       }
 
-      // Convert amount to number if it's a string (and ensure it's in cents)
-      let amount;
-      if (typeof req.body.amount === 'string') {
-        amount = Math.round(parseFloat(req.body.amount) * 100);
-      } else {
-        amount = req.body.amount;
-      }
+      // Ensure bid amount is in cents
+      let amount = req.body.amount;
+      console.log("[BID] Raw amount received:", amount, typeof amount);
 
       if (isNaN(amount)) {
         return res.status(400).json({ message: "Bid amount must be a valid number" });
@@ -258,64 +254,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         auctionId: auction.id,
         bidderId: req.user.id,
         amount: amount,
+        timestamp: new Date()
       };
 
       console.log("[BID] Creating bid with data:", bidData);
       const bid = await storage.createBid(bidData);
       console.log("[BID] Bid created successfully:", bid);
 
-      // Send notification to the seller about the new bid
-      try {
-        console.log("[NOTIFICATION] Attempting to send notifications for new bid");
-        const { NotificationService } = await import('./notification-service');
+      // Fetch updated auction after bid is recorded
+      const updatedAuction = await storage.getAuction(auctionId);
+      console.log("[BID] Updated auction state:", updatedAuction);
 
-        console.log("[NOTIFICATION] Notifying seller:", {
-          sellerId: auction.sellerId,
-          auctionTitle: auction.title,
-          amount: amount
-        });
-
-        await NotificationService.notifyNewBid(
-          auction.sellerId,
-          auction.title,
-          amount
-        );
-        console.log("[NOTIFICATION] Seller notification sent successfully");
-
-        // Get previous bids to notify outbid user
-        const previousBids = await storage.getBidsForAuction(auction.id);
-        if (previousBids.length > 1) {
-          // Sort by amount in descending order to get the second highest bid
-          const sortedBids = previousBids.sort((a, b) => b.amount - a.amount);
-          const secondHighestBid = sortedBids[1];
-
-          // Only notify if it's a different bidder
-          if (secondHighestBid.bidderId !== req.user.id) {
-            console.log("[NOTIFICATION] Notifying previous bidder:", {
-              bidderId: secondHighestBid.bidderId,
-              auctionTitle: auction.title,
-              newAmount: amount
-            });
-
-            await NotificationService.notifyOutbid(
-              secondHighestBid.bidderId,
-              auction.title,
-              amount
-            );
-            console.log("[NOTIFICATION] Previous bidder notification sent successfully");
-          }
-        }
-      } catch (notifyError) {
-        console.error("[NOTIFICATION] Failed to send bid notification:", notifyError);
-        console.error("[NOTIFICATION] Full error details:", {
-          error: notifyError,
-          stack: notifyError.stack,
-          bid: bid,
-          auction: auction
-        });
-      }
-
-      res.status(201).json(bid);
+      res.status(201).json({
+        bid,
+        currentPrice: updatedAuction?.currentPrice
+      });
     } catch (error) {
       console.error("[BID] Error:", error);
       if (error instanceof ZodError) {
@@ -863,7 +816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-app.get("/api/buyer-requests/:id", async (req, res) => {
+  app.get("/api/buyer-requests/:id", async (req, res) => {
     try {
       const request = await storage.getBuyerRequest(parseInt(req.params.id));
       if (!request) {
@@ -894,7 +847,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
       // Only allow buyer or admin to update status
       if (req.user!.id !== request.buyerId && req.user!.role !== "admin") {
         return res.status(403).json({ message: "Not authorized to update this request" });
-      }
+      }      
       const updatedRequest = await storage.updateBuyerRequestStatus(requestId, status);
       res.json(updatedRequest);
     } catch (error) {
@@ -1156,11 +1109,29 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
     try {
       // Get all approved auctions
       const allAuctions = await storage.getAuctions({ approved: true });
+
+      // Get all bids to calculate active bidders and totals
+      const allBids = await Promise.all(
+        allAuctions.map(auction => storage.getBidsForAuction(auction.id))
+      );
+      const bids = allBids.flat();
+
+      // Count active bidders (unique bidders in the last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const activeBidders = new Set(
+        bids
+          .filter(bid => new Date(bid.timestamp) >= thirtyDaysAgo)
+          .map(bid => bid.bidderId)
+      ).size;
+
       // Count active auctions (not ended and approved)
       const now = new Date();
       const activeAuctions = allAuctions.filter(auction =>
         new Date(auction.endDate) > now && auction.approved
       ).length;
+
       // Calculate average prices by species
       const speciesPrices = allAuctions.reduce((acc, auction) => {
         if (!acc[auction.species]) {
@@ -1170,572 +1141,68 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
         acc[auction.species].count += 1;
         return acc;
       }, {} as Record<string, { total: number; count: number }>);
+
       const averagePrices = Object.entries(speciesPrices).map(([species, data]) => ({
         species,
         averagePrice: Math.round(data.total / data.count)
       }));
-      // Calculate top seller and buyer for the last month
-      const lastMonth = new Date();
-      lastMonth.setMonth(lastMonth.getMonth() - 1);
-      // Get completed auctions from last month
-      const lastMonthAuctions = allAuctions.filter(auction =>
-        auction.paymentStatus === 'completed' &&
-        new Date(auction.endDate) >= lastMonth
-      );
-      // Calculate seller totals
-      const sellerTotals = lastMonthAuctions.reduce((acc, auction) => {
-        if (!acc[auction.sellerId]) {
-          acc[auction.sellerId] = { total: 0, count: 0 };
-        }
-        acc[auction.sellerId].total += auction.currentPrice;
-        acc[auction.sellerId].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
-      // Calculate buyer totals
-      const buyerTotals = lastMonthAuctions.reduce((acc, auction) => {
-        if (!acc[auction.winningBidderId]) {
-          acc[auction.winningBidderId] = { total: 0, count: 0 };
-        }
-        acc[auction.winningBidderId].total += auction.currentPrice;
-        acc[auction.winningBidderId].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
-      // Find top seller
-      let topSeller = { userId: 0, total: 0, count: 0 };
-      for (const [userId, data] of Object.entries(sellerTotals)) {
-        if (data.total > topSeller.total) {
-          topSeller = { userId: parseInt(userId), ...data };
-        }
-      }
-      // Find top buyer
-      let topBuyer = { userId: 0, total: 0, count: 0 };
-      for (const [userId, data] of Object.entries(buyerTotals)) {
-        if (data.total > topBuyer.total) {
-          topBuyer = { userId: parseInt(userId), ...data };
-        }
-      }
-      // Get user profiles for top performers
-      const [topSellerProfile, topBuyerProfile] = await Promise.all([
-        topSeller.userId ? storage.getProfile(topSeller.userId) : null,
-        topBuyer.userId ? storage.getProfile(topBuyer.userId) : null,
-      ]);
-      // Calculate price history (average price by month)
+
+      // Calculate price history by category (last 6 months)
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      const monthlyPrices = allAuctions
+
+      // Group auctions by category and month
+      const priceHistoryByCategory = allAuctions
         .filter(auction => new Date(auction.endDate) >= sixMonthsAgo)
         .reduce((acc, auction) => {
           const monthKey = new Date(auction.endDate).toISOString().slice(0, 7);
-          if (!acc[monthKey]) {
-            acc[monthKey] = { total: 0, count: 0 };
+          if (!acc[auction.category]) {
+            acc[auction.category] = {};
           }
-          acc[monthKey].total += auction.currentPrice;
-          acc[monthKey].count += 1;
+          if (!acc[auction.category][monthKey]) {
+            acc[auction.category][monthKey] = { total: 0, count: 0 };
+          }
+          acc[auction.category][monthKey].total += auction.currentPrice;
+          acc[auction.category][monthKey].count += 1;
           return acc;
-        }, {} as Record<string, { total: number; count: number }>);
-      const priceHistory = Object.entries(monthlyPrices)
-        .map(([date, data]) => ({
-          date: `${date}-01`,  
-          averagePrice: Math.round(data.total / data.count)
-        }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        }, {} as Record<string, Record<string, { total: number; count: number }>>);
+
+      // Convert to time series format
+      const priceHistory = Object.entries(priceHistoryByCategory).reduce((acc, [category, monthData]) => {
+        Object.entries(monthData).forEach(([month, data]) => {
+          acc.push({
+            category,
+            date: `${month}-01`,
+            averagePrice: Math.round(data.total / data.count)
+          });
+        });
+        return acc;
+      }, [] as Array<{ category: string; date: string; averagePrice: number }>);
+
       // Calculate popular categories
       const categoryCount = allAuctions.reduce((acc, auction) => {
         acc[auction.category] = (acc[auction.category] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
+
       const popularCategories = Object.entries(categoryCount)
         .map(([category, count]) => ({ category, count }))
         .sort((a, b) => b.count - a.count);
+
       res.json({
         averagePrices,
         activeAuctions,
-        topPerformers: {
-          seller: topSellerProfile ? {
-            name: topSellerProfile.fullName,
-            total: topSeller.total,
-            auctionsWon: topSeller.count
-          } : null,
-          buyer: topBuyerProfile ? {
-            name: topBuyerProfile.fullName,
-            total: topBuyer.total,
-            auctionsWon: topBuyer.count
-          } : null
-        },
+        activeBidders,
+        totalBids: bids.length,
         priceHistory,
-        popularCategories
+        popularCategories,
       });
     } catch (error) {
       console.error("Error fetching market statistics:", error);
       res.status(500).json({ message: "Failed to fetch market statistics" });
     }
   });
-  
-  // Get winner details for seller
-  app.get("/api/auctions/:id/winner", requireAuth, async (req, res) => {
-    try {
-      const auctionId = parseInt(req.params.id);
-      const auction = await storage.getAuction(auctionId);
-      if (!auction) {
-        return res.status(404).json({ message: "Auction not found" });
-      }
-      // Verify this is the seller
-      if (auction.sellerId !== req.user!.id) {
-        return res.status(403).json({ message: "Only the seller can view winner details" });
-      }
-      // Verify auction is ended and has a winner
-      if (auction.status !== "ended" || !auction.winningBidderId) {
-        return res.status(400).json({ message: "Auction must be ended and have a winner" });
-      }
-      const winnerDetails = await storage.getWinnerDetails(auctionId);
-      if (!winnerDetails) {
-        return res.status(404).json({ message: "Winner details not found" });
-      }
-      res.json(winnerDetails);
-    } catch (error) {
-      console.error("Error getting winner details:", error);
-      res.status(500).json({ message: "Failed to get winner details" });
-    }
-  });
-  
-  // Submit fulfillment details
-  app.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
-    try {
-      const auctionId = parseInt(req.params.id);
-      const auction = await storage.getAuction(auctionId);
-      if (!auction) {
-        return res.status(404).json({ message: "Auction not found" });
-      }
-      // Verify this is the seller
-      if (auction.sellerId !== req.user!.id) {
-        return res.status(403).json({ message: "Only the seller can fulfill the auction" });
-      }
-      // Verify auction is ended and has a winner
-      if (auction.status !== "ended" || !auction.winningBidderId) {
-        return res.status(400).json({ message: "Auction must be ended and have a winner" });
-      }
-      // Verify payment is completed
-      if (auction.paymentStatus !== "completed") {
-        return res.status(400).json({ message: "Payment must be completed before fulfillment" });
-      }
-      // Validate and create fulfillment
-      const fulfillmentData = insertFulfillmentSchema.parse({
-        ...req.body,
-        auctionId,
-      });
-      const fulfillment = await storage.createFulfillment(fulfillmentData);
-      // Email notifications temporarily disabled for testing
-      /*
-      // Get winner user and send notification
-      const winner = await storage.getUser(auction.winningBidderId);
-      if (winner) {
-        await EmailService.sendNotification('fulfillment', winner, {
-          auctionTitle: auction.title,
-          shippingCarrier: fulfillmentData.shippingCarrier,
-          trackingNumber: fulfillmentData.trackingNumber,
-          shippingDate: fulfillmentData.shippingDate.toISOString(),
-          estimatedDeliveryDate: fulfillmentData.estimatedDeliveryDate?.toISOString(),
-        });
-      }
-      */
-      res.status(201).json(fulfillment);
-    } catch (error) {
-      console.error("Error fulfilling auction:", error);
-      if (error instanceof ZodError) {
-        res.status(400).json({
-          message: "Invalid fulfillment data",
-          errors: error.errors,
-        });
-      } else {
-        res.status(500).json({ message: "Failed to fulfill auction" });
-      }
-    }
-  });
-  
-  // Get fulfillment status
-  app.get("/api/auctions/:id/fulfillment", requireAuth, async (req, res) => {
-    try {
-      const auctionId = parseInt(req.params.id);
-      const auction = await storage.getAuction(auctionId);
-      if (!auction) {
-        return res.status(404).json({ message: "Auction not found" });
-      }
-      // Only allow winner or seller to view fulfillment status
-      if (req.user!.id !== auction.winningBidderId && req.user!.id !== auction.sellerId) {
-        return res.status(403).json({ message: "Unauthorized to view fulfillment status" });
-      }
-      const fulfillment = await storage.getFulfillment(auctionId);
-      res.json(fulfillment || { status: "pending" });
-    } catch (error) {
-      console.error("Error getting fulfillment status:", error);
-      res.status(500).json({ message: "Failed to get fulfillment status" });
-    }
-  });
-  
-  // Add this new endpoint for handling auction end
-  app.post("/api/auctions/:id/end", requireAuth, async (req, res) => {
-    try {
-      const auctionId = parseInt(req.params.id);
-      const auction = await storage.getAuction(auctionId);
-      if (!auction) {
-        return res.status(404).json({ message: "Auction not found" });
-      }
-      // Verify auction has actually ended
-      if (new Date() <= new Date(auction.endDate)) {
-        return res.status(400).json({ message: "Auction has not ended yet" });
-      }
-      // Get highest bid
-      const bids = await storage.getBidsForAuction(auctionId);
-      const highestBid = bids.length > 0
-        ? bids.reduce((max, bid) => bid.amount > max.amount ? bid : max, bids[0])
-        : null;
-      if (!highestBid) {
-        // No bids placed, void the auction
-        await storage.updateAuction(auctionId, {
-          status: "voided",
-          updatedAt: new Date()
-        });
-        return res.json({ message: "Auction ended with no bids" });
-      }
-      // Check if reserve price was met
-      const reserveMet = highestBid.amount >= auction.reservePrice;
-      if (reserveMet) {
-        // Automatically award to highest bidder
-        await storage.updateAuction(auctionId, {
-          status: "ended",
-          winningBidderId: highestBid.bidderId,
-          reserveMet: true,
-          paymentStatus: "pending",
-          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
-          updatedAt: new Date() 
-        });
-        return res.json({
-          message: "Auction ended successfully, reserve met",
-          winningBidderId: highestBid.bidderId
-        });
-      } else {
-        // Set to pending seller decision
-        await storage.updateAuction(auctionId, {
-          status: "pending_seller_decision",
-          reserveMet: false,
-          updatedAt: new Date()
-        });
-        return res.json({
-          message: "Auction ended, awaiting seller decision",
-          highestBid: highestBid.amount
-        });
-      }
-    } catch (error) {
-      console.error("Error ending auction:", error);
-      res.status(500).json({ message: "Failed to end auction" });
-    }
-  });
-  
-  // Add endpoint for seller decision
-  app.post("/api/auctions/:id/seller-decision", requireAuth, async (req, res) => {
-    try {
-      const auctionId = parseInt(req.params.id);
-      const { decision } = req.body;
-      if (!decision || !["accept", "void"].includes(decision)) {
-        return res.status(400).json({ message: "Invalid decision" });
-      }
-      const auction = await storage.getAuction(auctionId);
-      if (!auction) {
-        return res.status(404).json({ message: "Auction not found" });
-      }
-      // Verify this is the seller
-      if (auction.sellerId !== req.user!.id) {
-        return res.status(403).json({ message: "Only the seller can make this decision" });
-      }
-      // Verify auction is in pending_seller_decision status
-      if (auction.status !== "pending_seller_decision") {
-        return res.status(400).json({ message: "Auction is not awaiting seller decision" });
-      }
-      // Get highest bid
-      const bids = await storage.getBidsForAuction(auctionId);
-      const highestBid = bids.reduce((max, bid) => bid.amount > max.amount ? bid : max, bids[0]);
-      if (decision === "accept") {
-        // Accept the highest bid
-        await storage.updateAuction(auctionId, {
-          status: "ended",
-          winningBidderId: highestBid.bidderId,
-          sellerDecision: "accept",
-          paymentStatus: "pending",
-          paymentDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
-        });
-        return res.json({
-          message: "Highest bid accepted",
-          winningBidderId: highestBid.bidderId
-        });
-      } else {
-        // Void the auction
-        await storage.updateAuction(auctionId, {
-          status: "voided",
-          sellerDecision: "void"
-        });
-        return res.json({ message: "Auction voided by seller" });
-      }
-    } catch (error) {
-      console.error("Error processing seller decision:", error);
-      res.status(500).json({ message: "Failed to process seller decision" });
-    }
-  });
-  
-  // Seller onboarding and payout routes
-  app.post("/api/seller/connect", requireAuth, requireProfile, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      // Get publishable key (make sure it's using the correct env var name)
-      const stripePublishableKey = process.env.VITE_STRIPE_PUBLISHABLE_KEY;
-      if (!stripePublishableKey) {
-        console.error("Missing Stripe publishable key");
-        return res.status(500).json({
-          message: "Server configuration error",
-          details: "Missing Stripe publishable key"
-        });
-      }
-      console.log("Stripe Connect request initiated. PublishableKey available:", !!stripePublishableKey);
-      console.log("User ID:", req.user.id, "User role:", req.user.role);
-      // Validate protocol and host
-      if (!req.protocol || !req.get('host')) {
-        console.error("Missing protocol or host in request:", { protocol: req.protocol, host: req.get('host') });
-        return res.status(500).json({
-          message: "Invalid server configuration",
-          details: "Could not determine server URL"
-        });
-      }
-      // Construct base URL
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      console.log("Using base URL:", baseUrl);
-      // Check if user already has a Stripe account
-      const existingProfile = await storage.getProfile(req.user.id);
-      console.log("Existing profile:", existingProfile ? "found" : "not found", 
-                   "Stripe account ID:", existingProfile?.stripeAccountId || "none");
-      if (existingProfile?.stripeAccountId) {
-        console.log("User already has Stripe account:", existingProfile.stripeAccountId);
-        // Get onboarding link for existing account
-        try {
-          console.log("Getting onboarding link for existing account");
-          const onboardingUrl = await SellerPaymentService.getOnboardingLink(
-            existingProfile.stripeAccountId,
-            baseUrl
-          );
-          console.log("Successfully generated onboarding URL for existing account:", onboardingUrl);
-          // Ensure URL is included in the response
-          if (!onboardingUrl) {
-            throw new Error("No onboarding URL was generated");
-          }
-          return res.json({
-            url: onboardingUrl,
-            accountId: existingProfile.stripeAccountId,
-            publishableKey: stripePublishableKey
-          });
-        } catch (linkError) {
-          console.error("Failed to create onboarding link:", linkError);
-          if (linkError instanceof Error && linkError.message.includes("No such account")) {
-            // The account was deleted on Stripe side, need to create a new one
-            console.log("Account was deleted on Stripe, creating a new one");
-            // Continue with creation flow
-          } else {
-            return res.status(500).json({
-              message: "Failed to create Stripe onboarding link",
-              error: linkError instanceof Error ? linkError.message : "Unknown error"
-            });
-          }
-        }
-      }
-      // Get user profile
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile) {
-        return res.status(404).json({ message: "Profile not found" });
-      }
-      console.log("Creating new Stripe account for user:", req.user.id);
-      try {
-        // Create Stripe account and get the result
-        const result = await SellerPaymentService.createSellerAccount(profile);
-        console.log("New Stripe account created with ID:", result.accountId);
-        console.log("Full result from createSellerAccount:", result);
-        // If we already have a URL in the result, use it directly
-        if (result.url) {
-          console.log("URL received directly from createSellerAccount:", result.url);
-          return res.json({
-            url: result.url,
-            accountId: result.accountId,
-            clientSecret: result.clientSecret,
-            publishableKey: stripePublishableKey
-          });
-        }
-        // Otherwise, get onboarding link
-        const onboardingUrl = await SellerPaymentService.getOnboardingLink(result.accountId, baseUrl);
-        console.log("Onboarding URL generated:", onboardingUrl);
-        if (!onboardingUrl) {
-          throw new Error("Failed to generate onboarding URL");
-        }
-        res.json({
-          url: onboardingUrl,
-          accountId: result.accountId,
-          clientSecret: result.clientSecret,
-          publishableKey: stripePublishableKey
-        });
-      } catch (stripeError) {
-        console.error("Stripe API error:", stripeError);
-        return res.status(500).json({
-          message: "Failed to setup Stripe account",
-          error: stripeError instanceof Error ? stripeError.message : "Unknown Stripe error"
-        });
-      }
-    } catch (error) {
-      console.error("Error creating seller account:", error);
-      res.status(500).json({
-        message: "Failed to create seller account",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  });
-  
-  app.get("/api/seller/status", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.json({ status: "not_started" });
-      }
-      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
-      res.json({ status });
-    } catch (error) {
-      console.error("Error checking seller status:", error);
-      res.status(500).json({ message: "Failed to check seller status" });
-    }
-  });
-  
-  app.post("/api/seller/onboarding/refresh", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(404).json({ message: "Stripe account not found" });
-      }
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      console.log("Getting onboarding link with base URL:", baseUrl);
-      const onboardingUrl = await SellerPaymentService.getOnboardingLink(
-        profile.stripeAccountId,
-        baseUrl
-      );
-      console.log("Generated onboarding URL:", onboardingUrl);
-      res.json({ url: onboardingUrl });
-    } catch (error) {
-      console.error("Error refreshing onboarding link:", error);
-      res.status(500).json({ message: "Failed to refresh onboarding link" });
-    }
-  });
-  
-  app.get("/api/seller/payouts", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const payouts = await storage.getPayoutsBySeller(req.id);
-      res.json(payouts);
-    } catch (error) {
-      console.error("Error fetching payouts:", error);
-      res.status(500).json({ message: "Failed to fetch payouts" });
-    }
-  });
-  
-  // Get seller's payout schedule
-  app.get("/api/seller/payout-schedule", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(400).json({ message: "No Stripe account found" });
-      }
-      const schedule = await SellerPaymentService.getPayoutSchedule(profile.stripeAccountId);
-      res.json(schedule);
-    } catch (error) {
-      console.error("Error getting payout schedule:", error);
-      res.status(500).json({ message: "Failed to get payout schedule" });
-    }
-  });
-  
-  // Get seller's balance
-  app.get("/api/seller/balance", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(400).json({ message: "No Stripe account found" });
-      }
-      const balance = await SellerPaymentService.getBalance(profile.stripeAccountId);
-      res.json(balance);
-    } catch (error) {
-      console.error("Error getting balance:", error);
-      res.status(500).json({ message: "Failed to get balance" });
-    }
-  });
-  
-  // Get seller's recent payouts
-  app.get("/api/seller/stripe-payouts", requireAuth, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const profile = await storage.getProfile(req.user.id);
-      if (!profile?.stripeAccountId) {
-        return res.status(400).json({ message: "No Stripe account found" });
-      }
-      const payouts = await SellerPaymentService.getPayouts(profile.stripeAccountId);
-      res.json(payouts);
-    } catch (error) {
-      console.error("Error getting payouts:", error);
-      res.status(500).json({ message: "Failed to get payouts" });
-    }
-  });
-  
-  // Add this new route after the existing /api/sellers/status route
-  app.get("/api/sellers/active", async (req, res) => {
-    try {
-      // Get all approved sellers
-      const sellers = await storage.getUsers({ 
-        role: "seller",
-        approved: true 
-      });
-      // Get profiles and recent auctions for each seller
-      const sellersWithDetails = await Promise.all(
-        sellers.map(async (seller) => {
-          const profile = await storage.getProfile(seller.id);
-          const auctions = await storage.getAuctions({ 
-            sellerId: seller.id,
-            approved: true
-          });
-          return {
-            ...seller,
-            profile,
-            auctions: auctions.slice(0, 3) // Only return the 3 most recent auctions
-          };
-        })
-      );
-      // Filter out sellers without profiles or recent auctions
-      const activeSellers = sellersWithDetails.filter(
-        seller => seller.profile && seller.auctions.length > 0
-      );
-      res.json(activeSellers);
-    } catch (error) {
-      console.error("Error fetching active sellers:", error);
-      res.status(500).json({ message: "Failed to fetch active sellers" });
-    }
-  });
-  
+
   app.get("/api/analytics/auction-bids", async (req, res) => {
     try {
       // Get all auctions with their bids
@@ -1755,7 +1222,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
       res.status(500).json({ message: "Failed to fetch auction bids" });
     }
   });
-  
+
   app.get("/api/analytics/top-performers", async (req, res) => {
     try {
       // Get all auctions with their bids
@@ -1811,7 +1278,7 @@ app.get("/api/buyer-requests/:id", async (req, res) => {
       res.status(500).json({ message: "Failed to fetch top performers" });
     }
   });
-  
+
   // Set up periodic checks for auction notifications
   const NOTIFICATION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
   setInterval(async () => {
