@@ -1016,7 +1016,7 @@ export default function AdminDashboard() {
                                     </p>
                                     <p>
                                       <span className="font-semibold">Contact: </span>
-                                      {auction.sellerProfile.phoneNumber || "Not specified"}
+                                      {auction.sellerProfile.email || "Not specified"}
                                     </p>
                                     <p>
                                       <span className="font-semibold">Location: </span>

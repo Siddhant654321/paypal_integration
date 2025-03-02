@@ -2,6 +2,35 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { type Auction } from "@shared/schema";
+
+// Helper function to get a valid image URL from auction
+function getValidImageUrl(auction: any): string {
+  // First check if there's a valid imageUrl
+  if (auction.imageUrl && auction.imageUrl.trim() !== '') {
+    // Ensure URL has proper protocol
+    if (!auction.imageUrl.startsWith('http') && !auction.imageUrl.startsWith('/')) {
+      return `/${auction.imageUrl}`;
+    }
+    return auction.imageUrl;
+  }
+  
+  // Then check for images array
+  if (auction.images && Array.isArray(auction.images) && auction.images.length > 0) {
+    const firstImage = auction.images[0];
+    if (firstImage && firstImage.trim() !== '') {
+      // Ensure URL has proper protocol
+      if (!firstImage.startsWith('http') && !firstImage.startsWith('/')) {
+        return `/${firstImage}`;
+      }
+      return firstImage;
+    }
+  }
+  
+  // Return a placeholder if no valid image is found
+  return '/images/placeholder.jpg';
+}
+
+
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 import { Store, MapPin, CreditCard } from "lucide-react";
@@ -23,13 +52,13 @@ export default function AuctionCard({ auction, showStatus }: Props) {
 
   return (
     <Card className="overflow-hidden">
-      <div className="aspect-square w-full overflow-hidden">
+      <div className="aspect-square w-full overflow-hidden bg-muted">
         <img
-          src={auction.imageUrl || (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ? auction.images[0] : '')}
+          src={getValidImageUrl(auction)}
           alt={auction.title}
           className="w-full h-full object-cover"
           onError={(e) => {
-            e.currentTarget.src = ''; // Don't set a fallback image
+            e.currentTarget.src = '/images/placeholder.jpg'; // Set a fallback image
           }}
         />
       </div>
