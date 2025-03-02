@@ -866,40 +866,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!request) {
         return res.status(404).json({ message: "Buyer request not found" });
       }
+
       // Increment views
       await storage.incrementBuyerRequestViews(request.id);
-      // Get buyer profile
-      const buyerProfile = await storage.getProfile(request.buyerId);
+
+      // Get buyer profile if it exists (for non-anonymous requests)
+      const buyerProfile = request.buyerId ? await storage.getProfile(request.buyerId) : null;
+
       res.json({ ...request, buyerProfile });
     } catch (error) {
       console.error("Error fetching buyer request:", error);
       res.status(500).json({ message: "Failed to fetch buyer request" });
     }
   });
-  
-  app.patch("/api/buyer-requests/:id/status", requireAuth, async (req, res) => {
-    try {
-      const requestId = parseInt(req.params.id);
-      const { status } = req.body;
-      if (!status || !["open", "fulfilled", "closed"].includes(status)) {
-        return res.status(400).json({ message: "Invalid status" });
-      }
-      const request = await storage.getBuyerRequest(requestId);
-      if (!request) {
-        return res.status(404).json({ message: "Buyer request not found" });
-      }
-      // Only allow buyer or admin to update status
-      if (req.user!.id !== request.buyerId && req.user!.role !== "admin") {
-        return res.status(403).json({ message: "Not authorized to update this request" });
-      }
-      const updatedRequest = await storage.updateBuyerRequestStatus(requestId, status);
-      res.json(updatedRequest);
-    } catch (error) {
-      console.error("Error updating buyer request status:", error);
-      res.status(500).json({ message: "Failed to update buyer request status" });
-    }
-  });
-  
 
   // Update buyer request (admin only)
   app.patch("/api/buyer-requests/:id", requireAdmin, async (req, res) => {

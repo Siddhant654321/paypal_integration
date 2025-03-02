@@ -5,18 +5,26 @@ import { Loader2 } from "lucide-react";
 import { BuyerRequest } from "@shared/schema";
 import { BuyerRequestForm } from "@/components/buyer-request-form";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 
 export default function EditBuyerRequestPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const { toast } = useToast();
 
-  const { data: request, isLoading } = useQuery<BuyerRequest>({
+  const { data: request, isLoading, error } = useQuery<BuyerRequest>({
     queryKey: [`/api/buyer-requests/${id}`],
     enabled: !!id,
   });
 
+  // Check if user is admin or seller-admin
   if (!user?.role?.includes("admin")) {
+    toast({
+      title: "Access Denied",
+      description: "Only administrators can edit buyer requests.",
+      variant: "destructive",
+    });
     navigate("/");
     return null;
   }
@@ -29,13 +37,13 @@ export default function EditBuyerRequestPage() {
     );
   }
 
-  if (!request) {
+  if (error || !request) {
     return (
       <div className="container py-8">
         <Card>
           <CardContent className="py-8">
             <div className="text-center text-muted-foreground">
-              Request not found
+              {error ? "Error loading request" : "Request not found"}
             </div>
           </CardContent>
         </Card>

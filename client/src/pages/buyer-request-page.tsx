@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 interface BuyerRequestWithProfile extends BuyerRequest {
-  buyerProfile: Profile;
+  buyerProfile?: Profile;
 }
 
 export default function BuyerRequestPage() {
@@ -20,7 +20,7 @@ export default function BuyerRequestPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  const { data: request, isLoading, error } = useQuery<BuyerRequestWithProfile>({
+  const { data: request, isLoading } = useQuery<BuyerRequestWithProfile>({
     queryKey: [`/api/buyer-requests/${id}`],
     enabled: !!id,
   });
@@ -34,9 +34,9 @@ export default function BuyerRequestPage() {
         title: "Request Deleted",
         description: "The buyer request has been deleted successfully.",
       });
-      navigate("/");
+      navigate("/buyer-requests");
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
         description: "Failed to delete request: " + error.message,
@@ -49,20 +49,6 @@ export default function BuyerRequestPage() {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
         <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="container py-8">
-        <Card>
-          <CardContent className="py-8">
-            <div className="text-center text-muted-foreground">
-              Failed to load buyer request
-            </div>
-          </CardContent>
-        </Card>
       </div>
     );
   }
@@ -81,7 +67,7 @@ export default function BuyerRequestPage() {
     );
   }
 
-  const isAdmin = user?.role === "admin" || user?.role === "seller_admin";
+  const isAdmin = user?.role?.includes("admin");
 
   return (
     <div className="container py-8">
@@ -136,6 +122,15 @@ export default function BuyerRequestPage() {
         <CardContent>
           <div className="space-y-4">
             <p className="text-lg">{request.description}</p>
+            {request.buyerProfile && (
+              <div className="mt-6 pt-6 border-t">
+                <h3 className="font-medium mb-2">Buyer Information</h3>
+                <p>{request.buyerProfile.fullName}</p>
+                <p className="text-sm text-muted-foreground">
+                  {request.buyerProfile.city}, {request.buyerProfile.state}
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

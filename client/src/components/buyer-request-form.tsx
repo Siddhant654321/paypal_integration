@@ -97,6 +97,15 @@ export function BuyerRequestForm({ onClose, initialData, isEditing }: BuyerReque
   });
 
   function onSubmit(data: InsertBuyerRequest) {
+    // For editing, check if user is admin
+    if (isEditing && !user?.role?.includes("admin")) {
+      toast({
+        title: "Permission Denied",
+        description: "Only admins can edit buyer requests.",
+        variant: "destructive",
+      });
+      return;
+    }
     mutation.mutate(data);
   }
 
