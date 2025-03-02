@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { type Auction } from "@shared/schema";
+import { formatDollars } from "../utils/money-utils"; // Import formatDollars utility
 
 // Helper function to get a valid image URL from auction
 function getValidImageUrl(auction: any): string {
@@ -13,7 +14,7 @@ function getValidImageUrl(auction: any): string {
     }
     return auction.imageUrl;
   }
-  
+
   // Then check for images array
   if (auction.images && Array.isArray(auction.images) && auction.images.length > 0) {
     const firstImage = auction.images[0];
@@ -25,7 +26,7 @@ function getValidImageUrl(auction: any): string {
       return firstImage;
     }
   }
-  
+
   // Return a placeholder if no valid image is found
   return '/images/placeholder.jpg';
 }
@@ -35,7 +36,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 import { Store, MapPin, CreditCard } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { formatPrice } from "../utils/formatters";
+
 
 type Props = {
   auction: Auction;
@@ -101,7 +102,7 @@ export default function AuctionCard({ auction, showStatus }: Props) {
       <CardFooter className="p-4 pt-0 flex flex-col gap-2">
         <div className="flex w-full justify-between items-center">
           <div>
-            <div className="font-semibold">${(auction.currentPrice / 100).toFixed(2)}</div>
+            <div className="font-semibold">{formatDollars(auction.currentPrice)}</div>
             <div className="text-sm text-muted-foreground">
               {isActive
                 ? `Ends ${formatDistanceToNow(new Date(auction.endDate), {

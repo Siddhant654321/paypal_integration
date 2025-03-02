@@ -56,6 +56,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import React, { useEffect } from "react";
 import { FileUpload } from "@/components/file-upload";
 import { User } from "lucide-react"; //moved here to remove duplicate
+import { formatDollars, toCents, toInputValue } from "@/utils/money-utils";
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -149,7 +150,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                       <div key={bid.id} className="p-3 border rounded-lg">
                         <div className="flex justify-between items-center">
                           <div>
-                            <p className="font-medium">${bid.amount}</p>
+                            <p className="font-medium">{formatDollars(bid.amount)}</p>
                             <p className="text-sm text-muted-foreground">
                               {new Date(bid.timestamp).toLocaleString()}
                             </p>
@@ -262,7 +263,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
             {bids.map((bid) => (
               <div key={bid.id} className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
-                  <p className="font-medium">Bid Amount: ${bid.amount}</p>
+                  <p className="font-medium">Bid Amount: {formatDollars(bid.amount)}</p>
                   <p className="text-sm text-muted-foreground">
                     Bidder ID: {bid.bidderId}
                   </p>
@@ -412,7 +413,16 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
         </DialogHeader>
         <Form {...form}>
           <form
-            onSubmit={form.handleSubmit((data) => updateAuctionMutation.mutate(data))}
+            onSubmit={form.handleSubmit((formData) => {
+              const updatedData = {
+                ...formData,
+                startPrice: toCents(formData.startPrice),
+                reservePrice: toCents(formData.reservePrice),
+                endDate: new Date(formData.endDate).toISOString(),
+                startDate: new Date(formData.startDate).toISOString(),
+              };
+              updateAuctionMutation.mutate(updatedData);
+            })}
             className="space-y-4"
           >
             <FormField
@@ -495,12 +505,12 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                       <Input
                         type="text"
                         placeholder="0.00"
-                        value={field.value}
+                        {...field}
                         onChange={(e) => handlePriceChange(e, field)}
                       />
                     </FormControl>
                     <FormDescription>
-                      Current: ${(auction.startPrice / 100).toFixed(2)}
+                      Current: {formatDollars(auction.startPrice)}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -517,12 +527,12 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                       <Input
                         type="text"
                         placeholder="0.00"
-                        value={field.value}
+                        {...field}
                         onChange={(e) => handlePriceChange(e, field)}
                       />
                     </FormControl>
                     <FormDescription>
-                      Current: ${(auction.reservePrice / 100).toFixed(2)}
+                      Current: {formatDollars(auction.reservePrice)}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
