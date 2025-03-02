@@ -16,7 +16,7 @@ import { formatPrice } from "@/utils/formatters";
 import { BuyerRequestList } from "@/components/buyer-request-list";
 
 interface MarketStats {
-  activeBuyers: number;
+  activeBidders: number;
   totalBids: number;
   averagePrices: {
     species: string;
@@ -50,6 +50,11 @@ export default function AnalyticsPage() {
     queryKey: ["/api/analytics/market-stats"],
   });
 
+  // Get theme colors from CSS variables
+  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#8884d8';
+  const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--secondary').trim() || '#82ca9d';
+  const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#ccc';
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -75,15 +80,15 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Active Buyers Card */}
+        {/* Active Bidders Card */}
         <Card>
           <CardHeader className="space-y-1.5 p-4 md:p-6">
-            <CardTitle className="text-lg md:text-xl">Active Buyers</CardTitle>
+            <CardTitle className="text-lg md:text-xl">Active Bidders</CardTitle>
             <CardDescription>Last 30 days</CardDescription>
           </CardHeader>
           <CardContent className="p-4 md:p-6 pt-0">
             <div className="text-3xl md:text-4xl font-bold">
-              {marketStats?.activeBuyers || 0}
+              {marketStats?.activeBidders || 0}
             </div>
           </CardContent>
         </Card>
@@ -158,13 +163,14 @@ export default function AnalyticsPage() {
           <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={marketStats?.averagePrices || []}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
                 <XAxis dataKey="species" />
                 <YAxis tickFormatter={(value) => formatPrice(value)} />
                 <Tooltip
                   formatter={(value) => [formatPrice(value as number), "Average Price"]}
+                  contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
                 />
-                <Bar dataKey="averagePrice" fill="#8884d8" />
+                <Bar dataKey="averagePrice" fill={primaryColor} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -178,11 +184,13 @@ export default function AnalyticsPage() {
           <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={marketStats?.popularCategories || []}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke={mutedColor} />
                 <XAxis dataKey="category" />
                 <YAxis />
-                <Tooltip />
-                <Bar dataKey="count" fill="#82ca9d" />
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
+                />
+                <Bar dataKey="count" fill={secondaryColor} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
