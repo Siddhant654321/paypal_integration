@@ -264,36 +264,10 @@ export default function AuctionPage() {
             <div className="text-sm text-muted-foreground">
               Starting price: {formatPrice(auction.startPrice)}
             </div>
+            <div className="text-sm text-muted-foreground">
+              Total bids: {bids.length}
+            </div>
           </div>
-
-          {showSellerDecision && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button className="w-full">Make Decision</Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Auction Decision Required</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    The reserve price was not met. The highest bid was {formatPrice(auction.currentPrice)}.
-                    Would you like to accept this bid or void the auction?
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => handleSellerDecision("accept")}>
-                    Accept Bid
-                  </AlertDialogAction>
-                  <AlertDialogAction
-                    onClick={() => handleSellerDecision("void")}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Void Auction
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
 
           {user && isActive && user.id !== auction.sellerId && (
             <BidForm

@@ -30,15 +30,15 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
     },
     onSuccess: () => {
       setAmount("");
-      // Invalidate the relevant queries
-      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
-
       // Notify parent component
       if (onBidSuccess) {
         onBidSuccess();
       }
+
+      // Invalidate the relevant queries
+      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
 
       toast({
         title: "Bid placed successfully",
