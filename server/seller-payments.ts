@@ -1,3 +1,4 @@
+
 import Stripe from "stripe";
 import { storage } from "./storage";
 import { Profile } from "@shared/schema";
@@ -33,34 +34,32 @@ export class SellerPaymentService {
 
       // Create a new Connect Express account
       console.log("Creating new Stripe Connect account");
-      try {
-        const account = await stripe.accounts.create({
-          type: 'express',
-          country: 'US',
-          email: profile.email,
-          business_type: 'individual',
-          capabilities: {
-            card_payments: { requested: true },
-            transfers: { requested: true },
-          },
-          business_profile: {
-            product_description: "Poultry and hatching eggs auction sales",
-            mcc: "0742", // Veterinary Services, which includes animal breeding
-          },
-        });
-        console.log("Stripe account created with ID:", account.id);
+      const account = await stripe.accounts.create({
+        type: 'express',
+        country: 'US',
+        email: profile.email,
+        business_type: 'individual',
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_profile: {
+          product_description: "Poultry and hatching eggs auction sales",
+          mcc: "0742", // Veterinary Services, which includes animal breeding
+        },
+      });
+      console.log("Stripe account created with ID:", account.id);
 
       // Create an account link for onboarding
       console.log("Creating account link for onboarding");
       console.log("BASE_URL:", process.env.BASE_URL || 'http://localhost:5000');
-      try {
-        const accountLink = await stripe.accountLinks.create({
-          account: account.id,
-          refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
-          return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
-          type: 'account_onboarding',
-        });
-        console.log("Account link created:", accountLink.url ? "Success" : "Failed");
+      const accountLink = await stripe.accountLinks.create({
+        account: account.id,
+        refresh_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?refresh=true`,
+        return_url: `${process.env.BASE_URL || 'http://localhost:5000'}/seller-dashboard?success=true`,
+        type: 'account_onboarding',
+      });
+      console.log("Account link created:", accountLink.url ? "Success" : "Failed");
 
       // Update profile with Stripe account ID and initial status
       await storage.updateSellerStripeAccount(profile.userId, {
@@ -70,17 +69,9 @@ export class SellerPaymentService {
       console.log("Profile updated with Stripe account ID");
 
       return {
-          accountId: account.id,
-          url: accountLink.url,
-        };
-      } catch (linkError) {
-        console.error("Error creating account link:", linkError);
-        throw linkError;
-      }
-    } catch (accountError) {
-      console.error("Error creating Stripe account:", accountError);
-      throw accountError;
-    }
+        accountId: account.id,
+        url: accountLink.url,
+      };
     } catch (error) {
       console.error("Error creating seller account:", error);
       if (error instanceof Error) {
