@@ -507,13 +507,17 @@ export class DatabaseStorage implements IStorage {
 
   async getBuyerRequest(id: number): Promise<BuyerRequest | undefined> {
     try {
+      log(`[BUYER REQUEST] Getting buyer request ${id}`);
       const [request] = await db
         .select()
         .from(buyerRequests)
-        .where(eq(buyerRequests.id, id));
+        .where(eq(buyerRequests.id, id))
+        .limit(1);
+
+      log(`[BUYER REQUEST] Found request: ${JSON.stringify(request)}`);
       return request;
     } catch (error) {
-      log(`Error getting buyer request ${id}: ${error}`);
+      log(`[BUYER REQUEST] Error getting buyer request ${id}: ${error}`);
       throw error;
     }
   }

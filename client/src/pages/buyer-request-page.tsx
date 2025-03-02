@@ -9,6 +9,7 @@ import { BuyerRequest, Profile } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 
 interface BuyerRequestWithProfile extends BuyerRequest {
   buyerProfile?: Profile;
@@ -20,7 +21,10 @@ export default function BuyerRequestPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  const { data: request, isLoading } = useQuery<BuyerRequestWithProfile>({
+  // Check if user is admin or seller-admin
+  const isAdmin = user?.role === "admin" || user?.role === "seller_admin";
+
+  const { data: request, isLoading, error } = useQuery<BuyerRequestWithProfile>({
     queryKey: [`/api/buyer-requests/${id}`],
     enabled: !!id,
   });
@@ -34,6 +38,7 @@ export default function BuyerRequestPage() {
         title: "Request Deleted",
         description: "The buyer request has been deleted successfully.",
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/buyer-requests'] });
       navigate("/buyer-requests");
     },
     onError: (error: any) => {
@@ -53,6 +58,20 @@ export default function BuyerRequestPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="container py-8">
+        <Card>
+          <CardContent className="py-8">
+            <div className="text-center text-muted-foreground">
+              Failed to load buyer request
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!request) {
     return (
       <div className="container py-8">
@@ -67,12 +86,10 @@ export default function BuyerRequestPage() {
     );
   }
 
-  const isAdmin = user?.role?.includes("admin");
-
   return (
     <div className="container py-8">
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-4">
           <div className="flex items-start justify-between">
             <div>
               <CardTitle className="text-2xl">{request.title}</CardTitle>
@@ -90,7 +107,7 @@ export default function BuyerRequestPage() {
             </div>
           </div>
           {isAdmin && (
-            <div className="flex gap-2 mt-4">
+            <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"

@@ -862,20 +862,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/buyer-requests/:id", async (req, res) => {
     try {
-      const request = await storage.getBuyerRequest(parseInt(req.params.id));
+      const requestId = parseInt(req.params.id);
+      console.log(`[BUYER REQUEST] Fetching request ${requestId}`);
+
+      if (isNaN(requestId)) {
+        console.log(`[BUYER REQUEST] Invalid ID: ${req.params.id}`);
+        return res.status(400).json({ message: "Invalid request ID" });
+      }
+
+      const request = await storage.getBuyerRequest(requestId);
       if (!request) {
+        console.log(`[BUYER REQUEST] Request ${requestId} not found`);
         return res.status(404).json({ message: "Buyer request not found" });
       }
+
+      console.log(`[BUYER REQUEST] Found request:`, request);
 
       // Increment views
       await storage.incrementBuyerRequestViews(request.id);
 
       // Get buyer profile if it exists (for non-anonymous requests)
-      const buyerProfile = request.buyerId ? await storage.getProfile(request.buyerId) : null;
+      let buyerProfile = null;
+      if (request.buyerId > 0) {
+        console.log(`[BUYER REQUEST] Fetching profile for buyer ${request.buyerId}`);
+        buyerProfile = await storage.getProfile(request.buyerId);
+      }
+
+      console.log(`[BUYER REQUEST] Returning request with profile:`, {
+        requestId,
+        hasProfile: !!buyerProfile
+      });
 
       res.json({ ...request, buyerProfile });
     } catch (error) {
-      console.error("Error fetching buyer request:", error);
+      console.error("[BUYER REQUEST] Error fetching request:", error);
       res.status(500).json({ message: "Failed to fetch buyer request" });
     }
   });
@@ -1128,6 +1148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch active sellers" });
     }
   });
+  
   
 
   app.get("/api/analytics/market-stats", async (req, res) => {
