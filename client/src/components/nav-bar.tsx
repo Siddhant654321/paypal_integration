@@ -6,7 +6,7 @@ import { NotificationsMenu } from "./notifications";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useToast } from "@/components/ui/use-toast"; // Corrected import path
+import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import type { Notification } from "@shared/schema";
 
