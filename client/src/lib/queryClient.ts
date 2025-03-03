@@ -16,20 +16,23 @@ export async function apiRequest<T>(
   method: string,
   url: string,
   data?: unknown | undefined,
-): Promise<T> {
+): Promise<Response> {
   console.log(`[API] ${method} ${url}`, { data });
 
-  const res = await fetch(url, {
+  const response = await fetch(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include", // Always include credentials
   });
 
-  await throwIfResNotOk(res);
-  const responseData = await res.json();
-  console.log(`[API] Response from ${url}:`, responseData);
-  return responseData;
+  console.log(`[API] Response from ${url}:`, {
+    status: response.status,
+    ok: response.ok,
+    statusText: response.statusText
+  });
+
+  return response;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
@@ -38,8 +41,15 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    console.log(`[QUERY] Fetching ${queryKey[0]}`);
+
     const res = await fetch(queryKey[0] as string, {
-      credentials: "include", // Always include credentials
+      credentials: "include",
+    });
+
+    console.log(`[QUERY] Response for ${queryKey[0]}:`, {
+      status: res.status,
+      ok: res.ok
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -47,7 +57,9 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    const data = await res.json();
+    console.log(`[QUERY] Parsed data for ${queryKey[0]}:`, data);
+    return data;
   };
 
 export const queryClient = new QueryClient({
@@ -57,10 +69,18 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
-      retry: false,
+      retry: (failureCount, error) => {
+        // Don't retry on 401/403
+        if (error instanceof Error && error.message.startsWith('401:')) return false;
+        if (error instanceof Error && error.message.startsWith('403:')) return false;
+        return failureCount < 3;
+      },
     },
     mutations: {
       retry: false,
+      onError: (error) => {
+        console.error('[MUTATION] Error:', error);
+      }
     },
   },
 });
