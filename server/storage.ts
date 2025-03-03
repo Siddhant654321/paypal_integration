@@ -149,7 +149,7 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(profiles.userId, userId))
         .returning();
-      
+
       log(`Successfully updated Stripe account. New status: ${data.status}`);
       return updatedProfile;
     } catch (error) {
@@ -306,7 +306,7 @@ export class DatabaseStorage implements IStorage {
     try {
       log(`Getting users with filters: ${JSON.stringify(filters)}`);
       let query = db.select().from(users);
-      
+
       if (filters) {
         if (filters.approved !== undefined) {
           query = query.where(eq(users.approved, filters.approved));
@@ -315,7 +315,7 @@ export class DatabaseStorage implements IStorage {
           query = query.where(eq(users.role, filters.role));
         }
       }
-      
+
       return await query;
     } catch (error) {
       log(`Error getting users: ${error}`);

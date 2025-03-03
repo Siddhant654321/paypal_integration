@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -113,20 +113,18 @@ export const bids = pgTable("bids", {
 
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
-  auctionId: integer("auction_id").notNull(),
-  buyerId: integer("buyer_id").notNull(),
-  sellerId: integer("seller_id").notNull(),
-  amount: integer("amount").notNull(),
-  platformFee: integer("platform_fee").notNull(),
-  sellerPayout: integer("seller_payout").notNull(),
-  insuranceFee: integer("insurance_fee").notNull().default(0),
-  stripePaymentIntentId: text("stripe_payment_intent_id"),
-  stripeTransferId: text("stripe_transfer_id"),
-  status: text("status", {
-    enum: ["pending", "processing", "completed", "failed"],
-  }).notNull().default("pending"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  auctionId: integer("auction_id").notNull().references(() => auctions.id),
+  buyerId: integer("buyer_id").notNull().references(() => users.id),
+  sellerId: integer("seller_id").notNull().references(() => users.id),
+  amount: integer("amount").notNull(), // in cents
+  platformFee: integer("platform_fee").notNull(), // in cents
+  sellerPayout: integer("seller_payout").notNull(), // in cents
+  insuranceFee: integer("insurance_fee").notNull(), // in cents
+  stripePaymentIntentId: varchar("stripe_payment_intent_id").notNull(),
+  status: varchar("status", { enum: ["pending", "completed", "failed"] }).notNull(),
+  payoutProcessed: boolean("payout_processed").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const payouts = pgTable("payouts", {
@@ -240,10 +238,10 @@ export const insertPaymentSchema = createInsertSchema(payments)
   .omit({
     id: true,
     stripePaymentIntentId: true,
-    stripeTransferId: true,
     status: true,
     createdAt: true,
     updatedAt: true,
+    payoutProcessed:true
   });
 
 // Create insert schema for payouts

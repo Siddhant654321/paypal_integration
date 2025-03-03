@@ -860,7 +860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/buyer-requests", async (req, res) => {
+  app.get("/api/buyer-requests", async (req, res)) => {
     try {
       const filters = {
         status: req.query.status as string || "open",
@@ -1618,7 +1618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
-      
+
       // Update profile with latest status from Stripe if it's changed
       if (profile.stripeAccountStatus !== status) {
         await storage.updateSellerStripeAccount(req.user.id, {
@@ -1647,3 +1647,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
 const log = (message: string, context: string = 'general') => {
   console.log(`[${context}] ${message}`);
 }
+
+// API endpoint for fulfillment
+  app.post("/api/auctions/:id/fulfill", requireAuth, requireApprovedSeller, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const { trackingNumber, carrier, notes } = req.body;
+
+      // Verify auction belongs to seller
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      if (auction.sellerId !== req.user.id) {
+        return res.status(403).json({ message: "Not authorized to fulfill this auction" });
+      }
+
+      // Create fulfillment record
+      await storage.createFulfillment({
+        auctionId,
+        trackingNumber,
+        carrier,
+        notes,
+        status: "shipped"
+      });
+
+      // Update auction status
+      await storage.updateAuction(auctionId, {
+        status: "fulfilled",
+      });
+
+      // Find the payment for this auction
+      const payment = await storage.findPaymentByAuctionId(auctionId);
+      if (payment && payment.status === "completed" && !payment.payoutProcessed) {
+        try {
+          // Now that we have tracking info, create the payout to the seller
+          await SellerPaymentService.createPayout(
+            payment.id,
+            auction.sellerId,
+            payment.sellerPayout
+          );
+
+          // Mark that payout has been processed
+          await storage.markPaymentPayoutProcessed(payment.id);
+
+          console.log(`Successfully processed payout for auction ${auctionId} to seller ${auction.sellerId}`);
+        } catch (payoutError) {
+          console.error("Error processing seller payout:", payoutError);
+          // We'll still mark the auction as fulfilled, but log the payout error
+        }
+      }
+
+      // Notify the buyer
+      if (auction.winningBidderId) {
+        await NotificationService.notifyFulfillment(
+          auction.winningBidderId,
+          auction.title,
+          trackingNumber,
+          carrier
+        );
+      }
+
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Error fulfilling auction:", error);
+      return res.status(500).json({ message: "Failed to fulfill auction" });
+    }
+  });

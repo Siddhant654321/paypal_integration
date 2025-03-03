@@ -153,12 +153,9 @@ export class PaymentService {
         "completed"
       );
 
-      // Create payout for seller
-      await SellerPaymentService.createPayout(
-        payment.id,
-        payment.sellerId,
-        payment.sellerPayout
-      );
+      // We'll create the payout after fulfillment now, not immediately
+      // The payout will be triggered in the fulfillment route when 
+      // tracking information is provided
     } catch (error) {
       console.error("Error handling payment success:", error);
       throw error;
