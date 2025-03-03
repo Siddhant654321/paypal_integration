@@ -44,9 +44,21 @@ export class SellerPaymentService {
       });
       console.log("Stripe account created with ID:", account.id);
 
-      // Get the base URL from environment or use a default
-      const baseUrl = process.env.BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      console.log("Using base URL:", baseUrl);
+      // Get the base URL - handle both development and Replit environments
+      let baseUrl: string;
+      if (process.env.REPL_ID && process.env.REPL_SLUG) {
+        // We're on Replit - use the .repl.co domain
+        baseUrl = `https://${process.env.REPL_SLUG}.repl.co`;
+        console.log("Using Replit production URL:", baseUrl);
+      } else if (process.env.BASE_URL) {
+        // Use explicitly set BASE_URL if available
+        baseUrl = process.env.BASE_URL;
+        console.log("Using explicit BASE_URL:", baseUrl);
+      } else {
+        // Fallback for local development
+        baseUrl = 'http://localhost:5000';
+        console.log("Using local development URL:", baseUrl);
+      }
 
       // Create an account link for onboarding
       const accountLink = await stripe.accountLinks.create({
@@ -56,7 +68,12 @@ export class SellerPaymentService {
         type: 'account_onboarding',
         collect: 'eventually_due',
       });
-      console.log("Account link created:", accountLink.url ? "Success" : "Failed");
+
+      if (!accountLink.url) {
+        throw new Error("Failed to generate Stripe Connect URL");
+      }
+
+      console.log("Account link created successfully");
 
       // Update profile with Stripe account ID and initial status
       await storage.updateSellerStripeAccount(profile.userId, {
