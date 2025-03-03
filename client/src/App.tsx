@@ -1,5 +1,4 @@
 import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/hooks/use-auth";
@@ -19,6 +18,16 @@ import FulfillmentPage from "@/pages/fulfillment-page";
 import SellerProfilePage from "@/pages/seller-profile";
 import BuyerRequestPage from "@/pages/buyer-request-page";
 import EditBuyerRequestPage from "@/pages/edit-buyer-request";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60000, // 1 minute
+      cacheTime: 300000, // 5 minutes
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function Router() {
   return (
