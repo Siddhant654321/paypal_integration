@@ -45,19 +45,11 @@ export class SellerPaymentService {
       console.log("Stripe account created with ID:", account.id);
 
       // Get the base URL for redirects
-      let baseUrl: string;
-
-      // In development environment
-      if (process.env.NODE_ENV === 'development') {
-        baseUrl = 'http://localhost:5000';
-        console.log("Using development URL:", baseUrl);
-      }
-      // In Replit production environment
-      else {
-        // Use REPLIT_DOMAIN which is the full domain name for your repl
-        baseUrl = `https://${process.env.REPLIT_DOMAIN}`;
-        console.log("Using Replit production URL:", baseUrl);
-      }
+      const baseUrl = process.env.REPLIT_DOMAIN 
+        ? `https://${process.env.REPLIT_DOMAIN}`
+        : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      
+      console.log("Using redirect URL:", baseUrl);
 
       // Create an account link for onboarding
       const accountLink = await stripe.accountLinks.create({
