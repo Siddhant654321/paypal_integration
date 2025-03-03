@@ -2,12 +2,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { type Auction } from "@shared/schema";
-import { formatDistanceToNow } from "date-fns";
-import { Link } from "wouter";
-import { Store, MapPin, CreditCard } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
-import { formatPrice } from "../utils/formatters";
-import { ReactNode } from "react";
 
 // Helper function to get a valid image URL from auction
 function getValidImageUrl(auction: any): string {
@@ -19,7 +13,7 @@ function getValidImageUrl(auction: any): string {
     }
     return auction.imageUrl;
   }
-
+  
   // Then check for images array
   if (auction.images && Array.isArray(auction.images) && auction.images.length > 0) {
     const firstImage = auction.images[0];
@@ -31,18 +25,24 @@ function getValidImageUrl(auction: any): string {
       return firstImage;
     }
   }
-
+  
   // Return a placeholder if no valid image is found
   return '/images/placeholder.jpg';
 }
 
+
+import { formatDistanceToNow } from "date-fns";
+import { Link } from "wouter";
+import { Store, MapPin, CreditCard } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { formatPrice } from "../utils/formatters";
+
 type Props = {
   auction: Auction;
   showStatus?: boolean;
-  actions?: ReactNode;
 };
 
-export default function AuctionCard({ auction, showStatus, actions }: Props) {
+export default function AuctionCard({ auction, showStatus }: Props) {
   const { user } = useAuth();
   const isActive = new Date() >= new Date(auction.startDate) && new Date() <= new Date(auction.endDate);
 
@@ -110,15 +110,15 @@ export default function AuctionCard({ auction, showStatus, actions }: Props) {
                 : "Auction ended"}
             </div>
           </div>
-          {actions || (
-            <Link href={`/auction/${auction.id}`}>
-              <Button variant="secondary">View Details</Button>
-            </Link>
-          )}
+          <Link href={`/auction/${auction.id}`}>
+            <Button variant="secondary">View Details</Button>
+          </Link>
         </div>
 
         {/* Only show Pay Now button to the auction winner */}
-        {auction.status === "ended" && needsPayment && (
+        {auction.status === "ended" && 
+         ((isWinningBidder && needsPayment) || 
+          (user?.id === auction.winningBidderId)) && (
           <Link href={`/auction/${auction.id}/pay`}>
             <Button size="sm" className="w-full" variant="default">
               <CreditCard className="mr-2 h-4 w-4" />

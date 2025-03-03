@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, AlertCircle, CheckCircle2, Search, Trash2, Edit } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle2, Search, Trash2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -24,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -39,8 +38,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import AuctionCard from "@/components/auction-card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import ViewBidsDialog from "@/components/view-bids-dialog";
-import EditAuctionDialog from "@/components/edit-auction-dialog";
 
 // Types
 type SellerStripeStatus = {
@@ -163,8 +160,8 @@ function AdminDashboard() {
 
   // Filtered Lists
   const realPendingUsers = pendingUsers?.filter(user => !user.approved && user.role === "seller") || [];
-  const filteredSellers = approvedSellers?.filter(seller =>
-    seller.approved &&
+  const filteredSellers = approvedSellers?.filter(seller => 
+    seller.approved && 
     (seller.role === "seller" || seller.role === "seller_admin") &&
     seller.username.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
@@ -470,109 +467,66 @@ function AdminDashboard() {
                       return (
                         <div
                           key={auction.id}
-                          className="flex flex-col p-4 border rounded-lg"
+                          className="flex items-center justify-between p-4 border rounded-lg"
                         >
-                          <div className="flex justify-between items-start">
-                            <div className="flex-grow">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium">{auction.title}</p>
-                                {!isStripeVerified && (
-                                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
-                                    <AlertCircle className="h-4 w-4 mr-1" />
-                                    Stripe setup incomplete
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex gap-2 mt-1">
-                                <Badge>{auction.species}</Badge>
-                                <Badge variant="outline">{auction.category}</Badge>
-                              </div>
+                          <div className="flex-grow">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{auction.title}</p>
+                              {!isStripeVerified && (
+                                <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
+                                  <AlertCircle className="h-4 w-4 mr-1" />
+                                  Stripe setup incomplete
+                                </Badge>
+                              )}
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => approveAuctionMutation.mutate(auction.id)}
-                                disabled={approveAuctionMutation.isPending}
-                                variant="default"
-                              >
-                                {approveAuctionMutation.isPending && (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                )}
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                                Approve
-                              </Button>
-
-                              <ViewBidsDialog
-                                auctionId={auction.id}
-                                auctionTitle={auction.title}
-                              />
-
-                              <EditAuctionDialog auction={auction} />
-
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="destructive" size="sm">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Auction</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete this auction? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => deleteAuctionMutation.mutate(auction.id)}
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                            <div className="flex gap-2 mt-1">
+                              <Badge>{auction.species}</Badge>
+                              <Badge variant="outline">{auction.category}</Badge>
                             </div>
-                          </div>
-
-                          <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                            <p className="whitespace-pre-wrap">{auction.description}</p>
-
-                            <div className="mt-4">
+                            <div className="mt-2 text-sm text-muted-foreground">
                               <p>
                                 <span className="font-semibold">Seller: </span>
                                 {seller ? seller.username : "Unknown"}
                               </p>
-                              <p>
-                                <span className="font-semibold">Start Price: </span>
-                                ${auction.startPrice}
-                              </p>
-                              <p>
-                                <span className="font-semibold">Reserve Price: </span>
-                                ${auction.reservePrice}
-                              </p>
-                              <p>
-                                <span className="font-semibold">Start Date: </span>
-                                {new Date(auction.startDate).toLocaleString()}
-                              </p>
-                              <p>
-                                <span className="font-semibold">End Date: </span>
-                                {new Date(auction.endDate).toLocaleString()}
-                              </p>
                             </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => approveAuctionMutation.mutate(auction.id)}
+                              disabled={approveAuctionMutation.isPending || !isStripeVerified}
+                              variant="default"
+                            >
+                              {approveAuctionMutation.isPending && (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              )}
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              Approve
+                            </Button>
 
-                            {auction.images && auction.images.length > 0 && (
-                              <div className="grid grid-cols-3 gap-4 mt-4">
-                                {auction.images.map((imageUrl, index) => (
-                                  <img
-                                    key={index}
-                                    src={imageUrl}
-                                    alt={`Auction image ${index + 1}`}
-                                    className="w-full h-32 object-cover rounded-lg"
-                                  />
-                                ))}
-                              </div>
-                            )}
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
                       );
@@ -602,42 +556,33 @@ function AdminDashboard() {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                       {filteredActiveAuctions.map((auction) => (
-                        <AuctionCard
-                          key={auction.id}
+                        <AuctionCard 
+                          key={auction.id} 
                           auction={auction}
                           actions={
-                            <div className="flex gap-2">
-                              <ViewBidsDialog
-                                auctionId={auction.id}
-                                auctionTitle={auction.title}
-                              />
-
-                              <EditAuctionDialog auction={auction} />
-
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="destructive" size="sm">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Auction</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete this auction? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => deleteAuctionMutation.mutate(auction.id)}
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           }
                         />
                       ))}
@@ -657,42 +602,33 @@ function AdminDashboard() {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                       {filteredCompletedAuctions.map((auction) => (
-                        <AuctionCard
-                          key={auction.id}
+                        <AuctionCard 
+                          key={auction.id} 
                           auction={auction}
                           actions={
-                            <div className="flex gap-2">
-                              <ViewBidsDialog
-                                auctionId={auction.id}
-                                auctionTitle={auction.title}
-                              />
-
-                              <EditAuctionDialog auction={auction} />
-
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="destructive" size="sm">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Auction</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete this auction? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => deleteAuctionMutation.mutate(auction.id)}
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           }
                         />
                       ))}
@@ -879,7 +815,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
     mutationFn: async (bidId: number) => {
       await apiRequest("DELETE", `/api/admin/bids/${bidId}`);
     },
-    onSuccess: () => {
+    onSuccess: () =>{
       queryClient.invalidateQueries({ queryKey: ["/api/admin/bids", auctionId] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
@@ -897,7 +833,8 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
       toast({
         title: "Error",
         description: error.message,
-        variant: "destructive",      });
+        variant: "destructive",
+      });
     },
   });
 
