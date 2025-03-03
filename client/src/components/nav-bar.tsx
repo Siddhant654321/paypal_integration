@@ -1,37 +1,26 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { UserCircle, LineChart, Home, LayoutDashboard } from "lucide-react";
 import { NotificationsMenu } from "./notifications";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import type { Notification } from "@shared/schema";
 
 export default function NavBar() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const router = useRouter();
-  const toast = useToast();
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   // Enhanced notification fetching with detailed logging
   const { data: notifications = [], error: notificationError } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
     enabled: !!user,
     refetchInterval: 10000, // Increased frequency for testing
-    staleTime: 5000,
-    onSuccess: (data) => {
-      console.log("[Notifications] Fetch successful:", {
-        count: data.length,
-        unreadCount: data.filter(n => !n.read).length,
-        latestNotification: data[0]
-      });
-    },
-    onError: (error) => {
-      console.error("[Notifications] Fetch error:", error);
-    }
+    staleTime: 5000
   });
 
   const logoutMutation = useMutation({
@@ -45,9 +34,9 @@ export default function NavBar() {
         title: "Logged out",
         description: "You have been logged out successfully",
       });
-      router.push("/");
+      setLocation("/");
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("Logout error:", error);
       toast({
         title: "Error",
@@ -132,7 +121,13 @@ export default function NavBar() {
                     {user.hasProfile ? "Profile" : "Complete Profile"}
                   </Button>
                 </Link>
-                <Button onClick={logoutMutation.mutate} variant="ghost">Logout</Button>
+                <Button 
+                  onClick={() => logoutMutation.mutate()} 
+                  variant="ghost"
+                  disabled={logoutMutation.isPending}
+                >
+                  {logoutMutation.isPending ? "Logging out..." : "Logout"}
+                </Button>
               </div>
             </>
           ) : (

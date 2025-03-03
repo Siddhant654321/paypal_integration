@@ -12,8 +12,10 @@ import Stripe from "stripe";
 import { SellerPaymentService } from "./seller-payments";
 import { AuctionService } from "./auction-service";
 import { AIPricingService } from "./ai-service";
-import type { User } from "./storage"; // Add User type
-import { EmailService } from "./email";
+import type { User } from "./storage";
+
+// Temporarily remove email service import
+// import { EmailService } from "./email";
 
 
 // Add middleware to check profile completion
@@ -110,7 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(auctionsWithProfiles);
     } catch (error) {
       console.error("[AUCTIONS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch auctions",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -131,7 +133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(auctions);
     } catch (error) {
       console.error("[SELLER AUCTIONS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch seller auctions",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -157,8 +159,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let amount = Math.round(
-        typeof req.body.amount === 'string' 
-          ? parseFloat(req.body.amount) * 100 
+        typeof req.body.amount === 'string'
+          ? parseFloat(req.body.amount) * 100
           : req.body.amount
       );
 
@@ -177,6 +179,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bidderId: req.user.id,
         amount: amount,
       });
+
+      // Email notifications temporarily disabled
+      /*
+      try {
+        await EmailService.sendNotification('bid', seller, {
+          auctionTitle: auction.title,
+          bidAmount: amount
+        });
+      } catch (notifyError) {
+        console.error("[EMAIL] Failed to send bid notification:", notifyError);
+      }
+      */
 
       res.status(201).json(bid);
     } catch (error) {
@@ -217,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(auction);
     } catch (error) {
       console.error("[ADMIN APPROVE] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to approve auction",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -289,7 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ ...auction, sellerProfile });
     } catch (error) {
       console.error("[SINGLE AUCTION] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch auction",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -303,7 +317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(bids);
     } catch (error) {
       console.error("[BIDS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch bids",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -314,12 +328,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/auctions", requireAdmin, async (req, res) => {
     try {
       const status = req.query.status as string | undefined;
-      const approved = req.query.approved === 'true' ? true : 
-                      req.query.approved === 'false' ? false : undefined;
+      const approved = req.query.approved === 'true' ? true :
+        req.query.approved === 'false' ? false : undefined;
 
       console.log(`[ADMIN] Fetching auctions with status: ${status}, approved: ${approved}`);
 
-      const auctions = await storage.getAuctions({ 
+      const auctions = await storage.getAuctions({
         status,
         approved
       });
@@ -336,7 +350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(auctionsWithSellerProfiles);
     } catch (error) {
       console.error("[ADMIN] Error fetching auctions:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch auctions",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -358,7 +372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(bids);
     } catch (error) {
       console.error("[ADMIN BIDS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch bids",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -391,7 +405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(bidsWithAuctions);
     } catch (error) {
       console.error("[USER BIDS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch user bids",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -428,7 +442,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } else {
         console.error("[PROFILE POST] Error:", error);
-        res.status(500).json({ 
+        res.status(500).json({
           message: "Failed to save profile",
           error: error instanceof Error ? error.message : String(error)
         });
@@ -446,7 +460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(profile);
     } catch (error) {
       console.error("[PROFILE GET] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch profile",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -460,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(auctions);
     } catch (error) {
       console.error("[ADMIN AUCTIONS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch pending auctions",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -518,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(auction);
     } catch (error) {
       console.error("[ADMIN APPROVE] Error approving auction:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to approve auction",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -531,7 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(user);
     } catch (error) {
       console.error("[ADMIN USER APPROVE] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to approve user",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -554,7 +568,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(users);
     } catch (error) {
       console.error("[ADMIN USERS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch users",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -587,7 +601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(profile);
     } catch (error) {
       console.error("[ADMIN PROFILES] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch profile",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -602,7 +616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(bids);
     } catch (error) {
       console.error("[ADMIN USER BIDS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch user bids",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -616,7 +630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(auctions);
     } catch (error) {
       console.error("[ADMIN USER AUCTIONS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch user auctions",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -630,7 +644,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.sendStatus(200);
     } catch (error) {
       console.error("[ADMIN PROFILE DELETE] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to delete profile",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -644,7 +658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.sendStatus(200);
     } catch (error) {
       console.error("[ADMIN AUCTION DELETE] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to delete auction",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -879,7 +893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             day: data.endDateDay
           });
 
-          try {
+                    try {
             // Create date from component parts, being careful about types
             const year = parseInt(data.endDateYear);
             const month = parseInt(data.endDateMonth) - 1; // JS months are 0-indexed
@@ -908,12 +922,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Additional field name variations
           const possibleStartDateFields = [
-            'startDate', 'start_date', 'auction_start_date', 
+            'startDate', 'start_date', 'auction_start_date',
             'auctionStartDate', 'start', 'beginDate'
           ];
 
           const possibleEndDateFields = [
-            'endDate', 'end_date', 'auction_end_date', 
+            'endDate', 'end_date', 'auction_end_date',
             'auctionEndDate', 'end', 'closeDate'
           ];
 
@@ -959,7 +973,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Make sure we actually have data to update
       if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: "No valid data provided for update",
           receivedData: data
         });
@@ -970,7 +984,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedAuction);
     } catch (error) {
       console.error("[ADMIN AUCTION PATCH] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to update auction",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1014,7 +1028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("[ADMIN AUCTION PHOTOS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to add photos to auction",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1059,7 +1073,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("[ADMIN AUCTION PHOTO DELETE] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to delete auction photo",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1073,7 +1087,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.sendStatus(200);
     } catch (error) {
       console.error("[ADMIN BID DELETE] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to delete bid",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1108,7 +1122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("[BUYER REQUEST POST] Error creating buyer request:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to create buyer request",
         error: error instanceof Error ? error.message : "Unknown error"
       });
@@ -1129,8 +1143,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const requestsWithProfiles = await Promise.all(
         requests.map(async (request) => {
           const buyerProfile = await storage.getProfile(request.buyerId);
-          console.log(`[BUYER REQUESTS] Found profile for buyer ${request.buyerId}:`, 
-            buyerProfile ? "yes" : "no");          return { ...request, buyerProfile };
+          console.log(`[BUYER REQUESTS] Found profile for buyer ${request.buyerId}:`,
+            buyerProfile ? "yes" : "no");
+          return { ...request, buyerProfile };
         })
       );
 
@@ -1138,7 +1153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(requestsWithProfiles);
     } catch (error) {
       console.error("[BUYER REQUESTS] Error fetching requests:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch buyer requests",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1181,7 +1196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ ...request, buyerProfile });
     } catch (error) {
       console.error("[BUYER REQUEST GET] Error fetching request:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch buyer request",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1197,7 +1212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedRequest);
     } catch (error) {
       console.error("[BUYER REQUEST PATCH] Error updating buyer request:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to update buyer request",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1212,7 +1227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.sendStatus(200);
     } catch (error) {
       console.error("[BUYER REQUEST DELETE] Error deleting buyer request:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to delete buyer request",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1281,7 +1296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ url: session.url });
     } catch (error) {
       console.error("[CHECKOUT SESSION] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to retrieve checkout session",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1335,7 +1350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ received: true });
     } catch (error) {
       console.error("[STRIPE WEBHOOK] Error:", error);
-      res.status(400).json({ 
+      res.status(400).json({
         message: "Webhook error",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1355,10 +1370,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.user!.id !== auction.winningBidderId && req.user!.id !== auction.sellerId) {
         return res.status(403).json({ message: "Unauthorized to view payment status" });
       }
-      res.json({        status: auction.paymentStatus,        dueDate: auction.paymentDueDate,      });
+      res.json({
+        status: auction.paymentStatus,
+        dueDate: auction.paymentDueDate,
+      });
     } catch (error) {
       console.error("[AUCTION PAYMENT] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch payment status",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1373,7 +1391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(notifications);
     } catch (error) {
       console.error("[NOTIFICATIONS GET] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch notifications",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1387,7 +1405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(notification);
     } catch (error) {
       console.error("[NOTIFICATION READ] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to mark notification as read",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1399,14 +1417,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const notifications = await storage.getNotificationsByUserId(req.user.id);
       await Promise.all(
-        notifications.map(notification => 
+        notifications.map(notification =>
           storage.markNotificationAsRead(notification.id)
         )
       );
       res.json({ success: true });
     } catch (error) {
       console.error("[MARK ALL NOTIFICATIONS READ] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to mark all notifications as read",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1421,7 +1439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ count });
     } catch (error) {
       console.error("[UNREAD NOTIFICATION COUNT] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to get unread notifications count",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1433,15 +1451,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/sellers/active", async (req, res) => {
     try {
       // Get all approved sellers
-      const sellers = await storage.getUsers({ 
+      const sellers = await storage.getUsers({
         role: "seller",
-        approved: true 
+        approved: true
       });
       // Get profiles and recent auctions for each seller
       const sellersWithDetails = await Promise.all(
         sellers.map(async (seller) => {
           const profile = await storage.getProfile(seller.id);
-          const auctions = await storage.getAuctions({ 
+          const auctions = await storage.getAuctions({
             sellerId: seller.id,
             approved: true
           });
@@ -1459,7 +1477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(activeSellers);
     } catch (error) {
       console.error("[ACTIVE SELLERS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch active sellers",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1528,7 +1546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return dateA - dateB;
       });
 
-      console.log("[ANALYTICS] Sorted auctions dates:", sortedAuctions.map(a => 
+      console.log("[ANALYTICS] Sorted auctions dates:", sortedAuctions.map(a =>
         ({ id: a.id, title: a.title, start: a.startDate, end: a.endDate, price: a.currentPrice || a.startPrice }))
       );
 
@@ -1629,13 +1647,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         popularCategories
       };
 
-      console.log("[ANALYTICS] Response generated with price data points:", 
+      console.log("[ANALYTICS] Response generated with price data points:",
         response.priceData.length);
 
       res.json(response);
     } catch (error) {
       console.error("[ANALYTICS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch market statistics",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1668,15 +1686,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/sellers/active", async (req, res) => {
     try {
       // Get all approved sellers
-      const sellers = await storage.getUsers({ 
+      const sellers = await storage.getUsers({
         role: "seller",
-        approved: true 
+        approved: true
       });
       // Get profiles and recent auctions for each seller
       const sellersWithDetails = await Promise.all(
         sellers.map(async (seller) => {
           const profile = await storage.getProfile(seller.id);
-          const auctions = await storage.getAuctions({ 
+          const auctions = await storage.getAuctions({
             sellerId: seller.id,
             approved: true
           });
@@ -1694,7 +1712,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(activeSellers);
     } catch (error) {
       console.error("[ACTIVE SELLERS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch active sellers",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1718,7 +1736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(auctionBids);
     } catch (error) {
       console.error("[AUCTION BIDS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch auction bids",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1778,7 +1796,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ topSeller, topBuyer });
     } catch (error) {
       console.error("[TOP PERFORMERS] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fetch top performers",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1821,8 +1839,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(suggestion);
     } catch (error) {
       console.error("[AI PRICE SUGGESTION] Error:", error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to generate price suggestion" 
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to generate price suggestion"
       });
     }
   });
@@ -1850,8 +1868,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(suggestion);
     } catch (error) {
       console.error("[AI DESCRIPTION SUGGESTION] Error:", error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to generate description" 
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to generate description"
       });
     }
   });
@@ -1916,13 +1934,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      return res.json({ 
+      return res.json({
         status,
         accountId: profile.stripeAccountId
       });
     } catch (error) {
       console.error("[Seller Status] Error:", error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: "Failed to fetch seller status",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1982,6 +2000,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Notify the buyer
+      /*
       if (auction.winningBidderId) {
         await EmailService.notifyFulfillment(
           auction.winningBidderId,
@@ -1990,11 +2009,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           carrier
         );
       }
+      */
 
       return res.json({ success: true });
     } catch (error) {
       console.error("[FULFILLMENT] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to fulfill auction",
         error: error instanceof Error ? error.message : String(error)
       });
