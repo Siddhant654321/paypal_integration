@@ -10,6 +10,7 @@ import { SellerShowcase } from "@/components/seller-showcase";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { BuyerRequestForm } from "@/components/buyer-request-form";
 import { useAuth } from "@/hooks/use-auth";
+import { updateAuctionStatus, sendBuyerNotification } from "@/services/auction-service"; // Assumed functions
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -56,7 +57,7 @@ export default function HomePage() {
       auction.status !== "ended" &&
       auction.status !== "voided"
     );
-    
+
     // Include auctions that have ended or have status completed
     const completed = filtered.filter(auction => 
       new Date(auction.endDate) <= now || 
@@ -204,7 +205,9 @@ export default function HomePage() {
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {completedAuctions.map((auction) => (
-                  <AuctionCard key={auction.id} auction={auction} />
+                  <AuctionCard key={auction.id} auction={auction}  // Added handling for completed auctions
+                    onPayment={() => handlePayment(auction)} // Added payment handling
+                  />
                 ))}
               </div>
             </>
@@ -213,4 +216,10 @@ export default function HomePage() {
       </main>
     </div>
   );
+}
+
+async function handlePayment(auction: Auction) {
+  // Handle payment logic here.  This might involve redirecting the user to a payment gateway.
+  console.log('Initiating payment for auction:', auction.id);
+  // ... your payment gateway integration ...
 }

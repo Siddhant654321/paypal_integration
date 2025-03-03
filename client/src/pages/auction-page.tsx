@@ -124,6 +124,8 @@ export default function AuctionPage() {
         return <Badge>Active</Badge>;
       case "ended":
         return <Badge variant="secondary">{auction.winningBidderId ? "Sold" : "Ended"}</Badge>;
+      case "completed":
+        return <Badge variant="secondary">{auction.winningBidderId ? "Sold" : "Completed"}</Badge>;
       case "pending_seller_decision":
         return <Badge variant="secondary">Awaiting Seller Decision</Badge>;
       case "voided":
@@ -252,6 +254,20 @@ export default function AuctionPage() {
           <div className="prose max-w-none">
             <p>{auction.description}</p>
           </div>
+          
+          {/* Payment button for winning bidder */}
+          {auction.status === "ended" && 
+           user?.id === auction.winningBidderId && 
+           auction.paymentStatus !== "completed" && (
+            <div className="mt-4">
+              <Link href={`/auction/${auction.id}/pay`}>
+                <Button size="lg" className="w-full" variant="default">
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  Complete Purchase
+                </Button>
+              </Link>
+            </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-lg">
