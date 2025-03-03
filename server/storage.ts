@@ -377,15 +377,53 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`Auction with id ${auctionId} not found`);
       }
 
-      const formattedData = { ...data };
-
-      // Handle date conversions if needed
-      if (formattedData.startDate && !(formattedData.startDate instanceof Date)) {
-        formattedData.startDate = new Date(formattedData.startDate);
+      // Make sure we have data to update
+      if (!data || Object.keys(data).length === 0) {
+        throw new Error("No values to set");
       }
 
-      if (formattedData.endDate && !(formattedData.endDate instanceof Date)) {
-        formattedData.endDate = new Date(formattedData.endDate);
+      const formattedData = { ...data };
+      
+      // Log what we're trying to update
+      log(`Updating auction ${auctionId} with data:`, formattedData);
+
+      // Handle date conversions if needed
+      if (formattedData.startDate) {
+        // Make sure we have a valid date
+        try {
+          if (!(formattedData.startDate instanceof Date)) {
+            formattedData.startDate = new Date(formattedData.startDate);
+          }
+          // Check if the date is valid
+          if (isNaN(formattedData.startDate.getTime())) {
+            log(`Invalid start date for auction ${auctionId}: ${formattedData.startDate}`);
+            delete formattedData.startDate;
+          } else {
+            log(`Valid start date for auction ${auctionId}: ${formattedData.startDate}`);
+          }
+        } catch (err) {
+          log(`Error parsing start date for auction ${auctionId}: ${err}`);
+          delete formattedData.startDate;
+        }
+      }
+
+      if (formattedData.endDate) {
+        // Make sure we have a valid date
+        try {
+          if (!(formattedData.endDate instanceof Date)) {
+            formattedData.endDate = new Date(formattedData.endDate);
+          }
+          // Check if the date is valid
+          if (isNaN(formattedData.endDate.getTime())) {
+            log(`Invalid end date for auction ${auctionId}: ${formattedData.endDate}`);
+            delete formattedData.endDate;
+          } else {
+            log(`Valid end date for auction ${auctionId}: ${formattedData.endDate}`);
+          }
+        } catch (err) {
+          log(`Error parsing end date for auction ${auctionId}: ${err}`);
+          delete formattedData.endDate;
+        }
       }
 
       // Keep original price values without conversion
@@ -416,7 +454,12 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      log(`Updating auction ${auctionId} with formatted data`);
+      // Check again if we have data to update after validation
+      if (Object.keys(formattedData).length === 0) {
+        throw new Error("No valid values to set after validation");
+      }
+
+      log(`Updating auction ${auctionId} with final formatted data:`, formattedData);
 
       const [auction] = await db
         .update(auctions)
@@ -424,6 +467,7 @@ export class DatabaseStorage implements IStorage {
         .where(eq(auctions.id, auctionId))
         .returning();
 
+      log(`Successfully updated auction ${auctionId}`);
       return auction;
     } catch (error) {
       log(`Error updating auction ${auctionId}: ${error}`);

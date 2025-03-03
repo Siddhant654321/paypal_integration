@@ -696,6 +696,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = req.body;
       
       console.log("Received auction update data:", data);
+      console.log("Request body type:", typeof data);
+      console.log("Request body keys:", Object.keys(data));
+
+      // Get the existing auction to compare with
+      const existingAuction = await storage.getAuction(auctionId);
+      if (!existingAuction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
 
       // Map legacy categories to new format if present
       if (data.category) {
@@ -711,18 +719,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Ensure we have a valid update object
+      // Initialize update data object
       const updateData: Partial<Auction> = {};
       
-      // Process date fields
+      // Check if we have date objects or strings
+      // Sometimes the client might send a date string or an ISO string
       if (data.startDate) {
         updateData.startDate = new Date(data.startDate);
         console.log("Setting startDate:", updateData.startDate);
+      } else if (data.start_date) {
+        // Try alternative field name
+        updateData.startDate = new Date(data.start_date);
+        console.log("Setting startDate from start_date:", updateData.startDate);
       }
       
       if (data.endDate) {
         updateData.endDate = new Date(data.endDate);
         console.log("Setting endDate:", updateData.endDate);
+      } else if (data.end_date) {
+        // Try alternative field name
+        updateData.endDate = new Date(data.end_date);
+        console.log("Setting endDate from end_date:", updateData.endDate);
+      }
+
+      // Handle special case for date fields in form data
+      if (data.startDateMonth && data.startDateDay && data.startDateYear) {
+        const startDate = new Date(
+          parseInt(data.startDateYear),
+          parseInt(data.startDateMonth) - 1, // JS months are 0-indexed
+          parseInt(data.startDateDay)
+        );
+        updateData.startDate = startDate;
+        console.log("Setting startDate from parts:", updateData.startDate);
+      }
+
+      if (data.endDateMonth && data.endDateDay && data.endDateYear) {
+        const endDate = new Date(
+          parseInt(data.endDateYear),
+          parseInt(data.endDateMonth) - 1, // JS months are 0-indexed
+          parseInt(data.endDateDay)
+        );
+        updateData.endDate = endDate;
+        console.log("Setting endDate from parts:", updateData.endDate);
       }
 
       // Process price fields
@@ -746,9 +784,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.status !== undefined) updateData.status = data.status;
       if (data.approved !== undefined) updateData.approved = data.approved;
       
+      // If the request was specifically to update dates but we don't have them in the regular format,
+      // try to extract dates from the request directly as a fallback
+      if (req.query.updateDates === 'true' && Object.keys(updateData).length === 0) {
+        console.log("Attempting to extract dates from raw request body");
+        
+        try {
+          // Get the raw date strings from the form
+          const rawStartDate = req.body.startDate || req.body.start_date;
+          const rawEndDate = req.body.endDate || req.body.end_date;
+          
+          if (rawStartDate) {
+            updateData.startDate = new Date(rawStartDate);
+            console.log("Extracted startDate from raw body:", updateData.startDate);
+          }
+          
+          if (rawEndDate) {
+            updateData.endDate = new Date(rawEndDate);
+            console.log("Extracted endDate from raw body:", updateData.endDate);
+          }
+        } catch (err) {
+          console.error("Error parsing dates from raw body:", err);
+        }
+      }
+      
       // Make sure we actually have data to update
       if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ message: "No valid data provided for update" });
+        return res.status(400).json({ 
+          message: "No valid data provided for update",
+          receivedData: data
+        });
       }
 
       console.log("Updating auction with processed data:", updateData);
@@ -756,7 +821,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedAuction);
     } catch (error) {
       console.error("Error updating auction:", error);
-      res.status(500).json({ message: "Failed to update auction" });
+      res.status(500).json({ 
+        message: "Failed to update auction",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
