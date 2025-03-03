@@ -44,26 +44,20 @@ export class SellerPaymentService {
       });
       console.log("Stripe account created with ID:", account.id);
 
-      // Get the base URL - handle both development and Replit environments
+      // Get the base URL for redirects
       let baseUrl: string;
 
-      // First try REPLIT_DOMAIN which is automatically set by Replit
-      if (process.env.REPLIT_DOMAIN) {
-        baseUrl = `https://${process.env.REPLIT_DOMAIN}`;
-        console.log("Using Replit domain:", baseUrl);
-      }
-      // Then try constructing from REPL_SLUG if available
-      else if (process.env.REPL_SLUG) {
-        baseUrl = `https://${process.env.REPL_SLUG}.repl.co`;
-        console.log("Using constructed Replit URL:", baseUrl);
-      }
-      // Finally fallback to localhost for development
-      else {
+      // In development environment
+      if (process.env.NODE_ENV === 'development') {
         baseUrl = 'http://localhost:5000';
         console.log("Using development URL:", baseUrl);
       }
-
-      console.log("Final base URL for Stripe redirects:", baseUrl);
+      // In Replit production environment
+      else {
+        // Use REPLIT_DOMAIN which is the full domain name for your repl
+        baseUrl = `https://${process.env.REPLIT_DOMAIN}`;
+        console.log("Using Replit production URL:", baseUrl);
+      }
 
       // Create an account link for onboarding
       const accountLink = await stripe.accountLinks.create({
@@ -78,19 +72,19 @@ export class SellerPaymentService {
         throw new Error("Failed to generate Stripe Connect URL");
       }
 
-      console.log("Generated Stripe Connect URL:", accountLink.url.substring(0, 50) + "...");
+      console.log("Generated account link with return URL:", `${baseUrl}/seller-dashboard?success=true`);
 
       // Update profile with Stripe account ID and initial status
       await storage.updateSellerStripeAccount(profile.userId, {
         accountId: account.id,
         status: "pending"
       });
-      console.log("Profile updated with Stripe account ID");
 
       return {
         accountId: account.id,
         url: accountLink.url,
       };
+
     } catch (error) {
       console.error("Error creating seller account:", error);
       throw error;
