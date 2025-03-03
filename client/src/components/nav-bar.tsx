@@ -26,14 +26,14 @@ export default function NavBar() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const response = await axios.post('/api/logout');
-      // No need to return data here as the endpoint just sends a status code
+      await axios.post('/api/logout');
       return true;
     },
     onSuccess: () => {
       console.log('Logged out successfully');
-      // Clear user from context
-      queryClient.setQueryData(['user'], null);
+      // Clear user from context and invalidate the cache
+      queryClient.setQueryData(['/api/user'], null);
+      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
       // Redirect to home page
       setLocation('/');
     },
