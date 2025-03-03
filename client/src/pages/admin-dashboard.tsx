@@ -343,6 +343,13 @@ function AdminDashboard() {
                             <Badge variant="outline">{seller.role}</Badge>
                           </div>
                           <div className="flex gap-2">
+                            <Button 
+                              onClick={() => deleteProfileMutation.mutate(seller.id)}
+                              variant="destructive" 
+                              size="sm"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                             {seller.hasProfile && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -412,11 +419,25 @@ function AdminDashboard() {
                             >
                               {buyer.username}
                             </button>
-                            <p className="text-sm text-muted-foreground">
-                              {buyer.email || "No email provided"}
-                            </p>
+                            <Badge variant="outline">{buyer.role}</Badge>
                           </div>
                           <div className="flex gap-2">
+                            <Button 
+                              onClick={() => deleteProfileMutation.mutate(buyer.id)}
+                              variant="destructive" 
+                              size="sm"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setSelectedUser({ id: buyer.id, username: buyer.username, role: buyer.role })
+                              }}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
                             {buyer.hasProfile && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
