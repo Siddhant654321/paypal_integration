@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, AlertCircle, CheckCircle2, Search, Trash2, Edit, Mail, Phone } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle2, Search, Trash2, Edit, Mail, Phone, CheckCircle, XCircle } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -209,6 +209,19 @@ function AdminDashboard() {
     enabled: !!user && (user.role === "admin" || user.role === "seller_admin"),
   });
 
+  const approveUserMutation = useMutation({
+    mutationFn: async (userId: number, approve: boolean) => {
+      await apiRequest("POST", `/api/admin/users/${userId}/${approve ? 'approve' : 'reject'}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Success", description: "User status updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
@@ -257,6 +270,12 @@ function AdminDashboard() {
                           <Badge variant="outline">{user.role}</Badge>
                         </div>
                         <div className="flex gap-2">
+                          <Button onClick={() => approveUserMutation.mutate(user.id, true)} variant="success" size="sm">
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                          <Button onClick={() => approveUserMutation.mutate(user.id, false)} variant="destructive" size="sm">
+                            <XCircle className="h-4 w-4" />
+                          </Button>
                           {user.hasProfile && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -864,7 +883,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
     mutationFn: async (bidId: number) => {
       await apiRequest("DELETE", `/api/admin/bids/${bidId}`);
     },
-    onSuccess: () => {
+    onSuccess: () =>{
       queryClient.invalidateQueries({ queryKey: ["/api/admin/bids", auctionId] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
