@@ -344,6 +344,8 @@ export class DatabaseStorage implements IStorage {
         return existingAuction;
       }
 
+      log(`Approving auction ${auctionId} - changing status from ${existingAuction.status} to active`);
+
       // Update the auction status in a transaction
       const [updatedAuction] = await db.transaction(async (tx) => {
         return await tx
@@ -360,6 +362,7 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`Failed to update auction ${auctionId}`);
       }
 
+      log(`Successfully approved auction ${auctionId}, new status: ${updatedAuction.status}`);
       return updatedAuction;
     } catch (error) {
       log(`Error approving auction ${auctionId}: ${error}`);

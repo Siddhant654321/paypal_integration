@@ -722,6 +722,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Handle date conversions if needed
+      if (data.startDate !== undefined) {
+        data.startDate = new Date(data.startDate);
+      }
+
+      if (data.endDate !== undefined) {
+        data.endDate = new Date(data.endDate);
+      }
+
       const updatedAuction = await storage.updateAuction(auctionId, data);
       res.json(updatedAuction);
     } catch (error) {
