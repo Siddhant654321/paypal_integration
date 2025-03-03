@@ -53,7 +53,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { FileUpload } from "@/components/file-upload";
 import { User } from "lucide-react"; //moved here to remove duplicate
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -713,10 +713,43 @@ function AdminDashboard() {
   });
 
   // Filter approved auctions based on search term
-  const filteredActiveAuctions = approvedAuctions?.filter(auction =>
-    auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-    auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase())
-  );
+  const filteredActiveAuctions = useMemo(() => {
+    if (!approvedAuctions) return [];
+    const nowIso = new Date().toISOString();
+    const active = approvedAuctions.filter(auction => 
+      auction.endDate > nowIso && 
+      auction.status !== "completed" && 
+      auction.status !== "ended" &&
+      auction.status !== "voided"
+    );
+    if (!auctionSearchTerm) return active;
+
+    return active.filter(auction => 
+      auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.species.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.category.toLowerCase().includes(auctionSearchTerm.toLowerCase())
+    );
+  }, [approvedAuctions, auctionSearchTerm]);
+
+  const filteredCompletedAuctions = useMemo(() => {
+    if (!approvedAuctions) return [];
+    const nowIso = new Date().toISOString();
+    const completed = approvedAuctions.filter(auction => 
+      auction.endDate <= nowIso || 
+      auction.status === "completed" || 
+      auction.status === "ended" ||
+      auction.status === "voided"
+    );
+    if (!auctionSearchTerm) return completed;
+
+    return completed.filter(auction => 
+      auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.species.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.category.toLowerCase().includes(auctionSearchTerm.toLowerCase())
+    );
+  }, [approvedAuctions, auctionSearchTerm]);
 
   const { data: pendingUsers, isLoading: isLoadingPending } = useQuery<User[]>({
     queryKey: ["/api/admin/users", { approved: false, role: "seller" }],
@@ -743,12 +776,6 @@ function AdminDashboard() {
 
   const realPendingUsers = pendingUsers?.filter((user) => user.role === "seller" && !user.approved);
 
-  const now = new Date();
-  const filteredCompletedAuctions = approvedAuctions?.filter((auction) =>
-    new Date(auction.endDate) <= now &&
-    (auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()))
-  );
 
   const approveAuctionMutation = useMutation({
     mutationFn: async (auctionId: number) => {

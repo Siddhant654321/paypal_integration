@@ -49,8 +49,21 @@ export default function HomePage() {
       );
     }
 
-    const active = filtered.filter(auction => new Date(auction.endDate) > now);
-    const completed = filtered.filter(auction => new Date(auction.endDate) <= now);
+    // Filter out auctions that have ended or have status "completed"
+    const active = filtered.filter(auction => 
+      new Date(auction.endDate) > now && 
+      auction.status !== "completed" && 
+      auction.status !== "ended" &&
+      auction.status !== "voided"
+    );
+    
+    // Include auctions that have ended or have status completed
+    const completed = filtered.filter(auction => 
+      new Date(auction.endDate) <= now || 
+      auction.status === "completed" || 
+      auction.status === "ended" ||
+      auction.status === "voided"
+    );
 
     if (filters.sortBy && filters.sortBy !== 'default') {
       const sortFn = (a: Auction, b: Auction) => {
