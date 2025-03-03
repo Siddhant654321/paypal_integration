@@ -199,21 +199,21 @@ function AdminDashboard() {
 
   // Filter users by role - ensure no overlap between pending and approved
   const pendingSellers = pendingUsers?.filter((user: User) => 
-    user.role === 'seller' && !user.approved) || [];
+    user.role === 'seller' && !user.approved && 
+    !approvedUsers?.some((approved) => approved.id === user.id)) || [];
 
   const filteredSellers = approvedUsers?.filter((user: User) => 
     user.role === 'seller' && user.approved) || [];
 
   const filteredBuyers = allUsers?.filter((user: User) => 
-    user.role === 'buyer') || [];
+    user.role === 'buyer')
+    .filter((buyer) =>
+      buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase()) ||
+      buyer.email?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
+    ) || [];
 
-  const filteredBuyers = buyers?.filter((buyer) =>
-    buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase()) ||
-    buyer.email?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
-  );
 
-
-  const realPendingUsers = pendingUsers?.filter((user) => user.role === "seller" && !user.approved);
+  // We now use the improved pendingSellers filtering above
 
 
   const approveUserMutation = useMutation({
