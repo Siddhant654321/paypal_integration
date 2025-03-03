@@ -402,6 +402,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction.id}`] }); //Invalidate specific auction
       setOpen(false);
       toast({
         title: "Success",
@@ -945,7 +946,7 @@ function AdminDashboard() {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Delete Profile</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Are you sure you want to delete this seller's profile? This action cannot be undone.
+                                      Are yousure you want to delete this seller's profile? This action cannot be undone.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
