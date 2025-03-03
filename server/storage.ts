@@ -266,6 +266,24 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getHighestBidForAuction(auctionId: number): Promise<Bid | undefined> {
+    try {
+      log(`Getting highest bid for auction ${auctionId}`);
+      const [highestBid] = await db
+        .select()
+        .from(bids)
+        .where(eq(bids.auctionId, auctionId))
+        .orderBy(desc(bids.amount))
+        .limit(1);
+
+      log(`Found highest bid: ${highestBid?.amount || 'none'}`);
+      return highestBid;
+    } catch (error) {
+      log(`Error getting highest bid for auction ${auctionId}: ${error}`);
+      throw error;
+    }
+  }
+
   async createBid(bidData: InsertBid): Promise<Bid> {
     try {
       log(`Creating bid for auction ${bidData.auctionId}`);
@@ -281,10 +299,13 @@ export class DatabaseStorage implements IStorage {
           })
           .returning();
 
-        // Update the auction's current price
+        // Update the auction's current price and bid time
         await tx
           .update(auctions)
-          .set({ currentPrice: bidData.amount })
+          .set({ 
+            currentPrice: bidData.amount,
+            lastBidTime: new Date()
+          })
           .where(eq(auctions.id, bidData.auctionId));
 
         return bid;
@@ -377,51 +398,24 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`Auction with id ${auctionId} not found`);
       }
 
-      const formattedData = { ...data };
+      // Handle date formatting for all date fields
+      const processDate = (date: Date | string | undefined) => {
+        if (!date) return undefined;
+        const processed = new Date(date);
+        return isNaN(processed.getTime()) ? undefined : processed;
+      };
 
-      // Log incoming data for debugging
-      log(`Received update data for auction ${auctionId}:`, {
-        startDate: formattedData.startDate,
-        endDate: formattedData.endDate
-      });
+      const formattedData = {
+        ...data,
+        startDate: data.startDate ? processDate(data.startDate) : undefined,
+        endDate: data.endDate ? processDate(data.endDate) : undefined,
+        lastBidTime: data.lastBidTime ? processDate(data.lastBidTime) : undefined,
+        extendedEndDate: data.extendedEndDate ? processDate(data.extendedEndDate) : undefined
+      };
 
-      // Handle date formatting
-      if (formattedData.startDate) {
-        try {
-          // Handle ISO string format from the form
-          const startDate = new Date(formattedData.startDate);
-          if (isNaN(startDate.getTime())) {
-            throw new Error(`Invalid start date: ${formattedData.startDate}`);
-          }
-          formattedData.startDate = startDate;
-          log(`Formatted start date: ${startDate.toISOString()}`);
-        } catch (err) {
-          log(`Error formatting start date: ${err}`);
-          throw new Error(`Invalid start date format: ${formattedData.startDate}`);
-        }
-      }
-
-      if (formattedData.endDate) {
-        try {
-          // Handle ISO string format from the form
-          const endDate = new Date(formattedData.endDate);
-          if (isNaN(endDate.getTime())) {
-            throw new Error(`Invalid end date: ${formattedData.endDate}`);
-          }
-          formattedData.endDate = endDate;
-          log(`Formatted end date: ${endDate.toISOString()}`);
-        } catch (err) {
-          log(`Error formatting end date: ${err}`);
-          throw new Error(`Invalid end date format: ${formattedData.endDate}`);
-        }
-      }
-
-      // Handle price updates
+      // Handle price fields
       if (formattedData.startPrice !== undefined) {
         formattedData.startPrice = Number(formattedData.startPrice);
-        if (currentAuction.currentPrice === currentAuction.startPrice) {
-          formattedData.currentPrice = formattedData.startPrice;
-        }
       }
 
       if (formattedData.reservePrice !== undefined) {
@@ -441,9 +435,6 @@ export class DatabaseStorage implements IStorage {
           formattedData.imageUrl = formattedData.images[0];
         }
       }
-
-      // Log the final formatted data
-      log(`Final formatted data for auction ${auctionId}:`, formattedData);
 
       const [updatedAuction] = await db
         .update(auctions)

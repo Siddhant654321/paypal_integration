@@ -12,11 +12,16 @@ import Stripe from "stripe";
 import { SellerPaymentService } from "./seller-payments";
 import { AuctionService } from "./auction-service";
 import { AIPricingService } from "./ai-service";
-import type { User } from "./storage";
+import type { User, Auction } from "./storage";
 
-// Temporarily remove email service import
-// import { EmailService } from "./email";
-
+// Helper function to get raw body for Stripe webhook
+const getRawBody = async (req: express.Request): Promise<Buffer> => {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+};
 
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -140,7 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Place bid
+  // Place bid  (updated with extended bidding logic)
   app.post("/api/auctions/:id/bid", requireAuth, requireProfile, async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
@@ -174,23 +179,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      const now = new Date();
+      const endDate = auction.extendedEndDate || auction.endDate;
+
+      // Check if auction is still active
+      if (now > endDate) {
+        return res.status(400).json({ message: "Auction has ended" });
+      }
+
+      // Extended bidding logic
+      const EXTEND_MINUTES = 5;
+      const millisUntilEnd = endDate.getTime() - now.getTime();
+      const minutesUntilEnd = millisUntilEnd / (1000 * 60);
+
+      // If bid is placed within last 5 minutes, extend the auction
+      if (minutesUntilEnd <= EXTEND_MINUTES) {
+        const newEndDate = new Date(now.getTime() + (EXTEND_MINUTES * 60 * 1000));
+        await storage.updateAuction(auctionId, {
+          extendedEndDate: newEndDate,
+          lastBidTime: now
+        });
+        console.log(`[BID] Extended auction ${auctionId} end time to ${newEndDate}`);
+      }
+
       const bid = await storage.createBid({
         auctionId: auction.id,
         bidderId: req.user.id,
         amount: amount,
       });
 
-      // Email notifications temporarily disabled
-      /*
-      try {
-        await EmailService.sendNotification('bid', seller, {
-          auctionTitle: auction.title,
-          bidAmount: amount
-        });
-      } catch (notifyError) {
-        console.error("[EMAIL] Failed to send bid notification:", notifyError);
-      }
-      */
+      // Update auction with new current price and last bid time
+      await storage.updateAuction(auctionId, {
+        currentPrice: amount,
+        lastBidTime: now,
+        reserveMet: amount >= auction.reservePrice
+      });
 
       res.status(201).json(bid);
     } catch (error) {
@@ -856,11 +879,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Start date from individual components
         if (data.startDateYear && data.startDateMonth && data.startDateDay) {
-          console.log("Found startDate components:", {
+                    console.log("Found startDate components:", {
             year: data.startDateYear,
             month: data.startDateMonth,
-            day: data.startDateDay
-          });
+            day: data.startDateDay          });
 
           try {
             // Create date from component parts, being careful about types
@@ -870,8 +892,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             console.log("Parsed startDate components:", { year, month, day });
 
-            if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-              const dateObj = new Date(year, month, day);
+            if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {              const dateObj = new Date(year, month, day);
 
               if (!isNaN(dateObj.getTime())) {
                 updateData.startDate = dateObj;
@@ -893,7 +914,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             day: data.endDateDay
           });
 
-                    try {
+          try {
             // Create date from component parts, being careful about types
             const year = parseInt(data.endDateYear);
             const month = parseInt(data.endDateMonth) - 1; // JS months are 0-indexed
@@ -1303,60 +1324,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
   // Update the webhook handling section
   app.post("/api/webhooks/stripe", async (req, res) => {
-    const sig = req.headers["stripe-signature"];
-    const rawBody = await buffer(req);
     try {
-      console.log("Received Stripe webhook event");
+      const sig = req.headers["stripe-signature"];
+      const rawBody = await getRawBody(req);
+
+      console.log("[STRIPE WEBHOOK] Received event");
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
         apiVersion: "2023-10-16",
+        typescript: true,
       });
-      const event = stripe.webhooks.constructEvent(
-        rawBody,
-        sig as string,
-        process.env.STRIPE_WEBHOOK_SECRET!
-      );
-      console.log("Webhook event type:", event.type);
-      switch (event.type) {
-        case "checkout.session.completed": {
-          const session = event.data.object;
-          console.log("Processing completed checkout session:", session.id);
-          // Update payment and auction status
-          await storage.updatePaymentBySessionId(session.id, {
-            status: "completed",
-            stripePaymentIntentId: session.payment_intent as string,
-          });
-          // Find and update the associated auction
-          const payment = await storage.getPaymentBySessionId(session.id);
-          if (payment) {
-            console.log("Updating auction status for payment:", payment.id);
-            await storage.updateAuction(payment.auctionId, {
-              paymentStatus: "completed",
-            });
-          }
-          break;
-        }
-        case "payment_intent.payment_failed": {
-          const failedIntent = event.data.object;
-          console.log("Processing failed payment:", failedIntent.id);
-          await storage.updatePaymentByIntentId(failedIntent.id, {
-            status: "failed",
-          });
-          break;
-        }
+
+      let event;
+      try {
+        event = stripe.webhooks.constructEvent(
+          rawBody,
+          sig as string,
+          process.env.STRIPE_WEBHOOK_SECRET!
+        );
+      } catch (err) {
+        console.error("[STRIPE WEBHOOK] Error verifying signature:", err);
+        return res.status(400).json({ 
+          message: "Webhook signature verification failed",
+          error: err instanceof Error ? err.message : String(err)
+        });
       }
+
+      console.log("[STRIPE WEBHOOK] Event verified:", event.type);
+
+      // Handle the event
+      switch (event.type) {
+        case "checkout.session.completed":
+          const session = event.data.object;
+          await PaymentService.handleSuccessfulPayment(session);
+          break;
+        default:
+          console.log(`[STRIPE WEBHOOK] Unhandled event type: ${event.type}`);
+      }
+
       res.json({ received: true });
     } catch (error) {
       console.error("[STRIPE WEBHOOK] Error:", error);
-      res.status(400).json({
+      res.status(400).json({ 
         message: "Webhook error",
         error: error instanceof Error ? error.message : String(error)
       });
     }
   });
-
 
   // Get payment status for an auction
   app.get("/api/auctions/:id/payment", requireAuth, async (req, res) => {
@@ -1382,7 +1397,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-
 
   // Add these notification routes after the existing routes
   app.get("/api/notifications", requireAuth, async (req, res) => {
@@ -1431,7 +1445,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
   // Add notification count endpoint
   app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
     try {
@@ -1445,7 +1458,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-
 
   // Add this new route after the existing /api/sellers/status route
   app.get("/api/sellers/active", async (req, res) => {
@@ -1763,14 +1775,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const buyerStats = new Map();
       completedAuctions.forEach(auction => {
         if (!buyerStats.has(auction.winningBidderId)) {
-          buyerStats.set(auction.winningBidderId, { total: 0, auctionsWon: 0 });
-        }
+          buyerStats.set(auction.winningBidderId, { total: 0, auctionsWon: 0 });        }
         const stats = buyerStats.get(auction.winningBidderId);
         stats.total += auction.currentPrice;
         stats.auctionsWon += 1;
       });
       // Get top seller
-      let topSeller = null;
+            let topSeller = null;
       if (sellerStats.size > 0) {
         const [topSellerId, topSellerStats] = Array.from(sellerStats.entries())
           .sort((a, b) => b[1].total - a[1].total)[0];
@@ -1803,7 +1814,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
   // Set up periodic checks for auction notifications
   const NOTIFICATION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
   setInterval(async () => {
@@ -1814,7 +1824,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("[AUCTION NOTIFICATION CHECK] Error:", error);
     }
   }, NOTIFICATION_CHECK_INTERVAL);
-
 
   app.post("/api/ai/price-suggestion", requireAuth, requireApprovedSeller, async (req, res) => {
     try {
@@ -2000,22 +2009,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Notify the buyer
-      /*
-      if (auction.winningBidderId) {
-        await EmailService.notifyFulfillment(
-          auction.winningBidderId,
-          auction.title,
-          trackingNumber,
-          carrier
-        );
-      }
-      */
 
       return res.json({ success: true });
     } catch (error) {
       console.error("[FULFILLMENT] Error:", error);
       res.status(500).json({
         message: "Failed to fulfill auction",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Add seller decision endpoint
+  app.post("/api/auctions/:id/seller-decision", requireAuth, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+      const { decision } = req.body;
+
+      if (!["accept", "void"].includes(decision)) {
+        return res.status(400).json({ message: "Invalid decision. Must be 'accept' or 'void'" });
+      }
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      // Verify the user is the seller
+      if (auction.sellerId !== req.user.id) {
+        return res.status(403).json({ message: "Only the seller can make this decision" });
+      }
+
+      // Verify auction is in the correct state
+      if (auction.status !== "pending_seller_decision") {
+        return res.status(400).json({ message: "Auction is not pending seller decision" });
+      }
+
+      // Update auction based on decision
+      const updates: any = {
+        sellerDecision: decision,
+        status: decision === "accept" ? "ended" : "voided"
+      };
+
+      // If accepting, set the winning bidder
+      if (decision === "accept") {
+        const highestBid = await storage.getHighestBidForAuction(auctionId);
+        if (highestBid) {
+          updates.winningBidderId = highestBid.bidderId;
+          updates.currentPrice = highestBid.amount;
+        }
+      }
+
+      const updatedAuction = await storage.updateAuction(auctionId, updates);
+      res.json(updatedAuction);
+    } catch (error) {
+      console.error("[SELLER DECISION] Error:", error);
+      res.status(500).json({
+        message: "Failed to process seller decision",
         error: error instanceof Error ? error.message : String(error)
       });
     }

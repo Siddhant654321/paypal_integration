@@ -27,12 +27,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [timeLeft, setTimeLeft] = useState("");
+  const { toast } = useToast();
 
   const { data: auction, isLoading: isLoadingAuction, refetch: refetchAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
     queryKey: [`/api/auctions/${params?.id}`],
@@ -45,12 +47,39 @@ export default function AuctionPage() {
     refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
 
+  const handleSellerDecision = async (decision: "accept" | "void") => {
+    try {
+      await fetch(`/api/auctions/${auction?.id}/seller-decision`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ decision })
+      });
+
+      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction?.id}`] });
+      toast({
+        title: decision === "accept" ? "Auction accepted" : "Auction voided",
+        description: decision === "accept"
+          ? "You have accepted the highest bid"
+          : "You have voided the auction"
+      });
+    } catch (error) {
+      console.error("Error making seller decision:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process your decision",
+        variant: "destructive"
+      });
+    }
+  };
+
   useEffect(() => {
     if (!auction) return;
 
     const updateTimer = () => {
       const now = new Date();
-      const end = new Date(auction.endDate);
+      const end = new Date(auction.extendedEndDate || auction.endDate);
       const start = new Date(auction.startDate);
 
       if (now < start) {
@@ -73,9 +102,12 @@ export default function AuctionPage() {
         const hours = Math.floor((seconds % 86400) / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const remainingSeconds = seconds % 60;
-        setTimeLeft(
-          `${days}d ${hours}h ${minutes}m ${remainingSeconds}s remaining`
-        );
+
+        let timeString = `${days}d ${hours}h ${minutes}m ${remainingSeconds}s remaining`;
+        if (auction.extendedEndDate) {
+          timeString += " (Extended)";
+        }
+        setTimeLeft(timeString);
       }
     };
 
@@ -84,39 +116,8 @@ export default function AuctionPage() {
     return () => clearInterval(interval);
   }, [auction, queryClient]);
 
-  const handleSellerDecision = async (decision: "accept" | "void") => {
-    try {
-      await fetch(`/api/auctions/${auction?.id}/seller-decision`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ decision })
-      });
-      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction?.id}`] });
-    } catch (error) {
-      console.error("Error making seller decision:", error);
-    }
-  };
-
-  if (isLoadingAuction) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!auction) {
-    return (
-      <div className="flex justify-center items-center min-h-screen text-muted-foreground">
-        Auction not found
-      </div>
-    );
-  }
-
   const isActive = new Date() >= new Date(auction.startDate) && new Date() <= new Date(auction.endDate);
-  const showSellerDecision = auction.status === "pending_seller_decision" && user?.id === auction.sellerId;
+  const showSellerDecision = auction?.status === "pending_seller_decision" && user?.id === auction.sellerId;
 
   const getStatusBadge = () => {
     switch (auction.status) {
@@ -283,6 +284,57 @@ export default function AuctionPage() {
           {user && user.id === auction.sellerId && (
             <div className="text-sm text-muted-foreground">
               You cannot bid on your own auction
+            </div>
+          )}
+
+          {showSellerDecision && (
+            <div className="mt-6 space-y-4 border p-4 rounded-lg bg-muted">
+              <h3 className="text-lg font-semibold">Seller Decision Required</h3>
+              <p className="text-muted-foreground">
+                The reserve price was not met. You can either accept the highest bid or void the auction.
+              </p>
+              <div className="flex gap-4">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="default">Accept Highest Bid</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Accept Highest Bid?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to accept the highest bid of {formatPrice(auction.currentPrice)}?
+                        This is below your reserve price of {formatPrice(auction.reservePrice)}.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => handleSellerDecision("accept")}>
+                        Accept Bid
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">Void Auction</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Void Auction?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to void this auction? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => handleSellerDecision("void")}>
+                        Void Auction
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
           )}
 
