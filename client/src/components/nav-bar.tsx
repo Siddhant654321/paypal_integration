@@ -113,6 +113,15 @@ export default function NavBar() {
                     variant={user.hasProfile ? "ghost" : "default"}
                     size="sm"
                     className={!user.hasProfile ? "bg-primary text-primary-foreground" : ""}
+                    onClick={() => {
+                      // Refresh user data before navigating to ensure we have the latest profile status
+                      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+                      if (user?.hasProfile) {
+                        setLocation('/profile');
+                      } else {
+                        setLocation('/profile?action=create');
+                      }
+                    }}
                   >
                     <UserCircle className="mr-2 h-4 w-4" />
                     {user.hasProfile ? "Profile" : "Complete Profile"}

@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertProfileSchema, type InsertProfile, type Profile } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Redirect } from "wouter";
 import { Loader2, Bell } from "lucide-react";
@@ -46,6 +46,7 @@ const defaultValues: InsertProfile = {
 export default function ProfilePage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient(); // Added queryClient
 
   if (!user) {
     return <Redirect to="/auth" />;
@@ -99,6 +100,15 @@ export default function ProfilePage() {
       return res.json();
     },
     onSuccess: () => {
+      // Update the user data in the React Query cache
+      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+      const currentUser = queryClient.getQueryData(['/api/user']);
+      if (currentUser) {
+        queryClient.setQueryData(['/api/user'], {
+          ...currentUser,
+          hasProfile: true
+        });
+      }
       toast({
         title: "Profile saved",
         description: "Your profile has been saved successfully.",
