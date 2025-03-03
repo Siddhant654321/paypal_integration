@@ -28,6 +28,12 @@ export interface IStorage {
     category?: string;
     status?: string;
   }): Promise<Auction[]>;
+  getUsers(filters?: { 
+    approved?: boolean;
+    role?: string;
+    lastLoginAfter?: Date;
+  }): Promise<User[]>;
+  deleteUser(userId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -308,6 +314,7 @@ export class DatabaseStorage implements IStorage {
       let query = db.select().from(users);
 
       if (filters) {
+        // Add filter conditions
         if (filters.approved !== undefined) {
           query = query.where(eq(users.approved, filters.approved));
         }
@@ -316,7 +323,11 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      return await query;
+      const results = await query;
+
+      log(`Found ${results.length} users matching filters`);
+
+      return results;
     } catch (error) {
       log(`Error getting users: ${error}`);
       throw error;
@@ -647,6 +658,30 @@ export class DatabaseStorage implements IStorage {
         .where(eq(profiles.userId, userId));
     } catch (error) {
       log(`Error deleting profile for user ${userId}: ${error}`);
+      throw error;
+    }
+  }
+
+  async deleteUser(userId: number): Promise<void> {
+    try {
+      log(`Deleting user ${userId}`);
+
+      // Delete in a transaction to ensure both operations succeed or fail together
+      await db.transaction(async (tx) => {
+        // First delete the profile if it exists
+        await tx
+          .delete(profiles)
+          .where(eq(profiles.userId, userId));
+
+        // Then delete the user
+        await tx
+          .delete(users)
+          .where(eq(users.id, userId));
+      });
+
+      log(`Successfully deleted user ${userId} and associated profile`);
+    } catch (error) {
+      log(`Error deleting user ${userId}: ${error}`);
       throw error;
     }
   }

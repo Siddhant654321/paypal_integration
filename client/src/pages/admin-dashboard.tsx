@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, AlertCircle, CheckCircle2, Search, Trash2, Edit, Mail, Phone, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle2, Search, Trash2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -12,13 +12,19 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Auction, insertAuctionSchema } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Auction } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import AuctionCard from "@/components/auction-card";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,25 +36,28 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import AuctionCard from "@/components/auction-card";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
-// Add a type for seller status
+// Types
 type SellerStripeStatus = {
   sellerId: number;
   status: "not_started" | "pending" | "verified" | "rejected";
-  hasStripeAccount: boolean; // Added field for Stripe account status
+};
+
+type User = {
+  id: number;
+  username: string;
+  email?: string;
+  role: string;
+  approved: boolean;
+  hasProfile: boolean;
 };
 
 function AdminDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [auctionSearchTerm, setAuctionSearchTerm] = useState("");
   const [buyerSearchTerm, setBuyerSearchTerm] = useState("");
@@ -57,84 +66,6 @@ function AdminDashboard() {
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
   }
-
-  const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery({
-    queryKey: ["/api/admin/auctions", { approved: false }],
-    queryFn: () => fetch('/api/admin/auctions?approved=false').then(res => {
-      if (!res.ok) throw new Error("Failed to fetch pending auctions");
-      return res.json();
-    })
-  });
-
-  const { data: approvedAuctions, isLoading: isLoadingApprovedAuctions } = useQuery<Auction[]>({
-    queryKey: ["/api/auctions", { approved: true }],
-  });
-
-  const deleteAuctionMutation = useMutation({
-    mutationFn: async (auctionId: number) => {
-      const response = await fetch(`/api/admin/auctions/${auctionId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to delete auction');
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
-      toast({
-        title: "Success",
-        description: "Auction has been deleted",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const filteredActiveAuctions = useMemo(() => {
-    if (!approvedAuctions) return [];
-    const nowIso = new Date().toISOString();
-    const active = approvedAuctions.filter(auction =>
-      auction.endDate > nowIso &&
-      auction.status !== "completed" &&
-      auction.status !== "ended" &&
-      auction.status !== "voided"
-    );
-    if (!auctionSearchTerm) return active;
-
-    return active.filter(auction =>
-      auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-      auction.species.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-      auction.category.toLowerCase().includes(auctionSearchTerm.toLowerCase())
-    );
-  }, [approvedAuctions, auctionSearchTerm]);
-
-  const filteredCompletedAuctions = useMemo(() => {
-    if (!approvedAuctions) return [];
-    const nowIso = new Date().toISOString();
-    const completed = approvedAuctions.filter(auction =>
-      auction.endDate <= nowIso ||
-      auction.status === "completed" ||
-      auction.status === "ended" ||
-      auction.status === "voided"
-    );
-    if (!auctionSearchTerm) return completed;
-
-    return completed.filter(auction =>
-      auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-      auction.species.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-      auction.category.toLowerCase().includes(auctionSearchTerm.toLowerCase())
-    );
-  }, [approvedAuctions, auctionSearchTerm]);
 
   const { data: pendingUsers, isLoading: isLoadingPending } = useQuery<User[]>({
     queryKey: ["/api/admin/users", { approved: false, role: "seller" }],
@@ -148,79 +79,44 @@ function AdminDashboard() {
     queryKey: ["/api/admin/users", { role: "buyer" }],
   });
 
-
-  const filteredBuyers = buyers?.filter((buyer) =>
-    buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase()) ||
-    buyer.email?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
-  );
-
-  const filteredSellers = approvedSellers?.filter((seller) =>
-    (seller.role === "seller" || seller.role === "seller_admin") &&
-    seller.username.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const realPendingUsers = pendingUsers?.filter((user) => user.role === "seller" && !user.approved);
-
-  const approveAuctionMutation = useMutation({
-    mutationFn: async (auctionId: number) => {
-      await apiRequest("POST", `/api/admin/auctions/${auctionId}/approve`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
-      toast({
-        title: "Success",
-        description: "Auction has been approved",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteProfileMutation = useMutation({
-    mutationFn: async (userId: number) => {
-      await apiRequest("DELETE", `/api/admin/users/${userId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({
-        title: "Success",
-        description: "User profile has been deleted",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Add query for seller Stripe status
   const { data: sellerStripeStatuses } = useQuery<SellerStripeStatus[]>({
     queryKey: ["/api/admin/sellers/stripe-status"],
     enabled: !!user && (user.role === "admin" || user.role === "seller_admin"),
   });
 
-  const approveUserMutation = useMutation({
-    mutationFn: async (userId: number, approve: boolean) => {
-      await apiRequest("POST", `/api/admin/users/${userId}/${approve ? 'approve' : 'reject'}`);
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      await apiRequest("DELETE", `/api/admin/users/${userId}`);
     },
     onSuccess: () => {
+      // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "Success", description: "User status updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sellers/stripe-status"] });
+      toast({
+        title: "Success",
+        description: "User has been deleted",
+      });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
+
+  const realPendingUsers = pendingUsers?.filter(user => !user.approved && user.role === "seller") || [];
+  const filteredSellers = approvedSellers?.filter(seller => 
+    seller.approved && 
+    (seller.role === "seller" || seller.role === "seller_admin") &&
+    seller.username.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
+
+  const filteredBuyers = buyers?.filter((buyer) =>
+    buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase()) ||
+    buyer.email?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
+  ) || [];
 
   return (
     <div className="container mx-auto py-8">
@@ -236,13 +132,13 @@ function AdminDashboard() {
             <Tabs defaultValue="pending">
               <TabsList className="w-full">
                 <TabsTrigger value="pending">
-                  Pending Sellers ({realPendingUsers?.length || 0})
+                  Pending Sellers ({realPendingUsers.length})
                 </TabsTrigger>
                 <TabsTrigger value="sellers">
-                  Approved Sellers ({filteredSellers?.length || 0})
+                  Approved Sellers ({filteredSellers.length})
                 </TabsTrigger>
                 <TabsTrigger value="buyers">
-                  Buyers ({filteredBuyers?.length || 0})
+                  Buyers ({filteredBuyers.length})
                 </TabsTrigger>
               </TabsList>
 
@@ -251,7 +147,7 @@ function AdminDashboard() {
                   <div className="flex justify-center">
                     <LoadingSpinner className="h-8 w-8" />
                   </div>
-                ) : !realPendingUsers?.length ? (
+                ) : !realPendingUsers.length ? (
                   <p className="text-muted-foreground">No pending sellers</p>
                 ) : (
                   <div className="space-y-4">
@@ -270,37 +166,29 @@ function AdminDashboard() {
                           <Badge variant="outline">{user.role}</Badge>
                         </div>
                         <div className="flex gap-2">
-                          <Button onClick={() => approveUserMutation.mutate(user.id, true)} variant="success" size="sm">
-                            <CheckCircle className="h-4 w-4" />
-                          </Button>
-                          <Button onClick={() => approveUserMutation.mutate(user.id, false)} variant="destructive" size="sm">
-                            <XCircle className="h-4 w-4" />
-                          </Button>
-                          {user.hasProfile && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Profile</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this user's profile? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteProfileMutation.mutate(user.id)}
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete User</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this user? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteUserMutation.mutate(user.id)}
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
                     ))}
@@ -324,7 +212,7 @@ function AdminDashboard() {
                     <div className="flex justify-center">
                       <LoadingSpinner className="h-8 w-8" />
                     </div>
-                  ) : !filteredSellers?.length ? (
+                  ) : !filteredSellers.length ? (
                     <p className="text-muted-foreground">No sellers found</p>
                   ) : (
                     <div className="space-y-2">
@@ -343,39 +231,30 @@ function AdminDashboard() {
                             <Badge variant="outline">{seller.role}</Badge>
                           </div>
                           <div className="flex gap-2">
-                            <Button 
-                              onClick={() => deleteProfileMutation.mutate(seller.id)}
-                              variant="destructive" 
-                              size="sm"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                            {seller.hasProfile && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="destructive" size="sm">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Profile</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are yousure you want to delete this seller's profile? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => deleteProfileMutation.mutate(seller.id)}
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
-                            {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.hasStripeAccount
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete User</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this seller? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteUserMutation.mutate(seller.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                            {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status === "verified"
                               ? <CheckCircle2 className="h-4 w-4 text-green-500" title="Stripe account set up" />
                               : <AlertCircle className="h-4 w-4 text-amber-500" title="No Stripe account" />
                             }
@@ -403,14 +282,14 @@ function AdminDashboard() {
                     <div className="flex justify-center">
                       <LoadingSpinner className="h-8 w-8" />
                     </div>
-                  ) : !filteredBuyers?.length ? (
-                    <p className="textmuted-foreground">No buyers found</p>
+                  ) : !filteredBuyers.length ? (
+                    <p className="text-muted-foreground">No buyers found</p>
                   ) : (
                     <div className="space-y-2">
                       {filteredBuyers.map((buyer) => (
                         <div
                           key={buyer.id}
-                          className="flex items-center justifybetween p-4 border rounded-lg"
+                          className="flex items-center justify-between p-4 border rounded-lg"
                         >
                           <div>
                             <button
@@ -419,163 +298,11 @@ function AdminDashboard() {
                             >
                               {buyer.username}
                             </button>
-                            <Badge variant="outline">{buyer.role}</Badge>
+                            <p className="text-sm text-muted-foreground">
+                              {buyer.email || "No email provided"}
+                            </p>
                           </div>
                           <div className="flex gap-2">
-                            <Button 
-                              onClick={() => deleteProfileMutation.mutate(buyer.id)}
-                              variant="destructive" 
-                              size="sm"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                setSelectedUser({ id: buyer.id, username: buyer.username, role: buyer.role })
-                              }}
-                              variant="outline"
-                              size="sm"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            {buyer.hasProfile && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="destructive" size="sm">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Profile</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete this buyer's profile? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => deleteProfileMutation.mutate(buyer.id)}
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Auctions</CardTitle>
-            <CardDescription>Manage auction listings</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="pending">
-              <TabsList className="w-full">
-                <TabsTrigger value="pending">
-                  Pending ({pendingAuctions?.length || 0})
-                </TabsTrigger>
-                <TabsTrigger value="active">
-                  Active ({filteredActiveAuctions?.length || 0})
-                </TabsTrigger>
-                <TabsTrigger value="completed">
-                  Completed ({filteredCompletedAuctions?.length || 0})
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="pending">
-                {isLoadingPendingAuctions ? (
-                  <div className="flex justify-center">
-                    <LoadingSpinner className="h-8 w-8" />
-                  </div>
-                ) : !pendingAuctions?.length ? (
-                  <p className="text-muted-foreground">No pending auctions</p>
-                ) : (
-                  <div className="space-y-4">
-                    {pendingAuctions.map((auction) => {
-                      const seller = approvedSellers?.find(seller => seller.id === auction.sellerId);
-                      return (
-                        <div
-                          key={auction.id}
-                          className="flex items-center justify-between p-4 border rounded-lg"
-                        >
-                          <div className="flex-grow">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium">{auction.title}</p>
-                              {sellerStripeStatuses?.find(s => s.sellerId === auction.sellerId)?.status !== "verified" && (
-                                <Badge variant="warning" className="bg-amber-100 text-amber-800 border-amber-200">
-                                  <AlertCircle className="h-4 w-4 mr-1" />
-                                  Stripe setup incomplete
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex gap-2 mt-1">
-                              <Badge>{auction.species}</Badge>
-                              <Badge variant="outline">{auction.category}</Badge>
-                            </div>
-                            <div className="mt-2 text-sm text-muted-foreground">
-                              <p>
-                                <span className="font-semibold">Seller: </span>
-                                {seller ? seller.username : "Unknown"}
-                                {seller?.email && ` (${seller.email})`}
-                              </p>
-                              {auction.sellerProfile && (
-                                <>
-                                  <p>
-                                    <span className="font-semibold">Business: </span>
-                                    {auction.sellerProfile.businessName || "Not specified"}
-                                  </p>
-                                  <p>
-                                    <span className="font-semibold">Contact: </span>
-                                    {auction.sellerProfile.email || "Not specified"}
-                                  </p>
-                                  <p>
-                                    <span className="font-semibold">Location: </span>
-                                    {auction.sellerProfile.state ? `${auction.sellerProfile.city}, ${auction.sellerProfile.state}` : "Not specified"}
-                                  </p>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => approveAuctionMutation.mutate(auction.id)}
-                              disabled={
-                                approveAuctionMutation.isPending ||
-                                sellerStripeStatuses?.find(s => s.sellerId === auction.sellerId)?.status !== "verified"
-                              }
-                              variant="default"
-                            >
-                              {approveAuctionMutation.isPending && (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              )}
-                              <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Approve
-                            </Button>
-
-                            {/* Add warning about Stripe verification if needed */}
-                            {sellerStripeStatuses?.find(s => s.sellerId === auction.sellerId)?.status !== "verified" && (
-                              <div className="flex items-center">
-                                <Badge variant="warning" className="bg-amber-100 text-amber-800 border-amber-200">
-                                  <AlertCircle className="h-4 w-4 mr-1" />
-                                  Cannot approve - Stripe not verified
-                                </Badge>
-                              </div>
-                            )}
-
-                            <EditAuctionDialog auction={auction} />
-
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="destructive" size="sm">
@@ -584,15 +311,15 @@ function AdminDashboard() {
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogTitle>Delete User</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                    Are you sure you want to delete this buyer? This action cannot be undone.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                    onClick={() => deleteUserMutation.mutate(buyer.id)}
                                   >
                                     Delete
                                   </AlertDialogAction>
@@ -600,125 +327,6 @@ function AdminDashboard() {
                               </AlertDialogContent>
                             </AlertDialog>
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="active">
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search auctions..."
-                      value={auctionSearchTerm}
-                      onChange={(e) => setAuctionSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-
-                  {isLoadingApprovedAuctions ? (
-                    <div className="flex justify-center">
-                      <LoadingSpinner className="h-8 w-8" />
-                    </div>
-                  ) : !filteredActiveAuctions?.length ? (
-                    <p className="text-muted-foreground">No active auctions found</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {filteredActiveAuctions.map((auction) => (
-                        <div key={auction.id} className="relative">
-                          <div className="absolute top-2 right-2 z-10 flex gap-2">
-                            <EditAuctionDialog auction={auction} />
-                            <ViewBidsDialog
-                              auctionId={auction.id}
-                              auctionTitle={auction.title}
-                            />
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this auction? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                          <AuctionCard auction={auction} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="completed">
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search completed auctions..."
-                      value={auctionSearchTerm}
-                      onChange={(e) => setAuctionSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-
-                  {isLoadingApprovedAuctions ? (
-                    <div className="flex justify-center">
-                      <LoadingSpinner className="h-8 w-8" />
-                    </div>
-                  ) : !filteredCompletedAuctions?.length ? (
-                    <p className="text-muted-foreground">No completed auctions found</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {filteredCompletedAuctions.map((auction) => (
-                        <div key={auction.id} className="relative">
-                          <div className="absolute top-2 right-2 z-10 flex gap-2">
-                            <ViewBidsDialog
-                              auctionId={auction.id}
-                              auctionTitle={auction.title}
-                            />
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this auction? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                          <AuctionCard auction={auction} />
                         </div>
                       ))}
                     </div>
@@ -729,6 +337,7 @@ function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
       {selectedUser && (
         <UserProfileDialog
           userId={selectedUser.id}
@@ -890,6 +499,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
 
 function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctionTitle: string }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: bids, isLoading } = useQuery<Bid[]>({
     queryKey: ["/api/admin/bids", auctionId],

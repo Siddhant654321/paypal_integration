@@ -620,7 +620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // File upload endpoint
   app.post("/api/upload", requireAuth, upload.array('files', 5), handleFileUpload);
 
-  // Get all users for admin (with filters)
+  // Update the get users endpoint to properly filter by approval status
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
       const filters = {
@@ -628,11 +628,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           req.query.approved === 'false' ? false : undefined,
         role: req.query.role as string | undefined
       };
-      console.log("Fetching users with filters:", filters);
+
+      console.log("[ADMIN] Fetching users with filters:", filters);
       const users = await storage.getUsers(filters);
+
+      // For pending sellers, only return those that are not approved
+      if (filters.approved === false && filters.role === "seller") {
+        const pendingSellers = users.filter(user => !user.approved);
+        return res.json(pendingSellers);
+      }
+
+      // For approved sellers, only return those that are approved
+      if (filters.approved === true && (filters.role === "seller" || filters.role === "seller_admin")) {
+        const approvedSellers = users.filter(user => user.approved);
+        return res.json(approvedSellers);
+      }
+
       res.json(users);
     } catch (error) {
-      console.error("Error fetching users:", error);
+      console.error("[ADMIN] Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
@@ -2066,6 +2080,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[ADMIN] Error fetching seller Stripe status:", error);
       res.status(500).json({ message: "Failed to fetch seller status" });
+    }
+  });
+
+  // Add new endpoint for deleting users
+  app.delete("/api/admin/users/:userId", requireAdmin, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      console.log("[ADMIN] Deleting user:", userId);
+
+      // First delete profile if exists
+      await storage.deleteProfile(userId);
+
+      // Then delete the user
+      await storage.deleteUser(userId);
+
+      console.log("[ADMIN] Successfully deleted user and profile");
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      console.error("[ADMIN] Error deleting user:", error);
+      res.status(500).json({ message: "Failed to delete user" });
     }
   });
 
