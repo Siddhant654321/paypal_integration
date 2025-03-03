@@ -19,6 +19,8 @@ import SellerProfilePage from "@/pages/seller-profile";
 import BuyerRequestPage from "@/pages/buyer-request-page";
 import EditBuyerRequestPage from "@/pages/edit-buyer-request";
 
+import { QueryClient } from "@tanstack/react-query";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

@@ -942,8 +942,7 @@ function AdminDashboard() {
                               className="font-medium hover:underline"
                               onClick={() => setSelectedUser({ id: seller.id, username: seller.username, role: seller.role })}
                             >
-                              {seller.username}
-                            </button>
+                              {seller.username}                            </button>
                             <Badge variant="outline">{seller.role}</Badge>
                           </div>
                           <div className="flex gap-2">
