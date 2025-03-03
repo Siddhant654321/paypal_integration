@@ -4,13 +4,12 @@ import AuctionFilters from "@/components/auction-filters";
 import { useState, useMemo } from "react";
 import { Auction, User, Profile } from "@shared/schema";
 import { Loader2, Archive, Search } from "lucide-react";
-import { formatPrice } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { SellerShowcase } from "@/components/seller-showcase";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { BuyerRequestForm } from "@/components/buyer-request-form";
 import { useAuth } from "@/hooks/use-auth";
-import { updateAuctionStatus, sendBuyerNotification } from "@/services/auction-service"; // Assumed functions
+import { updateAuctionStatus, sendBuyerNotification } from "@/services/auction-service";
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -51,17 +50,17 @@ export default function HomePage() {
     }
 
     // Filter out auctions that have ended or have status "completed"
-    const active = filtered.filter(auction => 
-      new Date(auction.endDate) > now && 
-      auction.status !== "completed" && 
+    const active = filtered.filter(auction =>
+      new Date(auction.endDate) > now &&
+      auction.status !== "completed" &&
       auction.status !== "ended" &&
       auction.status !== "voided"
     );
 
     // Include auctions that have ended or have status completed
-    const completed = filtered.filter(auction => 
-      new Date(auction.endDate) <= now || 
-      auction.status === "completed" || 
+    const completed = filtered.filter(auction =>
+      new Date(auction.endDate) <= now ||
+      auction.status === "completed" ||
       auction.status === "ended" ||
       auction.status === "voided"
     );
@@ -205,9 +204,7 @@ export default function HomePage() {
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {completedAuctions.map((auction) => (
-                  <AuctionCard key={auction.id} auction={auction}  // Added handling for completed auctions
-                    onPayment={() => handlePayment(auction)} // Added payment handling
-                  />
+                  <AuctionCard key={auction.id} auction={auction} onPayment={() => handlePayment(auction)} />
                 ))}
               </div>
             </>
@@ -219,7 +216,21 @@ export default function HomePage() {
 }
 
 async function handlePayment(auction: Auction) {
-  // Handle payment logic here.  This might involve redirecting the user to a payment gateway.
-  console.log('Initiating payment for auction:', auction.id);
-  // ... your payment gateway integration ...
+  try {
+    // Update auction status to pending payment
+    await updateAuctionStatus(auction.id, "pending_payment");
+
+    // Notify buyer
+    if (auction.winningBidderId) {
+      await sendBuyerNotification(
+        auction.winningBidderId,
+        `Payment initiated for auction: ${auction.title}`
+      );
+    }
+
+    // Redirect to payment page
+    window.location.href = `/payment/${auction.id}`;
+  } catch (error) {
+    console.error('Error initiating payment:', error);
+  }
 }
