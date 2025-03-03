@@ -2,14 +2,13 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    let errorMessage: string;
+    const text = await res.text();
     try {
-      const errorData = await res.json();
-      errorMessage = errorData.message || `${res.status}: ${res.statusText}`;
+      const json = JSON.parse(text);
+      throw new Error(json.message || `${res.status}: ${res.statusText}`);
     } catch (e) {
-      errorMessage = `${res.status}: ${res.statusText}`;
+      throw new Error(`${res.status}: ${text || res.statusText}`);
     }
-    throw new Error(errorMessage);
   }
 }
 
@@ -28,14 +27,9 @@ export async function apiRequest<T>(
   });
 
   await throwIfResNotOk(res);
-  try {
-    const responseData = await res.json();
-    console.log(`[API] Response from ${url}:`, responseData);
-    return responseData;
-  } catch (error) {
-    console.error(`[API] Error parsing JSON from ${url}:`, error);
-    throw new Error('Invalid JSON response from server');
-  }
+  const responseData = await res.json();
+  console.log(`[API] Response from ${url}:`, responseData);
+  return responseData;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
@@ -44,21 +38,16 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    try {
-      const res = await fetch(queryKey[0] as string, {
-        credentials: "include",
-      });
+    const res = await fetch(queryKey[0] as string, {
+      credentials: "include", // Always include credentials
+    });
 
-      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-        return null;
-      }
-
-      await throwIfResNotOk(res);
-      return await res.json();
-    } catch (error) {
-      console.error(`[Query] Error fetching ${queryKey[0]}:`, error);
-      throw error;
+    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+      return null;
     }
+
+    await throwIfResNotOk(res);
+    return await res.json();
   };
 
 export const queryClient = new QueryClient({

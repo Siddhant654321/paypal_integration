@@ -25,39 +25,56 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
         auctionId,
         amount: dollarsToCents(bidAmount), // Convert dollars to cents for storage
       };
-
-      // apiRequest already returns parsed JSON
-      return await apiRequest("POST", `/api/auctions/${auctionId}/bid`, bidData);
+      const res = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, bidData);
+      return res.json();
     },
     onSuccess: () => {
       setAmount("");
+      // Log success message
       console.log("Bid placed successfully for auction:", auctionId);
-
+      
       // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
       queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
-
+      
       // Force refetch the auction and bids data
       queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
-
-      // Notify parent component
+      
+      // Notify parent component after the invalidation
       if (onBidSuccess) {
-        onBidSuccess();
+        setTimeout(() => {
+          onBidSuccess();
+        }, 100); // Small delay to ensure invalidation completes
       }
 
       toast({
-        title: "Success",
-        description: "Your bid has been placed successfully",
+        title: "Bid placed successfully",
+        description: "Your bid has been recorded",
       });
     },
-    onError: (error: Error) => {
-      console.error("[BidForm] Error placing bid:", error);
+    onError: (error: any) => {
+      let errorMessage = "An unexpected error occurred";
+
+      if (error.message) {
+        errorMessage = error.message;
+      }
+
+      if (error.response) {
+        try {
+          const responseData = error.response.json();
+          if (responseData && responseData.message) {
+            errorMessage = responseData.message;
+          }
+        } catch (e) {
+          // Ignore JSON parsing errors
+        }
+      }
 
       toast({
         title: "Failed to place bid",
-        description: error.message || "An unexpected error occurred",
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -76,7 +93,6 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
       });
       return;
     }
-
     bidMutation.mutate(bidAmount);
   };
 
