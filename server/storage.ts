@@ -377,87 +377,48 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`Auction with id ${auctionId} not found`);
       }
 
-      // Make sure we have data to update
-      if (!data || Object.keys(data).length === 0) {
-        throw new Error("No values to set");
-      }
-
       const formattedData = { ...data };
-      
-      // Log what we're trying to update
-      log(`Updating auction ${auctionId} with data:`, formattedData);
-      
-      // Enhanced date handling
-      if (formattedData.startDate !== undefined) {
+
+      // Log incoming data for debugging
+      log(`Received update data for auction ${auctionId}:`, {
+        startDate: formattedData.startDate,
+        endDate: formattedData.endDate
+      });
+
+      // Handle date formatting
+      if (formattedData.startDate) {
         try {
-          // Handle various date formats
-          let startDate: Date;
-          
-          if (formattedData.startDate instanceof Date) {
-            startDate = formattedData.startDate;
-          } else if (typeof formattedData.startDate === 'string') {
-            // Try to parse the string as a date
-            startDate = new Date(formattedData.startDate);
-          } else if (typeof formattedData.startDate === 'number') {
-            // Handle timestamp
-            startDate = new Date(formattedData.startDate);
-          } else {
-            // Unknown format
-            log(`Unknown start date format for auction ${auctionId}: ${typeof formattedData.startDate}`);
-            throw new Error(`Invalid start date format: ${typeof formattedData.startDate}`);
-          }
-          
-          // Validate the date
+          // Handle ISO string format from the form
+          const startDate = new Date(formattedData.startDate);
           if (isNaN(startDate.getTime())) {
-            log(`Invalid start date value for auction ${auctionId}: ${formattedData.startDate}`);
-            throw new Error(`Invalid start date value: ${formattedData.startDate}`);
+            throw new Error(`Invalid start date: ${formattedData.startDate}`);
           }
-          
           formattedData.startDate = startDate;
-          log(`Valid start date for auction ${auctionId}: ${formattedData.startDate.toISOString()}`);
+          log(`Formatted start date: ${startDate.toISOString()}`);
         } catch (err) {
-          log(`Error processing start date for auction ${auctionId}: ${err}`);
-          // Keep the field but log the error, we'll handle this case below
+          log(`Error formatting start date: ${err}`);
+          throw new Error(`Invalid start date format: ${formattedData.startDate}`);
         }
       }
 
-      if (formattedData.endDate !== undefined) {
+      if (formattedData.endDate) {
         try {
-          // Handle various date formats
-          let endDate: Date;
-          
-          if (formattedData.endDate instanceof Date) {
-            endDate = formattedData.endDate;
-          } else if (typeof formattedData.endDate === 'string') {
-            // Try to parse the string as a date
-            endDate = new Date(formattedData.endDate);
-          } else if (typeof formattedData.endDate === 'number') {
-            // Handle timestamp
-            endDate = new Date(formattedData.endDate);
-          } else {
-            // Unknown format
-            log(`Unknown end date format for auction ${auctionId}: ${typeof formattedData.endDate}`);
-            throw new Error(`Invalid end date format: ${typeof formattedData.endDate}`);
-          }
-          
-          // Validate the date
+          // Handle ISO string format from the form
+          const endDate = new Date(formattedData.endDate);
           if (isNaN(endDate.getTime())) {
-            log(`Invalid end date value for auction ${auctionId}: ${formattedData.endDate}`);
-            throw new Error(`Invalid end date value: ${formattedData.endDate}`);
+            throw new Error(`Invalid end date: ${formattedData.endDate}`);
           }
-          
           formattedData.endDate = endDate;
-          log(`Valid end date for auction ${auctionId}: ${formattedData.endDate.toISOString()}`);
+          log(`Formatted end date: ${endDate.toISOString()}`);
         } catch (err) {
-          log(`Error processing end date for auction ${auctionId}: ${err}`);
-          // Keep the field but log the error, we'll handle this case below
+          log(`Error formatting end date: ${err}`);
+          throw new Error(`Invalid end date format: ${formattedData.endDate}`);
         }
       }
 
-      // Keep original price values without conversion
+      // Handle price updates
       if (formattedData.startPrice !== undefined) {
         formattedData.startPrice = Number(formattedData.startPrice);
-        // Update currentPrice only if there are no bids yet
         if (currentAuction.currentPrice === currentAuction.startPrice) {
           formattedData.currentPrice = formattedData.startPrice;
         }
@@ -476,31 +437,30 @@ export class DatabaseStorage implements IStorage {
         if (!Array.isArray(formattedData.images)) {
           formattedData.images = [formattedData.images];
         }
-
         if (!formattedData.imageUrl && formattedData.images.length > 0) {
           formattedData.imageUrl = formattedData.images[0];
         }
       }
 
-      // Check again if we have data to update after validation
-      if (Object.keys(formattedData).length === 0) {
-        throw new Error("No valid values to set after validation");
-      }
+      // Log the final formatted data
+      log(`Final formatted data for auction ${auctionId}:`, formattedData);
 
-      log(`Updating auction ${auctionId} with final formatted data:`, formattedData);
-
-      const [auction] = await db
+      const [updatedAuction] = await db
         .update(auctions)
         .set(formattedData)
         .where(eq(auctions.id, auctionId))
         .returning();
 
-      log(`Successfully updated auction ${auctionId}:`, formattedData);
-      // Return the updated auction data
-      const updatedAuction = await this.getAuction(auctionId);
+      if (!updatedAuction) {
+        throw new Error("Failed to update auction in database");
+      }
+
+      log(`Successfully updated auction ${auctionId}`);
       return updatedAuction;
+
     } catch (error) {
-      log(`Error updating auction ${auctionId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log(`Error updating auction ${auctionId}: ${errorMessage}`);
       throw error;
     }
   }

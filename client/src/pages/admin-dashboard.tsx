@@ -325,7 +325,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
   // Format dates for the form's datetime-local input
   const formatDateForInput = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toISOString().slice(0, 16); // Format as "YYYY-MM-DDThh:mm"
+    const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+    return localDate.toISOString().slice(0, 16); // Format as "YYYY-MM-DDThh:mm"
   };
 
   const form = useForm({
@@ -346,13 +347,16 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
+      // Convert form data to the correct format
       const formData = new FormData();
 
-      // Convert prices from dollars to cents
+      // Convert prices from dollars to cents and format dates
       const dataToSend = {
         ...data,
         startPrice: Math.round(Number(data.startPrice) * 100),
         reservePrice: Math.round(Number(data.reservePrice) * 100),
+        startDate: new Date(data.startDate).toISOString(),
+        endDate: new Date(data.endDate).toISOString(),
       };
 
       // Add basic auction data
@@ -544,11 +548,10 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>Start Date and Time</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="datetime-local" 
+                      <Input
+                        type="datetime-local"
                         {...field}
                         onChange={(e) => {
-                          console.log("New start date:", e.target.value);
                           field.onChange(e.target.value);
                         }}
                       />
@@ -565,11 +568,10 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>End Date and Time</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="datetime-local" 
+                      <Input
+                        type="datetime-local"
                         {...field}
                         onChange={(e) => {
-                          console.log("New end date:", e.target.value);
                           field.onChange(e.target.value);
                         }}
                       />
@@ -622,15 +624,15 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
             </div>
 
             <DialogFooter>
-              <Button 
-                variant="outline" 
-                type="button" 
+              <Button
+                variant="outline"
+                type="button"
                 onClick={() => setOpen(false)}
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={updateAuctionMutation.isPending}
               >
                 {updateAuctionMutation.isPending ? (
@@ -952,7 +954,7 @@ function AdminDashboard() {
                       {filteredBuyers.map((buyer) => (
                         <div
                           key={buyer.id}
-                          className="flex items-center justify-between p-4 border rounded-lg"
+                          className="flex items-center justifybetween p-4 border rounded-lg"
                         >
                           <div>
                             <button
