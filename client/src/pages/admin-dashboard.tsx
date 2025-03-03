@@ -67,6 +67,7 @@ function AdminDashboard() {
     return <Redirect to="/" />;
   }
 
+  // User Management Queries
   const { data: pendingUsers, isLoading: isLoadingPending } = useQuery<User[]>({
     queryKey: ["/api/admin/users", { approved: false, role: "seller" }],
   });
@@ -84,12 +85,21 @@ function AdminDashboard() {
     enabled: !!user && (user.role === "admin" || user.role === "seller_admin"),
   });
 
+  // Auction Management Queries
+  const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery<Auction[]>({
+    queryKey: ["/api/admin/auctions", { approved: false }],
+  });
+
+  const { data: approvedAuctions, isLoading: isLoadingApprovedAuctions } = useQuery<Auction[]>({
+    queryKey: ["/api/auctions", { approved: true }],
+  });
+
+  // Mutations
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: number) => {
       await apiRequest("DELETE", `/api/admin/users/${userId}`);
     },
     onSuccess: () => {
-      // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sellers/stripe-status"] });
       toast({
@@ -106,6 +116,49 @@ function AdminDashboard() {
     },
   });
 
+  const deleteAuctionMutation = useMutation({
+    mutationFn: async (auctionId: number) => {
+      await apiRequest("DELETE", `/api/admin/auctions/${auctionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      toast({
+        title: "Success",
+        description: "Auction has been deleted",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveAuctionMutation = useMutation({
+    mutationFn: async (auctionId: number) => {
+      await apiRequest("POST", `/api/admin/auctions/${auctionId}/approve`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      toast({
+        title: "Success",
+        description: "Auction has been approved",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Filtered Lists
   const realPendingUsers = pendingUsers?.filter(user => !user.approved && user.role === "seller") || [];
   const filteredSellers = approvedSellers?.filter(seller => 
     seller.approved && 
@@ -118,11 +171,50 @@ function AdminDashboard() {
     buyer.email?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
   ) || [];
 
+  const filteredActiveAuctions = useMemo(() => {
+    if (!approvedAuctions) return [];
+    const now = new Date();
+    const active = approvedAuctions.filter(auction =>
+      new Date(auction.endDate) > now &&
+      auction.status !== "completed" &&
+      auction.status !== "ended" &&
+      auction.status !== "voided"
+    );
+    if (!auctionSearchTerm) return active;
+
+    return active.filter(auction =>
+      auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.species.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.category.toLowerCase().includes(auctionSearchTerm.toLowerCase())
+    );
+  }, [approvedAuctions, auctionSearchTerm]);
+
+  const filteredCompletedAuctions = useMemo(() => {
+    if (!approvedAuctions) return [];
+    const now = new Date();
+    const completed = approvedAuctions.filter(auction =>
+      new Date(auction.endDate) <= now ||
+      auction.status === "completed" ||
+      auction.status === "ended" ||
+      auction.status === "voided"
+    );
+    if (!auctionSearchTerm) return completed;
+
+    return completed.filter(auction =>
+      auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.species.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.category.toLowerCase().includes(auctionSearchTerm.toLowerCase())
+    );
+  }, [approvedAuctions, auctionSearchTerm]);
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
 
       <div className="grid gap-8">
+        {/* Users Card */}
         <Card>
           <CardHeader>
             <CardTitle>Users</CardTitle>
@@ -142,6 +234,7 @@ function AdminDashboard() {
                 </TabsTrigger>
               </TabsList>
 
+              {/* User Management Tabs Content */}
               <TabsContent value="pending">
                 {isLoadingPending ? (
                   <div className="flex justify-center">
@@ -336,6 +429,216 @@ function AdminDashboard() {
             </Tabs>
           </CardContent>
         </Card>
+
+        {/* Auctions Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Auctions</CardTitle>
+            <CardDescription>Manage auction listings</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="pending">
+              <TabsList className="w-full">
+                <TabsTrigger value="pending">
+                  Pending ({pendingAuctions?.length || 0})
+                </TabsTrigger>
+                <TabsTrigger value="active">
+                  Active ({filteredActiveAuctions.length})
+                </TabsTrigger>
+                <TabsTrigger value="completed">
+                  Completed ({filteredCompletedAuctions.length})
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="pending">
+                {isLoadingPendingAuctions ? (
+                  <div className="flex justify-center">
+                    <LoadingSpinner className="h-8 w-8" />
+                  </div>
+                ) : !pendingAuctions?.length ? (
+                  <p className="text-muted-foreground">No pending auctions</p>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingAuctions.map((auction) => {
+                      const seller = approvedSellers?.find(seller => seller.id === auction.sellerId);
+                      const sellerStripeStatus = sellerStripeStatuses?.find(s => s.sellerId === auction.sellerId);
+                      const isStripeVerified = sellerStripeStatus?.status === "verified";
+
+                      return (
+                        <div
+                          key={auction.id}
+                          className="flex items-center justify-between p-4 border rounded-lg"
+                        >
+                          <div className="flex-grow">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{auction.title}</p>
+                              {!isStripeVerified && (
+                                <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
+                                  <AlertCircle className="h-4 w-4 mr-1" />
+                                  Stripe setup incomplete
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex gap-2 mt-1">
+                              <Badge>{auction.species}</Badge>
+                              <Badge variant="outline">{auction.category}</Badge>
+                            </div>
+                            <div className="mt-2 text-sm text-muted-foreground">
+                              <p>
+                                <span className="font-semibold">Seller: </span>
+                                {seller ? seller.username : "Unknown"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => approveAuctionMutation.mutate(auction.id)}
+                              disabled={approveAuctionMutation.isPending || !isStripeVerified}
+                              variant="default"
+                            >
+                              {approveAuctionMutation.isPending && (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              )}
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              Approve
+                            </Button>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="active">
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search active auctions..."
+                      value={auctionSearchTerm}
+                      onChange={(e) => setAuctionSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  {isLoadingApprovedAuctions ? (
+                    <div className="flex justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                  ) : !filteredActiveAuctions.length ? (
+                    <p className="text-muted-foreground">No active auctions found</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredActiveAuctions.map((auction) => (
+                        <AuctionCard 
+                          key={auction.id} 
+                          auction={auction}
+                          actions={
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="completed">
+                <div className="space-y-4">
+                  {isLoadingApprovedAuctions ? (
+                    <div className="flex justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                  ) : !filteredCompletedAuctions.length ? (
+                    <p className="text-muted-foreground">No completed auctions found</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredCompletedAuctions.map((auction) => (
+                        <AuctionCard 
+                          key={auction.id} 
+                          auction={auction}
+                          actions={
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       </div>
 
       {selectedUser && (
@@ -349,8 +652,6 @@ function AdminDashboard() {
     </div>
   );
 }
-
-export default AdminDashboard;
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -942,3 +1243,5 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
     </Dialog>
   );
 }
+
+export default AdminDashboard;
