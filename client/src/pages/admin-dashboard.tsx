@@ -38,12 +38,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import axios from 'axios';
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, Textarea } from "@/components/ui/form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import FileUpload from "@/components/file-upload";
 
 // Add a type for seller status
 type SellerStripeStatus = {
@@ -51,25 +45,6 @@ type SellerStripeStatus = {
   status: "not_started" | "pending" | "verified" | "rejected";
   hasStripeAccount: boolean; // Added field for Stripe account status
 };
-
-type User = {
-  id: number;
-  username: string;
-  email?: string;
-  role: string;
-  approved: boolean;
-  hasProfile: boolean;
-};
-
-type Bid = {
-  id: number;
-  auctionId: number;
-  bidderId: number;
-  amount: number;
-  timestamp: string;
-  status: string;
-};
-
 
 function AdminDashboard() {
   const { user } = useAuth();
@@ -161,101 +136,69 @@ function AdminDashboard() {
     );
   }, [approvedAuctions, auctionSearchTerm]);
 
-  // Get all users
-  const { data: allUsers, isLoading } = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const response = await fetch('/api/admin/users');
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
-      }
-      return response.json();
-    },
+  const { data: pendingUsers, isLoading: isLoadingPending } = useQuery<User[]>({
+    queryKey: ["/api/admin/users", { approved: false, role: "seller" }],
   });
 
-  // Get pending users specifically
-  const { data: pendingUsers } = useQuery({
-    queryKey: ['pendingUsers'],
-    queryFn: async () => {
-      const response = await fetch('/api/admin/users?approved=false&role=seller');
-      if (!response.ok) {
-        throw new Error('Failed to fetch pending users');
-      }
-      return response.json();
-    },
+  const { data: approvedSellers, isLoading: isLoadingApproved } = useQuery<User[]>({
+    queryKey: ["/api/admin/users", { approved: true, role: ["seller", "seller_admin"] }],
   });
 
-  // Get approved users specifically
-  const { data: approvedUsers } = useQuery({
-    queryKey: ['approvedUsers'],
-    queryFn: async () => {
-      const response = await fetch('/api/admin/users?approved=true');
-      if (!response.ok) {
-        throw new Error('Failed to fetch approved users');
-      }
-      return response.json();
-    },
+  const { data: buyers, isLoading: isLoadingBuyers } = useQuery<User[]>({
+    queryKey: ["/api/admin/users", { role: "buyer" }],
   });
 
-  // Filter users by role - ensure no overlap between pending and approved
-  const pendingSellers = pendingUsers?.filter((user: User) => 
-    user.role === 'seller' && !user.approved && 
-    !approvedUsers?.some((approved) => approved.id === user.id)) || [];
 
-  const filteredSellers = approvedUsers?.filter((user: User) => 
-    user.role === 'seller' && user.approved) || [];
+  const filteredBuyers = buyers?.filter((buyer) =>
+    buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase()) ||
+    buyer.email?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
+  );
 
-  const filteredBuyers = allUsers?.filter((user: User) => 
-    user.role === 'buyer')
-    .filter((buyer) =>
-      buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase()) ||
-      buyer.email?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
-    ) || [];
+  const filteredSellers = approvedSellers?.filter((seller) =>
+    (seller.role === "seller" || seller.role === "seller_admin") &&
+    seller.username.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
+  const realPendingUsers = pendingUsers?.filter((user) => user.role === "seller" && !user.approved);
 
-  // We now use the improved pendingSellers filtering above
-
-
-  const approveUserMutation = useMutation({
-    mutationFn: async (userId: number) => {
-      const response = await fetch(`/api/admin/users/${userId}/approve`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to approve user');
-      }
-      return await response.json();
+  const approveAuctionMutation = useMutation({
+    mutationFn: async (auctionId: number) => {
+      await apiRequest("POST", `/api/admin/auctions/${auctionId}/approve`);
     },
-    onSuccess: (data) => {
-      // Invalidate all related queries to force a proper refresh
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      queryClient.invalidateQueries({ queryKey: ['pendingUsers'] });
-      queryClient.invalidateQueries({ queryKey: ['approvedUsers'] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       toast({
-        title: 'Success',
-        description: 'User status updated',
+        title: "Success",
+        description: "Auction has been approved",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
       });
     },
   });
 
   const deleteProfileMutation = useMutation({
     mutationFn: async (userId: number) => {
-      const response = await fetch(`/api/admin/profiles/${userId}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to delete profile');
-      }
-      return userId;
+      await apiRequest("DELETE", `/api/admin/users/${userId}`);
     },
     onSuccess: () => {
-      // Force refresh all related data
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      queryClient.invalidateQueries({ queryKey: ['pendingUsers'] });
-      queryClient.invalidateQueries({ queryKey: ['approvedUsers'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({
-        title: 'Success',
-        description: 'Profile deleted successfully',
+        title: "Success",
+        description: "User profile has been deleted",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
       });
     },
   });
@@ -264,6 +207,19 @@ function AdminDashboard() {
   const { data: sellerStripeStatuses } = useQuery<SellerStripeStatus[]>({
     queryKey: ["/api/admin/sellers/stripe-status"],
     enabled: !!user && (user.role === "admin" || user.role === "seller_admin"),
+  });
+
+  const approveUserMutation = useMutation({
+    mutationFn: async (userId: number, approve: boolean) => {
+      await apiRequest("POST", `/api/admin/users/${userId}/${approve ? 'approve' : 'reject'}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Success", description: "User status updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
   });
 
   return (
@@ -280,7 +236,7 @@ function AdminDashboard() {
             <Tabs defaultValue="pending">
               <TabsList className="w-full">
                 <TabsTrigger value="pending">
-                  Pending Sellers ({pendingSellers?.length || 0})
+                  Pending Sellers ({realPendingUsers?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="sellers">
                   Approved Sellers ({filteredSellers?.length || 0})
@@ -291,15 +247,15 @@ function AdminDashboard() {
               </TabsList>
 
               <TabsContent value="pending">
-                {isLoading ? (
+                {isLoadingPending ? (
                   <div className="flex justify-center">
                     <LoadingSpinner className="h-8 w-8" />
                   </div>
-                ) : !pendingSellers?.length ? (
+                ) : !realPendingUsers?.length ? (
                   <p className="text-muted-foreground">No pending sellers</p>
                 ) : (
                   <div className="space-y-4">
-                    {pendingSellers.map((user) => (
+                    {realPendingUsers.map((user) => (
                       <div
                         key={user.id}
                         className="flex items-center justify-between p-4 border rounded-lg"
@@ -314,11 +270,11 @@ function AdminDashboard() {
                           <Badge variant="outline">{user.role}</Badge>
                         </div>
                         <div className="flex gap-2">
-                          <Button onClick={() => approveUserMutation.mutate(user.id)} variant="success" size="sm" disabled={approveUserMutation.isPending}>
-                            {approveUserMutation.isPending ? 'Approving...' : <CheckCircle className="h-4 w-4" />}
+                          <Button onClick={() => approveUserMutation.mutate(user.id, true)} variant="success" size="sm">
+                            <CheckCircle className="h-4 w-4" />
                           </Button>
-                          <Button onClick={() => deleteProfileMutation.mutate(user.id)} variant="destructive" size="sm" disabled={deleteProfileMutation.isPending}>
-                            {deleteProfileMutation.isPending ? 'Removing...' : <XCircle className="h-4 w-4" />}
+                          <Button onClick={() => approveUserMutation.mutate(user.id, false)} variant="destructive" size="sm">
+                            <XCircle className="h-4 w-4" />
                           </Button>
                           {user.hasProfile && (
                             <AlertDialog>
@@ -364,7 +320,7 @@ function AdminDashboard() {
                     />
                   </div>
 
-                  {isLoading ? (
+                  {isLoadingApproved ? (
                     <div className="flex justify-center">
                       <LoadingSpinner className="h-8 w-8" />
                     </div>
@@ -387,24 +343,13 @@ function AdminDashboard() {
                             <Badge variant="outline">{seller.role}</Badge>
                           </div>
                           <div className="flex gap-2">
-                            <div className="flex gap-2">
-                              <Button 
-                                variant="default" 
-                                size="sm" 
-                                onClick={() => approveUserMutation.mutate(seller.id)}
-                                disabled={approveUserMutation.isPending}
-                              >
-                                {approveUserMutation.isPending ? 'Approving...' : 'Approve'}
-                              </Button>
-                              <Button 
-                                variant="destructive" 
-                                size="sm" 
-                                onClick={() => deleteProfileMutation.mutate(seller.id)}
-                                disabled={deleteProfileMutation.isPending}
-                              >
-                                {deleteProfileMutation.isPending ? 'Removing...' : 'Decline'}
-                              </Button>
-                            </div>
+                            <Button 
+                              onClick={() => deleteProfileMutation.mutate(seller.id)}
+                              variant="destructive" 
+                              size="sm"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                             {seller.hasProfile && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -454,7 +399,7 @@ function AdminDashboard() {
                     />
                   </div>
 
-                  {isLoading ? (
+                  {isLoadingBuyers ? (
                     <div className="flex justify-center">
                       <LoadingSpinner className="h-8 w-8" />
                     </div>
@@ -481,9 +426,8 @@ function AdminDashboard() {
                               onClick={() => deleteProfileMutation.mutate(buyer.id)}
                               variant="destructive" 
                               size="sm"
-                              disabled={deleteProfileMutation.isPending}
                             >
-                              {deleteProfileMutation.isPending ? 'Removing...' : <Trash2 className="h-4 w-4" />}
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                             <Button
                               onClick={() => {
@@ -559,7 +503,7 @@ function AdminDashboard() {
                 ) : (
                   <div className="space-y-4">
                     {pendingAuctions.map((auction) => {
-                      const seller = approvedUsers?.find(seller => seller.id === auction.sellerId);
+                      const seller = approvedSellers?.find(seller => seller.id === auction.sellerId);
                       return (
                         <div
                           key={auction.id}
@@ -888,7 +832,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                 ) : (
                   <div className="space-y-2">
                     {bids.map((bid) => (
-                      <div key{bid.id} className="p-3 border rounded-lg">
+                      <div key={bid.id} className="p-3 border rounded-lg">
                         <div className="flex justify-between items-center">
                           <div>
                             <p className="font-medium">${bid.amount}</p>
