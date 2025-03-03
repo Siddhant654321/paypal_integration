@@ -860,7 +860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/buyer-requests", async (req, res)) => {
+  app.get("/api/buyer-requests", async (req, res) => {
     try {
       const filters = {
         status: req.query.status as string || "open",
