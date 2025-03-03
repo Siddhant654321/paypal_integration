@@ -57,6 +57,7 @@ import React, { useEffect } from "react";
 import { FileUpload } from "@/components/file-upload";
 import { User } from "lucide-react"; //moved here to remove duplicate
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import axios from 'axios';
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -378,17 +379,25 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       const remainingImages = auction.images?.filter(img => !imagesToRemove.includes(img)) || [];
       formData.append('existingImages', JSON.stringify(remainingImages));
 
-      const response = await fetch(`/api/admin/auctions/${auction.id}`, {
-        method: 'PATCH',
-        body: formData,
-      });
+      // For date updates, use JSON instead of FormData
+      if (data.startDate || data.endDate) {
+        console.log("Sending direct JSON for date update:", {
+          startDate: data.startDate,
+          endDate: data.endDate
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to update auction');
+        return await axios.patch(`/api/admin/auctions/${auction.id}`, {
+          startDate: data.startDate,
+          endDate: data.endDate
+        });
+      } else {
+        // For other updates, use FormData
+        return await axios.patch(`/api/admin/auctions/${auction.id}`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
       }
-
-      return await response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
@@ -948,7 +957,7 @@ function AdminDashboard() {
                       <LoadingSpinner className="h-8 w-8" />
                     </div>
                   ) : !filteredBuyers?.length ? (
-                    <p className="text-muted-foreground">No buyers found</p>
+                    <p className="textmuted-foreground">No buyers found</p>
                   ) : (
                     <div className="space-y-2">
                       {filteredBuyers.map((buyer) => (
