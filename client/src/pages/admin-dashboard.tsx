@@ -18,7 +18,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AuctionCard from "@/components/auction-card";
-import { LoadingSpinner } from "@/components/ui/loading-spinner"; // Added import
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Add a type for seller status
 type SellerStripeStatus = {
