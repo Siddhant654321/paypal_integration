@@ -57,7 +57,7 @@ import React, { useEffect } from "react";
 import { FileUpload } from "@/components/file-upload";
 import { User } from "lucide-react"; //moved here to remove duplicate
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import axios from 'axios';
+import axios from "axios";
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();

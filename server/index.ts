@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
-// Check for required Stripe environment variables
+// Check for required environment variables
 if (!process.env.STRIPE_SECRET_KEY) {
   console.error("ERROR: Missing STRIPE_SECRET_KEY environment variable");
 }
@@ -14,46 +14,93 @@ if (!process.env.STRIPE_WEBHOOK_SECRET) {
 }
 
 const app = express();
-app.use(express.json());
+
+// Configure JSON parsing with error handling - only validate when there's a body
+app.use(express.json({
+  verify: (req: Request, res: Response, buf: Buffer) => {
+    if (buf.length > 0) {
+      try {
+        JSON.parse(buf.toString());
+      } catch (e) {
+        res.status(400).json({ 
+          message: "Invalid JSON in request body",
+          error: (e as Error).message 
+        });
+        throw e;
+      }
+    }
+  }
+}));
+
 app.use(express.urlencoded({ extended: false }));
 
 // Add detailed request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
-  const originalResJson = res.json;
+  // Log request details
+  if (path.startsWith('/api')) {
+    console.log(`[REQUEST] ${req.method} ${path}`, {
+      query: req.query,
+      body: req.body,
+      headers: req.headers
+    });
+  }
+
+  // Capture original JSON method
+  const originalJson = res.json;
   res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
+    try {
+      // Ensure the response is actually JSON serializable
+      const serialized = JSON.stringify(bodyJson);
+      const parsed = JSON.parse(serialized);
+
+      // Log response for API endpoints
+      if (path.startsWith('/api')) {
+        console.log(`[RESPONSE] ${req.method} ${path}`, {
+          status: res.statusCode,
+          body: parsed
+        });
+      }
+
+      return originalJson.apply(res, [parsed, ...args]);
+    } catch (error) {
+      console.error(`[JSON Error] Failed to serialize response for ${path}:`, error);
+      return res.status(500).send({ 
+        message: "Internal server error: Invalid JSON response",
+        path,
+        timestamp: new Date().toISOString()
+      });
+    }
   };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
     }
   });
 
   next();
 });
 
+// Add basic status endpoint for health checks
+app.get("/api/status", (_req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    uptime: process.uptime(),
+    domain: process.env.REPLIT_DOMAIN || 'localhost:5000'
+  });
+});
+
 (async () => {
   try {
-    // Log startup process
     log("Starting server initialization...");
 
-    // Test database connection with improved error handling
+    // Test database connection
     try {
       log("Testing database connection...");
       await db.execute(sql`SELECT 1`);
@@ -64,10 +111,10 @@ app.use((req, res, next) => {
       console.error("Connection details:", {
         host: process.env.DATABASE_HOST || 'not set',
         database: process.env.DATABASE_NAME || 'not set',
-        user: process.env.DATABASE_USER || 'not set', //Added to show user if available. Sensitive data is masked in production.
-        hasPassword: !!process.env.DATABASE_PASSWORD, //Indicates if password is set.
+        user: process.env.DATABASE_USER || 'not set',
+        hasPassword: !!process.env.DATABASE_PASSWORD,
       });
-      throw dbError; // Re-throw the error to stop server startup
+      throw dbError;
     }
 
     // Verify required environment variables
@@ -90,23 +137,36 @@ app.use((req, res, next) => {
     const server = await registerRoutes(app);
     log("Routes registered successfully");
 
-    // Global error handling
+    // Enhanced global error handling
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
-      log(`Error handler caught: ${err.stack || err}`);
-      res.status(status).json({ message });
+
+      // Log detailed error information
+      console.error("[Error Handler]", {
+        status,
+        message,
+        stack: err.stack,
+        type: err.constructor.name
+      });
+
+      // Send sanitized error response
+      res.status(status).json({ 
+        message,
+        status,
+        timestamp: new Date().toISOString()
+      });
     });
 
-    // Setup Vite or static serving
-    if (app.get("env") === "development") {
+    // Setup static serving for Replit or Vite for development
+    if (process.env.REPLIT_DOMAIN) {
+      log("Setting up static file serving for Replit production...");
+      serveStatic(app);
+      log("Static file serving setup complete");
+    } else {
       log("Setting up Vite for development...");
       await setupVite(app, server);
       log("Vite setup complete");
-    } else {
-      log("Setting up static file serving for production...");
-      serveStatic(app);
-      log("Static file serving setup complete");
     }
 
     // ALWAYS serve on port 5000
@@ -114,41 +174,45 @@ app.use((req, res, next) => {
 
     const startServer = async () => {
       try {
-        // First try to kill any existing process on this port
-        log(`Checking if port ${port} is in use...`);
-        // Import child_process using dynamic import instead of require
-        const childProcess = await import('child_process');
-        const { execSync } = childProcess;
-        try {
-          execSync(`lsof -i :${port} -t | xargs kill -9`);
-          log(`Freed port ${port}`);
-          // Wait a moment before starting
-          setTimeout(() => bindServer(), 1000);
-        } catch (err) {
-          // No process was using the port or couldn't be killed
-          bindServer();
-        }
+        await new Promise<void>((resolve, reject) => {
+          server.listen({
+            port,
+            host: "0.0.0.0",
+          }, () => {
+            const domain = process.env.REPLIT_DOMAIN ? 
+              `https://${process.env.REPLIT_DOMAIN}` : 
+              `http://localhost:${port}`;
+            log(`Server started successfully on ${domain}`);
+            log(`Status endpoint available at ${domain}/api/status`);
+            resolve();
+          }).on('error', (e: any) => {
+            if (e.code === 'EADDRINUSE') {
+              log(`Port ${port} is in use. Attempting to free...`);
+              reject(e);
+            } else {
+              log(`Server error: ${e.message}`);
+              reject(e);
+            }
+          });
+        });
       } catch (error) {
-        log(`Error during server startup: ${error}`);
-        process.exit(1);
-      }
-    };
-
-    const bindServer = () => {
-      server.listen({
-        port,
-        host: "0.0.0.0",
-      }, () => {
-        log(`Server started successfully on port ${port}`);
-      }).on('error', (e: any) => {
-        if (e.code === 'EADDRINUSE') {
-          log(`Port ${port} is still in use. Please restart your Repl to free resources.`);
-          process.exit(1);
+        if ((error as any).code === 'EADDRINUSE') {
+          log(`Attempting to free port ${port}...`);
+          try {
+            const { execSync } = await import('child_process');
+            execSync(`lsof -i :${port} -t | xargs kill -9`);
+            log(`Freed port ${port}`);
+            // Try starting server again after a brief delay
+            setTimeout(() => startServer(), 1000);
+          } catch (killError) {
+            log(`Failed to free port ${port}: ${killError}`);
+            process.exit(1);
+          }
         } else {
-          log(`Server error: ${e.message}`);
+          log(`Fatal error during server startup: ${error}`);
           process.exit(1);
         }
-      });
+      }
     };
 
     startServer();
