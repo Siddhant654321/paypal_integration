@@ -4,7 +4,7 @@ import { Auction, Bid, Profile } from "@shared/schema";
 import BidForm from "@/components/bid-form";
 import { formatDistanceToNow, differenceInSeconds } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Clock, Store, User, MapPin, CreditCard } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, Store, User, MapPin } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -16,16 +16,23 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { useMutation } from "@tanstack/react-query";
-import { toast } from "@/components/ui/use-toast";
-
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [timeLeft, setTimeLeft] = useState("");
-  const [isLoading, setIsLoading] = useState(false); // Added loading state
 
   const { data: auction, isLoading: isLoadingAuction, refetch: refetchAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
     queryKey: [`/api/auctions/${params?.id}`],
@@ -91,45 +98,6 @@ export default function AuctionPage() {
       console.error("Error making seller decision:", error);
     }
   };
-
-  // Create checkout session mutation
-  const createCheckoutMutation = useMutation({
-    mutationFn: async (includeInsurance: boolean) => {
-      setIsLoading(true);
-      const response = await fetch(`/api/auctions/${auction.id}/pay`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ includeInsurance }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create checkout session");
-      }
-
-      const { sessionId } = await response.json();
-      return sessionId;
-    },
-    onSuccess: (sessionId) => {
-      // Redirect to Stripe checkout
-      window.location.href = `/checkout/${sessionId}`;
-    },
-    onError: (error) => {
-      const errorMessage = error.message.includes("Stripe onboarding")
-        ? "The seller hasn't completed their payment setup yet. Please try again later or contact support."
-        : error.message;
-
-      toast({
-        title: "Payment Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      setIsLoading(false);
-    },
-  });
-
 
   if (isLoadingAuction) {
     return (
@@ -286,18 +254,20 @@ export default function AuctionPage() {
           <div className="prose max-w-none">
             <p>{auction.description}</p>
           </div>
-
+          
           {/* Payment button for winning bidder */}
-          {auction.status === "ended" &&
-            user?.id === auction.winningBidderId &&
-            auction.paymentStatus !== "completed" && (
-              <div className="mt-4">
-                <Button size="lg" className="w-full" variant="default" onClick={() => createCheckoutMutation.mutate(false)}> {/* Added onClick handler */}
+          {auction.status === "ended" && 
+           user?.id === auction.winningBidderId && 
+           auction.paymentStatus !== "completed" && (
+            <div className="mt-4">
+              <Link href={`/auction/${auction.id}/pay`}>
+                <Button size="lg" className="w-full" variant="default">
                   <CreditCard className="mr-2 h-5 w-5" />
                   Complete Purchase
                 </Button>
-              </div>
-            )}
+              </Link>
+            </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-lg">
