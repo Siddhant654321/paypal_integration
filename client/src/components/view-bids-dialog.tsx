@@ -43,11 +43,7 @@ export default function ViewBidsDialog({ auctionId, auctionTitle }: ViewBidsDial
 
   const { data: bids, isLoading } = useQuery<Bid[]>({
     queryKey: ["/api/admin/bids", auctionId],
-    queryFn: () =>
-      fetch(`/api/admin/bids?auctionId=${auctionId}`).then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch bids");
-        return res.json();
-      }),
+    queryFn: () => apiRequest("GET", `/api/admin/bids?auctionId=${auctionId}`),
   });
 
   const deleteBidMutation = useMutation({
@@ -95,7 +91,7 @@ export default function ViewBidsDialog({ auctionId, auctionTitle }: ViewBidsDial
             {bids.map((bid) => (
               <div key={bid.id} className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="space-y-1">
-                  <p className="font-medium">Bid Amount: ${bid.amount}</p>
+                  <p className="font-medium">Bid Amount: ${(bid.amount / 100).toFixed(2)}</p>
                   <p className="text-sm text-muted-foreground">
                     Bidder ID: {bid.bidderId}
                   </p>
