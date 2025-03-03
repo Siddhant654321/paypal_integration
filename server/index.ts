@@ -1,159 +1,70 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
-import { storage } from "./storage";
+import { setupVite, serveStatic } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
-// Check for required Stripe environment variables
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.error("ERROR: Missing STRIPE_SECRET_KEY environment variable");
-}
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
-  console.warn("WARNING: Missing STRIPE_WEBHOOK_SECRET environment variable");
-}
-
 const app = express();
+
+// Basic middleware setup
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Add detailed request logging middleware
+// Simple request logging
 app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
+  console.log(`[REQUEST] ${req.method} ${req.path}`);
   next();
+});
+
+// Basic error handling
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("[ERROR]", err);
+  res.status(500).json({ message: "Internal server error" });
+});
+
+// Health check endpoint
+app.get("/api/status", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 (async () => {
   try {
-    // Log startup process
-    log("Starting server initialization...");
+    // Test database connection
+    console.log("[SERVER] Testing database connection...");
+    await db.execute(sql`SELECT 1`);
+    console.log("[SERVER] Database connection successful");
 
-    // Test database connection with improved error handling
-    try {
-      log("Testing database connection...");
-      await db.execute(sql`SELECT 1`);
-      log("Database connection successful");
-    } catch (dbError) {
-      log(`Database connection failed: ${dbError}`);
-      console.error("Database connection error details:", dbError);
-      console.error("Connection details:", {
-        host: process.env.DATABASE_HOST || 'not set',
-        database: process.env.DATABASE_NAME || 'not set',
-        user: process.env.DATABASE_USER || 'not set', //Added to show user if available. Sensitive data is masked in production.
-        hasPassword: !!process.env.DATABASE_PASSWORD, //Indicates if password is set.
-      });
-      throw dbError; // Re-throw the error to stop server startup
-    }
-
-    // Verify required environment variables
-    log("Verifying environment variables...");
-    const requiredEnvVars = [
-      'DATABASE_URL',
-      'STRIPE_SECRET_KEY',
-      'STRIPE_PUBLISHABLE_KEY',
-      'STRIPE_WEBHOOK_SECRET'
-    ];
-
-    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-    if (missingVars.length > 0) {
-      throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
-    }
-    log("Environment variables verified");
-
-    // Initialize routes
-    log("Registering routes...");
+    // Setup routes
+    console.log("[SERVER] Setting up routes...");
     const server = await registerRoutes(app);
-    log("Routes registered successfully");
+    console.log("[SERVER] Routes setup complete");
 
-    // Global error handling
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
-      log(`Error handler caught: ${err.stack || err}`);
-      res.status(status).json({ message });
+    // Setup static serving or Vite
+    try {
+      if (process.env.NODE_ENV === "production") {
+        console.log("[SERVER] Setting up static file serving...");
+        serveStatic(app);
+      } else {
+        console.log("[SERVER] Setting up Vite development server...");
+        await setupVite(app, server);
+      }
+      console.log("[SERVER] Frontend setup complete");
+    } catch (frontendError) {
+      console.error("[SERVER] Frontend setup error:", frontendError);
+      // Continue server startup even if frontend setup fails
+    }
+
+    // Start server
+    const port = 5000;
+    server.listen({
+      port,
+      host: "0.0.0.0",
+    }, () => {
+      console.log(`[SERVER] Server started on port ${port}`);
     });
 
-    // Setup Vite or static serving
-    if (app.get("env") === "development") {
-      log("Setting up Vite for development...");
-      await setupVite(app, server);
-      log("Vite setup complete");
-    } else {
-      log("Setting up static file serving for production...");
-      serveStatic(app);
-      log("Static file serving setup complete");
-    }
-
-    // ALWAYS serve on port 5000
-    const port = 5000;
-
-    const startServer = async () => {
-      try {
-        // First try to kill any existing process on this port
-        log(`Checking if port ${port} is in use...`);
-        // Import child_process using dynamic import instead of require
-        const childProcess = await import('child_process');
-        const { execSync } = childProcess;
-        try {
-          execSync(`lsof -i :${port} -t | xargs kill -9`);
-          log(`Freed port ${port}`);
-          // Wait a moment before starting
-          setTimeout(() => bindServer(), 1000);
-        } catch (err) {
-          // No process was using the port or couldn't be killed
-          bindServer();
-        }
-      } catch (error) {
-        log(`Error during server startup: ${error}`);
-        process.exit(1);
-      }
-    };
-
-    const bindServer = () => {
-      server.listen({
-        port,
-        host: "0.0.0.0",
-      }, () => {
-        log(`Server started successfully on port ${port}`);
-      }).on('error', (e: any) => {
-        if (e.code === 'EADDRINUSE') {
-          log(`Port ${port} is still in use. Please restart your Repl to free resources.`);
-          process.exit(1);
-        } else {
-          log(`Server error: ${e.message}`);
-          process.exit(1);
-        }
-      });
-    };
-
-    startServer();
   } catch (error) {
-    log(`Fatal error during server startup: ${error}`);
+    console.error("[SERVER] Fatal error during startup:", error);
     process.exit(1);
   }
 })();

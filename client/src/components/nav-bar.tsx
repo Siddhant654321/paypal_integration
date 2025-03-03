@@ -6,7 +6,7 @@ import { NotificationsMenu } from "./notifications";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import type { Notification } from "@shared/schema";
 
@@ -14,24 +14,14 @@ export default function NavBar() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
-  const toast = useToast();
+  const { toast } = useToast();
 
-  // Enhanced notification fetching with detailed logging
-  const { data: notifications = [], error: notificationError } = useQuery<Notification[]>({
+  const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
     enabled: !!user,
-    refetchInterval: 10000, // Increased frequency for testing
-    staleTime: 5000,
-    onSuccess: (data) => {
-      console.log("[Notifications] Fetch successful:", {
-        count: data.length,
-        unreadCount: data.filter(n => !n.read).length,
-        latestNotification: data[0]
-      });
-    },
-    onError: (error) => {
-      console.error("[Notifications] Fetch error:", error);
-    }
+    retry: 3,
+    refetchInterval: 10000,
+    staleTime: 5000
   });
 
   const logoutMutation = useMutation({
@@ -60,7 +50,6 @@ export default function NavBar() {
   return (
     <div className="bg-accent p-4">
       <div className="container mx-auto flex justify-between items-center">
-        {/* Left section - Brand and main navigation */}
         <div className="flex items-center gap-4">
           <Link href="/">
             <div className="flex items-center gap-2">
@@ -87,11 +76,9 @@ export default function NavBar() {
           </Link>
         </div>
 
-        {/* Right section - User-specific navigation */}
         <div className="flex items-center gap-4">
           {user ? (
             <>
-              {/* Dashboards section */}
               <div className="flex items-center gap-2">
                 {(user.role === "seller" || user.role === "seller_admin") && (
                   <Link href="/seller/dashboard">
@@ -113,10 +100,9 @@ export default function NavBar() {
 
               <Separator orientation="vertical" className="h-6" />
 
-              {/* User section */}
               <div className="flex items-center gap-2">
                 <NotificationsMenu 
-                  notifications={notifications || []} 
+                  notifications={notifications} 
                   onMarkAllRead={() => {
                     // markAllReadMutation will be handled in the NotificationsMenu component
                   }}
@@ -132,7 +118,7 @@ export default function NavBar() {
                     {user.hasProfile ? "Profile" : "Complete Profile"}
                   </Button>
                 </Link>
-                <Button onClick={logoutMutation.mutate} variant="ghost">Logout</Button>
+                <Button onClick={() => logoutMutation.mutate()} variant="ghost">Logout</Button>
               </div>
             </>
           ) : (
