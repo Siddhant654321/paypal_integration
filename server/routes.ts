@@ -145,10 +145,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Place bid  (updated with extended bidding logic)
+  // Place bid endpoint (simplified version without extended bidding for now)
   app.post("/api/auctions/:id/bid", requireAuth, requireProfile, async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
+      console.log(`[BID] Received bid for auction ${auctionId}`);
 
       if (isNaN(auctionId)) {
         return res.status(400).json({ message: "Invalid auction ID" });
@@ -158,6 +159,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!auction) {
         return res.status(404).json({ message: "Auction not found" });
       }
+
+      console.log(`[BID] Found auction:`, {
+        id: auction.id,
+        status: auction.status,
+        currentPrice: auction.currentPrice,
+        endDate: auction.endDate
+      });
 
       if (auction.sellerId === req.user.id) {
         return res.status(403).json({ message: "You cannot bid on your own auction" });
@@ -180,27 +188,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const now = new Date();
-      const endDate = auction.extendedEndDate || auction.endDate;
-
-      // Check if auction is still active
-      if (now > endDate) {
+      if (now > new Date(auction.endDate)) {
         return res.status(400).json({ message: "Auction has ended" });
       }
 
-      // Extended bidding logic
-      const EXTEND_MINUTES = 5;
-      const millisUntilEnd = endDate.getTime() - now.getTime();
-      const minutesUntilEnd = millisUntilEnd / (1000 * 60);
-
-      // If bid is placed within last 5 minutes, extend the auction
-      if (minutesUntilEnd <= EXTEND_MINUTES) {
-        const newEndDate = new Date(now.getTime() + (EXTEND_MINUTES * 60 * 1000));
-        await storage.updateAuction(auctionId, {
-          extendedEndDate: newEndDate,
-          lastBidTime: now
-        });
-        console.log(`[BID] Extended auction ${auctionId} end time to ${newEndDate}`);
-      }
+      console.log(`[BID] Creating bid:`, {
+        auctionId: auction.id,
+        bidderId: req.user.id,
+        amount: amount
+      });
 
       const bid = await storage.createBid({
         auctionId: auction.id,
@@ -208,11 +204,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: amount,
       });
 
-      // Update auction with new current price and last bid time
+      // Update auction with new current price
       await storage.updateAuction(auctionId, {
         currentPrice: amount,
-        lastBidTime: now,
         reserveMet: amount >= auction.reservePrice
+      });
+
+      console.log(`[BID] Successfully created bid:`, {
+        bidId: bid.id,
+        amount: bid.amount,
+        newPrice: amount
       });
 
       res.status(201).json(bid);
@@ -879,20 +880,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Start date from individual components
         if (data.startDateYear && data.startDateMonth && data.startDateDay) {
-                    console.log("Found startDate components:", {
+          console.log("Found startDate components:", {
             year: data.startDateYear,
             month: data.startDateMonth,
-            day: data.startDateDay          });
+            day: data.startDateDay
+          });
 
           try {
             // Create date from component parts, being careful about types
             const year = parseInt(data.startDateYear);
-            const month = parseInt(data.startDateMonth) - 1; // JS months are 0-indexed
+            const month = parseIntdata.startDateMonth) - 1; // JS months are 0-indexed
             const day = parseInt(data.startDateDay);
 
             console.log("Parsed startDate components:", { year, month, day });
 
-            if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {              const dateObj = new Date(year, month, day);
+            if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+              const dateObj = new Date(year, month, day);
 
               if (!isNaN(dateObj.getTime())) {
                 updateData.startDate = dateObj;
@@ -1345,7 +1348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
       } catch (err) {
         console.error("[STRIPE WEBHOOK] Error verifying signature:", err);
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: "Webhook signature verification failed",
           error: err instanceof Error ? err.message : String(err)
         });
@@ -1366,7 +1369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ received: true });
     } catch (error) {
       console.error("[STRIPE WEBHOOK] Error:", error);
-      res.status(400).json({ 
+      res.status(400).json({
         message: "Webhook error",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1775,13 +1778,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const buyerStats = new Map();
       completedAuctions.forEach(auction => {
         if (!buyerStats.has(auction.winningBidderId)) {
-          buyerStats.set(auction.winningBidderId, { total: 0, auctionsWon: 0 });        }
+          buyerStats.set(auction.winningBidderId, { total: 0, auctionsWon: 0 });
+        }
         const stats = buyerStats.get(auction.winningBidderId);
         stats.total += auction.currentPrice;
         stats.auctionsWon += 1;
       });
       // Get top seller
-            let topSeller = null;
+      let topSeller = null;
       if (sellerStats.size > 0) {
         const [topSellerId, topSellerStats] = Array.from(sellerStats.entries())
           .sort((a, b) => b[1].total - a[1].total)[0];
