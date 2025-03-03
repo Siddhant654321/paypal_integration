@@ -679,6 +679,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/admin/sellers/stripe-status", requireAdmin, async (req, res) => {
+    try {
+      const sellers = await storage.getUsers({ role: "seller" });
+      const sellerAdmins = await storage.getUsers({ role: "seller_admin" });
+      const allSellers = [...sellers, ...sellerAdmins];
+      
+      const statusList = await Promise.all(allSellers.map(async (seller) => {
+        const profile = await storage.getProfile(seller.id);
+        return {
+          sellerId: seller.id,
+          username: seller.username,
+          hasStripeAccount: !!profile?.stripeAccountId,
+          stripeAccountStatus: profile?.stripeAccountStatus
+        };
+      }));
+      
+      res.json(statusList);
+    } catch (error) {
+      console.error("Error fetching seller Stripe statuses:", error);
+      res.status(500).json({ message: "Failed to fetch seller Stripe statuses" });
+    }
+  });
+
   app.get("/api/admin/users/:userId/auctions", requireAdmin, async (req, res) => {
     try {
       const userId = parseInt(req.params.userId);

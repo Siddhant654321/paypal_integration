@@ -23,6 +23,7 @@ import AuctionCard from "@/components/auction-card";
 type SellerStripeStatus = {
   sellerId: number;
   status: "not_started" | "pending" | "verified" | "rejected";
+  hasStripeAccount: boolean; // Added field for Stripe account status
 };
 
 function AdminDashboard() {
@@ -328,6 +329,10 @@ function AdminDashboard() {
                                 </AlertDialogContent>
                               </AlertDialog>
                             )}
+                            {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.hasStripeAccount 
+                              ? <CheckCircle2 className="h-4 w-4 text-green-500" title="Stripe account set up" /> 
+                              : <AlertCircle className="h-4 w-4 text-amber-500" title="No Stripe account" />
+                            }
                           </div>
                         </div>
                       ))}
@@ -878,7 +883,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex justify-center p-4">
+          <div className="flex justifycenter p-4">
             <LoadingSpinner className="h-6 w-6" />
           </div>
         ) : !bids?.length ? (
