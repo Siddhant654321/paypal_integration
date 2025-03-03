@@ -495,8 +495,10 @@ export class DatabaseStorage implements IStorage {
         .where(eq(auctions.id, auctionId))
         .returning();
 
-      log(`Successfully updated auction ${auctionId}`);
-      return auction;
+      log(`Successfully updated auction ${auctionId}:`, updatedData);
+      // Return the updated auction data
+      const updatedAuction = await this.getAuction(auctionId);
+      return updatedAuction;
     } catch (error) {
       log(`Error updating auction ${auctionId}: ${error}`);
       throw error;
