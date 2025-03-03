@@ -572,7 +572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         approved: true,
         status: 'active'
       });
-      
+
       // Then call approveAuction for any additional logic
       const auction = await storage.approveAuction(auctionId);
 
@@ -701,7 +701,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const auctionId = parseInt(req.params.id);
       const data = req.body;
-      
+
       console.log("Received auction update data:", data);
       console.log("Request body type:", typeof data);
       console.log("Request body keys:", Object.keys(data));
@@ -728,7 +728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Initialize update data object
       const updateData: Partial<Auction> = {};
-      
+
       console.log("Raw date fields from request:", {
         startDate: data.startDate,
         endDate: data.endDate,
@@ -741,10 +741,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDateMonth: data.endDateMonth,
         endDateYear: data.endDateYear
       });
-      
+
       // Look for date in various formats - log all attempts for debugging
       console.log("Trying to parse dates from all possible formats");
-      
+
       // Direct date field handling
       if (data.startDate) {
         console.log("Found startDate field:", data.startDate);
@@ -765,7 +765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("Using Date object for startDate:", updateData.startDate);
         }
       }
-      
+
       if (data.endDate) {
         console.log("Found endDate field:", data.endDate);
         if (typeof data.endDate === 'string') {
@@ -785,7 +785,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("Using Date object for endDate:", updateData.endDate);
         }
       }
-      
+
       // Alternative field names
       if (!updateData.startDate && data.start_date) {
         console.log("Found start_date field:", data.start_date);
@@ -799,7 +799,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Error parsing start_date:", e);
         }
       }
-      
+
       if (!updateData.endDate && data.end_date) {
         console.log("Found end_date field:", data.end_date);
         try {
@@ -821,7 +821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             parseInt(data.startDateMonth) - 1, // JS months are 0-indexed
             parseInt(data.startDateDay)
           );
-          
+
           if (!isNaN(startDate.getTime())) {
             updateData.startDate = startDate;
             console.log("Setting startDate from parts:", updateData.startDate);
@@ -844,7 +844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             parseInt(data.endDateMonth) - 1, // JS months are 0-indexed
             parseInt(data.endDateDay)
           );
-          
+
           if (!isNaN(endDate.getTime())) {
             updateData.endDate = endDate;
             console.log("Setting endDate from parts:", updateData.endDate);
@@ -864,15 +864,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.startPrice !== undefined) {
         updateData.startPrice = Number(data.startPrice);
       }
-      
+
       if (data.reservePrice !== undefined) {
         updateData.reservePrice = Number(data.reservePrice);
       }
-      
+
       if (data.currentPrice !== undefined) {
         updateData.currentPrice = Number(data.currentPrice);
       }
-      
+
       // Process other fields
       if (data.title !== undefined) updateData.title = data.title;
       if (data.description !== undefined) updateData.description = data.description;
@@ -880,10 +880,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.category !== undefined) updateData.category = data.category;
       if (data.status !== undefined) updateData.status = data.status;
       if (data.approved !== undefined) updateData.approved = data.approved;
-      
+
       // Handle date components if they were sent from a form
       console.log("Checking for date components in the request");
-      
+
       // Always try to extract date information, regardless of other conditions
       try {
         // Start date from individual components
@@ -893,18 +893,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             month: data.startDateMonth,
             day: data.startDateDay
           });
-          
+
           try {
             // Create date from component parts, being careful about types
             const year = parseInt(data.startDateYear);
             const month = parseInt(data.startDateMonth) - 1; // JS months are 0-indexed
             const day = parseInt(data.startDateDay);
-            
+
             console.log("Parsed startDate components:", { year, month, day });
-            
+
             if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
               const dateObj = new Date(year, month, day);
-              
+
               if (!isNaN(dateObj.getTime())) {
                 updateData.startDate = dateObj;
                 console.log("Successfully created startDate from components:", updateData.startDate);
@@ -916,7 +916,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("Error creating startDate from components:", e);
           }
         }
-        
+
         // End date from individual components
         if (data.endDateYear && data.endDateMonth && data.endDateDay) {
           console.log("Found endDate components:", {
@@ -924,18 +924,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             month: data.endDateMonth,
             day: data.endDateDay
           });
-          
+
           try {
             // Create date from component parts, being careful about types
             const year = parseInt(data.endDateYear);
             const month = parseInt(data.endDateMonth) - 1; // JS months are 0-indexed
             const day = parseInt(data.endDateDay);
-            
+
             console.log("Parsed endDate components:", { year, month, day });
-            
+
             if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
               const dateObj = new Date(year, month, day);
-              
+
               if (!isNaN(dateObj.getTime())) {
                 updateData.endDate = dateObj;
                 console.log("Successfully created endDate from components:", updateData.endDate);
@@ -947,22 +947,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("Error creating endDate from components:", e);
           }
         }
-        
+
         // Try to handle form data with various field names
         if (!updateData.startDate || !updateData.endDate) {
           console.log("Trying to extract dates from form data with various field names");
-          
+
           // Additional field name variations
           const possibleStartDateFields = [
             'startDate', 'start_date', 'auction_start_date', 
             'auctionStartDate', 'start', 'beginDate'
           ];
-          
+
           const possibleEndDateFields = [
             'endDate', 'end_date', 'auction_end_date', 
             'auctionEndDate', 'end', 'closeDate'
           ];
-          
+
           // Try each possible field name for start date
           if (!updateData.startDate) {
             for (const field of possibleStartDateFields) {
@@ -980,7 +980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             }
           }
-          
+
           // Try each possible field name for end date
           if (!updateData.endDate) {
             for (const field of possibleEndDateFields) {
@@ -1002,7 +1002,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (err) {
         console.error("Error processing date fields:", err);
       }
-      
+
       // Make sure we actually have data to update
       if (Object.keys(updateData).length === 0) {
         return res.status(400).json({ 

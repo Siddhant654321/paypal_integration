@@ -654,8 +654,12 @@ function AdminDashboard() {
     queryKey: ["/api/admin/users", { role: "buyer" }],
   });
 
-  const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery<Auction[]>({
-    queryKey: ["/api/admin/auctions", { status: "pending" }],
+  const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery({
+    queryKey: ["/api/admin/auctions", { pendingReview: true }],
+    queryFn: () => fetch(`/api/admin/auctions?pendingReview=true`).then(res => {
+      if (!res.ok) throw new Error("Failed to fetch pending auctions");
+      return res.json();
+    })
   });
 
   const { data: approvedAuctions, isLoading: isLoadingApprovedAuctions } = useQuery<Auction[]>({
