@@ -694,6 +694,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const auctionId = parseInt(req.params.id);
       const data = req.body;
+      
+      console.log("Received auction update data:", data);
 
       // Map legacy categories to new format if present
       if (data.category) {
@@ -709,29 +711,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Log price data for debugging
-      if (data.startPrice !== undefined || data.reservePrice !== undefined || data.currentPrice !== undefined) {
-        console.log("Updating auction prices:", {
-          auctionId,
-          startPrice: data.startPrice,
-          reservePrice: data.reservePrice,
-          currentPrice: data.currentPrice,
-          startPriceType: typeof data.startPrice,
-          reservePriceType: typeof data.reservePrice,
-          currentPriceType: typeof data.currentPrice
-        });
+      // Ensure we have a valid update object
+      const updateData: Partial<Auction> = {};
+      
+      // Process date fields
+      if (data.startDate) {
+        updateData.startDate = new Date(data.startDate);
+        console.log("Setting startDate:", updateData.startDate);
+      }
+      
+      if (data.endDate) {
+        updateData.endDate = new Date(data.endDate);
+        console.log("Setting endDate:", updateData.endDate);
       }
 
-      // Handle date conversions if needed
-      if (data.startDate !== undefined) {
-        data.startDate = new Date(data.startDate);
+      // Process price fields
+      if (data.startPrice !== undefined) {
+        updateData.startPrice = Number(data.startPrice);
+      }
+      
+      if (data.reservePrice !== undefined) {
+        updateData.reservePrice = Number(data.reservePrice);
+      }
+      
+      if (data.currentPrice !== undefined) {
+        updateData.currentPrice = Number(data.currentPrice);
+      }
+      
+      // Process other fields
+      if (data.title !== undefined) updateData.title = data.title;
+      if (data.description !== undefined) updateData.description = data.description;
+      if (data.species !== undefined) updateData.species = data.species;
+      if (data.category !== undefined) updateData.category = data.category;
+      if (data.status !== undefined) updateData.status = data.status;
+      if (data.approved !== undefined) updateData.approved = data.approved;
+      
+      // Make sure we actually have data to update
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No valid data provided for update" });
       }
 
-      if (data.endDate !== undefined) {
-        data.endDate = new Date(data.endDate);
-      }
-
-      const updatedAuction = await storage.updateAuction(auctionId, data);
+      console.log("Updating auction with processed data:", updateData);
+      const updatedAuction = await storage.updateAuction(auctionId, updateData);
       res.json(updatedAuction);
     } catch (error) {
       console.error("Error updating auction:", error);
