@@ -45,9 +45,13 @@ export class SellerPaymentService {
       console.log("Stripe account created with ID:", account.id);
 
       // Get the base URL for redirects
-      const baseUrl = process.env.REPLIT_DOMAIN 
-        ? `https://${process.env.REPLIT_DOMAIN}`
-        : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      let baseUrl = "https://pipsnchicks.replit.app";
+      
+      // Use container URL for development, but fall back to the deployed URL
+      if (process.env.REPL_SLUG && process.env.REPL_OWNER) {
+        // Use the 5000 port which is what your server is running on
+        baseUrl = `https://${parseInt(process.env.REPL_ID || '0', 10)}.id.repl.co:5000`;
+      }
       
       console.log("Using redirect URL:", baseUrl);
 
