@@ -391,7 +391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const status = req.query.status as string | undefined;
       const approved = req.query.approved === 'true' ? true : 
-                      req.query.approved === 'false' ? false : undefined;
+                        req.query.approved === 'false' ? false : undefined;
 
       console.log(`[ADMIN] Fetching auctions with status: ${status}, approved: ${approved}`);
 
@@ -605,20 +605,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // File upload endpoint
   app.post("/api/upload", requireAuth, upload.array('files', 5), handleFileUpload);
 
-  // Get all users for admin (with filters)
+  // Update the admin users endpoint
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
+      console.log("[ADMIN:USERS] Received request with query:", req.query);
+
       const filters = {
         approved: req.query.approved === 'true' ? true :
           req.query.approved === 'false' ? false : undefined,
         role: req.query.role as string | undefined
       };
-      console.log("Fetching users with filters:", filters);
+
+      console.log("[ADMIN:USERS] Parsed filters:", filters);
+
       const users = await storage.getUsers(filters);
-      res.json(users);
+      console.log("[ADMIN:USERS] Retrieved users:", {
+        count: users.length,
+        roles: users.map(u => u.role)
+      });
+
+      // Add profiles to user data with error handling
+      const usersWithProfiles = await Promise.all(
+        users.map(async (user) => {
+          try {
+            const profile = await storage.getProfile(user.id);
+            return {
+              ...user,
+              hasProfile: !!profile,
+              profile: profile || null
+            };
+          } catch (profileError) {
+            console.error(`[ADMIN:USERS] Error fetching profile for user ${user.id}:`, profileError);
+            return {
+              ...user,
+              hasProfile: false,
+              profile: null
+            };
+          }
+        })
+      );
+
+      console.log("[ADMIN:USERS] Processed users with profiles:", {
+        total: usersWithProfiles.length,
+        withProfiles: usersWithProfiles.filter(u => u.hasProfile).length,
+        roles: [...new Set(usersWithProfiles.map(u => u.role))]
+      });
+
+      res.json(usersWithProfiles);
     } catch (error) {
-      console.error("Error fetching users:", error);
-      res.status(500).json({ message: "Failed to fetch users" });
+      console.error("[ADMIN:USERS] Error:", error);
+      res.status(500).json({
+        message: "Failed to fetch users",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -845,7 +884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             parseInt(data.endDateDay)
           );
 
-          if (!isNaN(endDate.getTime())) {
+          if (!isNaN(endDate.getTime())){
             updateData.endDate = endDate;
             console.log("Setting endDate from parts:", updateData.endDate);
           } else {
@@ -1478,7 +1517,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
-
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
       const timeFrame = req.query.timeFrame as string || 'month';
@@ -1734,7 +1772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all auctions with their bids
       const auctions = await storage.getAuctions({});
       const completedAuctions = auctions.filter(a => a.status === "ended" && a.winningBidderId);
-      // Calculate seller performance
+            // Calculate seller performance
       const sellerStats = new Map();
       completedAuctions.forEach(auction => {
         if (!sellerStats.has(auction.sellerId)) {

@@ -1,6 +1,6 @@
 import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, SQL } from "drizzle-orm";
 import { Store } from "express-session";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
@@ -77,13 +77,25 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     try {
+      console.log("[STORAGE:USERS] Creating new user:", {
+        username: insertUser.username,
+        role: insertUser.role
+      });
+
       const [user] = await db
         .insert(users)
         .values(insertUser)
         .returning();
+
+      console.log("[STORAGE:USERS] Created user:", {
+        id: user.id,
+        role: user.role,
+        approved: user.approved
+      });
+
       return user;
     } catch (error) {
-      log(`Error creating user: ${error}`);
+      console.error("[STORAGE:USERS] Error creating user:", error);
       throw error;
     }
   }
@@ -304,21 +316,43 @@ export class DatabaseStorage implements IStorage {
     lastLoginAfter?: Date;
   }): Promise<User[]> {
     try {
-      log(`Getting users with filters: ${JSON.stringify(filters)}`);
-      let query = db.select().from(users);
+      console.log("[STORAGE:USERS] Getting users with filters:", filters);
+      let conditions: SQL[] = [];
 
       if (filters) {
+        console.log("[STORAGE:USERS] Building filter conditions");
+
         if (filters.approved !== undefined) {
-          query = query.where(eq(users.approved, filters.approved));
+          console.log("[STORAGE:USERS] Adding approval filter:", filters.approved);
+          conditions.push(eq(users.approved, filters.approved));
         }
+
         if (filters.role) {
-          query = query.where(eq(users.role, filters.role));
+          console.log("[STORAGE:USERS] Adding role filter:", filters.role);
+          conditions.push(eq(users.role, filters.role));
+        }
+
+        if (filters.lastLoginAfter) {
+          console.log("[STORAGE:USERS] Adding lastLogin filter:", filters.lastLoginAfter);
+          conditions.push(eq(users.lastLogin, filters.lastLoginAfter));
         }
       }
 
-      return await query;
+      const query = conditions.length > 0
+        ? db.select().from(users).where(and(...conditions))
+        : db.select().from(users);
+
+      const results = await query;
+
+      console.log("[STORAGE:USERS] Query results:", {
+        count: results.length,
+        roles: results.map(u => u.role),
+        approvalStatus: results.map(u => u.approved)
+      });
+
+      return results;
     } catch (error) {
-      log(`Error getting users: ${error}`);
+      console.error("[STORAGE:USERS] Error getting users:", error);
       throw error;
     }
   }
