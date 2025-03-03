@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AuctionCard from "@/components/auction-card";
+import { LoadingSpinner } from "@/components/ui/loading-spinner"; // Added import
 
 // Add a type for seller status
 type SellerStripeStatus = {
@@ -329,8 +330,8 @@ function AdminDashboard() {
                                 </AlertDialogContent>
                               </AlertDialog>
                             )}
-                            {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.hasStripeAccount 
-                              ? <CheckCircle2 className="h-4 w-4 text-green-500" title="Stripe account set up" /> 
+                            {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.hasStripeAccount
+                              ? <CheckCircle2 className="h-4 w-4 text-green-500" title="Stripe account set up" />
                               : <AlertCircle className="h-4 w-4 text-amber-500" title="No Stripe account" />
                             }
                           </div>
