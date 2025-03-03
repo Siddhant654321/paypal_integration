@@ -5,7 +5,7 @@ import { UserCircle, LineChart, Home, LayoutDashboard } from "lucide-react";
 import { NotificationsMenu } from "./notifications";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useLocation } from "wouter";
 import { useToast } from "@/components/ui/use-toast";
 import axios from "axios";
 import type { Notification } from "@shared/schema";
@@ -13,7 +13,7 @@ import type { Notification } from "@shared/schema";
 export default function NavBar() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const router = useRouter();
+  const [, setLocation] = useLocation();
   const toast = useToast();
 
   // Enhanced notification fetching with detailed logging
@@ -45,7 +45,7 @@ export default function NavBar() {
         title: "Logged out",
         description: "You have been logged out successfully",
       });
-      router.push("/");
+      setLocation("/");
     },
     onError: (error) => {
       console.error("Logout error:", error);
