@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import AuctionCard from "@/components/auction-card";
 import AuctionFilters from "@/components/auction-filters";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Auction, User, Profile } from "@shared/schema";
 import { Loader2, Archive, Search } from "lucide-react";
 import { formatPrice } from "@/utils/formatters";
@@ -88,19 +88,6 @@ export default function HomePage() {
 
     return { activeAuctions: active, completedAuctions: completed };
   }, [auctions, filters.searchTerm, filters.sortBy]);
-
-  // Preload hero image
-  useEffect(() => {
-    const link = document.createElement('link');
-    link.rel = 'preload';
-    link.as = 'image';
-    link.href = '/images/hero-chicken.jpg';
-    document.head.appendChild(link);
-
-    return () => {
-      document.head.removeChild(link);
-    };
-  }, []);
 
   return (
     <div className="min-h-screen">
