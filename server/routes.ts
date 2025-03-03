@@ -722,45 +722,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Initialize update data object
       const updateData: Partial<Auction> = {};
       
+      console.log("Raw date fields from request:", {
+        startDate: data.startDate,
+        endDate: data.endDate,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        startDateDay: data.startDateDay,
+        startDateMonth: data.startDateMonth,
+        startDateYear: data.startDateYear,
+        endDateDay: data.endDateDay,
+        endDateMonth: data.endDateMonth,
+        endDateYear: data.endDateYear
+      });
+      
       // Check if we have date objects or strings
       // Sometimes the client might send a date string or an ISO string
       if (data.startDate) {
-        updateData.startDate = new Date(data.startDate);
-        console.log("Setting startDate:", updateData.startDate);
+        try {
+          updateData.startDate = new Date(data.startDate);
+          console.log("Setting startDate:", updateData.startDate);
+        } catch (e) {
+          console.error("Error parsing startDate:", e);
+        }
       } else if (data.start_date) {
         // Try alternative field name
-        updateData.startDate = new Date(data.start_date);
-        console.log("Setting startDate from start_date:", updateData.startDate);
+        try {
+          updateData.startDate = new Date(data.start_date);
+          console.log("Setting startDate from start_date:", updateData.startDate);
+        } catch (e) {
+          console.error("Error parsing start_date:", e);
+        }
       }
       
       if (data.endDate) {
-        updateData.endDate = new Date(data.endDate);
-        console.log("Setting endDate:", updateData.endDate);
+        try {
+          updateData.endDate = new Date(data.endDate);
+          console.log("Setting endDate:", updateData.endDate);
+        } catch (e) {
+          console.error("Error parsing endDate:", e);
+        }
       } else if (data.end_date) {
         // Try alternative field name
-        updateData.endDate = new Date(data.end_date);
-        console.log("Setting endDate from end_date:", updateData.endDate);
+        try {
+          updateData.endDate = new Date(data.end_date);
+          console.log("Setting endDate from end_date:", updateData.endDate);
+        } catch (e) {
+          console.error("Error parsing end_date:", e);
+        }
       }
 
       // Handle special case for date fields in form data
       if (data.startDateMonth && data.startDateDay && data.startDateYear) {
-        const startDate = new Date(
-          parseInt(data.startDateYear),
-          parseInt(data.startDateMonth) - 1, // JS months are 0-indexed
-          parseInt(data.startDateDay)
-        );
-        updateData.startDate = startDate;
-        console.log("Setting startDate from parts:", updateData.startDate);
+        try {
+          const startDate = new Date(
+            parseInt(data.startDateYear),
+            parseInt(data.startDateMonth) - 1, // JS months are 0-indexed
+            parseInt(data.startDateDay)
+          );
+          
+          if (!isNaN(startDate.getTime())) {
+            updateData.startDate = startDate;
+            console.log("Setting startDate from parts:", updateData.startDate);
+          } else {
+            console.error("Invalid date created from parts:", {
+              year: data.startDateYear,
+              month: data.startDateMonth,
+              day: data.startDateDay
+            });
+          }
+        } catch (e) {
+          console.error("Error creating date from parts:", e);
+        }
       }
 
       if (data.endDateMonth && data.endDateDay && data.endDateYear) {
-        const endDate = new Date(
-          parseInt(data.endDateYear),
-          parseInt(data.endDateMonth) - 1, // JS months are 0-indexed
-          parseInt(data.endDateDay)
-        );
-        updateData.endDate = endDate;
-        console.log("Setting endDate from parts:", updateData.endDate);
+        try {
+          const endDate = new Date(
+            parseInt(data.endDateYear),
+            parseInt(data.endDateMonth) - 1, // JS months are 0-indexed
+            parseInt(data.endDateDay)
+          );
+          
+          if (!isNaN(endDate.getTime())) {
+            updateData.endDate = endDate;
+            console.log("Setting endDate from parts:", updateData.endDate);
+          } else {
+            console.error("Invalid date created from parts:", {
+              year: data.endDateYear,
+              month: data.endDateMonth,
+              day: data.endDateDay
+            });
+          }
+        } catch (e) {
+          console.error("Error creating date from parts:", e);
+        }
       }
 
       // Process price fields
@@ -784,27 +839,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.status !== undefined) updateData.status = data.status;
       if (data.approved !== undefined) updateData.approved = data.approved;
       
-      // If the request was specifically to update dates but we don't have them in the regular format,
-      // try to extract dates from the request directly as a fallback
-      if (req.query.updateDates === 'true' && Object.keys(updateData).length === 0) {
-        console.log("Attempting to extract dates from raw request body");
+      // Special handling for form data with date strings
+      // Check if we're receiving a request with date strings to update
+      if ((req.query.updateDates === 'true' || req.headers['x-update-dates']) && Object.keys(updateData).length === 0) {
+        console.log("Attempting to extract dates from form data");
         
         try {
-          // Get the raw date strings from the form
-          const rawStartDate = req.body.startDate || req.body.start_date;
-          const rawEndDate = req.body.endDate || req.body.end_date;
-          
-          if (rawStartDate) {
-            updateData.startDate = new Date(rawStartDate);
-            console.log("Extracted startDate from raw body:", updateData.startDate);
-          }
-          
-          if (rawEndDate) {
-            updateData.endDate = new Date(rawEndDate);
-            console.log("Extracted endDate from raw body:", updateData.endDate);
+          // Check if we have date strings in various possible formats
+          if (typeof req.body === 'object') {
+            console.log("Form data keys:", Object.keys(req.body));
+            
+            // Try to extract dates from various fields and formats
+            const startDateStr = req.body.startDate || req.body.start_date || req.body.auction_start_date;
+            const endDateStr = req.body.endDate || req.body.end_date || req.body.auction_end_date;
+            
+            if (startDateStr) {
+              try {
+                const parsedDate = new Date(startDateStr);
+                if (!isNaN(parsedDate.getTime())) {
+                  updateData.startDate = parsedDate;
+                  console.log("Successfully parsed startDate:", updateData.startDate);
+                } else {
+                  console.error("Invalid startDate format:", startDateStr);
+                }
+              } catch (e) {
+                console.error("Error parsing startDate string:", startDateStr, e);
+              }
+            }
+            
+            if (endDateStr) {
+              try {
+                const parsedDate = new Date(endDateStr);
+                if (!isNaN(parsedDate.getTime())) {
+                  updateData.endDate = parsedDate;
+                  console.log("Successfully parsed endDate:", updateData.endDate);
+                } else {
+                  console.error("Invalid endDate format:", endDateStr);
+                }
+              } catch (e) {
+                console.error("Error parsing endDate string:", endDateStr, e);
+              }
+            }
+            
+            // Fallback: Try to construct dates from individual fields (MM/DD/YYYY format)
+            if (!updateData.startDate) {
+              const month = req.body.start_month || req.body.startMonth;
+              const day = req.body.start_day || req.body.startDay;
+              const year = req.body.start_year || req.body.startYear;
+              
+              if (month && day && year) {
+                try {
+                  const constructedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  if (!isNaN(constructedDate.getTime())) {
+                    updateData.startDate = constructedDate;
+                    console.log("Constructed startDate from parts:", updateData.startDate);
+                  }
+                } catch (e) {
+                  console.error("Error constructing startDate from parts:", e);
+                }
+              }
+            }
+            
+            if (!updateData.endDate) {
+              const month = req.body.end_month || req.body.endMonth;
+              const day = req.body.end_day || req.body.endDay;
+              const year = req.body.end_year || req.body.endYear;
+              
+              if (month && day && year) {
+                try {
+                  const constructedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  if (!isNaN(constructedDate.getTime())) {
+                    updateData.endDate = constructedDate;
+                    console.log("Constructed endDate from parts:", updateData.endDate);
+                  }
+                } catch (e) {
+                  console.error("Error constructing endDate from parts:", e);
+                }
+              }
+            }
           }
         } catch (err) {
-          console.error("Error parsing dates from raw body:", err);
+          console.error("Error processing date fields:", err);
         }
       }
       
