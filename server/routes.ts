@@ -2,20 +2,18 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema } from "@shared/schema";
+import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema, insertFulfillmentSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import path from "path";
 import multer from 'multer';
 import { upload, handleFileUpload } from "./uploads";
 import { PaymentService } from "./payments";
-import { buffer } from "micro";
 import Stripe from "stripe";
-import {SellerPaymentService} from "./seller-payments";
-import {insertFulfillmentSchema} from "@shared/schema"; 
-import { EmailService } from "./email"; 
+import { SellerPaymentService } from "./seller-payments";
 import { AuctionService } from "./auction-service";
-import { AIPricingService } from "./ai-service"; // Added import
+import { AIPricingService } from "./ai-service";
 import type { User } from "./storage"; // Add User type
+import { EmailService } from "./email";
 
 
 // Add middleware to check profile completion
@@ -25,45 +23,14 @@ const requireProfile = async (req: any, res: any, next: any) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  // Enhanced logging for debugging
-  console.log("[PROFILE CHECK] User authentication state:", {
-    userId: req.user?.id,
+  console.log("[PROFILE CHECK] User:", {
+    id: req.user?.id,
     role: req.user?.role,
-    username: req.user?.username,
     isAuthenticated: req.isAuthenticated()
   });
 
-  // Skip profile check for now to fix the auction form issue
-  console.log("[PROFILE CHECK] Temporarily bypassing profile check");
+  // For development, temporarily skip profile check
   return next();
-
-  // The code below is commented out to fix the "seller not found" issue
-  /*
-  // Check if profile exists 
-  const hasProfile = await storage.hasProfile(req.user.id);
-  console.log("[PROFILE CHECK] Profile check result:", {
-    userId: req.user.id, 
-    role: req.user.role,
-    hasProfile
-  });
-
-  // For buyers, no profile is required
-  if (req.user.role === "buyer") {
-    console.log("[PROFILE CHECK] Skipping profile check for buyer");
-    return next();
-  }
-
-  // For sellers and seller_admin, check profile status
-  const isSeller = req.user.role === "seller" || req.user.role === "seller_admin";
-  if (isSeller && !hasProfile) {
-    console.log("[PROFILE CHECK] Seller missing required profile");
-    return res.status(403).json({ message: "Profile completion required" });
-  }
-
-  // Profile exists or not required, proceed
-  console.log("[PROFILE CHECK] Access granted");
-  next();
-  */
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -72,7 +39,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-  // Middleware to check if user is authenticated
+  // Authentication middleware
   const requireAuth = (req: any, res: any, next: any) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -80,7 +47,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Middleware to check if user is an admin
+  // Admin middleware
   const requireAdmin = (req: any, res: any, next: any) => {
     if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "seller_admin")) {
       return res.status(403).json({ message: "Forbidden" });
@@ -88,10 +55,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Middleware to check if user is an approved seller or seller_admin
+  // Approved seller middleware
   const requireApprovedSeller = (req: any, res: any, next: any) => {
     try {
-      console.log("[SELLER CHECK] Checking seller authorization:", {
+      console.log("[SELLER CHECK]", {
         isAuthenticated: req.isAuthenticated(),
         user: req.user ? {
           id: req.user.id,
@@ -101,46 +68,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (!req.isAuthenticated()) {
-        console.log("[SELLER CHECK] User not authenticated");
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      // Allow seller_admin without approval check
       if (req.user.role === "seller_admin") {
-        console.log("[SELLER CHECK] User is seller_admin, access granted");
         return next();
       }
 
       if (req.user.role !== "seller") {
-        console.log("[SELLER CHECK] User is not a seller", { role: req.user.role });
         return res.status(403).json({ message: "Only sellers can perform this action" });
       }
 
-      // Check approval for regular sellers
       if (!req.user.approved) {
-        console.log("[SELLER CHECK] Seller not approved");
         return res.status(403).json({ message: "Only approved sellers can perform this action" });
       }
 
-      console.log("[SELLER CHECK] Access granted to approved seller");
       next();
     } catch (error) {
-      console.error("[SELLER CHECK] Error in seller authorization:", error);
+      console.error("[SELLER CHECK] Error:", error);
       res.status(500).json({ message: "Authorization check failed" });
     }
   };
 
-  // Update the getAuctions endpoint to include seller profiles
+  // Get auctions with filters
   app.get("/api/auctions", async (req, res) => {
     try {
       const filters = {
         species: req.query.species as string | undefined,
         category: req.query.category as string | undefined,
-        approved: true, 
+        approved: true,
       };
-      const auctions = await storage.getAuctions(filters);
 
-      // Get seller profiles for each auction
+      const auctions = await storage.getAuctions(filters);
       const auctionsWithProfiles = await Promise.all(
         auctions.map(async (auction) => {
           const sellerProfile = await storage.getProfile(auction.sellerId);
@@ -150,43 +109,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(auctionsWithProfiles);
     } catch (error) {
-      console.error("Error fetching auctions:", error);
-      res.status(500).json({ message: "Failed to fetch auctions" });
+      console.error("[AUCTIONS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch auctions",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
   // Get seller's auctions
   app.get("/api/seller/auctions", requireAuth, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      // Allow both seller and seller_admin to view their auctions
       if (req.user.role !== "seller" && req.user.role !== "seller_admin") {
         return res.status(403).json({ message: "Only sellers can view their auctions" });
       }
 
-      console.log(`[AUCTIONS] Fetching auctions for seller ${req.user.id}`);
       const auctions = await storage.getAuctions({
         sellerId: req.user.id
       });
 
-      console.log(`[AUCTIONS] Found ${auctions.length} auctions`);
       res.json(auctions);
     } catch (error) {
-      console.error("[AUCTIONS] Error fetching seller auctions:", error);
-      res.status(500).json({ message: "Failed to fetch seller auctions" });
+      console.error("[SELLER AUCTIONS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch seller auctions",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Place bid
+  app.post("/api/auctions/:id/bid", requireAuth, requireProfile, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+
+      if (isNaN(auctionId)) {
+        return res.status(400).json({ message: "Invalid auction ID" });
+      }
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      if (auction.sellerId === req.user.id) {
+        return res.status(403).json({ message: "You cannot bid on your own auction" });
+      }
+
+      let amount = Math.round(
+        typeof req.body.amount === 'string' 
+          ? parseFloat(req.body.amount) * 100 
+          : req.body.amount
+      );
+
+      if (isNaN(amount)) {
+        return res.status(400).json({ message: "Bid amount must be a valid number" });
+      }
+
+      if (amount <= auction.currentPrice) {
+        return res.status(400).json({
+          message: `Bid must be higher than current price of $${(auction.currentPrice / 100).toFixed(2)}`
+        });
+      }
+
+      const bid = await storage.createBid({
+        auctionId: auction.id,
+        bidderId: req.user.id,
+        amount: amount,
+      });
+
+      res.status(201).json(bid);
+    } catch (error) {
+      console.error("[BID] Error:", error);
+      if (error instanceof ZodError) {
+        res.status(400).json({
+          message: "Invalid bid data",
+          errors: error.errors
+        });
+      } else {
+        res.status(500).json({
+          message: "Failed to place bid",
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    }
+  });
+
+  // Update auction status (admin only)
+  app.post("/api/admin/auctions/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const auctionId = parseInt(req.params.id);
+
+      if (isNaN(auctionId)) {
+        return res.status(400).json({ message: "Invalid auction ID" });
+      }
+
+      const existingAuction = await storage.getAuction(auctionId);
+      if (!existingAuction) {
+        return res.status(404).json({ message: "Auction not found" });
+      }
+
+      if (existingAuction.approved) {
+        return res.status(400).json({ message: "Auction is already approved" });
+      }
+
+      const auction = await storage.approveAuction(auctionId);
+      res.json(auction);
+    } catch (error) {
+      console.error("[ADMIN APPROVE] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to approve auction",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
   // Create new auction (sellers only)
   app.post("/api/auctions", requireAuth, upload.array('images', 5), async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
       if (req.user.role !== "seller" && req.user.role !== "seller_admin") {
         return res.status(403).json({ message: "Only sellers can create auctions" });
       }
@@ -236,128 +276,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Place bid on auction (anyone can bid except the seller of the auction)
-  app.post("/api/auctions/:id/bid", requireAuth, requireProfile, async (req, res) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const auctionId = parseInt(req.params.id);
-      console.log(`[BID] Processing new bid for auction ${auctionId} from user ${req.user.id}`);
-
-      if (isNaN(auctionId)) {
-        return res.status(400).json({ message: "Invalid auction ID" });
-      }
-
-      const auction = await storage.getAuction(auctionId);
-      if (!auction) {
-        return res.status(404).json({ message: "Auction not found" });
-      }
-
-      // Don't allow sellers to bid on their own auctions
-      if (auction.sellerId === req.user.id) {
-        return res.status(403).json({ message: "You cannot bid on your own auction" });
-      }
-
-      // Convert amount to number if it's a string (and ensure it's in cents)
-      let amount;
-      if (typeof req.body.amount === 'string') {
-        amount = Math.round(parseFloat(req.body.amount) * 100);
-      } else {
-        amount = req.body.amount;
-      }
-
-      if (isNaN(amount)) {
-        return res.status(400).json({ message: "Bid amount must be a valid number" });
-      }
-
-      if (amount <= auction.currentPrice) {
-        return res.status(400).json({
-          message: `Bid must be higher than current price of $${(auction.currentPrice / 100).toFixed(2)}`
-        });
-      }
-
-      console.log(`[BID] Amount validated: $${amount/100} for auction "${auction.title}"`);
-
-      const bidData = {
-        auctionId: auction.id,
-        bidderId: req.user.id,
-        amount: amount,
-      };
-
-      console.log("[BID] Creating bid with data:", bidData);
-      const bid = await storage.createBid(bidData);
-      console.log("[BID] Bid created successfully:", bid);
-
-      // Send notification to the seller about the new bid
-      try {
-        console.log("[NOTIFICATION] Attempting to send notifications for new bid");
-        const { NotificationService } = await import('./notification-service');
-
-        console.log("[NOTIFICATION] Notifying seller:", {
-          sellerId: auction.sellerId,
-          auctionTitle: auction.title,
-          amount: amount
-        });
-
-        await NotificationService.notifyNewBid(
-          auction.sellerId,
-          auction.title,
-          amount
-        );
-        console.log("[NOTIFICATION] Seller notification sent successfully");
-
-        // Get previous bids to notify outbid user
-        const previousBids = await storage.getBidsForAuction(auction.id);
-        if (previousBids.length > 1) {
-          // Sort by amount in descending order to get the second highest bid
-          const sortedBids = previousBids.sort((a, b) => b.amount - a.amount);
-          const secondHighestBid = sortedBids[1];
-
-          // Only notify if it's a different bidder
-          if (secondHighestBid.bidderId !== req.user.id) {
-            console.log("[NOTIFICATION] Notifying previous bidder:", {
-              bidderId: secondHighestBid.bidderId,
-              auctionTitle: auction.title,
-              newAmount: amount
-            });
-
-            await NotificationService.notifyOutbid(
-              secondHighestBid.bidderId,
-              auction.title,
-              amount
-            );
-            console.log("[NOTIFICATION] Previous bidder notification sent successfully");
-          }
-        }
-      } catch (notifyError) {
-        console.error("[NOTIFICATION] Failed to send bid notification:", notifyError);
-        console.error("[NOTIFICATION] Full error details:", {
-          error: notifyError,
-          stack: notifyError.stack,
-          bid: bid,
-          auction: auction
-        });
-      }
-
-      res.status(201).json(bid);
-    } catch (error) {
-      console.error("[BID] Error:", error);
-      if (error instanceof ZodError) {
-        res.status(400).json({
-          message: "Invalid bid data",
-          errors: error.errors
-        });
-      } else {
-        res.status(500).json({
-          message: "Failed to place bid",
-          error: error instanceof Error ? error.message : "Unknown error"
-        });
-      }
-    }
-  });
-
   // Update the single auction endpoint to include seller profile
   app.get("/api/auctions/:id", async (req, res) => {
     try {
@@ -370,8 +288,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sellerProfile = await storage.getProfile(auction.sellerId);
       res.json({ ...auction, sellerProfile });
     } catch (error) {
-      console.error("Error fetching auction:", error);
-      res.status(500).json({ message: "Failed to fetch auction" });
+      console.error("[SINGLE AUCTION] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch auction",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -381,8 +302,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bids = await storage.getBidsForAuction(parseInt(req.params.id));
       res.json(bids);
     } catch (error) {
-      console.error("Error fetching bids:", error);
-      res.status(500).json({ message: "Failed to fetch bids" });
+      console.error("[BIDS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch bids",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -412,7 +336,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(auctionsWithSellerProfiles);
     } catch (error) {
       console.error("[ADMIN] Error fetching auctions:", error);
-      res.status(500).json({ message: "Failed to fetch auctions" });
+      res.status(500).json({ 
+        message: "Failed to fetch auctions",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -430,18 +357,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bids = await storage.getBidsForAuction(auctionId);
       res.json(bids);
     } catch (error) {
-      console.error("Error fetching bids:", error);
-      res.status(500).json({ message: "Failed to fetch bids" });
+      console.error("[ADMIN BIDS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch bids",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
   // Update the user bids endpoint to include payment information
   app.get("/api/user/bids", requireAuth, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
       // Get all bids by the user with their corresponding auctions
       const bids = await storage.getBidsByUser(req.user.id);
 
@@ -464,8 +390,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(bidsWithAuctions);
     } catch (error) {
-      console.error("Error fetching user bids:", error);
-      res.status(500).json({ message: "Failed to fetch user bids" });
+      console.error("[USER BIDS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch user bids",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -473,10 +402,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Profile routes
   app.post("/api/profile", requireAuth, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
       const profileData = insertProfileSchema.parse(req.body);
 
       // Check if profile exists
@@ -502,18 +427,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errors: error.errors,
         });
       } else {
-        console.error("Error saving profile:", error);
-        res.status(500).json({ message: "Failed to save profile" });
+        console.error("[PROFILE POST] Error:", error);
+        res.status(500).json({ 
+          message: "Failed to save profile",
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     }
   });
 
   app.get("/api/profile", requireAuth, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
       const profile = await storage.getProfile(req.user.id);
       if (!profile) {
         return res.status(404).json({ message: "Profile not found" });
@@ -521,8 +445,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(profile);
     } catch (error) {
-      console.error("Error fetching profile:", error);
-      res.status(500).json({ message: "Failed to fetch profile" });
+      console.error("[PROFILE GET] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch profile",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -532,9 +459,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auctions = await storage.getAuctions({ approved: false });
       res.json(auctions);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch pending auctions" });
+      console.error("[ADMIN AUCTIONS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch pending auctions",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
+
 
   // Update the auction approval endpoint
   app.post("/api/admin/auctions/:id/approve", requireAdmin, async (req, res) => {
@@ -598,7 +530,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.approveUser(parseInt(req.params.id));
       res.json(user);
     } catch (error) {
-      res.status(500).json({ message: "Failed to approve user" });
+      console.error("[ADMIN USER APPROVE] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to approve user",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -617,8 +553,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const users = await storage.getUsers(filters);
       res.json(users);
     } catch (error) {
-      console.error("Error fetching users:", error);
-      res.status(500).json({ message: "Failed to fetch users" });
+      console.error("[ADMIN USERS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch users",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -647,8 +586,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(profile);
     } catch (error) {
-      console.error("Error fetching profile:", error);
-      res.status(500).json({ message: "Failed to fetch profile" });
+      console.error("[ADMIN PROFILES] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch profile",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -659,8 +601,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bids = await storage.getBidsByUser(userId);
       res.json(bids);
     } catch (error) {
-      console.error("Error fetching user bids:", error);
-      res.status(500).json({ message: "Failed to fetch user bids" });
+      console.error("[ADMIN USER BIDS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch user bids",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -670,8 +615,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auctions = await storage.getAuctions({ sellerId: userId });
       res.json(auctions);
     } catch (error) {
-      console.error("Error fetching user auctions:", error);
-      res.status(500).json({ message: "Failed to fetch user auctions" });
+      console.error("[ADMIN USER AUCTIONS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch user auctions",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -681,8 +629,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteProfile(parseInt(req.params.userId));
       res.sendStatus(200);
     } catch (error) {
-      console.error("Error deleting profile:", error);
-      res.status(500).json({ message: "Failed to delete profile" });
+      console.error("[ADMIN PROFILE DELETE] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to delete profile",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -692,8 +643,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteAuction(parseInt(req.params.id));
       res.sendStatus(200);
     } catch (error) {
-      console.error("Error deleting auction:", error);
-      res.status(500).json({ message: "Failed to delete auction" });
+      console.error("[ADMIN AUCTION DELETE] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to delete auction",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1015,14 +969,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedAuction = await storage.updateAuction(auctionId, updateData);
       res.json(updatedAuction);
     } catch (error) {
-      console.error("Error updating auction:", error);
+      console.error("[ADMIN AUCTION PATCH] Error:", error);
       res.status(500).json({ 
         message: "Failed to update auction",
         error: error instanceof Error ? error.message : String(error)
       });
     }
   });
-
 
   // Admin endpoint for managing auction photos
   app.post("/api/admin/auctions/:id/photos", requireAdmin, upload.array('images', 5), async (req, res) => {
@@ -1060,8 +1013,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         auction: updatedAuction
       });
     } catch (error) {
-      console.error("Error adding auction photos:", error);
-      res.status(500).json({ message: "Failed to add photos to auction" });
+      console.error("[ADMIN AUCTION PHOTOS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to add photos to auction",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1102,8 +1058,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         auction: updatedAuction
       });
     } catch (error) {
-      console.error("Error deleting auction photo:", error);
-      res.status(500).json({ message: "Failed to delete auction photo" });
+      console.error("[ADMIN AUCTION PHOTO DELETE] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to delete auction photo",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1113,8 +1072,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteBid(parseInt(req.params.id));
       res.sendStatus(200);
     } catch (error) {
-      console.error("Error deleting bid:", error);
-      res.status(500).json({ message: "Failed to delete bid" });
+      console.error("[ADMIN BID DELETE] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to delete bid",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1135,7 +1097,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("Successfully created buyer request:", buyerRequest);
         res.status(201).json(buyerRequest);
       } catch (error) {
-        console.error("Validation or creation error:", error);
+        console.error("[BUYER REQUEST POST] Validation or creation error:", error);
         if (error instanceof ZodError) {
           return res.status(400).json({
             message: "Invalid request data",
@@ -1145,7 +1107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw error;
       }
     } catch (error) {
-      console.error("Error creating buyer request:", error);
+      console.error("[BUYER REQUEST POST] Error creating buyer request:", error);
       res.status(500).json({ 
         message: "Failed to create buyer request",
         error: error instanceof Error ? error.message : "Unknown error"
@@ -1176,7 +1138,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(requestsWithProfiles);
     } catch (error) {
       console.error("[BUYER REQUESTS] Error fetching requests:", error);
-      res.status(500).json({ message: "Failed to fetch buyer requests" });
+      res.status(500).json({ 
+        message: "Failed to fetch buyer requests",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1215,8 +1180,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ ...request, buyerProfile });
     } catch (error) {
-      console.error("[BUYER REQUEST] Error fetching request:", error);
-      res.status(500).json({ message: "Failed to fetch buyer request" });
+      console.error("[BUYER REQUEST GET] Error fetching request:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch buyer request",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1228,8 +1196,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedRequest = await storage.updateBuyerRequest(requestId, data);
       res.json(updatedRequest);
     } catch (error) {
-      console.error("Error updating buyer request:", error);
-      res.status(500).json({ message: "Failed to update buyer request" });
+      console.error("[BUYER REQUEST PATCH] Error updating buyer request:", error);
+      res.status(500).json({ 
+        message: "Failed to update buyer request",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1240,8 +1211,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteBuyerRequest(requestId);
       res.sendStatus(200);
     } catch (error) {
-      console.error("Error deleting buyer request:", error);
-      res.status(500).json({ message: "Failed to delete buyer request" });
+      console.error("[BUYER REQUEST DELETE] Error deleting buyer request:", error);
+      res.status(500).json({ 
+        message: "Failed to delete buyer request",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1283,7 +1257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       res.json({ sessionId, payment });
     } catch (error) {
-      console.error("Payment creation error:", error);
+      console.error("[AUCTION PAY] Error:", error);
       res.status(500).json({
         message: "Failed to create payment session",
         details: error instanceof Error ? error.message : "Unknown error",
@@ -1306,8 +1280,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return the URL for client-side redirect
       res.json({ url: session.url });
     } catch (error) {
-      console.error("Error retrieving checkout session:", error);
-      res.status(500).json({ message: "Failed to retrieve checkout session" });
+      console.error("[CHECKOUT SESSION] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to retrieve checkout session",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1357,8 +1334,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({ received: true });
     } catch (error) {
-      console.error("Webhook error:", error);
-      res.status(400).json({ message: "Webhook error" });
+      console.error("[STRIPE WEBHOOK] Error:", error);
+      res.status(400).json({ 
+        message: "Webhook error",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1377,8 +1357,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({        status: auction.paymentStatus,        dueDate: auction.paymentDueDate,      });
     } catch (error) {
-      console.error("Error fetching paymentstatus:", error);
-      res.status(500).json({ message: "Failed to fetch payment status" });
+      console.error("[AUCTION PAYMENT] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch payment status",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1386,14 +1369,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add these notification routes after the existing routes
   app.get("/api/notifications", requireAuth, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
       const notifications = await storage.getNotificationsByUserId(req.user.id);
       res.json(notifications);
     } catch (error) {
-      console.error("Error fetching notifications:", error);
-      res.status(500).json({ message: "Failed to fetch notifications" });
+      console.error("[NOTIFICATIONS GET] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch notifications",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1403,17 +1386,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notification = await storage.markNotificationAsRead(parseInt(req.params.id));
       res.json(notification);
     } catch (error) {
-      console.error("Error marking notification as read:", error);
-      res.status(500).json({ message: "Failed to mark notification as read" });
+      console.error("[NOTIFICATION READ] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to mark notification as read",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
 
   app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
       const notifications = await storage.getNotificationsByUserId(req.user.id);
       await Promise.all(
         notifications.map(notification => 
@@ -1422,8 +1405,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       res.json({ success: true });
     } catch (error) {
-      console.error("Error marking all notifications as read:", error);
-      res.status(500).json({ message: "Failed to mark all notifications as read" });
+      console.error("[MARK ALL NOTIFICATIONS READ] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to mark all notifications as read",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1431,14 +1417,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add notification count endpoint
   app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
       const count = await storage.getUnreadNotificationsCount(req.user.id);
       res.json({ count });
     } catch (error) {
-      console.error("Error getting unread notifications count:", error);
-      res.status(500).json({ message: "Failed to get unread notifications count" });
+      console.error("[UNREAD NOTIFICATION COUNT] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to get unread notifications count",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1472,11 +1458,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       res.json(activeSellers);
     } catch (error) {
-      console.error("Error fetching active sellers:", error);
-      res.status(500).json({ message: "Failed to fetch active sellers" });
+      console.error("[ACTIVE SELLERS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch active sellers",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
-
 
 
   app.get("/api/analytics/market-stats", async (req, res) => {
@@ -1646,8 +1634,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(response);
     } catch (error) {
-      console.error("[ANALYTICS] Error fetching market stats:", error);
-      res.status(500).json({ message: "Failed to fetch market statistics" });
+      console.error("[ANALYTICS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch market statistics",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1702,8 +1693,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       res.json(activeSellers);
     } catch (error) {
-      console.error("Error fetching active sellers:", error);
-      res.status(500).json({ message: "Failed to fetch active sellers" });
+      console.error("[ACTIVE SELLERS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch active sellers",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1723,8 +1717,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       res.json(auctionBids);
     } catch (error) {
-      console.error("Error fetching auction bids:", error);
-      res.status(500).json({ message: "Failed to fetch auction bids" });
+      console.error("[AUCTION BIDS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch auction bids",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1780,8 +1777,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({ topSeller, topBuyer });
     } catch (error) {
-      console.error("Error fetching top performers:", error);
-      res.status(500).json({ message: "Failed to fetch top performers" });
+      console.error("[TOP PERFORMERS] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch top performers",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1793,7 +1793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await AuctionService.checkAndNotifyEndingAuctions();
       await AuctionService.checkAndNotifyCompletedAuctions();
     } catch (error) {
-      console.error("Error in auction notification check:", error);
+      console.error("[AUCTION NOTIFICATION CHECK] Error:", error);
     }
   }, NOTIFICATION_CHECK_INTERVAL);
 
@@ -1820,7 +1820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[AI ENDPOINT] Generated price suggestion:", suggestion);
       res.json(suggestion);
     } catch (error) {
-      console.error("[AI ENDPOINT] Error getting price suggestion:", error);
+      console.error("[AI PRICE SUGGESTION] Error:", error);
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Failed to generate price suggestion" 
       });
@@ -1849,7 +1849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[AI ENDPOINT] Generated description suggestion:", suggestion);
       res.json(suggestion);
     } catch (error) {
-      console.error("[AI ENDPOINT] Error generating description:", error);
+      console.error("[AI DESCRIPTION SUGGESTION] Error:", error);
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Failed to generate description" 
       });
@@ -1897,10 +1897,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get seller's Stripe account status
   app.get("/api/seller/status", requireAuth, async (req, res) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
       const profile = await storage.getProfile(req.user.id);
       if (!profile) {
         return res.status(404).json({ message: "Profile not found" });
@@ -1980,14 +1976,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           console.log(`Successfully processed payout for auction ${auctionId} to seller ${auction.sellerId}`);
         } catch (payoutError) {
-          console.error("Error processing seller payout:", payoutError);
+          console.error("[FULFILLMENT] Error processing seller payout:", payoutError);
           // We'll still mark the auction as fulfilled, but log the payout error
         }
       }
 
       // Notify the buyer
       if (auction.winningBidderId) {
-        await NotificationService.notifyFulfillment(
+        await EmailService.notifyFulfillment(
           auction.winningBidderId,
           auction.title,
           trackingNumber,
@@ -1997,8 +1993,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       return res.json({ success: true });
     } catch (error) {
-      console.error("Error fulfilling auction:", error);
-      return res.status(500).json({ message: "Failed to fulfill auction" });
+      console.error("[FULFILLMENT] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to fulfill auction",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
