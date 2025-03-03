@@ -1641,14 +1641,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
-  return httpServer;
-}
-
-const log = (message: string, context: string = 'general') => {
-  console.log(`[${context}] ${message}`);
-}
-
-// API endpoint for fulfillment
+  // API endpoint for fulfillment
   app.post("/api/auctions/:id/fulfill", requireAuth, requireApprovedSeller, async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
@@ -1715,3 +1708,10 @@ const log = (message: string, context: string = 'general') => {
       return res.status(500).json({ message: "Failed to fulfill auction" });
     }
   });
+
+  return httpServer;
+}
+
+const log = (message: string, context: string = 'general') => {
+  console.log(`[${context}] ${message}`);
+}
