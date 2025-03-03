@@ -159,7 +159,7 @@ function AdminDashboard() {
   });
 
   // Filtered Lists
-  const realPendingUsers = pendingUsers?.filter(user => !user.approved && user.role === "seller") || [];
+  const pendingSellers = pendingUsers?.filter(user => !user.approved && user.role === "seller") || [];
   const filteredSellers = approvedSellers?.filter(seller => 
     seller.approved && 
     (seller.role === "seller" || seller.role === "seller_admin") &&
@@ -224,13 +224,13 @@ function AdminDashboard() {
             <Tabs defaultValue="pending">
               <TabsList className="w-full">
                 <TabsTrigger value="pending">
-                  Pending Sellers ({realPendingUsers.length})
+                  Pending Sellers ({pendingSellers?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="sellers">
-                  Approved Sellers ({filteredSellers.length})
+                  Approved Sellers ({filteredSellers?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="buyers">
-                  Buyers ({filteredBuyers.length})
+                  Buyers ({filteredBuyers?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
@@ -463,6 +463,76 @@ function AdminDashboard() {
                       const seller = approvedSellers?.find(seller => seller.id === auction.sellerId);
                       const sellerStripeStatus = sellerStripeStatuses?.find(s => s.sellerId === auction.sellerId);
                       const isStripeVerified = sellerStripeStatus?.status === "verified";
+                      
+                      return (
+                        <Card key={auction.id} className="overflow-hidden">
+                          <CardHeader>
+                            <CardTitle className="flex justify-between items-center">
+                              <span>{auction.title}</span>
+                              <div className="flex gap-2">
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => approveAuctionMutation.mutate(auction.id)}
+                                  disabled={!isStripeVerified}
+                                >
+                                  <Check className="mr-2 h-4 w-4" />
+                                  Approve
+                                </Button>
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm"
+                                  onClick={() => {/* Add rejection handler */}}
+                                >
+                                  <X className="mr-2 h-4 w-4" />
+                                  Reject
+                                </Button>
+                              </div>
+                            </CardTitle>
+                            <CardDescription>
+                              Seller: {seller?.username || "Unknown"} 
+                              {!isStripeVerified && (
+                                <Badge variant="outline" className="ml-2 bg-amber-100 text-amber-800">
+                                  Unverified Stripe Account
+                                </Badge>
+                              )}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid md:grid-cols-2 gap-4">
+                              <div>
+                                <h3 className="font-semibold mb-2">Auction Details</h3>
+                                <div className="space-y-2 text-sm">
+                                  <div><strong>Species:</strong> {auction.species}</div>
+                                  <div><strong>Category:</strong> {auction.category}</div>
+                                  <div><strong>Starting Price:</strong> ${auction.startingPrice}</div>
+                                  <div><strong>Reserve Price:</strong> ${auction.reservePrice || "None"}</div>
+                                  <div><strong>Duration:</strong> {auction.duration} days</div>
+                                  <div><strong>Description:</strong> {auction.description}</div>
+                                </div>
+                              </div>
+                              <div>
+                                {auction.images && auction.images.length > 0 && (
+                                  <div>
+                                    <h3 className="font-semibold mb-2">Images</h3>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {auction.images.map((image, index) => (
+                                        <div key={index} className="relative aspect-square">
+                                          <img 
+                                            src={image.url || `/uploads/${image.filename}`} 
+                                            alt={`Auction image ${index + 1}`}
+                                            className="object-cover w-full h-full rounded-md"
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
 
                       return (
                         <div
