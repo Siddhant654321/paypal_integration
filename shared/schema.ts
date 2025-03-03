@@ -262,6 +262,7 @@ export const insertUserSchema = createInsertSchema(users)
   })
   .extend({
     email: z.string().email("Invalid email format"),
+    role: z.enum(["buyer", "seller"]), // Restrict roles to only buyer and seller for registration
   });
 
 // Add fulfillment schema

@@ -144,7 +144,7 @@ export default function AuthPage() {
                     <Label htmlFor="role">Account Type</Label>
                     <Select
                       value={registerForm.watch("role")}
-                      onValueChange={(value: "buyer" | "seller" | "admin" | "seller_admin") =>
+                      onValueChange={(value: "buyer" | "seller") =>
                         registerForm.setValue("role", value)
                       }
                     >
@@ -154,8 +154,6 @@ export default function AuthPage() {
                       <SelectContent>
                         <SelectItem value="buyer">Buyer</SelectItem>
                         <SelectItem value="seller">Seller</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="seller_admin">Seller Admin</SelectItem>
                       </SelectContent>
                     </Select>
                     {registerForm.formState.errors.role && (
