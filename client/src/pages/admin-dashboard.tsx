@@ -1,5 +1,8 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import { Redirect } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Loader2, AlertCircle, CheckCircle2, Search, Trash2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -7,24 +10,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import LoadingSpinner from "@/components/ui/loading-spinner";
+import { Auction } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useState, useMemo } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Loader2,
-  Search,
-  Trash2,
-  CheckCircle2,
-  AlertCircle,
-  Edit,
-  Eye,
-  FileEdit,
-  Calendar
-} from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,25 +36,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { formatPrice } from "../utils/formatters";
 import AuctionCard from "@/components/auction-card";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
-import { Redirect } from "wouter";
-import { Auction } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
-
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 // Types
 type SellerStripeStatus = {
@@ -480,241 +463,72 @@ function AdminDashboard() {
                       const seller = approvedSellers?.find(seller => seller.id === auction.sellerId);
                       const sellerStripeStatus = sellerStripeStatuses?.find(s => s.sellerId === auction.sellerId);
                       const isStripeVerified = sellerStripeStatus?.status === "verified";
-                      const formattedStartDate = new Date(auction.startDate).toLocaleDateString();
-                      const formattedEndDate = new Date(auction.endDate).toLocaleDateString();
 
                       return (
-                        <Card key={auction.id}>
-                          <CardHeader>
-                            <CardTitle>{auction.title}</CardTitle>
-                            <CardDescription>
-                              {auction.species} - {auction.category}
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="flex justify-between mb-4">
-                              <div>
-                                <div className="font-medium">Seller:</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {seller?.username || "Unknown Seller"}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="font-medium">Start Price:</div>
-                                <div className="text-sm">
-                                  {formatPrice(auction.startPrice)}
-                                </div>
-                              </div>
+                        <div
+                          key={auction.id}
+                          className="flex items-center justify-between p-4 border rounded-lg"
+                        >
+                          <div className="flex-grow">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{auction.title}</p>
+                              {!isStripeVerified && (
+                                <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
+                                  <AlertCircle className="h-4 w-4 mr-1" />
+                                  Stripe setup incomplete
+                                </Badge>
+                              )}
                             </div>
-
-                            <div className="grid grid-cols-2 gap-2 my-2">
-                              <div>
-                                <div className="font-medium">Start Date:</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {formattedStartDate}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="font-medium">End Date:</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {formattedEndDate}
-                                </div>
-                              </div>
+                            <div className="flex gap-2 mt-1">
+                              <Badge>{auction.species}</Badge>
+                              <Badge variant="outline">{auction.category}</Badge>
                             </div>
-
-                            {!isStripeVerified && (
-                              <Alert className="mb-4">
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertTitle>Seller not verified</AlertTitle>
-                                <AlertDescription>
-                                  The seller must complete Stripe verification before their auction can be approved.
-                                </AlertDescription>
-                              </Alert>
-                            )}
-
-                            <div className="grid grid-cols-2 gap-2 mt-2">
-                              <div>
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" className="w-full">
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      View Details
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-xl">
-                                    <DialogHeader>
-                                      <DialogTitle>{auction.title}</DialogTitle>
-                                      <DialogDescription>
-                                        Auction #{auction.id} details
-                                      </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="space-y-4 my-4">
-                                      <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                          <h4 className="text-sm font-medium">Start Price</h4>
-                                          <p>{formatPrice(auction.startPrice)}</p>
-                                        </div>
-                                        <div>
-                                          <h4 className="text-sm font-medium">Reserve Price</h4>
-                                          <p>{formatPrice(auction.reservePrice)}</p>
-                                        </div>
-                                        <div>
-                                          <h4 className="text-sm font-medium">Start Date</h4>
-                                          <p>{formattedStartDate}</p>
-                                        </div>
-                                        <div>
-                                          <h4 className="text-sm font-medium">End Date</h4>
-                                          <p>{formattedEndDate}</p>
-                                        </div>
-                                        <div>
-                                          <h4 className="text-sm font-medium">Species</h4>
-                                          <p>{auction.species}</p>
-                                        </div>
-                                        <div>
-                                          <h4 className="text-sm font-medium">Category</h4>
-                                          <p>{auction.category}</p>
-                                        </div>
-                                      </div>
-
-                                      <div>
-                                        <h4 className="text-sm font-medium">Description</h4>
-                                        <p className="text-sm mt-1">{auction.description}</p>
-                                      </div>
-
-                                      {auction.images && auction.images.length > 0 && (
-                                        <div>
-                                          <h4 className="text-sm font-medium mb-2">Images</h4>
-                                          <div className="grid grid-cols-3 gap-2">
-                                            {auction.images.map((image, index) => (
-                                              <img 
-                                                key={index}
-                                                src={image}
-                                                alt={`Auction image ${index + 1}`}
-                                                className="rounded-md h-24 w-full object-cover"
-                                              />
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </DialogContent>
-                                </Dialog>
-                              </div>
-                              <div>
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button variant="secondary" size="sm" className="w-full">
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-xl">
-                                    <DialogHeader>
-                                      <DialogTitle>Edit Auction</DialogTitle>
-                                      <DialogDescription>
-                                        Make changes to this auction before approval
-                                      </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid gap-4 py-4">
-                                      <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                          <Label htmlFor="edit-title">Title</Label>
-                                          <Input 
-                                            id="edit-title" 
-                                            defaultValue={auction.title}
-                                            onChange={(e) => {
-                                              // You can add state here to track changes
-                                            }}
-                                          />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label htmlFor="edit-price">Start Price</Label>
-                                          <Input 
-                                            id="edit-price" 
-                                            type="number"
-                                            defaultValue={auction.startPrice / 100} 
-                                          />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label htmlFor="edit-species">Species</Label>
-                                          <Input 
-                                            id="edit-species" 
-                                            defaultValue={auction.species} 
-                                          />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label htmlFor="edit-category">Category</Label>
-                                          <Input 
-                                            id="edit-category" 
-                                            defaultValue={auction.category} 
-                                          />
-                                        </div>
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="edit-description">Description</Label>
-                                        <Textarea 
-                                          id="edit-description" 
-                                          defaultValue={auction.description}
-                                          rows={4}
-                                        />
-                                      </div>
-                                    </div>
-                                    <DialogFooter>
-                                      <DialogClose asChild>
-                                        <Button variant="outline">Cancel</Button>
-                                      </DialogClose>
-                                      <Button type="submit" onClick={() => {
-                                        // Implement update logic here
-                                        // You would use updateAuctionMutation
-                                        toast({
-                                          title: "Changes Saved",
-                                          description: "The auction has been updated.",
-                                        });
-                                      }}>
-                                        Save Changes
-                                      </Button>
-                                    </DialogFooter>
-                                  </DialogContent>
-                                </Dialog>
-                              </div>
+                            <div className="mt-2 text-sm text-muted-foreground">
+                              <p>
+                                <span className="font-semibold">Seller: </span>
+                                {seller ? seller.username : "Unknown"}
+                              </p>
                             </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => approveAuctionMutation.mutate(auction.id)}
+                              disabled={approveAuctionMutation.isPending || !isStripeVerified}
+                              variant="default"
+                            >
+                              {approveAuctionMutation.isPending && (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              )}
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              Approve
+                            </Button>
 
-                            <div className="flex items-center justify-end gap-3 mt-4">
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="destructive" size="sm">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Auction</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete this auction? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => deleteAuctionMutation.mutate(auction.id)}
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                disabled={!isStripeVerified}
-                                onClick={() => approveAuctionMutation.mutate(auction.id)}
-                              >
-                                Approve
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this auction? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -916,7 +730,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
               </div>
             )}
 
-            {{role === "buyer" && (
+            {role === "buyer" && (
               <div>
                 <h3 className="font-semibold mb-4">Bid History</h3>
                 {isLoadingBids ? (
