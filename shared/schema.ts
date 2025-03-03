@@ -79,7 +79,7 @@ export const auctions = pgTable("auctions", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   species: text("species").notNull(),
-  category: text("category").notNull(),
+  category: text("category").notNull(),  // Remove enum constraint to allow flexibility
   imageUrl: text("image_url"),
   images: text("images").array().notNull().default([]),
   startPrice: integer("start_price").notNull(),
@@ -87,8 +87,6 @@ export const auctions = pgTable("auctions", {
   currentPrice: integer("current_price").notNull(),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
-  lastBidTime: timestamp("last_bid_time"),
-  extendedEndDate: timestamp("extended_end_date"),
   approved: boolean("approved").notNull().default(false),
   status: text("status", {
     enum: ["active", "ended", "pending_seller_decision", "voided", "pending_fulfillment", "fulfilled"],
@@ -197,9 +195,7 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     status: true,
     sellerDecision: true,
     reserveMet: true,
-    fulfillmentRequired: true,
-    lastBidTime: true,
-    extendedEndDate: true
+    fulfillmentRequired: true
   })
   .extend({
     title: z.string().min(5, "Title must be at least 5 characters"),

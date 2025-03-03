@@ -42,8 +42,8 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
       const response = await apiRequest("POST", "/api/ai/price-suggestion", {
         species,
         category,
-        quality: quality || "Standard",
-        additionalDetails: details || ""
+        quality: quality || "Standard", // Provide default value
+        additionalDetails: details || "" // Make optional
       });
 
       console.log("[AI PRICE] Received response:", response);
@@ -90,7 +90,7 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
         title: `${species} - ${category}`,
         species,
         category,
-        details: details || ""
+        details: details || "" // Optional but use if provided
       });
 
       console.log("[AI DESC] Received response:", response);
@@ -105,8 +105,8 @@ export function AIPriceSuggestion({ species, category, onSuggestionsReceived }: 
       });
 
       onSuggestionsReceived({
-        startPrice: 0,
-        reservePrice: 0,
+        startPrice: 0, // Keep existing price
+        reservePrice: 0, // Keep existing price
         description: response.description,
       });
     } catch (error) {

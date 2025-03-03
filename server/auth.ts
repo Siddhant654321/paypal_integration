@@ -71,8 +71,9 @@ export function setupAuth(app: Express) {
 
   passport.deserializeUser(async (id: string | number, done) => {
     try {
+      // Ensure id is a number
       const userId = typeof id === 'string' ? parseInt(id, 10) : id;
-      console.log("[AUTH] Deserializing user:", { userId });
+      console.log("[AUTH] Deserializing user:", { userId, type: typeof userId });
 
       const user = await storage.getUser(userId);
       if (!user) {
@@ -88,103 +89,49 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Fix login endpoint to properly handle JSON responses
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
-      if (err) {
-        console.error("[AUTH] Login error:", err);
-        return res.status(500).json({ 
-          message: "Internal server error",
-          error: err.message
-        });
-      }
-
-      if (!user) {
-        return res.status(401).json({ 
-          message: info?.message || "Authentication failed" 
-        });
-      }
-
-      req.login(user, (loginErr) => {
-        if (loginErr) {
-          console.error("[AUTH] Login session error:", loginErr);
-          return res.status(500).json({ 
-            message: "Failed to create session",
-            error: loginErr.message
-          });
-        }
-        res.json(user);
-      });
-    })(req, res, next);
-  });
-
-  // Fix register endpoint to properly handle JSON responses
-  app.post("/api/register", async (req, res) => {
+  app.post("/api/register", async (req, res, next) => {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
-      const hashedPassword = await hashPassword(req.body.password);
       const user = await storage.createUser({
         ...req.body,
-        password: hashedPassword,
+        password: await hashPassword(req.body.password),
       });
 
       req.login(user, (err) => {
-        if (err) {
-          console.error("[AUTH] Registration session error:", err);
-          return res.status(500).json({ 
-            message: "User created but failed to log in",
-            error: err.message
-          });
-        }
+        if (err) return next(err);
         res.status(201).json(user);
       });
     } catch (error) {
-      console.error("[AUTH] Registration error:", error);
-      res.status(500).json({ 
-        message: "Failed to create user",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
+      next(error);
     }
   });
 
-  // Fix logout endpoint to properly handle JSON responses
-  app.post("/api/logout", (req, res) => {
-    const userId = req.user?.id;
-    console.log("[AUTH] Logout attempt for user:", userId);
-
-    req.logout((err) => {
-      if (err) {
-        console.error("[AUTH] Logout error:", err);
-        return res.status(500).json({ 
-          message: "Failed to logout",
-          error: err.message
-        });
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err, user, info) => {
+      if (err) return next(err);
+      if (!user) {
+        return res.status(401).json({ message: info?.message || "Authentication failed" });
       }
-
-      req.session.destroy((sessionErr) => {
-        if (sessionErr) {
-          console.error("[AUTH] Session destruction error:", sessionErr);
-          return res.status(500).json({ 
-            message: "Failed to clear session",
-            error: sessionErr.message
-          });
-        }
-
-        console.log("[AUTH] User logged out successfully:", userId);
-        res.json({ message: "Logged out successfully" });
+      req.login(user, (err) => {
+        if (err) return next(err);
+        res.status(200).json(user);
       });
+    })(req, res, next);
+  });
+
+  app.post("/api/logout", (req, res, next) => {
+    req.logout((err) => {
+      if (err) return next(err);
+      res.sendStatus(200);
     });
   });
 
-  // Fix user endpoint to properly handle JSON responses
   app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
     res.json(req.user);
   });
 }

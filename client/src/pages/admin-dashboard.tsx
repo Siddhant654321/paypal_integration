@@ -57,7 +57,6 @@ import React, { useEffect } from "react";
 import { FileUpload } from "@/components/file-upload";
 import { User } from "lucide-react"; //moved here to remove duplicate
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import axios from "axios";
 
 function UserProfileDialog({ userId, username, role, onClose }: { userId: number; username: string; role: string; onClose: () => void }) {
   const { toast } = useToast();
@@ -316,19 +315,11 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
   );
 }
 
-// Update the EditAuctionDialog component to better handle dates and match new auction form
 function EditAuctionDialog({ auction }: { auction: Auction }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [imagesToRemove, setImagesToRemove] = useState<string[]>([]);
-
-  // Format dates for the form's datetime-local input
-  const formatDateForInput = (dateString: string) => {
-    const date = new Date(dateString);
-    const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
-    return localDate.toISOString().slice(0, 16); // Format as "YYYY-MM-DDThh:mm"
-  };
 
   const form = useForm({
     resolver: zodResolver(insertAuctionSchema),
@@ -336,34 +327,40 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       title: auction.title,
       description: auction.description,
       species: auction.species,
-      category: auction.category,
-      startPrice: auction.startPrice / 100, // Convert from cents to dollars
-      reservePrice: auction.reservePrice / 100,
-      startDate: formatDateForInput(auction.startDate),
-      endDate: formatDateForInput(auction.endDate),
+      category: ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(auction.category)
+        ? auction.category
+        : "Purebred & Production",
+      startPrice: auction.startPrice,
+      reservePrice: auction.reservePrice,
+      startDate: new Date(auction.startDate).toISOString(),
+      endDate: new Date(auction.endDate).toISOString(),
       imageUrl: auction.imageUrl || "",
       images: auction.images || [],
     },
   });
 
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>, field: any) => {
+    const value = e.target.value;
+    const parsedValue = parseFloat(value);
+    if (!isNaN(parsedValue)) {
+      field.onChange(parsedValue);
+    } else {
+      field.onChange("");
+    }
+  };
+
+  const handleImageRemove = (imageUrl: string) => {
+    setImagesToRemove(prev => [...prev, imageUrl]);
+  };
+
   const updateAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Convert form data to the correct format
       const formData = new FormData();
 
-      // Convert prices from dollars to cents and format dates
-      const dataToSend = {
-        ...data,
-        startPrice: Math.round(Number(data.startPrice) * 100),
-        reservePrice: Math.round(Number(data.reservePrice) * 100),
-        startDate: new Date(data.startDate).toISOString(),
-        endDate: new Date(data.endDate).toISOString(),
-      };
-
       // Add basic auction data
-      Object.keys(dataToSend).forEach(key => {
+      Object.keys(data).forEach(key => {
         if (key !== 'files' && key !== 'images') {
-          formData.append(key, dataToSend[key].toString());
+          formData.append(key, data[key].toString());
         }
       });
 
@@ -379,32 +376,23 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       const remainingImages = auction.images?.filter(img => !imagesToRemove.includes(img)) || [];
       formData.append('existingImages', JSON.stringify(remainingImages));
 
-      // For date updates, use JSON instead of FormData
-      if (data.startDate || data.endDate) {
-        console.log("Sending direct JSON for date update:", {
-          startDate: data.startDate,
-          endDate: data.endDate
-        });
+      const response = await fetch(`/api/admin/auctions/${auction.id}`, {
+        method: 'PATCH',
+        body: formData,
+      });
 
-        return await axios.patch(`/api/admin/auctions/${auction.id}`, {
-          startDate: data.startDate,
-          endDate: data.endDate
-        });
-      } else {
-        // For other updates, use FormData
-        return await axios.patch(`/api/admin/auctions/${auction.id}`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
+      if (!response.ok) {
+        throw new Error('Failed to update auction');
       }
+
+      return await response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       setOpen(false);
       toast({
-        title: "Success",
+        title: "Auction updated",
         description: `Successfully updated "${data.title}"`,
       });
     },
@@ -417,16 +405,11 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
     },
   });
 
-  const handleImageRemove = (imageUrl: string) => {
-    setImagesToRemove(prev => [...prev, imageUrl]);
-  };
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Edit className="h-4 w-4 mr-2" />
-          Edit
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+          <Edit className="h-4 w-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -498,9 +481,9 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Show Quality">Show Quality</SelectItem>
-                        <SelectItem value="Purebred & Production">Purebred & Production</SelectItem>
-                        <SelectItem value="Fun & Mixed">Fun & Mixed</SelectItem>
+                        <SelectItem value="show">Show Quality</SelectItem>
+                        <SelectItem value="purebred">Purebred & Production</SelectItem>
+                        <SelectItem value="fun">Fun & Mixed</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -508,6 +491,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                 )}
               />
             </div>
+
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -518,12 +502,15 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                     <FormLabel>Start Price ($)</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
+                        type="text"
+                        placeholder="0.00"
+                        value={field.value}
+                        onChange={(e) => handlePriceChange(e, field)}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Current: ${(auction.startPrice / 100).toFixed(2)}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -537,12 +524,15 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                     <FormLabel>Reserve Price ($)</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
+                        type="text"
+                        placeholder="0.00"
+                        value={field.value}
+                        onChange={(e) => handlePriceChange(e, field)}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Current: ${(auction.reservePrice / 100).toFixed(2)}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -557,13 +547,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>Start Date and Time</FormLabel>
                     <FormControl>
-                      <Input
-                        type="datetime-local"
-                        {...field}
-                        onChange={(e) => {
-                          field.onChange(e.target.value);
-                        }}
-                      />
+                      <Input type="datetime-local" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -577,13 +561,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                   <FormItem>
                     <FormLabel>End Date and Time</FormLabel>
                     <FormControl>
-                      <Input
-                        type="datetime-local"
-                        {...field}
-                        onChange={(e) => {
-                          field.onChange(e.target.value);
-                        }}
-                      />
+                      <Input type="datetime-local" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -599,7 +577,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
                     !imagesToRemove.includes(imageUrl) && (
                       <div key={index} className="relative group">
                         <img
-                          src={imageUrl}
+                          src={imageUrl.startsWith('http') || imageUrl.startsWith('/') ? imageUrl : `/uploads/${imageUrl}`}
                           alt={`Auction image ${index + 1}`}
                           className="w-full h-32 object-cover rounded-lg"
                           onError={(e) => {
@@ -633,17 +611,12 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
             </div>
 
             <DialogFooter>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={updateAuctionMutation.isPending}
-              >
+              <DialogClose asChild>
+                <Button type="button" variant="secondary">
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button type="submit" disabled={updateAuctionMutation.isPending}>
                 {updateAuctionMutation.isPending ? (
                   <LoadingSpinner className="h-4 w-4 mr-2" />
                 ) : null}
@@ -657,7 +630,6 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
   );
 }
 
-// Update the AdminDashboard component to properly handle pending auctions
 function AdminDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -669,54 +641,6 @@ function AdminDashboard() {
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
   }
-
-  // Query for pending auctions (not approved)
-  const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery({
-    queryKey: ["/api/admin/auctions", { approved: false }],
-    queryFn: () => fetch('/api/admin/auctions?approved=false').then(res => {
-      if (!res.ok) throw new Error("Failed to fetch pending auctions");
-      return res.json();
-    })
-  });
-
-  // Query for approved auctions
-  const { data: approvedAuctions, isLoading: isLoadingApprovedAuctions } = useQuery<Auction[]>({
-    queryKey: ["/api/auctions", { approved: true }],
-  });
-
-  const deleteAuctionMutation = useMutation({
-    mutationFn: async (auctionId: number) => {
-      const response = await fetch(`/api/admin/auctions/${auctionId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to delete auction');
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
-      toast({
-        title: "Success",
-        description: "Auction has been deleted",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Filter approved auctions based on search term
-  const filteredActiveAuctions = approvedAuctions?.filter(auction =>
-    auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
-    auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase())
-  );
 
   const { data: pendingUsers, isLoading: isLoadingPending } = useQuery<User[]>({
     queryKey: ["/api/admin/users", { approved: false, role: "seller" }],
@@ -730,6 +654,17 @@ function AdminDashboard() {
     queryKey: ["/api/admin/users", { role: "buyer" }],
   });
 
+  const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery({
+    queryKey: ["/api/admin/auctions", { pendingReview: true }],
+    queryFn: () => fetch(`/api/admin/auctions?pendingReview=true`).then(res => {
+      if (!res.ok) throw new Error("Failed to fetch pending auctions");
+      return res.json();
+    })
+  });
+
+  const { data: approvedAuctions, isLoading: isLoadingApprovedAuctions } = useQuery<Auction[]>({
+    queryKey: ["/api/auctions", { approved: true }],
+  });
 
   const filteredBuyers = buyers?.filter((buyer) =>
     buyer.username.toLowerCase().includes(buyerSearchTerm.toLowerCase()) ||
@@ -744,6 +679,12 @@ function AdminDashboard() {
   const realPendingUsers = pendingUsers?.filter((user) => user.role === "seller" && !user.approved);
 
   const now = new Date();
+  const filteredActiveAuctions = approvedAuctions?.filter((auction) =>
+    new Date(auction.endDate) > now &&
+    (auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
+      auction.description.toLowerCase().includes(auctionSearchTerm.toLowerCase()))
+  );
+
   const filteredCompletedAuctions = approvedAuctions?.filter((auction) =>
     new Date(auction.endDate) <= now &&
     (auction.title.toLowerCase().includes(auctionSearchTerm.toLowerCase()) ||
@@ -761,6 +702,27 @@ function AdminDashboard() {
       toast({
         title: "Success",
         description: "Auction has been approved",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteAuctionMutation = useMutation({
+    mutationFn: async (auctionId: number) => {
+      await apiRequest("DELETE", `/api/admin/auctions/${auctionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      toast({
+        title: "Success",
+        description: "Auction has been deleted",
       });
     },
     onError: (error: Error) => {
@@ -791,6 +753,7 @@ function AdminDashboard() {
       });
     },
   });
+
 
   return (
     <div className="container mx-auto py-8">
@@ -957,13 +920,13 @@ function AdminDashboard() {
                       <LoadingSpinner className="h-8 w-8" />
                     </div>
                   ) : !filteredBuyers?.length ? (
-                    <p className="textmuted-foreground">No buyers found</p>
+                    <p className="text-muted-foreground">No buyers found</p>
                   ) : (
                     <div className="space-y-2">
                       {filteredBuyers.map((buyer) => (
                         <div
                           key={buyer.id}
-                          className="flex items-center justifybetween p-4 border rounded-lg"
+                          className="flex items-center justify-between p-4 border rounded-lg"
                         >
                           <div>
                             <button
