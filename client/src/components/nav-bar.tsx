@@ -26,8 +26,14 @@ export default function NavBar() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await axios.post('/api/logout');
-      return true;
+      try {
+        await axios.post('/api/logout');
+        console.log('Logged out successfully');
+        return true;
+      } catch (error) {
+        console.error('Logout error:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       console.log('Logged out successfully');
