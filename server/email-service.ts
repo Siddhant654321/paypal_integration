@@ -128,3 +128,75 @@ export class EmailService {
     }
   }
 }
+// Basic email service implementation
+
+export class EmailService {
+  static async sendEmail(to: string, subject: string, body: string): Promise<void> {
+    try {
+      console.log("[EMAIL] Would send email:");
+      console.log(`  To: ${to}`);
+      console.log(`  Subject: ${subject}`);
+      console.log(`  Body: ${body}`);
+      
+      // In a production environment, you would integrate with an email service
+      // like SendGrid, Mailgun, AWS SES, etc. here
+      
+      console.log("[EMAIL] Email sending simulated (no actual email sent)");
+    } catch (error) {
+      console.error("[EMAIL] Error sending email:", error);
+      throw error;
+    }
+  }
+
+  static async sendWinningBidEmail(
+    email: string, 
+    auctionTitle: string, 
+    bidAmount: number
+  ): Promise<void> {
+    const subject = `Congratulations! You won the auction for "${auctionTitle}"`;
+    const body = `
+      Hello,
+      
+      Congratulations! You have won the auction for "${auctionTitle}" with a bid of $${(bidAmount/100).toFixed(2)}.
+      
+      Please proceed to payment to complete your purchase.
+      
+      Thank you,
+      Pips 'n Chicks Auctions Team
+    `;
+    
+    await this.sendEmail(email, subject, body);
+  }
+
+  static async sendAuctionEndedEmail(
+    email: string, 
+    auctionTitle: string, 
+    soldPrice: number | null
+  ): Promise<void> {
+    let subject, body;
+    
+    if (soldPrice) {
+      subject = `Your auction "${auctionTitle}" has ended and sold!`;
+      body = `
+        Hello,
+        
+        Your auction "${auctionTitle}" has ended and sold for $${(soldPrice/100).toFixed(2)}.
+        
+        Thank you,
+        Pips 'n Chicks Auctions Team
+      `;
+    } else {
+      subject = `Your auction "${auctionTitle}" has ended`;
+      body = `
+        Hello,
+        
+        Your auction "${auctionTitle}" has ended without any bids.
+        
+        Thank you,
+        Pips 'n Chicks Auctions Team
+      `;
+    }
+    
+    await this.sendEmail(email, subject, body);
+  }
+}
