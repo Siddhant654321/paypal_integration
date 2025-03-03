@@ -16,7 +16,7 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "@/components/ui/use-toast";
 
 
