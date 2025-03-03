@@ -422,6 +422,18 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
     setImagesToRemove(prev => [...prev, imageUrl]);
   };
 
+  const onSubmit = (data: any) => {
+    // Make sure dates are proper Date objects
+    const sanitizedData = {
+      ...data,
+      startDate: data.startDate instanceof Date ? data.startDate : new Date(data.startDate as string),
+      endDate: data.endDate instanceof Date ? data.endDate : new Date(data.endDate as string)
+    };
+
+    console.log("Submitting with sanitized data:", sanitizedData);
+    updateAuctionMutation.mutate(sanitizedData);
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -439,7 +451,7 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
         </DialogHeader>
         <Form {...form}>
           <form
-            onSubmit={form.handleSubmit((data) => updateAuctionMutation.mutate(data))}
+            onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-4"
           >
             <FormField
