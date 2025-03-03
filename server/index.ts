@@ -5,75 +5,49 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
-console.log("[SERVER] Starting server initialization...");
+console.log("[SERVER] Starting minimal server initialization...");
 
 const app = express();
 
-// Basic error handling middleware
+// Simple error handling middleware
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("[ERROR]", {
-    message: err.message,
-    stack: err.stack,
-    type: err.constructor.name
-  });
-  res.status(500).json({ 
-    message: "Internal server error",
-    timestamp: new Date().toISOString()
-  });
+  console.error("[ERROR]", err);
+  res.status(500).json({ message: "Internal server error" });
 });
 
 // Basic JSON parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Simple request logging
+// Basic request logging
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    console.log(`[REQUEST] ${req.method} ${req.path}`);
-  }
+  console.log(`[REQUEST] ${req.method} ${req.path}`);
   next();
 });
 
 // Basic health check endpoint
 app.get("/api/status", (_req, res) => {
-  try {
-    const status = {
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime()
-    };
-    res.json(status);
-  } catch (error) {
-    console.error("[Status Check] Error:", error);
-    res.status(500).json({ status: "error" });
-  }
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 (async () => {
   try {
-    log("Starting minimal server initialization...");
-
     // Test database connection
-    try {
-      log("Testing database connection...");
-      await db.execute(sql`SELECT 1`);
-      log("Database connection successful");
-    } catch (dbError) {
-      log(`Database connection failed: ${dbError}`);
-      throw dbError;
-    }
+    console.log("[SERVER] Testing database connection...");
+    await db.execute(sql`SELECT 1`);
+    console.log("[SERVER] Database connection successful");
 
-    // Initialize minimal routes first
-    log("Setting up minimal routes...");
+    // Setup minimal routes
+    console.log("[SERVER] Setting up routes...");
     const server = await registerRoutes(app);
-    log("Minimal routes setup complete");
+    console.log("[SERVER] Routes setup complete");
 
     // Setup static serving or Vite
     if (process.env.REPLIT_DOMAIN) {
-      log("Setting up static serving...");
+      console.log("[SERVER] Setting up static serving...");
       serveStatic(app);
     } else {
-      log("Setting up Vite...");
+      console.log("[SERVER] Setting up Vite...");
       await setupVite(app, server);
     }
 
@@ -83,17 +57,11 @@ app.get("/api/status", (_req, res) => {
       port,
       host: "0.0.0.0",
     }, () => {
-      const domain = process.env.REPLIT_DOMAIN ? 
-        `https://${process.env.REPLIT_DOMAIN}` : 
-        `http://localhost:${port}`;
-      log(`Server started successfully on ${domain}`);
-    }).on('error', (error: Error) => {
-      log(`Server startup error: ${error.message}`);
-      process.exit(1);
+      console.log(`[SERVER] Server started on port ${port}`);
     });
 
   } catch (error) {
-    log(`Fatal error during server startup: ${error}`);
+    console.error("[SERVER] Fatal error during startup:", error);
     process.exit(1);
   }
 })();
