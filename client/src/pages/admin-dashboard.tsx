@@ -160,8 +160,8 @@ function AdminDashboard() {
 
   // Filtered Lists
   const realPendingUsers = pendingUsers?.filter(user => !user.approved && user.role === "seller") || [];
-  const filteredSellers = approvedSellers?.filter(seller => 
-    seller.approved && 
+  const filteredSellers = approvedSellers?.filter(seller =>
+    seller.approved &&
     (seller.role === "seller" || seller.role === "seller_admin") &&
     seller.username.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
@@ -491,18 +491,41 @@ function AdminDashboard() {
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => approveAuctionMutation.mutate(auction.id)}
-                              disabled={approveAuctionMutation.isPending || !isStripeVerified}
-                              variant="default"
-                            >
-                              {approveAuctionMutation.isPending && (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              )}
-                              <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Approve
-                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  disabled={approveAuctionMutation.isPending}
+                                  variant="default"
+                                >
+                                  {approveAuctionMutation.isPending && (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  )}
+                                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                                  Approve
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    {isStripeVerified ? 'Approve Auction' : 'Warning: Stripe Not Verified'}
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    {isStripeVerified
+                                      ? 'Are you sure you want to approve this auction?'
+                                      : "The seller's Stripe account is not verified. Approving this auction may cause payment issues later. Do you want to proceed anyway?"}
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => approveAuctionMutation.mutate(auction.id)}
+                                  >
+                                    Approve
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
 
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -556,8 +579,8 @@ function AdminDashboard() {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                       {filteredActiveAuctions.map((auction) => (
-                        <AuctionCard 
-                          key={auction.id} 
+                        <AuctionCard
+                          key={auction.id}
                           auction={auction}
                           actions={
                             <AlertDialog>
@@ -602,8 +625,8 @@ function AdminDashboard() {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                       {filteredCompletedAuctions.map((auction) => (
-                        <AuctionCard 
-                          key={auction.id} 
+                        <AuctionCard
+                          key={auction.id}
                           auction={auction}
                           actions={
                             <AlertDialog>
@@ -815,7 +838,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
     mutationFn: async (bidId: number) => {
       await apiRequest("DELETE", `/api/admin/bids/${bidId}`);
     },
-    onSuccess: () =>{
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/bids", auctionId] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
@@ -889,7 +912,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={() => {
-                            deleteBidMutation.mutate(bid.id);
+                                                        deleteBidMutation.mutate(bid.id);
                           }}
                         >
                           Delete
