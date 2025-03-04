@@ -508,19 +508,12 @@ function AdminDashboard() {
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>
-                                    Approve Auction
+                                    {isStripeVerified ? 'Approve Auction' : 'Warning: Stripe Not Verified'}
                                   </AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Are you sure you want to approve this auction?
-                                    {!isStripeVerified && (
-                                      <Alert variant="warning" className="mt-2">
-                                        <AlertCircle className="h-4 w-4 mr-2" />
-                                        <AlertTitle>Stripe Not Verified</AlertTitle>
-                                        <AlertDescription>
-                                          The seller's Stripe account is not fully verified. This won't prevent the auction from being active, but may affect payment processing later.
-                                        </AlertDescription>
-                                      </Alert>
-                                    )}
+                                    {isStripeVerified
+                                      ? 'Are you sure you want to approve this auction?'
+                                      : "The seller's Stripe account is not verified. Approving this auction may cause payment issues later. Do you want to proceed anyway?"}
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
