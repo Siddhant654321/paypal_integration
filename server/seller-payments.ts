@@ -13,7 +13,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 const PRODUCTION_URL = 'https://poultryauction.co';
 const DEVELOPMENT_URL = 'http://localhost:5000';
 
-// Force production URL for Stripe redirects
+// Force production URL for Stripe redirects without any port number
 const BASE_URL = PRODUCTION_URL;
 
 export class SellerPaymentService {
@@ -51,11 +51,17 @@ export class SellerPaymentService {
       });
       console.log("[STRIPE] Account created with ID:", account.id);
 
-      // Create an account link for onboarding
+      // Create an account link for onboarding with sanitized redirect URLs
+      const refreshUrl = new URL('/seller-dashboard', BASE_URL);
+      refreshUrl.searchParams.append('refresh', 'true');
+      
+      const returnUrl = new URL('/seller-dashboard', BASE_URL); 
+      returnUrl.searchParams.append('success', 'true');
+      
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
-        refresh_url: `${BASE_URL}/seller-dashboard?refresh=true`,
-        return_url: `${BASE_URL}/seller-dashboard?success=true`,
+        refresh_url: refreshUrl.toString(),
+        return_url: returnUrl.toString(),
         type: 'account_onboarding',
         collect: 'eventually_due',
       });

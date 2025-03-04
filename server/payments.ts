@@ -122,10 +122,17 @@ export class PaymentService {
         cancel_url: `${BASE_URL}/auction/${auctionId}?payment=cancelled`,
       });
 
+      // Create properly formatted URLs
+      const successUrl = new URL(`/auction/${auctionId}`, BASE_URL);
+      successUrl.searchParams.append('payment', 'success');
+      
+      const cancelUrl = new URL(`/auction/${auctionId}`, BASE_URL);
+      cancelUrl.searchParams.append('payment', 'cancelled');
+      
       console.log("[STRIPE] Checkout session created:", {
         sessionId: session.id,
-        successUrl: `${BASE_URL}/auction/${auctionId}?payment=success`,
-        cancelUrl: `${BASE_URL}/auction/${auctionId}?payment=cancelled`
+        successUrl: successUrl.toString(),
+        cancelUrl: cancelUrl.toString()
       });
 
       // Update the payment with the Stripe session ID

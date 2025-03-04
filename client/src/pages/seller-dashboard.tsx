@@ -85,11 +85,14 @@ const SellerDashboard = () => {
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
 
-        // Add a slight delay to allow Stripe to process the account update
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Add a delay to allow Stripe to process the account update
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
         // Refresh the seller status
         await refetchStripeStatus();
+        
+        // Invalidate all queries to ensure we get fresh data
+        queryClient.invalidateQueries();
 
         toast({
           title: "Account update",
