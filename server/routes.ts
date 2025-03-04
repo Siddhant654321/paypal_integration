@@ -577,20 +577,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Auction is already approved" });
       }
 
-      await storage.updateAuction(auctionId, {
+      // Update auction to be approved and active
+      const updatedAuction = await storage.updateAuction(auctionId, {
         approved: true,
         status: 'active'
       });
 
-      const auction = await storage.approveAuction(auctionId);
-
       console.log(`[ADMIN APPROVE] Successfully approved auction:`, {
-        id: auction.id,
-        status: auction.status,
-        approved: auction.approved
+        id: updatedAuction.id,
+        status: updatedAuction.status,
+        approved: updatedAuction.approved
       });
 
-      res.json(auction);
+      res.json(updatedAuction);
     } catch (error) {
       console.error("[ADMIN APPROVE] Error approving auction:", error);
       res.status(500).json({ 
