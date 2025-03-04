@@ -137,8 +137,6 @@ function AdminDashboard() {
     },
   });
 
-  const queryClient = useQueryClient();
-
   const approveAuctionMutation = useMutation({
     mutationFn: async (auctionId: number) => {
       console.log("Approving auction:", auctionId);
