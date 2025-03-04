@@ -176,9 +176,16 @@ export default function HomePage() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeSellers.map((seller) => (
-                <SellerShowcase key={seller.id} seller={seller} />
-              ))}
+              {activeSellers
+                .filter(seller => 
+                  seller.approved === true && 
+                  seller.profile && 
+                  seller.role === "seller"
+                )
+                .map((seller) => (
+                  <SellerShowcase key={seller.id} seller={seller} />
+                ))
+              }
             </div>
           </section>
         )}

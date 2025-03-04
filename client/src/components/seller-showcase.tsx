@@ -14,11 +14,14 @@ interface SellerShowcaseProps {
 }
 
 export function SellerShowcase({ seller }: SellerShowcaseProps) {
-  const successfulAuctions = seller.auctions
+  // Make sure seller has auctions array
+  const sellerAuctions = seller.auctions || [];
+  
+  const successfulAuctions = sellerAuctions
     .filter(auction => auction.status === "ended" && auction.winningBidderId)
     .length;
 
-  const activeAuctions = seller.auctions
+  const activeAuctions = sellerAuctions
     .filter(auction => auction.status === "active" && auction.approved);
 
   return (
