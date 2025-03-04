@@ -9,18 +9,23 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16",
+  apiVersion: "2025-02-24.acacia",
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
+const PRODUCTION_URL = 'https://poultryauction.co';
+const DEVELOPMENT_URL = 'http://localhost:5000';
+
+// Use production URL if we're in production, otherwise use development URL
+const BASE_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : DEVELOPMENT_URL;
+
 export class PaymentService {
   static async createCheckoutSession(
     auctionId: number,
     buyerId: number,
-    includeInsurance: boolean = false,
-    baseUrl: string
+    includeInsurance: boolean = false
   ): Promise<{
     sessionId: string;
     payment: InsertPayment;
@@ -98,8 +103,8 @@ export class PaymentService {
           sellerId: auction.sellerId.toString(),
           includeInsurance: includeInsurance.toString(),
         },
-        success_url: `${baseUrl}/auction/${auctionId}?payment=success`,
-        cancel_url: `${baseUrl}/auction/${auctionId}?payment=cancelled`,
+        success_url: `${BASE_URL}/auction/${auctionId}?payment=success`,
+        cancel_url: `${BASE_URL}/auction/${auctionId}?payment=cancelled`,
       });
 
       // Update the payment with the Stripe session ID

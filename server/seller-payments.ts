@@ -10,10 +10,17 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-02-24.acacia"
 });
 
+const PRODUCTION_URL = 'https://poultryauction.co';
+const DEVELOPMENT_URL = 'http://localhost:5000';
+
+// Use production URL if we're in production, otherwise use development URL
+const BASE_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : DEVELOPMENT_URL;
+
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
       console.log("Creating seller account for:", profile.email);
+      console.log("Using base URL:", BASE_URL);
 
       // Clean up any existing account first
       if (profile.stripeAccountId) {
@@ -44,22 +51,11 @@ export class SellerPaymentService {
       });
       console.log("Stripe account created with ID:", account.id);
 
-      // Get the base URL for redirects
-      let baseUrl = "https://pipsnchicks.replit.app";
-      
-      // Use container URL for development, but fall back to the deployed URL
-      if (process.env.REPL_SLUG && process.env.REPL_OWNER) {
-        // Use the 5000 port which is what your server is running on
-        baseUrl = `https://${parseInt(process.env.REPL_ID || '0', 10)}.id.repl.co:5000`;
-      }
-      
-      console.log("Using redirect URL:", baseUrl);
-
       // Create an account link for onboarding
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
-        refresh_url: `${baseUrl}/seller-dashboard?refresh=true`,
-        return_url: `${baseUrl}/seller-dashboard?success=true`,
+        refresh_url: `${BASE_URL}/seller-dashboard?refresh=true`,
+        return_url: `${BASE_URL}/seller-dashboard?success=true`,
         type: 'account_onboarding',
         collect: 'eventually_due',
       });
@@ -68,7 +64,7 @@ export class SellerPaymentService {
         throw new Error("Failed to generate Stripe Connect URL");
       }
 
-      console.log("Generated account link with return URL:", `${baseUrl}/seller-dashboard?success=true`);
+      console.log("Generated account link with return URL:", `${BASE_URL}/seller-dashboard?success=true`);
 
       // Update profile with Stripe account ID and initial status
       await storage.updateSellerStripeAccount(profile.userId, {
