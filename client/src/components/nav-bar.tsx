@@ -87,10 +87,6 @@ export default function NavBar() {
                 src="/images/logo.png"
                 alt="Pips 'n Chicks Auctions"
                 className="h-10 w-auto object-contain"
-                onError={(e) => {
-                  console.log("Logo image failed to load, trying fallback path");
-                  e.currentTarget.src = "/attached_assets/Auctions Logos (2).png";
-                }}
               />
             </div>
           </Link>
