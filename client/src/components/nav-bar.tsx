@@ -37,10 +37,8 @@ export default function NavBar() {
     },
     onSuccess: () => {
       console.log('Logged out successfully');
-      // Clear user from context and invalidate the cache
       queryClient.setQueryData(['/api/user'], null);
       queryClient.invalidateQueries({ queryKey: ['/api/user'] });
-      // Redirect to home page
       setLocation('/');
     },
     onError: (error) => {
@@ -53,7 +51,6 @@ export default function NavBar() {
     },
   });
 
-  // Add mark all as read mutation
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
       console.log("[NavBar] Marking all notifications as read");
@@ -87,7 +84,7 @@ export default function NavBar() {
           <Link href="/">
             <div className="flex items-center gap-2">
               <img 
-                src="/favicon.png"
+                src="/attached_assets/Auctions Logos (2).png"
                 alt="Pips 'n Chicks Auctions"
                 className="h-10 w-auto object-contain"
               />
@@ -150,7 +147,6 @@ export default function NavBar() {
                     size="sm"
                     className={!user.hasProfile ? "bg-primary text-primary-foreground" : ""}
                     onClick={() => {
-                      // Refresh user data before navigating to ensure we have the latest profile status
                       queryClient.invalidateQueries({ queryKey: ['/api/user'] });
                       if (user?.hasProfile) {
                         setLocation('/profile');
