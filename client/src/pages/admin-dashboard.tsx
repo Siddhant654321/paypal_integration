@@ -544,8 +544,8 @@ function AdminDashboard() {
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
                                     onClick={() => {
+                                      setOpen(false);
                                       approveAuctionMutation.mutate(auction.id);
-                                      console.log("Approving auction:", auction.id);
                                     }}
                                   >
                                     Approve
