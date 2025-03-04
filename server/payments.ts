@@ -9,17 +9,23 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-02-24.acacia",
+  apiVersion: "2025-02-24.acacia"
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
+// Force production URL for all Stripe redirects
 const PRODUCTION_URL = 'https://poultryauction.co';
-const DEVELOPMENT_URL = 'http://localhost:5000';
 
-// Force production URL for Stripe redirects
-const BASE_URL = PRODUCTION_URL;
+// Prevent any environment overrides
+const getStripeRedirectUrl = (path: string, params: Record<string, string> = {}) => {
+  const url = new URL(path, PRODUCTION_URL);
+  Object.entries(params).forEach(([key, value]) => {
+    url.searchParams.append(key, value);
+  });
+  return url.toString();
+};
 
 export class PaymentService {
   static async createCheckoutSession(
@@ -35,7 +41,7 @@ export class PaymentService {
         auctionId,
         buyerId,
         includeInsurance,
-        baseUrl: BASE_URL
+        baseUrl: PRODUCTION_URL
       });
 
       // Get auction details
@@ -51,31 +57,13 @@ export class PaymentService {
       const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const sellerPayout = baseAmount - platformFee;
 
-      // Get seller's Stripe account ID
-      const sellerProfile = await storage.getProfile(auction.sellerId);
-      if (!sellerProfile?.stripeAccountId) {
-        throw new Error("Seller has not completed Stripe onboarding");
-      }
+      // Generate success and cancel URLs
+      const successUrl = getStripeRedirectUrl(`/auction/${auctionId}`, { payment: 'success' });
+      const cancelUrl = getStripeRedirectUrl(`/auction/${auctionId}`, { payment: 'cancelled' });
 
-      // Create payment record
-      const paymentData = {
-        auctionId,
-        buyerId,
-        sellerId: auction.sellerId,
-        amount: totalAmount,
-        platformFee,
-        sellerPayout,
-        insuranceFee,
-        stripePaymentIntentId: '',
-        status: 'pending' as const,
-      };
-
-      console.log("[STRIPE] Creating Checkout session with data:", {
-        baseAmount,
-        insuranceFee,
-        totalAmount,
-        platformFee,
-        sellerPayout
+      console.log("[STRIPE] Creating Checkout session with URLs:", {
+        successUrl,
+        cancelUrl
       });
 
       // Create Stripe Checkout session
@@ -85,7 +73,7 @@ export class PaymentService {
         payment_intent_data: {
           application_fee_amount: platformFee,
           transfer_data: {
-            destination: sellerProfile.stripeAccountId,
+            destination: auction.sellerStripeAccountId,
           },
         },
         line_items: [
@@ -118,22 +106,28 @@ export class PaymentService {
           sellerId: auction.sellerId.toString(),
           includeInsurance: includeInsurance.toString(),
         },
-        success_url: `${BASE_URL}/auction/${auctionId}?payment=success`,
-        cancel_url: `${BASE_URL}/auction/${auctionId}?payment=cancelled`,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
       });
 
-      // Create properly formatted URLs
-      const successUrl = new URL(`/auction/${auctionId}`, BASE_URL);
-      successUrl.searchParams.append('payment', 'success');
-      
-      const cancelUrl = new URL(`/auction/${auctionId}`, BASE_URL);
-      cancelUrl.searchParams.append('payment', 'cancelled');
-      
       console.log("[STRIPE] Checkout session created:", {
         sessionId: session.id,
-        successUrl: successUrl.toString(),
-        cancelUrl: cancelUrl.toString()
+        successUrl: successUrl,
+        cancelUrl: cancelUrl
       });
+
+      // Create payment record
+      const paymentData = {
+        auctionId,
+        buyerId,
+        sellerId: auction.sellerId,
+        amount: totalAmount,
+        platformFee,
+        sellerPayout,
+        insuranceFee,
+        stripePaymentIntentId: '',
+        status: 'pending' as const,
+      };
 
       // Update the payment with the Stripe session ID
       const payment = await storage.insertPayment({

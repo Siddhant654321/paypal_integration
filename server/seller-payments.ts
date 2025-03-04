@@ -10,17 +10,23 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-02-24.acacia"
 });
 
+// Force production URL for all Stripe redirects
 const PRODUCTION_URL = 'https://poultryauction.co';
-const DEVELOPMENT_URL = 'http://localhost:5000';
 
-// Force production URL for Stripe redirects without any port number
-const BASE_URL = PRODUCTION_URL;
+// Prevent any environment overrides
+const getStripeRedirectUrl = (path: string, params: Record<string, string> = {}) => {
+  const url = new URL(path, PRODUCTION_URL);
+  Object.entries(params).forEach(([key, value]) => {
+    url.searchParams.append(key, value);
+  });
+  return url.toString();
+};
 
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
       console.log("[STRIPE] Creating seller account for:", profile.email);
-      console.log("[STRIPE] Using base URL:", BASE_URL);
+      console.log("[STRIPE] Using production URL:", PRODUCTION_URL);
 
       // Clean up any existing account first
       if (profile.stripeAccountId) {
@@ -51,22 +57,19 @@ export class SellerPaymentService {
       });
       console.log("[STRIPE] Account created with ID:", account.id);
 
-      // Create an account link for onboarding with sanitized redirect URLs
-      const refreshUrl = new URL('/seller-dashboard', BASE_URL);
-      refreshUrl.searchParams.append('refresh', 'true');
-      
-      const returnUrl = new URL('/seller-dashboard', BASE_URL); 
-      returnUrl.searchParams.append('success', 'true');
-      
-      console.log("[STRIPE] Generated redirect URLs:", {
-        refreshUrl: refreshUrl.toString(),
-        returnUrl: returnUrl.toString()
+      // Generate redirect URLs using our helper
+      const refreshUrl = getStripeRedirectUrl('/seller-dashboard', { refresh: 'true' });
+      const returnUrl = getStripeRedirectUrl('/seller-dashboard', { success: 'true' });
+
+      console.log("[STRIPE] Creating account link with URLs:", {
+        refreshUrl,
+        returnUrl
       });
-      
+
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
-        refresh_url: refreshUrl.toString(),
-        return_url: returnUrl.toString(),
+        refresh_url: refreshUrl,
+        return_url: returnUrl,
         type: 'account_onboarding',
         collect: 'eventually_due',
       });
@@ -75,7 +78,7 @@ export class SellerPaymentService {
         throw new Error("Failed to generate Stripe Connect URL");
       }
 
-      console.log("[STRIPE] Generated account link with return URL:", `${BASE_URL}/seller-dashboard?success=true`);
+      console.log("[STRIPE] Account link created successfully");
 
       // Update profile with Stripe account ID and initial status
       await storage.updateSellerStripeAccount(profile.userId, {
@@ -157,7 +160,6 @@ export class SellerPaymentService {
       throw error;
     }
   }
-
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
       const profile = await storage.getProfile(sellerId);

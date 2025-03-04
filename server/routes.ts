@@ -20,9 +20,90 @@ import { db } from "./db";
 import { sql } from "drizzle-orm";
 import fs from 'fs';
 
+// Force production URL for all Stripe operations
+const PRODUCTION_URL = 'https://poultryauction.co';
+
+// Prevent any environment overrides
+const getStripeRedirectUrl = (path: string, params: Record<string, string> = {}) => {
+  const url = new URL(path, PRODUCTION_URL);
+  Object.entries(params).forEach(([key, value]) => {
+    url.searchParams.append(key, value);
+  });
+  return url.toString();
+};
+
+// Type definitions for request augmentation
+interface RequestWithUser extends express.Request {
+  user?: User;
+  isAuthenticated(): boolean;
+  login(user: any, callback: (err: any) => void): void;
+  logout(callback: (err: any) => void): void;
+}
+
+// All middleware definitions
+const requireAuth = (req: RequestWithUser, res: express.Response, next: express.NextFunction) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  next();
+};
+
+// Middleware to check if user is an admin
+const requireAdmin = (req: RequestWithUser, res: express.Response, next: express.NextFunction) => {
+  if (!req.isAuthenticated() || (req.user?.role !== "admin" && req.user?.role !== "seller_admin")) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  next();
+};
+
+// Middleware to check if user is an approved seller or seller_admin
+const requireApprovedSeller = (req: RequestWithUser, res: express.Response, next: express.NextFunction) => {
+  try {
+    console.log("[SELLER CHECK] Checking seller authorization:", {
+      isAuthenticated: req.isAuthenticated(),
+      user: req.user ? {
+        id: req.user.id,
+        role: req.user.role,
+        approved: req.user.approved
+      } : null
+    });
+
+    if (!req.isAuthenticated()) {
+      console.log("[SELLER CHECK] User not authenticated");
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    // Allow seller_admin without approval check
+    if (req.user.role === "seller_admin") {
+      console.log("[SELLER CHECK] User is seller_admin, access granted");
+      return next();
+    }
+
+    if (req.user.role !== "seller") {
+      console.log("[SELLER CHECK] User is not a seller", { role: req.user.role });
+      return res.status(403).json({ message: "Only sellers can perform this action" });
+    }
+
+    // Check approval for regular sellers
+    if (!req.user.approved) {
+      console.log("[SELLER CHECK] Seller not approved");
+      return res.status(403).json({ message: "Only approved sellers can perform this action" });
+    }
+
+    console.log("[SELLER CHECK] Access granted to approved seller");
+    next();
+  } catch (error) {
+    console.error("[SELLER CHECK] Error in seller authorization:", error);
+    res.status(500).json({ message: "Authorization check failed" });
+  }
+};
 
 // Add middleware to check profile completion
-const requireProfile = async (req: any, res: any, next: any) => {
+const requireProfile = async (req: RequestWithUser, res: express.Response, next: express.NextFunction) => {
   if (!req.isAuthenticated()) {
     console.log("[PROFILE CHECK] User not authenticated");
     return res.status(401).json({ message: "Unauthorized" });
@@ -40,6 +121,82 @@ const requireProfile = async (req: any, res: any, next: any) => {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+  
+  // Add the Stripe webhook endpoint
+  app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    try {
+      console.log("[STRIPE WEBHOOK] Received webhook");
+      const sig = req.headers['stripe-signature'];
+
+      if (!process.env.STRIPE_WEBHOOK_SECRET) {
+        console.error("[STRIPE WEBHOOK] Missing STRIPE_WEBHOOK_SECRET");
+        return res.status(400).send('Webhook secret not configured');
+      }
+
+      if (!sig) {
+        console.error("[STRIPE WEBHOOK] No Stripe signature found");
+        return res.status(400).send('No signature');
+      }
+
+      const event = Stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+
+      console.log("[STRIPE WEBHOOK] Event received:", event.type);
+
+      // Handle the event
+      switch (event.type) {
+        case 'payment_intent.succeeded':
+          await PaymentService.handlePaymentSuccess(event.data.object.id);
+          break;
+        case 'payment_intent.payment_failed':
+          await PaymentService.handlePaymentFailure(event.data.object.id);
+          break;
+        default:
+          console.log(`[STRIPE WEBHOOK] Unhandled event type ${event.type}`);
+      }
+
+      res.json({ received: true });
+    } catch (error) {
+      console.error("[STRIPE WEBHOOK] Error:", error);
+      res.status(400).send(`Webhook Error: ${error.message}`);
+    }
+  });
+
+  // Add seller connect endpoint with production URL
+  app.post("/api/seller/connect", requireAuth, async (req, res) => {
+    try {
+      console.log("[STRIPE CONNECT] Starting Connect process");
+      
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      console.log("[STRIPE CONNECT] Creating Connect account for seller:", {
+        userId: req.user.id,
+        email: profile.email,
+        productionUrl: PRODUCTION_URL
+      });
+
+      const { url } = await SellerPaymentService.createSellerAccount(profile);
+      
+      console.log("[STRIPE CONNECT] Generated onboarding URL:", url);
+      res.json({ url });
+    } catch (error) {
+      console.error("[STRIPE CONNECT] Error:", error);
+      res.status(500).json({ 
+        message: "Failed to create Stripe Connect account",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   // Add authentication endpoints with enhanced logging and response handling
   app.post("/api/login", async (req, res) => {
@@ -123,63 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   }, express.static(path.join(process.cwd(), 'uploads')));
 
-  // Middleware to check if user is authenticated
-  const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    next();
-  };
 
-  // Middleware to check if user is an admin
-  const requireAdmin = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "seller_admin")) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    next();
-  };
-
-  // Middleware to check if user is an approved seller or seller_admin
-  const requireApprovedSeller = (req: any, res: any, next: any) => {
-    try {
-      console.log("[SELLER CHECK] Checking seller authorization:", {
-        isAuthenticated: req.isAuthenticated(),
-        user: req.user ? {
-          id: req.user.id,
-          role: req.user.role,
-          approved: req.user.approved
-        } : null
-      });
-
-      if (!req.isAuthenticated()) {
-        console.log("[SELLER CHECK] User not authenticated");
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      // Allow seller_admin without approval check
-      if (req.user.role === "seller_admin") {
-        console.log("[SELLER CHECK] User is seller_admin, access granted");
-        return next();
-      }
-
-      if (req.user.role !== "seller") {
-        console.log("[SELLER CHECK] User is not a seller", { role: req.user.role });
-        return res.status(403).json({ message: "Only sellers can perform this action" });
-      }
-
-      // Check approval for regular sellers
-      if (!req.user.approved) {
-        console.log("[SELLER CHECK] Seller not approved");
-        return res.status(403).json({ message: "Only approved sellers can perform this action" });
-      }
-
-      console.log("[SELLER CHECK] Access granted to approved seller");
-      next();
-    } catch (error) {
-      console.error("[SELLER CHECK] Error in seller authorization:", error);
-      res.status(500).json({ message: "Authorization check failed" });
-    }
-  };
 
   // Update the getAuctions endpoint to include seller profiles
   app.get("/api/auctions", async (req, res) => {
@@ -898,6 +999,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("Using Date object for startDate:", updateData.startDate);
         }
       }
+
+      // Create HTTP server and configure routes
+      const httpServer = createServer(app);
+      
+      // Return configured server
+      return httpServer;
 
       if (data.endDate) {
         console.log("Found endDate field:", data.endDate);
@@ -2270,75 +2377,3 @@ export async function registerRoutes(app: Express): Promise<Server> {
 const log = (message: string, context: string = 'general') => {
   console.log(`[${context}] ${message}`);
 }
-// Stripe webhook endpoint (no auth)
-  app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
-    try {
-      const payload = req.body;
-      const sig = req.headers["stripe-signature"] as string;
-      const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-      console.log("[Stripe Webhook] Received webhook event");
-
-      if (!endpointSecret) {
-        console.error("Missing STRIPE_WEBHOOK_SECRET environment variable");
-        return res.status(500).json({ message: "Missing webhook secret" });
-      }
-
-      // Verify webhook signature
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-        apiVersion: "2025-02-24.acacia", // Updated to match other Stripe instances
-      });
-
-      let event;
-      try {
-        event = stripe.webhooks.constructEvent(
-          payload,
-          sig,
-          endpointSecret
-        );
-      } catch (err: any) {
-        console.error("[Stripe Webhook] Signature verification failed:", err.message);
-        return res.status(400).json({ message: "Webhook signature verification failed" });
-      }
-
-      console.log("[Stripe Webhook] Event type:", event.type);
-      // Handle the checkout.session.completed event
-      if (event.type === "checkout.session.completed") {
-        const session = event.data.object;
-        console.log("[Stripe Webhook] Checkout session completed:", session);
-
-        try {
-          await storage.updatePaymentBySessionId(session.id, {
-            status: "completed",
-            stripePaymentIntentId: session.payment_intent
-          });
-
-          const payment = await storage.getPaymentBySessionId(session.id);
-          if (payment) {
-            await storage.updateAuction(payment.auctionId, {
-              paymentStatus: "completed"
-            });
-          }
-
-          console.log("[Stripe Webhook] Payment updated successfully");
-        } catch (error) {
-          console.error("[Stripe Webhook] Error updating payment or auction:", error);
-        }
-      } else if (event.type === "payment_intent.payment_failed") {
-        const failedIntent = event.data.object;
-        console.log("[Stripe Webhook] Payment intent failed:", failedIntent);
-        await storage.updatePaymentByIntentId(failedIntent.id, {
-          status: "failed"
-        });
-        console.log("[Stripe Webhook] Payment intent failed, updated payment status");
-      } else {
-        console.log("[Stripe Webhook] Unhandled event type:", event.type);
-      }
-
-      res.send();
-
-    } catch (error) {
-      console.error("[Stripe Webhook] Error:", error);
-      res.status(500).json({ message: "Webhook processing failed" });
-    }
-  });

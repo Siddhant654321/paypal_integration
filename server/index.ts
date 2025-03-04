@@ -3,9 +3,21 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import fs from 'fs';
+import path from 'path';
 
 const app = express();
 const DEFAULT_PORT = 5000;
+
+// Force production mode for Stripe redirects
+process.env.NODE_ENV = 'production';
+
+console.log("[SERVER] Starting server with environment:", {
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: process.env.PORT || DEFAULT_PORT,
+  STRIPE_CONFIGURED: !!process.env.STRIPE_SECRET_KEY,
+  DATABASE_CONFIGURED: !!process.env.DATABASE_URL
+});
 
 // Basic middleware setup
 app.use(express.json());
@@ -42,14 +54,16 @@ async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
     // Setup frontend
     try {
-      if (process.env.NODE_ENV === "production") {
-        console.log("[SERVER] Setting up static file serving...");
-        serveStatic(app);
+      console.log("[SERVER] Setting up static file serving...");
+      const buildDir = path.join(process.cwd(), 'server', 'public');
+
+      if (!fs.existsSync(buildDir)) {
+        console.warn("[SERVER] Build directory not found:", buildDir);
+        console.warn("[SERVER] Static file serving will be disabled until build is present");
       } else {
-        console.log("[SERVER] Setting up Vite development server...");
-        await setupVite(app, server);
+        serveStatic(app);
+        console.log("[SERVER] Frontend setup complete");
       }
-      console.log("[SERVER] Frontend setup complete");
     } catch (frontendError) {
       console.error("[SERVER] Frontend setup error:", frontendError);
       // Continue server startup even if frontend setup fails
@@ -57,13 +71,22 @@ async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
     // Start server with error handling
     await new Promise<void>((resolve, reject) => {
+      console.log("[SERVER] Attempting to start server on port", port);
+
+      const timeoutId = setTimeout(() => {
+        reject(new Error(`Server failed to start within 10 seconds on port ${port}`));
+      }, 10000);
+
       server.listen({
         port,
         host: "0.0.0.0",
       }, () => {
-        console.log(`[SERVER] Server started on port ${port}`);
+        clearTimeout(timeoutId);
+        console.log(`[SERVER] Server started successfully on port ${port}`);
+        console.log("[SERVER] Production URL configured for Stripe:", 'https://poultryauction.co');
         resolve();
       }).on('error', (error: any) => {
+        clearTimeout(timeoutId);
         if (error.code === 'EADDRINUSE') {
           console.error(`[SERVER] Port ${port} is already in use`);
           reject(error);
