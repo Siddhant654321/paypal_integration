@@ -136,6 +136,78 @@ const FAQPage: FC = () => {
             </AccordionItem>
           </Accordion>
         </Card>
+
+        {/* Terms and Conditions Section */}
+        <div className="mt-16">
+          <h2 className="text-3xl font-bold text-center mb-8 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Terms and Conditions
+          </h2>
+
+          <Card className="p-6 shadow-lg bg-gradient-to-br from-background/80 to-background border-2">
+            <div className="prose prose-sm max-w-none">
+              <p className="text-lg mb-6">
+                Everyone agrees to these terms and conditions by bidding, buying, consigning, or otherwise participating in any Pips 'n Chicks Auctions. Breaking any of these terms and conditions can result in a ban from the platform and voiding sales. All disputes between buyers and sellers on lots from Pips 'n Chicks Auctions will be mediated by Pips 'n Chicks, and Pips 'n Chicks' decisions will be final. Pips 'n Chicks also reserves the right to modify these terms and conditions at any time, and continued use of the platform constitutes acceptance of these changes.
+              </p>
+
+              <h3 className="text-xl font-semibold mt-8 mb-4">Eligibility</h3>
+              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+                <p className="font-medium mb-2">Everyone must be over 18</p>
+                <p>You must be at least 18 years old and legally able to enter a binding contract to participate in auctions as a buyer, bidder, or seller, or have a legal guardian acting on your behalf. By creating an account and bidding or consigning, you agree you are above the legal age limit.</p>
+              </div>
+
+              <h3 className="text-xl font-semibold mb-4">Auction Process</h3>
+              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+                <ul className="space-y-4">
+                  <li>Every bid must be a serious attempt to buy the lot.</li>
+                  <li>All bids are binding and cannot be retracted. The highest bidder at the end of the auction is legally obligated to complete the purchase and considered the buyer.</li>
+                  <li>All bids are made in standard USD, and must be made through the website by the direct buyer.</li>
+                  <li>Bidders can sign up for notifications on any lot, which may be subject to technology delays due to no fault of Pips 'n Chicks or the consigner.</li>
+                  <li>Sellers agree to ship or transport lots within 5 business days of auction close.</li>
+                  <li>Auctions can be canceled prior to close for extenuating circumstances at the discretion of Pips 'n Chicks.</li>
+                </ul>
+              </div>
+
+              <h3 className="text-xl font-semibold mb-4">Payments</h3>
+              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+                <p className="font-medium mb-2">Everyone must pay and be paid timely. Fees are covered by the buyer.</p>
+                <ul className="space-y-2">
+                  <li>Buyers must make payment in full within 48 hours of winning the auction.</li>
+                  <li>All bidding prices include shipping, handling, and packaging fees.</li>
+                  <li>A 3.5% processing fee will be added to all credit and debit card charges.</li>
+                  <li>Sellers receive 90% of the final bid price, paid upon auction end and tracking number submission.</li>
+                </ul>
+              </div>
+
+              <h3 className="text-xl font-semibold mb-4">Shipping</h3>
+              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+                <p className="font-medium mb-2">Pips 'n Chicks and the Sellers are not liable for post office damage or hatch rates.</p>
+                <ul className="space-y-2">
+                  <li>Sellers must package fertile eggs and birds according to industry standards and USPS guidelines.</li>
+                  <li>All shipping is through USPS unless stated otherwise in the auction description.</li>
+                  <li>Sellers must maintain NPIP status for interstate transport.</li>
+                  <li>Lots become buyer property at auction close; buyer assumes all shipping risks.</li>
+                  <li>No guarantees on shipping speed or hatch rates without insurance.</li>
+                </ul>
+              </div>
+
+              <h3 className="text-xl font-semibold mb-4">Shipping Insurance</h3>
+              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+                <p>Pips 'n Chicks offers optional shipping insurance for:</p>
+                <ul className="list-disc list-inside space-y-2 mt-2">
+                  <li>Severe shipping delays affecting viability</li>
+                  <li>Lost or misrouted packages</li>
+                  <li>Packages damaged by USPS handling</li>
+                </ul>
+                <p className="mt-4 italic">Insurance does not cover:</p>
+                <ul className="list-disc list-inside space-y-2 mt-2">
+                  <li>Low hatch rates not caused by shipping</li>
+                  <li>Minor delays without viability impact</li>
+                  <li>Issues unrelated to shipping</li>
+                </ul>
+              </div>
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   )
