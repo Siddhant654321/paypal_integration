@@ -177,15 +177,32 @@ export default function HomePage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {activeSellers
-                .filter(seller => 
-                  seller.approved === true && 
-                  seller.profile && 
-                  seller.role === "seller" &&
-                  seller.auctions.some(auction => 
-                    auction.status === "active" && 
-                    auction.approved === true
-                  )
-                )
+                .filter(seller => {
+                  // Check if seller meets all criteria
+                  const isApproved = seller.approved === true;
+                  const hasProfile = !!seller.profile;
+                  const isSellerRole = seller.role === "seller";
+                  
+                  // Check if seller has at least one active and approved auction
+                  const hasActiveAuctions = Array.isArray(seller.auctions) && 
+                    seller.auctions.some(auction => 
+                      auction.status === "active" && 
+                      auction.approved === true
+                    );
+                  
+                  // Log filtering info for debugging
+                  console.log(`Filtering seller ${seller.id}:`, {
+                    isApproved,
+                    hasProfile,
+                    isSellerRole,
+                    hasActiveAuctions,
+                    auctionsCount: Array.isArray(seller.auctions) ? seller.auctions.length : 0
+                  });
+                  
+                  // Only show sellers that meet all criteria
+                  return isApproved && hasProfile && isSellerRole && hasActiveAuctions;
+                })
+                .slice(0, 1) // Only show the first seller 
                 .map((seller) => (
                   <SellerShowcase key={seller.id} seller={seller} />
                 ))
