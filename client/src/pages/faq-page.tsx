@@ -42,22 +42,24 @@ const FAQPage: FC = () => {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="commission" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
-              <AccordionTrigger className="text-lg font-semibold px-4">How does the auction site make money?</AccordionTrigger>
+            <AccordionItem value="commission" className="border-2 border-[#90BE6D]/50 rounded-lg bg-[#90BE6D]/5 hover:bg-[#90BE6D]/10 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4 text-[#1D3557]">How does the auction site make money?</AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 We operate on a 10% commission from the final bid price. This helps cover platform costs, fund the annual Pips 'n Chicks Virtual Show, and promote the site on social media.
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="help" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
-              <AccordionTrigger className="text-lg font-semibold px-4">I'm having issues. How can I get help?</AccordionTrigger>
+            <AccordionItem value="help" className="border-2 border-[#F8961E]/50 rounded-lg bg-[#F8961E]/5 hover:bg-[#F8961E]/10 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4 text-[#1D3557]">I'm having issues. How can I get help?</AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 If you have any problems with an order, questions, or ideas for new features, email us at pipsnchicks@gmail.com. We're here to ensure the best experience for both buyers and sellers!
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="insurance" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
-              <AccordionTrigger className="text-lg font-semibold px-4">What is the "insurance" system?</AccordionTrigger>
+            <AccordionItem value="insurance" className="border-2 border-[#43AA8B]/30 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4 text-[#1D3557]">
+                What is the "insurance" system?
+              </AccordionTrigger>
               <AccordionContent className="px-4 pb-4 space-y-2">
                 <p>This is a new optional feature to protect buyers from shipping-related issues. If you purchase insurance and experience problems, we'll issue a full refund at no cost to you or the seller.</p>
                 <p className="font-semibold mt-2">This covers:</p>
@@ -80,16 +82,16 @@ const FAQPage: FC = () => {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="payment" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
-              <AccordionTrigger className="text-lg font-semibold px-4">How do payments work?</AccordionTrigger>
+            <AccordionItem value="payment" className="border-2 border-[#4361EE]/50 rounded-lg bg-[#4361EE]/5 hover:bg-[#4361EE]/10 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4 text-[#1D3557]">How do payments work?</AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 <p>We use Stripe for secure payment processing. When you win an auction, you'll have 24 hours to complete your payment. We accept all major credit cards and digital wallets.</p>
                 <p className="mt-2 text-muted-foreground">Sellers receive their payments within 2-3 business days after successful delivery confirmation.</p>
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="auction-duration" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
-              <AccordionTrigger className="text-lg font-semibold px-4">How long do auctions last?</AccordionTrigger>
+            <AccordionItem value="auction-duration" className="border-2 border-[#4CC9F0]/50 rounded-lg bg-[#4CC9F0]/5 hover:bg-[#4CC9F0]/10 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4 text-[#1D3557]">How long do auctions last?</AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 <p>Auction durations are set by sellers and typically run between 3-7 days. The exact end time is clearly displayed on each listing.</p>
                 <p className="mt-2">We use automatic time extension: if a bid is placed in the last 5 minutes, the auction extends by 5 minutes to prevent sniping.</p>
@@ -124,8 +126,8 @@ const FAQPage: FC = () => {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="seller-requirements" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
-              <AccordionTrigger className="text-lg font-semibold px-4">What are the requirements for sellers?</AccordionTrigger>
+            <AccordionItem value="seller-requirements" className="border-2 border-[#3A86FF]/50 rounded-lg bg-[#3A86FF]/5 hover:bg-[#3A86FF]/10 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4 text-[#1D3557]">What are the requirements for sellers?</AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 <p>To maintain quality standards, sellers must:</p>
                 <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
@@ -154,13 +156,13 @@ const FAQPage: FC = () => {
               </p>
 
               <h3 className="text-xl font-semibold mt-8 mb-4">Eligibility</h3>
-              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+              <div className="bg-[#43AA8B]/5 p-4 rounded-lg mb-6"> {/* Changed background color here */}
                 <p className="font-medium mb-2">Everyone must be over 18</p>
                 <p>You must be at least 18 years old and legally able to enter a binding contract to participate in auctions as a buyer, bidder, or seller, or have a legal guardian acting on your behalf. By creating an account and bidding or consigning, you agree you are above the legal age limit.</p>
               </div>
 
               <h3 className="text-xl font-semibold mb-4">Auction Process</h3>
-              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+              <div className="bg-[#4CC9F0]/5 p-4 rounded-lg mb-6"> {/* Changed background color here */}
                 <ul className="space-y-4">
                   <li>Every bid must be a serious attempt to buy the lot.</li>
                   <li>All bids are binding and cannot be retracted. The highest bidder at the end of the auction is legally obligated to complete the purchase and considered the buyer.</li>
@@ -172,7 +174,7 @@ const FAQPage: FC = () => {
               </div>
 
               <h3 className="text-xl font-semibold mb-4">Payments</h3>
-              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+              <div className="bg-[#3A86FF]/5 p-4 rounded-lg mb-6"> {/* Changed background color here */}
                 <p className="font-medium mb-2">Everyone must pay and be paid timely. Fees are covered by the buyer.</p>
                 <ul className="space-y-2">
                   <li>Buyers must make payment in full within 48 hours of winning the auction.</li>
@@ -183,7 +185,7 @@ const FAQPage: FC = () => {
               </div>
 
               <h3 className="text-xl font-semibold mb-4">Shipping</h3>
-              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+              <div className="bg-[#F8961E]/5 p-4 rounded-lg mb-6"> {/* Changed background color here */}
                 <p className="font-medium mb-2">Pips 'n Chicks and the Sellers are not liable for post office damage or hatch rates.</p>
                 <ul className="space-y-2">
                   <li>Sellers must package fertile eggs and birds according to industry standards and USPS guidelines.</li>
@@ -195,7 +197,7 @@ const FAQPage: FC = () => {
               </div>
 
               <h3 className="text-xl font-semibold mb-4">Shipping Insurance</h3>
-              <div className="bg-primary/5 p-4 rounded-lg mb-6">
+              <div className="bg-[#4361EE]/5 p-4 rounded-lg mb-6"> {/* Changed background color here */}
                 <p>Pips 'n Chicks offers optional shipping insurance for:</p>
                 <ul className="list-disc list-inside space-y-2 mt-2">
                   <li>Severe shipping delays affecting viability</li>
