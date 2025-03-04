@@ -139,20 +139,39 @@ function AdminDashboard() {
 
   const approveAuctionMutation = useMutation({
     mutationFn: async (auctionId: number) => {
-      await apiRequest("POST", `/api/admin/auctions/${auctionId}/approve`);
+      console.log(`Sending approval request for auction ${auctionId}`);
+      const response = await fetch(`/api/admin/auctions/${auctionId}/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Approval API error:", errorData);
+        throw new Error(`Failed to approve auction: ${errorData.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("Approval API response:", data);
+      return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+    onSuccess: (data) => {
+      console.log("Auction approved successfully:", data);
+      // Invalidate both queries to ensure lists are updated
+      queryClient.invalidateQueries({ queryKey: ["adminAuctions"] });
+
       toast({
-        title: "Success",
-        description: "Auction has been approved",
+        title: "Auction approved",
+        description: "The auction has been approved and is now visible to buyers",
       });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
+      console.error("Approval mutation error:", error);
       toast({
         title: "Error",
-        description: error.message,
+        description: `Failed to approve auction: ${error.message}`,
         variant: "destructive",
       });
     },
