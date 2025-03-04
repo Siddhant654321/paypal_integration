@@ -88,8 +88,8 @@ async function startServer(port: number = DEFAULT_PORT): Promise<void> {
       }).on('error', (error: any) => {
         clearTimeout(timeoutId);
         if (error.code === 'EADDRINUSE') {
-          console.error(`[SERVER] Port ${port} is already in use`);
-          reject(error);
+          console.log(`[SERVER] Port ${port} is already in use, trying port ${port + 1}`);
+          startServer(port + 1);
         } else {
           console.error('[SERVER] Server error:', error);
           reject(error);
