@@ -41,13 +41,13 @@ export function SellerShowcase({ seller }: SellerShowcaseProps) {
             <CardTitle className="text-lg">
               <div className="flex items-center gap-2">
                 <Store className="h-4 w-4" />
-                {seller.profile.businessName || seller.username}
+                <span>{seller.profile.businessName || seller.username}</span>
               </div>
             </CardTitle>
             {seller.profile.state && (
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <MapPin className="h-3 w-3" />
-                <span>{seller.profile.state}</span>
+                <span>{seller.profile.city}, {seller.profile.state}</span>
               </div>
             )}
           </div>
