@@ -112,19 +112,19 @@ export class NotificationService {
       // Check if user has email notifications enabled
       const user = await storage.getUser(userId);
       if (user?.emailNotificationsEnabled) {
-        log(`[EXTENSION] Sending email notification to user ${userId}`);
+        console.log(`[EXTENSION] Sending email notification to user ${userId}`);
         try {
           await EmailService.sendNotification("auction_extended", user, {
             auctionTitle,
             newEndTime: newEndDate.toLocaleString(),
           });
-          log(`[EXTENSION] Successfully sent email notification to user ${userId}`);
+          console.log(`[EXTENSION] Successfully sent email notification to user ${userId}`);
         } catch (emailError) {
-          log(`[EXTENSION] Failed to send email notification: ${emailError}`);
+          console.error(`[EXTENSION] Failed to send email notification:`, emailError);
         }
       }
     } catch (error) {
-      log(`[EXTENSION] Error in notifyAuctionExtended: ${error}`);
+      console.error(`[EXTENSION] Error in notifyAuctionExtended:`, error);
       throw error;
     }
   }

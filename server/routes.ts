@@ -342,16 +342,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
 
       console.log("[BID EXTENSION] Checking bid timing:", {
+        auctionId: auction.id,
+        auctionTitle: auction.title,
         currentTime: now.toISOString(),
         auctionEndTime: endTime.toISOString(),
         timeUntilEnd: timeUntilEnd / 1000, // Convert to seconds for readability
-        extensionThreshold: fiveMinutes / 1000
+        extensionThreshold: fiveMinutes / 1000,
+        shouldExtend: timeUntilEnd <= fiveMinutes
       });
 
       if (timeUntilEnd <= fiveMinutes) {
         const newEndDate = new Date(now.getTime() + fiveMinutes);
         console.log("[BID EXTENSION] Extending auction:", {
           auctionId: auction.id,
+          auctionTitle: auction.title,
           originalEndDate: endTime.toISOString(),
           newEndDate: newEndDate.toISOString(),
           extensionAmount: fiveMinutes / 1000
