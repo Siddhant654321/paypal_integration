@@ -137,44 +137,37 @@ function AdminDashboard() {
     },
   });
 
+  const queryClient = useQueryClient();
+
   const approveAuctionMutation = useMutation({
     mutationFn: async (auctionId: number) => {
-      console.log(`Sending approval request for auction ${auctionId}`);
-      const response = await fetch(`/api/admin/auctions/${auctionId}/approve`, {
+      console.log("Approving auction:", auctionId);
+      return fetch(`/api/admin/auctions/${auctionId}/approve`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" }
+      }).then(res => {
+        if (!res.ok) throw new Error("Failed to approve auction");
+        return res.json();
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("Approval API error:", errorData);
-        throw new Error(`Failed to approve auction: ${errorData.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log("Approval API response:", data);
-      return data;
     },
-    onSuccess: (data) => {
-      console.log("Auction approved successfully:", data);
-      // Invalidate both queries to ensure lists are updated
+    onSuccess: () => {
+      console.log("Successfully approved auction");
+      // Invalidate both queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["adminAuctions"] });
-
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
       toast({
-        title: "Auction approved",
-        description: "The auction has been approved and is now visible to buyers",
+        title: "Success",
+        description: "Auction has been approved"
       });
     },
     onError: (error) => {
-      console.error("Approval mutation error:", error);
+      console.error("Error approving auction:", error);
       toast({
         title: "Error",
-        description: `Failed to approve auction: ${error.message}`,
-        variant: "destructive",
+        description: "Failed to approve auction: " + error.message,
+        variant: "destructive"
       });
-    },
+    }
   });
 
   // Filtered Lists
@@ -543,10 +536,7 @@ function AdminDashboard() {
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => {
-                                      setOpen(false);
-                                      approveAuctionMutation.mutate(auction.id);
-                                    }}
+                                    onClick={() => approveAuctionMutation.mutate(auction.id)}
                                   >
                                     Approve
                                   </AlertDialogAction>
