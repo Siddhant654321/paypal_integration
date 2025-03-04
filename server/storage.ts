@@ -748,6 +748,25 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
+    try {
+      log(`Creating notification`, insertNotification);
+      const [notification] = await db
+        .insert(notifications)
+        .values({
+          ...insertNotification,
+          read: false,
+          createdAt: new Date(),
+        })
+        .returning();
+
+      log(`Successfully created notification:`, notification);
+      return notification;
+    } catch (error) {
+      log(`Error creating notification: ${error}`);
+      throw error;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();
