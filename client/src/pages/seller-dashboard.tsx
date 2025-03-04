@@ -81,17 +81,22 @@ const SellerDashboard = () => {
       const refresh = urlParams.get('refresh');
 
       if (success === 'true' || refresh === 'true') {
+        console.log("[Stripe] Redirect detected with params:", { success, refresh });
+        
         // Clear the query params
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
 
         // Add a delay to allow Stripe to process the account update
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        console.log("[Stripe] Waiting for account update to process...");
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         // Refresh the seller status
+        console.log("[Stripe] Refreshing seller status...");
         await refetchStripeStatus();
         
         // Invalidate all queries to ensure we get fresh data
+        console.log("[Stripe] Invalidating queries to refresh data...");
         queryClient.invalidateQueries();
 
         toast({

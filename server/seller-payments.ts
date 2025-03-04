@@ -58,6 +58,11 @@ export class SellerPaymentService {
       const returnUrl = new URL('/seller-dashboard', BASE_URL); 
       returnUrl.searchParams.append('success', 'true');
       
+      console.log("[STRIPE] Generated redirect URLs:", {
+        refreshUrl: refreshUrl.toString(),
+        returnUrl: returnUrl.toString()
+      });
+      
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
         refresh_url: refreshUrl.toString(),

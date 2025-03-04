@@ -18,6 +18,8 @@ import { AIPricingService } from "./ai-service";
 import type { User } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import fs from 'fs';
+
 
 // Add middleware to check profile completion
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -110,14 +112,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/uploads', (req, res, next) => {
     console.log(`[STATIC] Requested image: ${req.path}`);
     const fullPath = path.join(process.cwd(), 'uploads', req.path);
-    
+
     // Check if file exists and log the result
     if (fs.existsSync(fullPath)) {
       console.log(`[STATIC] Image found: ${req.path}`);
     } else {
       console.log(`[STATIC] Image not found: ${req.path}`);
     }
-    
+
     next();
   }, express.static(path.join(process.cwd(), 'uploads')));
 
@@ -2268,3 +2270,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
 const log = (message: string, context: string = 'general') => {
   console.log(`[${context}] ${message}`);
 }
+// Stripe webhook endpoint (no auth)
+  app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    try {
+      const payload = req.body;
+      const sig = req.headers["stripe-signature"] as string;
+      const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+      console.log("[Stripe Webhook] Received webhook event");
+
+      if (!endpointSecret) {
+        console.error("Missing STRIPE_WEBHOOK_SECRET environment variable");
+        return res.status(500).json({ message: "Missing webhook secret" });
+      }
+
+      // Verify webhook signature
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+        apiVersion: "2025-02-24.acacia", // Updated to match other Stripe instances
+      });
+
+      let event;
+      try {
+        event = stripe.webhooks.constructEvent(
+          payload,
+          sig,
+          endpointSecret
+        );
+      } catch (err: any) {
+        console.error("[Stripe Webhook] Signature verification failed:", err.message);
+        return res.status(400).json({ message: "Webhook signature verification failed" });
+      }
+
+      console.log("[Stripe Webhook] Event type:", event.type);
+      // Handle the checkout.session.completed event
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object;
+        console.log("[Stripe Webhook] Checkout session completed:", session);
+
+        try {
+          await storage.updatePaymentBySessionId(session.id, {
+            status: "completed",
+            stripePaymentIntentId: session.payment_intent
+          });
+
+          const payment = await storage.getPaymentBySessionId(session.id);
+          if (payment) {
+            await storage.updateAuction(payment.auctionId, {
+              paymentStatus: "completed"
+            });
+          }
+
+          console.log("[Stripe Webhook] Payment updated successfully");
+        } catch (error) {
+          console.error("[Stripe Webhook] Error updating payment or auction:", error);
+        }
+      } else if (event.type === "payment_intent.payment_failed") {
+        const failedIntent = event.data.object;
+        console.log("[Stripe Webhook] Payment intent failed:", failedIntent);
+        await storage.updatePaymentByIntentId(failedIntent.id, {
+          status: "failed"
+        });
+        console.log("[Stripe Webhook] Payment intent failed, updated payment status");
+      } else {
+        console.log("[Stripe Webhook] Unhandled event type:", event.type);
+      }
+
+      res.send();
+
+    } catch (error) {
+      console.error("[Stripe Webhook] Error:", error);
+      res.status(500).json({ message: "Webhook processing failed" });
+    }
+  });
