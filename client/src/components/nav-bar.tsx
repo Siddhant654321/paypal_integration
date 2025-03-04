@@ -80,6 +80,11 @@ export default function NavBar() {
               Market Analytics
             </Button>
           </Link>
+          <Link href="/faq">
+            <Button variant="ghost" size="sm" className="flex items-center gap-2">
+              FAQ
+            </Button>
+          </Link>
         </div>
 
         <div className="flex items-center gap-4">
