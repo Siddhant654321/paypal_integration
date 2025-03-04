@@ -14,7 +14,11 @@ const PRODUCTION_URL = 'https://poultryauction.co';
 const DEVELOPMENT_URL = 'http://localhost:5000';
 
 // Use production URL if we're in production, otherwise use development URL
-const BASE_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : DEVELOPMENT_URL;
+// Added explicit check for deployment URL to ensure it's always used in production
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
+const BASE_URL = IS_PRODUCTION ? PRODUCTION_URL : DEVELOPMENT_URL;
+
+console.log(`Using base URL for Stripe Connect: ${BASE_URL}`);
 
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
