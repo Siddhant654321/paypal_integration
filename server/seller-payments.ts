@@ -89,22 +89,28 @@ export class SellerPaymentService {
 
   static async getAccountStatus(accountId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
     try {
+      console.log("[STRIPE] Checking account status for:", accountId);
+
       if (!accountId) {
+        console.log("[STRIPE] No account ID provided, returning not_started");
         return "not_started";
       }
 
       const account = await stripe.accounts.retrieve(accountId);
-      console.log("Retrieved account status:", {
+      console.log("[STRIPE] Retrieved account status:", {
         charges_enabled: account.charges_enabled,
         payouts_enabled: account.payouts_enabled,
         details_submitted: account.details_submitted,
-        requirements: account.requirements
+        requirements: account.requirements?.currently_due,
+        disabled_reason: account.requirements?.disabled_reason
       });
 
       if (account.charges_enabled && account.payouts_enabled) {
+        console.log("[STRIPE] Account fully verified");
         // Update the local status if verified
         const profile = await storage.findProfileByStripeAccountId(accountId);
         if (profile) {
+          console.log("[STRIPE] Updating local profile status to verified");
           await storage.updateSellerStripeAccount(profile.userId, {
             accountId: accountId,
             status: "verified"
@@ -112,17 +118,22 @@ export class SellerPaymentService {
         }
         return "verified";
       } else if (account.details_submitted) {
+        console.log("[STRIPE] Account pending verification");
         return "pending";
       } else if (account.requirements?.disabled_reason) {
+        console.log("[STRIPE] Account rejected:", account.requirements.disabled_reason);
         return "rejected";
       }
 
+      console.log("[STRIPE] Account pending completion");
       return "pending";
     } catch (error) {
-      console.error("Error checking account status:", error);
+      console.error("[STRIPE] Error checking account status:", error);
       if (error instanceof Stripe.errors.PermissionError) {
+        console.log("[STRIPE] Permission error, marking as rejected");
         return "rejected";
       }
+      console.log("[STRIPE] Unknown error, marking as not_started");
       return "not_started";
     }
   }

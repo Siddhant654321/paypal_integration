@@ -61,6 +61,7 @@ const SellerDashboard = () => {
   const { data: stripeStatus, isLoading: stripeStatusLoading, refetch: refetchStripeStatus } = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
     retry: false,
+    refetchInterval: 5000, // Poll every 5 seconds when success=true is present
   });
 
   const { data: balance } = useQuery<Balance>({
@@ -73,7 +74,7 @@ const SellerDashboard = () => {
     enabled: stripeStatus?.status === "verified",
   });
 
-  // Check for Stripe success return
+  // Enhanced check for Stripe success return
   useEffect(() => {
     const checkStripeStatus = async () => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -81,20 +82,31 @@ const SellerDashboard = () => {
       const refresh = urlParams.get('refresh');
 
       if (success === 'true' || refresh === 'true') {
-        // Clear the query params
+        console.log("Stripe redirect detected, checking account status...");
+
+        // Clear the query params first
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
 
-        // Add a slight delay to allow Stripe to process the account update
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Add a longer delay to ensure Stripe has processed the account update
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
-        // Refresh the seller status
-        await refetchStripeStatus();
+        try {
+          // Force refetch the seller status
+          await refetchStripeStatus();
 
-        toast({
-          title: "Account update",
-          description: "Your account status has been updated. If you completed all required steps, your account will be verified shortly.",
-        });
+          toast({
+            title: "Account update",
+            description: "Your account status has been updated. If you completed all required steps, your account will be verified shortly.",
+          });
+        } catch (error) {
+          console.error("Error checking stripe status:", error);
+          toast({
+            title: "Error",
+            description: "Failed to check account status. Please try refreshing the page.",
+            variant: "destructive",
+          });
+        }
       }
     };
 
