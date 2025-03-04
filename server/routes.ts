@@ -318,6 +318,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Check if auction has ended
+      const now = new Date();
+      const endTime = new Date(auction.endDate);
+      if (now > endTime) {
+        return res.status(400).json({ message: "Auction has ended" });
+      }
+
       console.log(`[BID] Amount validated: $${amount/100} for auction "${auction.title}"`);
 
       const bidData = {
@@ -329,6 +336,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[BID] Creating bid with data:", bidData);
       const bid = await storage.createBid(bidData);
       console.log("[BID] Bid created successfully:", bid);
+
+      // Check if bid was placed in the last 5 minutes and extend if necessary
+      const timeUntilEnd = endTime.getTime() - now.getTime();
+      const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+      console.log("[BID EXTENSION] Checking bid timing:", {
+        currentTime: now.toISOString(),
+        auctionEndTime: endTime.toISOString(),
+        timeUntilEnd: timeUntilEnd / 1000, // Convert to seconds for readability
+        extensionThreshold: fiveMinutes / 1000
+      });
+
+      if (timeUntilEnd <= fiveMinutes) {
+        const newEndDate = new Date(now.getTime() + fiveMinutes);
+        console.log("[BID EXTENSION] Extending auction:", {
+          auctionId: auction.id,
+          originalEndDate: endTime.toISOString(),
+          newEndDate: newEndDate.toISOString(),
+          extensionAmount: fiveMinutes / 1000
+        });
+
+        await storage.updateAuction(auction.id, {
+          endDate: newEndDate,
+          status: "active"
+        });
+
+        console.log("[BID EXTENSION] Auction successfully extended");
+
+        // Send notification about auction extension
+        try {
+          const { NotificationService } = await import('./notification-service');
+
+          // Notify seller
+          console.log("[BID EXTENSION] Notifying seller:", auction.sellerId);
+          await NotificationService.notifyAuctionExtended(
+            auction.sellerId,
+            auction.title,
+            newEndDate
+          );
+
+          // Get all unique bidders for this auction
+          const auctionBids = await storage.getBidsForAuction(auction.id);
+          const uniqueBidders = [...new Set(auctionBids.map(bid => bid.bidderId))];
+
+          console.log("[BID EXTENSION] Notifying other bidders:", {
+            totalBidders: uniqueBidders.length,
+            currentBidder: req.user.id
+          });
+
+          // Notify all bidders about the extension
+          for (const bidderId of uniqueBidders) {
+            if (bidderId !== req.user.id) { // Don't notify the current bidder
+              await NotificationService.notifyAuctionExtended(
+                bidderId,
+                auction.title,
+                newEndDate
+              );
+            }
+          }
+
+          console.log("[BID EXTENSION] Successfully notified all participants");
+        } catch (notifyError) {
+          console.error("[BID EXTENSION] Failed to send notifications:", notifyError);
+          // Continue with bid process even if notifications fail
+        }
+      }
 
       // Send notification to the seller about the new bid
       try {
@@ -361,7 +434,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch (notifyError) {
         console.error("[NOTIFICATION] Failed to send bid notification:", notifyError);
-        // Continue with bid response even if notification fails
       }
 
       // Return successful bid response
@@ -408,7 +480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const status = req.query.status as string | undefined;
       const approved = req.query.approved === 'true' ? true : 
-                      req.query.approved === 'false' ? false : undefined;
+                        req.query.approved === 'false' ? false : undefined;
 
       console.log(`[ADMIN] Fetching auctions with status: ${status}, approved: ${approved}`);
 

@@ -10,7 +10,7 @@ export class NotificationService {
   static async createNotification(
     userId: number,
     notification: Omit<InsertNotification, "userId">
-  ): Promise<void> {
+  ): Promise<InsertNotification> {
     try {
       log(`Creating notification for user ${userId}`, notification);
 
@@ -22,7 +22,7 @@ export class NotificationService {
       const createdNotification = await storage.createNotification({
         ...notification,
         userId,
-        read: false, // Explicitly set read status
+        read: false,
         createdAt: new Date(),
       });
 
@@ -43,10 +43,11 @@ export class NotificationService {
         log(`Failed to send email notification: ${emailError}`);
         // Don't throw error here, continue with notification creation
       }
+      return createdNotification;
     } catch (error) {
       log(`Error creating notification: ${error}`);
       console.error('[NOTIFICATION] Full notification error:', error);
-      // Don't throw the error to prevent bid process from failing
+      throw error; // Updated error handling
     }
   }
 
@@ -82,6 +83,52 @@ export class NotificationService {
     );
   }
 
+  static async notifyAuctionExtended(
+    userId: number,
+    auctionTitle: string,
+    newEndDate: Date
+  ): Promise<void> {
+    try {
+      log(`[EXTENSION] Sending extension notification for auction "${auctionTitle}"`, {
+        userId,
+        newEndDate: newEndDate.toISOString()
+      });
+
+      const notification = await this.createNotification(
+        userId,
+        {
+          type: "auction",
+          title: "Auction Extended",
+          message: `The auction "${auctionTitle}" has been extended to ${newEndDate.toLocaleString()} due to last-minute bidding`,
+        }
+      );
+
+      log(`[EXTENSION] Successfully created extension notification`, {
+        notificationId: notification.id,
+        userId,
+        auctionTitle
+      });
+
+      // Check if user has email notifications enabled
+      const user = await storage.getUser(userId);
+      if (user?.emailNotificationsEnabled) {
+        log(`[EXTENSION] Sending email notification to user ${userId}`);
+        try {
+          await EmailService.sendNotification("auction_extended", user, {
+            auctionTitle,
+            newEndTime: newEndDate.toLocaleString(),
+          });
+          log(`[EXTENSION] Successfully sent email notification to user ${userId}`);
+        } catch (emailError) {
+          log(`[EXTENSION] Failed to send email notification: ${emailError}`);
+        }
+      }
+    } catch (error) {
+      log(`[EXTENSION] Error in notifyAuctionExtended: ${error}`);
+      throw error;
+    }
+  }
+
   static async notifyAuctionEnding(
     bidderId: number,
     auctionTitle: string
@@ -101,7 +148,7 @@ export class NotificationService {
     auctionTitle: string,
     isWinner: boolean
   ): Promise<void> {
-    const message = isWinner 
+    const message = isWinner
       ? `Congratulations! You've won the auction "${auctionTitle}"`
       : `The auction "${auctionTitle}" has ended`;
 
@@ -180,23 +227,6 @@ export class NotificationService {
         type: "auction",
         title,
         message,
-      }
-    );
-  }
-
-  static async notifyFulfillment(
-    userId: number,
-    auctionTitle: string,
-    trackingNumber: string,
-    carrier: string
-  ): Promise<void> {
-    log(`Notifying user ${userId} about fulfillment for "${auctionTitle}"`);
-    return this.createNotification(
-      userId,
-      {
-        type: "fulfillment",
-        title: "Item Shipped",
-        message: `Your item "${auctionTitle}" has been shipped! Tracking: ${trackingNumber} (${carrier})`,
       }
     );
   }
