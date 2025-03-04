@@ -23,6 +23,15 @@ console.log("[SERVER] Starting server with environment:", {
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Add Content Security Policy headers
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com"
+  );
+  next();
+});
+
 // Simple request logging
 app.use((req, res, next) => {
   console.log(`[REQUEST] ${req.method} ${req.path}`);
@@ -55,14 +64,21 @@ async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     // Setup frontend
     try {
       console.log("[SERVER] Setting up static file serving...");
-      const buildDir = path.join(process.cwd(), 'server', 'public');
+      const buildDir = path.join(process.cwd(), 'client', 'dist');
 
       if (!fs.existsSync(buildDir)) {
         console.warn("[SERVER] Build directory not found:", buildDir);
-        console.warn("[SERVER] Static file serving will be disabled until build is present");
+        console.warn("[SERVER] Running Vite build...");
+
+        // Use Vite dev server in this case
+        await setupVite(app, server);
+        console.log("[SERVER] Vite dev server setup complete");
       } else {
-        serveStatic(app);
-        console.log("[SERVER] Frontend setup complete");
+        app.use(express.static(buildDir));
+        app.get('*', (req, res) => {
+          res.sendFile(path.join(buildDir, 'index.html'));
+        });
+        console.log("[SERVER] Static file serving setup complete");
       }
     } catch (frontendError) {
       console.error("[SERVER] Frontend setup error:", frontendError);
