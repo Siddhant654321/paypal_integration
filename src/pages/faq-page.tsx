@@ -1,15 +1,21 @@
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { FC } from 'react'
 
-export default function FAQPage() {
+const FAQPage: FC = () => {
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
           Frequently Asked Questions
         </h1>
-        
+
         <Card className="p-6 shadow-lg bg-gradient-to-br from-background/80 to-background border-2">
           <Accordion type="single" collapsible className="space-y-4">
             <AccordionItem value="quality" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
@@ -75,3 +81,5 @@ export default function FAQPage() {
     </div>
   )
 }
+
+export default FAQPage
