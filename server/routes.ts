@@ -571,11 +571,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Auction not found" });
       }
 
-      // Check seller's Stripe status
+      // Check seller's profile exists
       const sellerProfile = await storage.getProfile(existingAuction.sellerId);
-      if (!sellerProfile || sellerProfile.stripeAccountStatus !== "verified") {
+      if (!sellerProfile) {
         return res.status(400).json({ 
-          message: "Cannot approve auction - seller's Stripe account is not verified" 
+          message: "Cannot approve auction - seller profile not found" 
         });
       }
 
