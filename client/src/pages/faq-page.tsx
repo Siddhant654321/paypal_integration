@@ -7,6 +7,7 @@ import {
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { FC } from 'react'
+import { Mail, Facebook, Instagram, Youtube, Globe } from "lucide-react"
 
 const FAQPage: FC = () => {
   return (
@@ -205,6 +206,65 @@ const FAQPage: FC = () => {
                   <li>Issues unrelated to shipping</li>
                 </ul>
               </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Contact Section */}
+        <div className="mt-16 mb-8">
+          <h2 className="text-3xl font-bold text-center mb-8 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Contact Us
+          </h2>
+
+          <Card className="p-6 shadow-lg bg-gradient-to-br from-background/80 to-background border-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <a 
+                href="mailto:pipsnchicks@gmail.com"
+                className="flex items-center gap-2 p-4 rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                <Mail className="h-5 w-5 text-primary" />
+                <span>pipsnchicks@gmail.com</span>
+              </a>
+
+              <a 
+                href="https://facebook.com/pipsnchicks"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 p-4 rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                <Facebook className="h-5 w-5 text-primary" />
+                <span>@pipsnchicks</span>
+              </a>
+
+              <a 
+                href="https://instagram.com/pipsnchicks"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 p-4 rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                <Instagram className="h-5 w-5 text-primary" />
+                <span>@pipsnchicks</span>
+              </a>
+
+              <a 
+                href="https://youtube.com/@pipsnchicks"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 p-4 rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                <Youtube className="h-5 w-5 text-primary" />
+                <span>@pipsnchicks</span>
+              </a>
+
+              <a 
+                href="https://www.pipsnchicks.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 p-4 rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                <Globe className="h-5 w-5 text-primary" />
+                <span>www.pipsnchicks.com</span>
+              </a>
             </div>
           </Card>
         </div>
