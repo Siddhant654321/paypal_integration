@@ -13,31 +13,32 @@ const FAQPage: FC = () => {
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+        <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-primary to-[#1D3557] bg-clip-text text-transparent">
           Frequently Asked Questions
         </h1>
 
-        <Card className="p-6 shadow-lg bg-gradient-to-br from-background/80 to-background border-2">
+        <Card className="p-6 shadow-lg bg-gradient-to-br from-background/90 to-background border-2 border-[#43AA8B]/40">
           <Accordion type="single" collapsible className="space-y-4">
-            <AccordionItem value="quality" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
-              <AccordionTrigger className="text-lg font-semibold px-4">What does "Quality" mean?</AccordionTrigger>
+            <AccordionItem value="quality" className="border-2 border-[#FFBA08]/30 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4 text-[#1D3557]">
+                What does "Quality" mean?
+              </AccordionTrigger>
               <AccordionContent className="px-4 pb-4 space-y-2">
                 <p className="mb-2">We categorize birds to help buyers and sellers find the best fit! Here's how we define them:</p>
                 <div className="space-y-2">
-                  <div className="p-3 bg-primary/10 rounded-lg">
-                    <h3 className="font-semibold">Show Quality</h3>
+                  <div className="p-3 bg-[#43AA8B]/10 rounded-lg border border-[#43AA8B]/20">
+                    <h3 className="font-semibold text-[#1D3557]">Show Quality</h3>
                     <p>Birds bred to meet their breed standards, typically by active members of poultry clubs and organizations.</p>
                   </div>
-                  <div className="p-3 bg-primary/10 rounded-lg">
-                    <h3 className="font-semibold">Production & Purebred</h3>
-                    <p>Purebred birds not bred for show but for production purposes. This includes breeds like Bresse and Cream Legbars, as well as most hatchery stock.</p>
+                  <div className="p-3 bg-[#FFBA08]/10 rounded-lg border border-[#FFBA08]/20">
+                    <h3 className="font-semibold text-[#1D3557]">Production & Purebred</h3>
+                    <p>Birds that maintain breed characteristics but may have minor imperfections. Perfect for backyard flocks.</p>
                   </div>
-                  <div className="p-3 bg-primary/10 rounded-lg">
-                    <h3 className="font-semibold">Fun & Mixed</h3>
-                    <p>Birds bred for unique traits, such as friendly personalities or colorful eggs, including barnyard mixes.</p>
+                  <div className="p-3 bg-[#F77F00]/10 rounded-lg border border-[#F77F00]/20">
+                    <h3 className="font-semibold text-[#1D3557]">Mixed Breeds</h3>
+                    <p>Cross-bred birds with a mix of characteristics from different breeds. Great for variety in your flock.</p>
                   </div>
                 </div>
-                <p className="mt-4 italic">Regardless of category, we prioritize sellers who uphold high standards of animal health, welfare, and customer satisfaction. For more details, check out our YouTube page!</p>
               </AccordionContent>
             </AccordionItem>
 
@@ -69,11 +70,13 @@ const FAQPage: FC = () => {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="shipping" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
-              <AccordionTrigger className="text-lg font-semibold px-4">Do auction prices include shipping?</AccordionTrigger>
+            <AccordionItem value="shipping" className="border-2 border-[#43AA8B]/30 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4 text-[#1D3557]">
+                Do auction prices include shipping?
+              </AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 <p>Yes! Right now, all auction prices include shipping costs. While we are working on a dedicated live bird shipping system, it's still in development.</p>
-                <p className="mt-2">If you need help setting your starting bid or reserve price, we offer an AI tool that calculates pricing based on market trends and your costs. Let us know if you'd like assistance!</p>
+                <p className="mt-2 text-[#1D3557]">If you need help setting your starting bid or reserve price, we offer an <span className="text-[#E63946] font-medium">AI tool</span> that calculates pricing based on market trends and your costs. Let us know if you'd like assistance!</p>
               </AccordionContent>
             </AccordionItem>
 
