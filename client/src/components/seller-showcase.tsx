@@ -5,7 +5,6 @@ import { Store, MapPin, Award, User as UserIcon, ArrowRight } from "lucide-react
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { useNavigate } from "react-router-dom";
 
 interface SellerShowcaseProps {
   seller: User & {
@@ -15,17 +14,12 @@ interface SellerShowcaseProps {
 }
 
 export function SellerShowcase({ seller }: SellerShowcaseProps) {
-  const navigate = useNavigate();
   const successfulAuctions = seller.auctions
     .filter(auction => auction.status === "ended" && auction.winningBidderId)
     .length;
 
   const activeAuctions = seller.auctions
     .filter(auction => auction.status === "active" && auction.approved);
-
-  const handleViewProfile = () => {
-    navigate(`/seller/${seller.id}`);
-  };
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
@@ -73,10 +67,12 @@ export function SellerShowcase({ seller }: SellerShowcaseProps) {
             <p className="text-sm text-muted-foreground">
               {activeAuctions.length} Active {activeAuctions.length === 1 ? 'Auction' : 'Auctions'}
             </p>
-            <Button onClick={handleViewProfile} variant="ghost" size="sm" className="font-medium">
-              View Profile
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+            <Link href={`/seller/${seller.id}`}>
+              <Button variant="ghost" size="sm" className="font-medium">
+                View Profile
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
           </div>
         </div>
       </CardContent>
