@@ -19,6 +19,7 @@ import FulfillmentPage from "@/pages/fulfillment-page";
 import SellerProfilePage from "@/pages/seller-profile";
 import BuyerRequestPage from "@/pages/buyer-request-page";
 import EditBuyerRequestPage from "@/pages/edit-buyer-request";
+import FAQPage from "@/pages/faq-page";
 
 function Router() {
   return (
@@ -39,6 +40,7 @@ function Router() {
         <Route path="/analytics" component={AnalyticsPage} />
         <Route path="/buyer-requests/:id" component={BuyerRequestPage} />
         <Route path="/buyer-requests/:id/edit" component={EditBuyerRequestPage} />
+        <Route path="/faq" component={FAQPage} />
         <Route component={NotFound} />
       </Switch>
     </div>
