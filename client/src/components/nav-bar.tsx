@@ -84,9 +84,13 @@ export default function NavBar() {
           <Link href="/">
             <div className="flex items-center gap-2">
               <img 
-                src={`/images/logo.png?t=${new Date().getTime()}`}
+                src={`/images/logo.png?v=20240918`}
                 alt="Pips 'n Chicks Auctions"
                 className="h-10 w-auto object-contain"
+                onError={(e) => {
+                  console.error("Logo failed to load, attempting fallback");
+                  e.currentTarget.src = `/attached_assets/Photoroom-20240916_072734.png?v=20240918`;
+                }}
               />
             </div>
           </Link>
