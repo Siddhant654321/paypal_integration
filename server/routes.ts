@@ -865,7 +865,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Trying to parse dates from all possible formats");
 
       // Direct date field handling
-      if (data.startDate) {
+      if(data.startDate) {
         console.log("Found startDate field:", data.startDate);
         if (typeof data.startDate === 'string') {
           try {
@@ -2199,6 +2199,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[ADMIN] Error deleting user:", error);
       res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  // Add seller profile endpoint
+  app.get("/api/sellers/:id", async (req, res) => {
+    try {
+      const sellerId = parseInt(req.params.id);
+      console.log(`[SELLER] Fetching seller profile for ID: ${sellerId}`);
+
+      // Get the seller
+      const seller = await storage.getUser(sellerId);
+      if (!seller) {
+        console.log(`[SELLER] Seller not found with ID: ${sellerId}`);
+        return res.status(404).json({ message: "Seller not found" });
+      }
+
+      // Get seller's profile
+      const profile = await storage.getProfile(sellerId);
+      if (!profile) {
+        console.log(`[SELLER] Profile not found for seller ID: ${sellerId}`);
+        return res.status(404).json({ message: "Seller profile not found" });
+      }
+
+      // Get seller's auctions
+      const auctions = await storage.getAuctions({ sellerId });
+      console.log(`[SELLER] Found ${auctions.length} auctions for seller ${sellerId}`);
+
+      // Combine and return all data
+      const sellerData = {
+        ...seller,
+        profile,
+        auctions
+      };
+
+      console.log(`[SELLER] Successfully compiled seller data for ID: ${sellerId}`);
+      res.json(sellerData);
+    } catch (error) {
+      console.error("[SELLER] Error fetching seller profile:", error);
+      res.status(500).json({ message: "Failed to fetch seller profile" });
     }
   });
 
