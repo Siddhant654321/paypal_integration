@@ -87,11 +87,13 @@ function AdminDashboard() {
 
   // Auction Management Queries
   const { data: pendingAuctions, isLoading: isLoadingPendingAuctions } = useQuery<Auction[]>({
-    queryKey: ["/api/admin/auctions", { approved: false }],
+    queryKey: ["/api/admin/auctions", "pending"],
+    queryFn: () => apiRequest("GET", "/api/admin/auctions?approved=false"),
   });
 
   const { data: approvedAuctions, isLoading: isLoadingApprovedAuctions } = useQuery<Auction[]>({
-    queryKey: ["/api/auctions", { approved: true }],
+    queryKey: ["/api/admin/auctions", "approved"],
+    queryFn: () => apiRequest("GET", "/api/admin/auctions?approved=true"),
   });
 
   // Mutations
@@ -121,8 +123,8 @@ function AdminDashboard() {
       await apiRequest("DELETE", `/api/admin/auctions/${auctionId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions", "pending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions", "approved"] });
       toast({
         title: "Success",
         description: "Auction has been deleted",
@@ -142,8 +144,9 @@ function AdminDashboard() {
       await apiRequest("POST", `/api/admin/auctions/${auctionId}/approve`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      // Invalidate both pending and approved auction queries with their specific keys
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions", "pending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions", "approved"] });
       toast({
         title: "Success",
         description: "Auction has been approved",
@@ -999,8 +1002,8 @@ function EditAuctionDialog({ auction }: { auction: Auction }) {
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions", "pending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions", "approved"] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction.id}`] });
       setOpen(false);
       toast({
