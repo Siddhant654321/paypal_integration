@@ -1,10 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic } from "./vite";
+import { setupVite } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
-import fs from 'fs';
-import path from 'path';
 
 const app = express();
 const DEFAULT_PORT = 5000;
@@ -61,25 +59,11 @@ async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     const server = await registerRoutes(app);
     console.log("[SERVER] Routes setup complete");
 
-    // Setup frontend
+    // Setup Vite dev server for now
     try {
-      console.log("[SERVER] Setting up static file serving...");
-      const buildDir = path.join(process.cwd(), 'client', 'dist');
-
-      if (!fs.existsSync(buildDir)) {
-        console.warn("[SERVER] Build directory not found:", buildDir);
-        console.warn("[SERVER] Running Vite build...");
-
-        // Use Vite dev server in this case
-        await setupVite(app, server);
-        console.log("[SERVER] Vite dev server setup complete");
-      } else {
-        app.use(express.static(buildDir));
-        app.get('*', (req, res) => {
-          res.sendFile(path.join(buildDir, 'index.html'));
-        });
-        console.log("[SERVER] Static file serving setup complete");
-      }
+      console.log("[SERVER] Setting up Vite dev server...");
+      await setupVite(app, server);
+      console.log("[SERVER] Vite dev server setup complete");
     } catch (frontendError) {
       console.error("[SERVER] Frontend setup error:", frontendError);
       // Continue server startup even if frontend setup fails
