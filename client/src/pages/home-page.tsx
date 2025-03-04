@@ -180,7 +180,11 @@ export default function HomePage() {
                 .filter(seller => 
                   seller.approved === true && 
                   seller.profile && 
-                  seller.role === "seller"
+                  seller.role === "seller" &&
+                  seller.auctions.some(auction => 
+                    auction.status === "active" && 
+                    auction.approved === true
+                  )
                 )
                 .map((seller) => (
                   <SellerShowcase key={seller.id} seller={seller} />

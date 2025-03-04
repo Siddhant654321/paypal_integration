@@ -765,7 +765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sellers = await storage.getUsers({ role: "seller" });
       const sellerAdmins = await storage.getUsers({ role: "seller_admin" });
       const allSellers = [...sellers, ...sellerAdmins];
-      
+
       const statusList = await Promise.all(allSellers.map(async (seller) => {
         const profile = await storage.getProfile(seller.id);
         return {
@@ -775,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stripeAccountStatus: profile?.stripeAccountStatus
         };
       }));
-      
+
       res.json(statusList);
     } catch (error) {
       console.error("Error fetching seller Stripe statuses:", error);
@@ -1552,31 +1552,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get unread notifications count" });
     }
   });
-  
+
   // Add seller approval endpoint
   app.post("/api/admin/sellers/:id/approve", requireAdmin, async (req, res) => {
     try {
       const sellerId = parseInt(req.params.id);
       console.log(`[ADMIN] Approving seller with ID ${sellerId}`);
-      
+
       // Find the user associated with this seller ID
       const users = await storage.getUsers();
       const sellerUser = users.find(user => user.id === sellerId);
-      
+
       if (!sellerUser) {
         return res.status(404).json({ message: "Seller not found" });
       }
-      
+
       // Update the user's approved status
       await storage.updateUser(sellerId, { approved: true });
-      
+
       // Send notification to the user
       await NotificationService.createNotification(sellerId, {
         type: "account",
         title: "Account Approved",
         message: "Your seller account has been approved! You can now create auctions."
       });
-      
+
       console.log(`[ADMIN] Successfully approved seller ${sellerId}`);
       res.json({ success: true });
     } catch (error) {
@@ -1608,9 +1608,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         })
       );
-      // Filter out sellers without profiles or recent auctions
+      // Filter out sellers without profiles or active approved auctions
       const activeSellers = sellersWithDetails.filter(
-        seller => seller.profile && seller.auctions.length > 0
+        seller => seller.profile && 
+                 seller.auctions.some(auction => 
+                   auction.status === "active" && 
+                   auction.approved === true
+                 )
       );
       res.json(activeSellers);
     } catch (error) {
@@ -1837,9 +1841,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         })
       );
-      // Filter out sellers without profiles or recent auctions
+      // Filter out sellers without profiles or active approved auctions
       const activeSellers = sellersWithDetails.filter(
-        seller => seller.profile && seller.auctions.length > 0
+        seller => seller.profile && 
+                 seller.auctions.some(auction => 
+                   auction.status === "active" && 
+                   auction.approved === true
+                 )
       );
       res.json(activeSellers);
     } catch (error) {
