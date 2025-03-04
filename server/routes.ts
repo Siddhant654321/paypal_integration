@@ -553,7 +553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update the auction approval endpoint to check Stripe status
+  // Update the auction approval endpoint
   app.post("/api/admin/auctions/:id/approve", requireAdmin, async (req, res) => {
     try {
       const auctionId = parseInt(req.params.id);
@@ -569,14 +569,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingAuction) {
         console.log(`[ADMIN APPROVE] Auction ${auctionId} not found`);
         return res.status(404).json({ message: "Auction not found" });
-      }
-
-      // Check seller's Stripe status
-      const sellerProfile = await storage.getProfile(existingAuction.sellerId);
-      if (!sellerProfile || sellerProfile.stripeAccountStatus !== "verified") {
-        return res.status(400).json({ 
-          message: "Cannot approve auction - seller's Stripe account is not verified" 
-        });
       }
 
       // Only allow approval of pending auctions
