@@ -14,7 +14,7 @@ const PRODUCTION_URL = 'https://poultryauction.co';
 const DEVELOPMENT_URL = 'http://localhost:5000';
 
 // Use production URL if we're in production, otherwise use development URL
-// Added explicit check for deployment URL to ensure it's always used in production
+// Added explicit check for Replit environment
 const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
 const BASE_URL = IS_PRODUCTION ? PRODUCTION_URL : DEVELOPMENT_URL;
 
