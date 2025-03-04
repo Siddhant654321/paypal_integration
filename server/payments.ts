@@ -18,8 +18,8 @@ const INSURANCE_FEE = 800; // $8.00 in cents
 const PRODUCTION_URL = 'https://poultryauction.co';
 const DEVELOPMENT_URL = 'http://localhost:5000';
 
-// Force production URL for Stripe redirects
-const BASE_URL = PRODUCTION_URL;
+// Use production URL if we're in production, otherwise use development URL
+const BASE_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : DEVELOPMENT_URL;
 
 export class PaymentService {
   static async createCheckoutSession(
@@ -31,13 +31,6 @@ export class PaymentService {
     payment: InsertPayment;
   }> {
     try {
-      console.log("[STRIPE] Creating checkout session:", {
-        auctionId,
-        buyerId,
-        includeInsurance,
-        baseUrl: BASE_URL
-      });
-
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
@@ -69,14 +62,6 @@ export class PaymentService {
         stripePaymentIntentId: '',
         status: 'pending' as const,
       };
-
-      console.log("[STRIPE] Creating Checkout session with data:", {
-        baseAmount,
-        insuranceFee,
-        totalAmount,
-        platformFee,
-        sellerPayout
-      });
 
       // Create Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
@@ -122,12 +107,6 @@ export class PaymentService {
         cancel_url: `${BASE_URL}/auction/${auctionId}?payment=cancelled`,
       });
 
-      console.log("[STRIPE] Checkout session created:", {
-        sessionId: session.id,
-        successUrl: `${BASE_URL}/auction/${auctionId}?payment=success`,
-        cancelUrl: `${BASE_URL}/auction/${auctionId}?payment=cancelled`
-      });
-
       // Update the payment with the Stripe session ID
       const payment = await storage.insertPayment({
         ...paymentData,
@@ -145,9 +124,9 @@ export class PaymentService {
       };
 
     } catch (error) {
-      console.error("[STRIPE] Checkout session creation error:", error);
+      console.error("Stripe session creation error:", error);
       if (error instanceof Stripe.errors.StripeError) {
-        console.error("[STRIPE] API Error:", {
+        console.error("Stripe API Error:", {
           type: error.type,
           code: error.code,
           message: error.message

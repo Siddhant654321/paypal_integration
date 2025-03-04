@@ -13,28 +13,28 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 const PRODUCTION_URL = 'https://poultryauction.co';
 const DEVELOPMENT_URL = 'http://localhost:5000';
 
-// Force production URL for Stripe redirects
-const BASE_URL = PRODUCTION_URL;
+// Use production URL if we're in production, otherwise use development URL
+const BASE_URL = process.env.NODE_ENV === 'production' ? PRODUCTION_URL : DEVELOPMENT_URL;
 
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
-      console.log("[STRIPE] Creating seller account for:", profile.email);
-      console.log("[STRIPE] Using base URL:", BASE_URL);
+      console.log("Creating seller account for:", profile.email);
+      console.log("Using base URL:", BASE_URL);
 
       // Clean up any existing account first
       if (profile.stripeAccountId) {
         try {
-          console.log("[STRIPE] Deleting existing account:", profile.stripeAccountId);
+          console.log("Deleting existing Stripe account:", profile.stripeAccountId);
           await stripe.accounts.del(profile.stripeAccountId);
-          console.log("[STRIPE] Successfully deleted existing account");
+          console.log("Successfully deleted existing account");
         } catch (error) {
-          console.warn("[STRIPE] Could not delete existing account:", error);
+          console.warn("Could not delete existing account:", error);
         }
       }
 
       // Create a new Connect Express account
-      console.log("[STRIPE] Creating new Connect account");
+      console.log("Creating new Stripe Connect account");
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US',
@@ -49,7 +49,7 @@ export class SellerPaymentService {
           mcc: "0742", // Veterinary Services, which includes animal breeding
         },
       });
-      console.log("[STRIPE] Account created with ID:", account.id);
+      console.log("Stripe account created with ID:", account.id);
 
       // Create an account link for onboarding
       const accountLink = await stripe.accountLinks.create({
@@ -64,7 +64,7 @@ export class SellerPaymentService {
         throw new Error("Failed to generate Stripe Connect URL");
       }
 
-      console.log("[STRIPE] Generated account link with return URL:", `${BASE_URL}/seller-dashboard?success=true`);
+      console.log("Generated account link with return URL:", `${BASE_URL}/seller-dashboard?success=true`);
 
       // Update profile with Stripe account ID and initial status
       await storage.updateSellerStripeAccount(profile.userId, {
@@ -78,7 +78,7 @@ export class SellerPaymentService {
       };
 
     } catch (error) {
-      console.error("[STRIPE] Error creating seller account:", error);
+      console.error("Error creating seller account:", error);
       throw error;
     }
   }
