@@ -2,9 +2,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { type Auction } from "@shared/schema";
+import { formatDistanceToNow } from "date-fns";
+import { Link } from "wouter";
+import { Store, MapPin, CreditCard } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { formatPrice } from "../utils/formatters";
+import React from 'react';
+
+type Props = {
+  auction: Auction;
+  showStatus?: boolean;
+  actions?: React.ReactNode;
+};
 
 // Helper function to get a valid image URL from auction
-function getValidImageUrl(auction: any): string {
+function getValidImageUrl(auction: Auction): string {
   // First check if there's a valid imageUrl
   if (auction.imageUrl && auction.imageUrl.trim() !== '') {
     // Ensure URL has proper protocol
@@ -13,7 +25,7 @@ function getValidImageUrl(auction: any): string {
     }
     return auction.imageUrl;
   }
-  
+
   // Then check for images array
   if (auction.images && Array.isArray(auction.images) && auction.images.length > 0) {
     const firstImage = auction.images[0];
@@ -25,24 +37,12 @@ function getValidImageUrl(auction: any): string {
       return firstImage;
     }
   }
-  
+
   // Return a placeholder if no valid image is found
   return '/images/placeholder.jpg';
 }
 
-
-import { formatDistanceToNow } from "date-fns";
-import { Link } from "wouter";
-import { Store, MapPin, CreditCard } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
-import { formatPrice } from "../utils/formatters";
-
-type Props = {
-  auction: Auction;
-  showStatus?: boolean;
-};
-
-export default function AuctionCard({ auction, showStatus }: Props) {
+export default function AuctionCard({ auction, showStatus, actions }: Props) {
   const { user } = useAuth();
   const isActive = new Date() >= new Date(auction.startDate) && new Date() <= new Date(auction.endDate);
 
@@ -58,7 +58,7 @@ export default function AuctionCard({ auction, showStatus }: Props) {
           alt={auction.title}
           className="w-full h-full object-cover"
           onError={(e) => {
-            e.currentTarget.src = '/images/placeholder.jpg'; // Set a fallback image
+            e.currentTarget.src = '/images/placeholder.jpg';
           }}
         />
       </div>
@@ -78,25 +78,6 @@ export default function AuctionCard({ auction, showStatus }: Props) {
         <p className="text-sm text-muted-foreground line-clamp-2">
           {auction.description}
         </p>
-        {auction.sellerProfile && (
-          <div className="mt-2 pt-2 border-t">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Store className="h-4 w-4" />
-              <span>{auction.sellerProfile.businessName || "Anonymous Seller"}</span>
-            </div>
-            {auction.sellerProfile.state && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                <MapPin className="h-3 w-3" />
-                <span>Shipping from {auction.sellerProfile.state}</span>
-              </div>
-            )}
-            {auction.sellerProfile.breedSpecialty && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Specializes in: {auction.sellerProfile.breedSpecialty}
-              </p>
-            )}
-          </div>
-        )}
       </CardContent>
       <CardFooter className="p-4 pt-0 flex flex-col gap-2">
         <div className="flex w-full justify-between items-center">
@@ -110,9 +91,12 @@ export default function AuctionCard({ auction, showStatus }: Props) {
                 : "Auction ended"}
             </div>
           </div>
-          <Link href={`/auction/${auction.id}`}>
-            <Button variant="secondary">View Details</Button>
-          </Link>
+          <div className="flex gap-2 items-center">
+            {actions}
+            <Link href={`/auction/${auction.id}`}>
+              <Button variant="secondary">View Details</Button>
+            </Link>
+          </div>
         </div>
 
         {/* Only show Pay Now button to the auction winner */}

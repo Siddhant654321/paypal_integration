@@ -273,6 +273,11 @@ function AdminDashboard() {
     setSelectedAuction(null);
   };
 
+  // Add this function to handle editing auctions
+  const handleEditAuction = (auction: Auction) => {
+    setSelectedAuction(auction);
+  };
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
@@ -533,113 +538,65 @@ function AdminDashboard() {
                 ) : !pendingAuctions?.length ? (
                   <p className="text-muted-foreground">No pending auctions</p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredPendingAuctions.map((auction) => {
                       const seller = approvedSellers?.find(seller => seller.id === auction.sellerId);
                       const sellerStripeStatus = sellerStripeStatuses?.find(s => s.sellerId === auction.sellerId);
                       const isStripeVerified = sellerStripeStatus?.status === "verified";
 
                       return (
-                        <div
+                        <AuctionCard
                           key={auction.id}
-                          className="flex items-center justify-between p-4 border rounded-lg"
-                        >
-                          <div className="flex-grow">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium">{auction.title}</p>
-                              {!isStripeVerified && (
-                                <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
-                                  <AlertCircle className="h-4 w-4 mr-1" />
-                                  Stripe setup incomplete
-                                </Badge>
-                              )}
+                          auction={auction}
+                          showStatus
+                          actions={
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => handleEditAuction(auction)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </Button>
+                              <Button
+                                onClick={() => approveAuctionMutation.mutate(auction.id)}
+                                disabled={approveAuctionMutation.isPending}
+                                variant="default"
+                                size="sm"
+                              >
+                                {approveAuctionMutation.isPending && (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                )}
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                                Approve
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="destructive" size="sm">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Auction</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this auction? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deleteAuctionMutation.mutate(auction.id)}
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
-                            <div className="flex gap-2 mt-1">
-                              <Badge>{auction.species}</Badge>
-                              <Badge variant="outline">{auction.category}</Badge>
-                            </div>
-                            <div className="mt-2 text-sm text-muted-foreground">
-                              <p>
-                                <span className="font-semibold">Seller: </span>
-                                {seller ? seller.username : "Unknown"}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={() => setSelectedAuction(auction)}
-                              variant="outline"
-                              size="sm"
-                            >
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  disabled={approveAuctionMutation.isPending}
-                                  variant="default"
-                                >
-                                  {approveAuctionMutation.isPending && (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  )}
-                                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                                  Approve
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Approve Auction</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to approve this auction? It will be
-                                    visible to all buyers.
-                                    {!isStripeVerified && (
-                                      <div className="mt-2 p-2 bg-yellow-100 border border-yellow-400 rounded">
-                                        <span className="text-yellow-800">
-                                          Note: This seller's Stripe account is not verified yet.
-                                          The auction can still be approved.
-                                        </span>
-                                      </div>
-                                    )}
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => approveAuctionMutation.mutate(auction.id)}
-                                  >
-                                    Approve
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Auction</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this auction? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteAuctionMutation.mutate(auction.id)}
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </div>
+                          }
+                        />
                       );
                     })}
                   </div>
@@ -670,10 +627,11 @@ function AdminDashboard() {
                         <AuctionCard
                           key={auction.id}
                           auction={auction}
+                          showStatus
                           actions={
                             <div className="flex gap-2">
                               <Button
-                                onClick={() => setSelectedAuction(auction)}
+                                onClick={() => handleEditAuction(auction)}
                                 variant="outline"
                                 size="sm"
                               >
@@ -965,8 +923,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
     },
   });
 
-  return (
-    <Dialog>
+  return (    <Dialog>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           View Bids
