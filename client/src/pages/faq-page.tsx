@@ -75,6 +75,65 @@ const FAQPage: FC = () => {
                 <p className="mt-2">If you need help setting your starting bid or reserve price, we offer an AI tool that calculates pricing based on market trends and your costs. Let us know if you'd like assistance!</p>
               </AccordionContent>
             </AccordionItem>
+
+            <AccordionItem value="payment" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4">How do payments work?</AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <p>We use Stripe for secure payment processing. When you win an auction, you'll have 24 hours to complete your payment. We accept all major credit cards and digital wallets.</p>
+                <p className="mt-2 text-muted-foreground">Sellers receive their payments within 2-3 business days after successful delivery confirmation.</p>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="auction-duration" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4">How long do auctions last?</AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <p>Auction durations are set by sellers and typically run between 3-7 days. The exact end time is clearly displayed on each listing.</p>
+                <p className="mt-2">We use automatic time extension: if a bid is placed in the last 5 minutes, the auction extends by 5 minutes to prevent sniping.</p>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="pricing" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4">How are prices determined?</AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <p>Sellers set their starting prices and optional reserve prices. Our AI pricing tool can suggest optimal starting prices based on:</p>
+                <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                  <li>Recent sales of similar birds</li>
+                  <li>Seasonal market trends</li>
+                  <li>Breed popularity and rarity</li>
+                  <li>Quality category</li>
+                </ul>
+                <p className="mt-2 italic">Remember: The final price is determined by bidder interest and market demand!</p>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="bidding" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4">How does bidding work?</AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <p>Bidding is straightforward:</p>
+                <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                  <li>Enter your maximum bid amount</li>
+                  <li>Our system will automatically bid up to your maximum</li>
+                  <li>You'll receive notifications if you're outbid</li>
+                  <li>Winner notification and payment instructions are sent automatically</li>
+                </ul>
+                <p className="mt-2 text-muted-foreground">Pro tip: Set up email notifications to stay updated on your bids!</p>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="seller-requirements" className="border-2 rounded-lg bg-background/50 hover:bg-background/80 transition-colors">
+              <AccordionTrigger className="text-lg font-semibold px-4">What are the requirements for sellers?</AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <p>To maintain quality standards, sellers must:</p>
+                <ul className="list-disc list-inside space-y-1 ml-4 mt-2">
+                  <li>Complete seller verification</li>
+                  <li>Provide clear, recent photos of birds</li>
+                  <li>Have appropriate shipping materials and experience</li>
+                  <li>Maintain good feedback ratings</li>
+                  <li>Follow our health and welfare guidelines</li>
+                </ul>
+                <p className="mt-2 italic">New sellers receive guidance and support throughout the process!</p>
+              </AccordionContent>
+            </AccordionItem>
           </Accordion>
         </Card>
       </div>
