@@ -390,20 +390,90 @@ function AdminDashboard() {
                   ) : (
                     <div className="space-y-2">
                       {filteredSellers.map((seller) => (
-                        <div
-                          key={seller.id}
-                          className="flex items-center justify-between p-4 border rounded-lg"
-                        >
-                          <div>
-                            <button
-                              className="font-medium hover:underline"
-                              onClick={() => setSelectedUser({ id: seller.id, username: seller.username, role: seller.role })}
-                            >
-                              {seller.username}
-                            </button>
-                            <Badge variant="outline">{seller.role}</Badge>
-                          </div>
-                          <div className="flex gap-2">
+                        <Card key={seller.id}>
+                          <CardHeader>
+                            <CardTitle>{seller.username}</CardTitle>
+                            <CardDescription>
+                              Role: {seller.role}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div>
+                              <strong>Status:</strong>{" "}
+                              {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status ? (
+                                <Badge
+                                  variant={
+                                    sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status === "complete"
+                                      ? "success"
+                                      : sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status === "pending"
+                                        ? "outline"
+                                        : "secondary"
+                                  }
+                                >
+                                  {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status.replace("_", " ")}
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive">Not Started</Badge>
+                              )}
+                            </div>
+                            {/* Add approval button for pending sellers */}
+                            {!seller.approved && (
+                              <div className="mt-4">
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button>Approve Seller</Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Approve Seller</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to approve {seller.username} as a seller?
+                                        {!sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status || sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status !== "complete" ? (
+                                          <div className="mt-2 text-destructive">
+                                            Warning: This seller has not completed their Stripe verification.
+                                          </div>
+                                        ) : null}
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => {
+                                          // Implement seller approval
+                                          fetch(`/api/admin/sellers/${seller.id}/approve`, {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" }
+                                          })
+                                            .then(res => {
+                                              if (!res.ok) throw new Error("Failed to approve seller");
+                                              return res.json();
+                                            })
+                                            .then(() => {
+                                              queryClient.invalidateQueries({ queryKey: ["/api/admin/sellers/stripe-status"] });
+                                              toast({
+                                                title: "Success",
+                                                description: `${seller.username} has been approved as a seller.`
+                                              });
+                                            })
+                                            .catch(err => {
+                                              console.error("Error approving seller:", err);
+                                              toast({
+                                                title: "Error",
+                                                description: "Failed to approve seller: " + err.message,
+                                                variant: "destructive"
+                                              });
+                                            });
+                                        }}
+                                      >
+                                        Approve
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            )}
+                          </CardContent>
+                          <div className="flex gap-2 p-4">
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="destructive" size="sm">
@@ -432,7 +502,7 @@ function AdminDashboard() {
                               : <AlertCircle className="h-4 w-4 text-amber-500" title="No Stripe account" />
                             }
                           </div>
-                        </div>
+                        </Card>
                       ))}
                     </div>
                   )}

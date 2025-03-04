@@ -53,6 +53,33 @@ export default function NavBar() {
     },
   });
 
+  // Add mark all as read mutation
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      console.log("[NavBar] Marking all notifications as read");
+      return axios.post("/api/notifications/mark-all-read");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      toast({
+        title: "Notifications",
+        description: "All notifications marked as read"
+      });
+    },
+    onError: (err) => {
+      console.error("[NavBar] Error marking all notifications as read:", err);
+      toast({
+        title: "Error",
+        description: "Failed to mark notifications as read",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleMarkAllRead = () => {
+    markAllReadMutation.mutate();
+  };
+
   return (
     <div className="bg-accent p-4">
       <div className="container mx-auto flex justify-between items-center">
@@ -114,9 +141,7 @@ export default function NavBar() {
               <div className="flex items-center gap-2">
                 <NotificationsMenu 
                   notifications={notifications} 
-                  onMarkAllRead={() => {
-                    // markAllReadMutation will be handled in the NotificationsMenu component
-                  }}
+                  onMarkAllRead={handleMarkAllRead} 
                 />
 
                 <Link href="/profile">

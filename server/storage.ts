@@ -40,6 +40,7 @@ export interface IStorage {
   markNotificationAsRead(notificationId: number): Promise<Notification>;
   markAllNotificationsAsRead(userId: number): Promise<void>;
   getUnreadNotificationsCount(userId: number): Promise<number>;
+  updateUser(userId: number, updates: Partial<User>): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -747,6 +748,19 @@ export class DatabaseStorage implements IStorage {
       log(`Error deleting user ${userId}: ${error}`);
       throw error;
     }
+  }
+
+  async updateUser(userId: number, updates: Partial<User>): Promise<User> {
+    log(`Updating user ${userId}`, "users");
+    await db.update(users)
+      .set(updates)
+      .where(eq(users.id, userId));
+
+    const updatedUser = await this.getUser(userId);
+    if (!updatedUser) {
+      throw new Error(`User ${userId} not found after update`);
+    }
+    return updatedUser;
   }
   async createNotification(insertNotification: InsertNotification): Promise<Notification> {
     try {

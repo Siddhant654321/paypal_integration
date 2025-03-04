@@ -1548,6 +1548,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get unread notifications count" });
     }
   });
+  
+  // Add seller approval endpoint
+  app.post("/api/admin/sellers/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const sellerId = parseInt(req.params.id);
+      console.log(`[ADMIN] Approving seller with ID ${sellerId}`);
+      
+      // Find the user associated with this seller ID
+      const users = await storage.getUsers();
+      const sellerUser = users.find(user => user.id === sellerId);
+      
+      if (!sellerUser) {
+        return res.status(404).json({ message: "Seller not found" });
+      }
+      
+      // Update the user's approved status
+      await storage.updateUser(sellerId, { approved: true });
+      
+      // Send notification to the user
+      await NotificationService.createNotification(sellerId, {
+        type: "account",
+        title: "Account Approved",
+        message: "Your seller account has been approved! You can now create auctions."
+      });
+      
+      console.log(`[ADMIN] Successfully approved seller ${sellerId}`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error approving seller:", error);
+      res.status(500).json({ message: "Failed to approve seller" });
+    }
+  });
 
   // Add this new route after the existing /api/sellers/status route
   app.get("/api/sellers/active", async (req, res) => {

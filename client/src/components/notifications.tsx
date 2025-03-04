@@ -22,15 +22,17 @@ export function NotificationsMenu({
   notifications = [],
   onMarkAllRead
 }: NotificationsMenuProps) {
-  // Add debug logging
+  // Enhanced debug logging
   console.log("[NotificationsMenu] Rendering with notifications:", {
     total: notifications.length,
+    unread: notifications.filter(n => !n.read).length,
     notifications: notifications.map(n => ({
       id: n.id,
       type: n.type,
       title: n.title,
       read: n.read,
-      timestamp: n.createdAt
+      createdAt: n.createdAt,
+      message: n.message?.substring(0, 30) + (n.message && n.message.length > 30 ? '...' : '')
     }))
   });
 
