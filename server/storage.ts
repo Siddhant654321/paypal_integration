@@ -1,6 +1,6 @@
-import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest } from "@shared/schema";
+import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest, notifications, type Notification, type InsertNotification } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { Store } from "express-session";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
@@ -34,6 +34,12 @@ export interface IStorage {
     lastLoginAfter?: Date;
   }): Promise<User[]>;
   deleteUser(userId: number): Promise<void>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotificationsByUserId(userId: number): Promise<Notification[]>;
+  getLastNotification(): Promise<Notification | undefined>;
+  markNotificationAsRead(notificationId: number): Promise<Notification>;
+  markAllNotificationsAsRead(userId: number): Promise<void>;
+  getUnreadNotificationsCount(userId: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -487,24 +493,81 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getNotificationsByUserId(userId: number): Promise<any[]> {
-    log(`Getting notifications for user ${userId}`);
-    return []; 
+  async getNotificationsByUserId(userId: number): Promise<Notification[]> {
+    try {
+      log(`Getting notifications for user ${userId}`);
+      const results = await db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+        .orderBy(desc(notifications.createdAt));
+
+      log(`Found ${results.length} notifications for user ${userId}`);
+      return results;
+    } catch (error) {
+      log(`Error getting notifications for user ${userId}: ${error}`);
+      throw error;
+    }
   }
 
-  async getLastNotification(): Promise<any | undefined> {
-    return undefined;
+  async getLastNotification(): Promise<Notification | undefined> {
+    try {
+      const [notification] = await db
+        .select()
+        .from(notifications)
+        .orderBy(desc(notifications.createdAt))
+        .limit(1);
+      return notification;
+    } catch (error) {
+      log(`Error getting last notification: ${error}`);
+      throw error;
+    }
   }
 
-  async markNotificationAsRead(notificationId: number): Promise<any> {
-    return { id: notificationId, read: true };
+  async markNotificationAsRead(notificationId: number): Promise<Notification> {
+    try {
+      log(`Marking notification ${notificationId} as read`);
+      const [notification] = await db
+        .update(notifications)
+        .set({ read: true })
+        .where(eq(notifications.id, notificationId))
+        .returning();
+      return notification;
+    } catch (error) {
+      log(`Error marking notification ${notificationId} as read: ${error}`);
+      throw error;
+    }
   }
 
   async markAllNotificationsAsRead(userId: number): Promise<void> {
+    try {
+      log(`Marking all notifications as read for user ${userId}`);
+      await db
+        .update(notifications)
+        .set({ read: true })
+        .where(eq(notifications.userId, userId));
+    } catch (error) {
+      log(`Error marking all notifications as read for user ${userId}: ${error}`);
+      throw error;
+    }
   }
 
   async getUnreadNotificationsCount(userId: number): Promise<number> {
-    return 0;
+    try {
+      const [result] = await db
+        .select({ count: db.fn.count() })
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.userId, userId),
+            eq(notifications.read, false)
+          )
+        );
+      return Number(result.count) || 0;
+    } catch (error) {
+      log(`Error getting unread notifications count for user ${userId}: ${error}`);
+      return 0;
+    }
   }
 
   async getPaymentBySessionId(sessionId: string): Promise<any | undefined> {
