@@ -1,34 +1,15 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite } from "./vite";
+import { setupVite, serveStatic } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
 const app = express();
 const DEFAULT_PORT = 5000;
 
-// Force production mode for Stripe redirects
-process.env.NODE_ENV = 'production';
-
-console.log("[SERVER] Starting server with environment:", {
-  NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT || DEFAULT_PORT,
-  STRIPE_CONFIGURED: !!process.env.STRIPE_SECRET_KEY,
-  DATABASE_CONFIGURED: !!process.env.DATABASE_URL
-});
-
 // Basic middleware setup
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
-// Add Content Security Policy headers
-app.use((req, res, next) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com"
-  );
-  next();
-});
 
 // Simple request logging
 app.use((req, res, next) => {
@@ -59,11 +40,16 @@ async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     const server = await registerRoutes(app);
     console.log("[SERVER] Routes setup complete");
 
-    // Setup Vite dev server for now
+    // Setup frontend
     try {
-      console.log("[SERVER] Setting up Vite dev server...");
-      await setupVite(app, server);
-      console.log("[SERVER] Vite dev server setup complete");
+      if (process.env.NODE_ENV === "production") {
+        console.log("[SERVER] Setting up static file serving...");
+        serveStatic(app);
+      } else {
+        console.log("[SERVER] Setting up Vite development server...");
+        await setupVite(app, server);
+      }
+      console.log("[SERVER] Frontend setup complete");
     } catch (frontendError) {
       console.error("[SERVER] Frontend setup error:", frontendError);
       // Continue server startup even if frontend setup fails
@@ -71,25 +57,16 @@ async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
     // Start server with error handling
     await new Promise<void>((resolve, reject) => {
-      console.log("[SERVER] Attempting to start server on port", port);
-
-      const timeoutId = setTimeout(() => {
-        reject(new Error(`Server failed to start within 10 seconds on port ${port}`));
-      }, 10000);
-
       server.listen({
         port,
         host: "0.0.0.0",
       }, () => {
-        clearTimeout(timeoutId);
-        console.log(`[SERVER] Server started successfully on port ${port}`);
-        console.log("[SERVER] Production URL configured for Stripe:", 'https://poultryauction.co');
+        console.log(`[SERVER] Server started on port ${port}`);
         resolve();
       }).on('error', (error: any) => {
-        clearTimeout(timeoutId);
         if (error.code === 'EADDRINUSE') {
-          console.log(`[SERVER] Port ${port} is already in use, trying port ${port + 1}`);
-          startServer(port + 1);
+          console.error(`[SERVER] Port ${port} is already in use`);
+          reject(error);
         } else {
           console.error('[SERVER] Server error:', error);
           reject(error);
