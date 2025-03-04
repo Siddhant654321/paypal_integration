@@ -58,7 +58,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import axios from "axios";
-import { FileUpload } from "@/components/file-upload";
 import AuctionCard from "@/components/auction-card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
@@ -86,6 +85,8 @@ function AdminDashboard() {
   const [auctionSearchTerm, setAuctionSearchTerm] = useState("");
   const [buyerSearchTerm, setBuyerSearchTerm] = useState("");
   const [selectedUser, setSelectedUser] = useState<{ id: number; username: string; role: string } | null>(null);
+  const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
+
 
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
     return <Redirect to="/" />;
@@ -230,10 +231,9 @@ function AdminDashboard() {
     if (!approvedAuctions) return [];
     const now = new Date();
     const active = approvedAuctions.filter(auction =>
+      auction.approved &&
       new Date(auction.endDate) > now &&
-      auction.status !== "completed" &&
-      auction.status !== "ended" &&
-      auction.status !== "voided"
+      auction.status === "active"
     );
     if (!auctionSearchTerm) return active;
 
@@ -244,6 +244,11 @@ function AdminDashboard() {
       auction.category.toLowerCase().includes(auctionSearchTerm.toLowerCase())
     );
   }, [approvedAuctions, auctionSearchTerm]);
+
+  const filteredPendingAuctions = useMemo(() => {
+    if (!pendingAuctions) return [];
+    return pendingAuctions.filter(auction => !auction.approved);
+  }, [pendingAuctions]);
 
   const filteredCompletedAuctions = useMemo(() => {
     if (!approvedAuctions) return [];
@@ -263,6 +268,10 @@ function AdminDashboard() {
       auction.category.toLowerCase().includes(auctionSearchTerm.toLowerCase())
     );
   }, [approvedAuctions, auctionSearchTerm]);
+
+  const closeEditDialog = () => {
+    setSelectedAuction(null);
+  };
 
   return (
     <div className="container mx-auto py-8">
@@ -506,7 +515,7 @@ function AdminDashboard() {
             <Tabs defaultValue="pending">
               <TabsList className="w-full">
                 <TabsTrigger value="pending">
-                  Pending ({pendingAuctions?.length || 0})
+                  Pending ({filteredPendingAuctions.length})
                 </TabsTrigger>
                 <TabsTrigger value="active">
                   Active ({filteredActiveAuctions.length})
@@ -525,7 +534,7 @@ function AdminDashboard() {
                   <p className="text-muted-foreground">No pending auctions</p>
                 ) : (
                   <div className="space-y-4">
-                    {pendingAuctions.map((auction) => {
+                    {filteredPendingAuctions.map((auction) => {
                       const seller = approvedSellers?.find(seller => seller.id === auction.sellerId);
                       const sellerStripeStatus = sellerStripeStatuses?.find(s => s.sellerId === auction.sellerId);
                       const isStripeVerified = sellerStripeStatus?.status === "verified";
@@ -557,6 +566,14 @@ function AdminDashboard() {
                             </div>
                           </div>
                           <div className="flex gap-2">
+                            <Button
+                              onClick={() => setSelectedAuction(auction)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                            </Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button
@@ -654,8 +671,15 @@ function AdminDashboard() {
                           key={auction.id}
                           auction={auction}
                           actions={
-                            <>
-                              <EditAuctionDialog auction={auction} />
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => setSelectedAuction(auction)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button variant="destructive" size="sm">
@@ -679,7 +703,7 @@ function AdminDashboard() {
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
-                            </>
+                            </div>
                           }
                         />
                       ))}
@@ -744,6 +768,12 @@ function AdminDashboard() {
           username={selectedUser.username}
           role={selectedUser.role}
           onClose={() => setSelectedUser(null)}
+        />
+      )}
+      {selectedAuction && (
+        <EditAuctionDialog
+          auction={selectedAuction}
+          onClose={closeEditDialog}
         />
       )}
     </div>
@@ -911,7 +941,8 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
   const deleteBidMutation = useMutation({
     mutationFn: async (bidId: number) => {
       await apiRequest("DELETE", `/api/admin/bids/${bidId}`);
-    },    onSuccess: () =>{
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/bids", auctionId] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
@@ -1003,9 +1034,10 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
   );
 }
 
-function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose: () => void }) {
+function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [imageUrl, setImageUrl] = useState(auction.imageUrl || "");
 
   const form = useForm({
     resolver: zodResolver(insertAuctionSchema),
@@ -1018,26 +1050,26 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose: ()
       reservePrice: auction.reservePrice,
       startDate: new Date(auction.startDate),
       endDate: new Date(auction.endDate),
-      imageUrl: auction.imageUrl || '',
+      imageUrl: auction.imageUrl || "",
       images: auction.images,
     },
   });
 
   const handleSubmit = async (values: any) => {
     try {
-      await axios.put(`/api/admin/auctions/${auction.id}`, values);
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/auctions'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
+      await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, values);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       toast({
-        title: 'Success',
-        description: 'Auction updated successfully',
+        title: "Success",
+        description: "Auction updated successfully",
       });
-      onClose();
+      if (onClose) onClose();
     } catch (error) {
       toast({
-        title: 'Error',
-        description: 'Failed to update auction',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to update auction",
+        variant: "destructive",
       });
     }
   };
@@ -1115,11 +1147,41 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose: ()
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="show">Show Quality</SelectItem>
-                        <SelectItem value="production">Production</SelectItem>
-                        <SelectItem value="mixed">Mixed</SelectItem>
+                        <SelectItem value="Show Quality">Show Quality</SelectItem>
+                        <SelectItem value="Purebred & Production">Purebred & Production</SelectItem>
+                        <SelectItem value="Fun & Mixed">Fun & Mixed</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Price ($)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="reservePrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reserve Price ($)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1134,7 +1196,11 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose: ()
                   <FormItem>
                     <FormLabel>Start Date</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <Input
+                        type="datetime-local"
+                        value={field.value.toISOString().slice(0, 16)}
+                        onChange={(e) => field.onChange(new Date(e.target.value))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1148,37 +1214,11 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose: ()
                   <FormItem>
                     <FormLabel>End Date</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="startPrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start Price</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="reservePrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Reserve Price</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
+                      <Input
+                        type="datetime-local"
+                        value={field.value.toISOString().slice(0, 16)}
+                        onChange={(e) => field.onChange(new Date(e.target.value))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
