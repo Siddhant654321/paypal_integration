@@ -20,10 +20,10 @@ function getValidImageUrl(auction: Auction): string {
   // First check if there's a valid imageUrl
   if (auction.imageUrl && auction.imageUrl.trim() !== '') {
     // Ensure URL has proper protocol
-    if (!auction.imageUrl.startsWith('http') && !auction.imageUrl.startsWith('/')) {
-      return `/uploads/${auction.imageUrl}`;
+    if (auction.imageUrl.startsWith('http') || auction.imageUrl.startsWith('/')) {
+      return auction.imageUrl;
     }
-    return auction.imageUrl;
+    return `/uploads/${auction.imageUrl}`;
   }
 
   // Then check for images array
@@ -31,10 +31,10 @@ function getValidImageUrl(auction: Auction): string {
     const firstImage = auction.images[0];
     if (firstImage && firstImage.trim() !== '') {
       // Ensure URL has proper protocol
-      if (!firstImage.startsWith('http') && !firstImage.startsWith('/')) {
-        return `/uploads/${firstImage}`;
+      if (firstImage.startsWith('http') || firstImage.startsWith('/')) {
+        return firstImage;
       }
-      return firstImage;
+      return `/uploads/${firstImage}`;
     }
   }
 

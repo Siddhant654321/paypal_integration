@@ -106,8 +106,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Serve static files from uploads directory
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  // Serve static files from uploads directory with logging middleware
+  app.use('/uploads', (req, res, next) => {
+    console.log(`[STATIC] Requested image: ${req.path}`);
+    const fullPath = path.join(process.cwd(), 'uploads', req.path);
+    
+    // Check if file exists and log the result
+    if (fs.existsSync(fullPath)) {
+      console.log(`[STATIC] Image found: ${req.path}`);
+    } else {
+      console.log(`[STATIC] Image not found: ${req.path}`);
+    }
+    
+    next();
+  }, express.static(path.join(process.cwd(), 'uploads')));
 
   // Middleware to check if user is authenticated
   const requireAuth = (req: any, res: any, next: any) => {

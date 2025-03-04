@@ -158,6 +158,7 @@ export default function AuctionPage() {
               alt={auction.title}
               className="w-full h-full object-cover"
               onError={(e) => {
+                console.log("Image failed to load:", e.currentTarget.src);
                 e.currentTarget.src = '/images/placeholder.jpg';
               }}
             />
@@ -172,6 +173,7 @@ export default function AuctionPage() {
                     alt={`${auction.title} - Image ${index + 1}`}
                     className="w-full h-full object-cover"
                     onError={(e) => {
+                      console.log("Thumbnail failed to load:", e.currentTarget.src);
                       e.currentTarget.src = '/images/placeholder.jpg';
                     }}
                   />
