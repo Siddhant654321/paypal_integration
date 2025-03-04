@@ -90,22 +90,23 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section */}
-      <div
-        className="relative h-[300px] md:h-[400px] bg-cover bg-center"
-        style={{
-          backgroundImage: 'url("/images/hero-chicken.jpg")',
-        }}
-      >
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px]">
-          <div className="container h-full mx-auto px-4 flex flex-col justify-center items-center text-center">
-            <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">
-              Pips 'n Chicks Auctions
-            </h1>
-            <p className="text-lg md:text-xl text-white/90 max-w-2xl">
-              Your trusted marketplace for premium poultry and hatching eggs
-            </p>
-          </div>
+      {/* Hero Section - Optimized */}
+      <div className="bg-accent h-[300px] md:h-[400px] relative overflow-hidden">
+        {/* Pre-loaded background image with reduced processing */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center opacity-50"
+          style={{
+            backgroundImage: 'url("/images/hero-chicken.jpg")',
+            willChange: 'transform',
+          }}
+        />
+        <div className="container relative h-full mx-auto px-4 flex flex-col justify-center items-center text-center z-10">
+          <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">
+            Pips 'n Chicks Auctions
+          </h1>
+          <p className="text-lg md:text-xl text-white max-w-2xl">
+            Your trusted marketplace for premium poultry and hatching eggs
+          </p>
         </div>
       </div>
 
