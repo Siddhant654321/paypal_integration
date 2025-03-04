@@ -16,7 +16,7 @@ import ProfilePage from "@/pages/profile-page";
 import PaymentPage from "@/pages/payment-page";
 import AnalyticsPage from "@/pages/analytics-page";
 import FulfillmentPage from "@/pages/fulfillment-page";
-import SellerProfilePage from "@/pages/seller-profile";
+import SellerProfilePage from "@/pages/seller-profile"; // Added import
 import BuyerRequestPage from "@/pages/buyer-request-page";
 import EditBuyerRequestPage from "@/pages/edit-buyer-request";
 import FAQPage from "@/pages/faq-page";
@@ -34,7 +34,7 @@ function Router() {
         <Route path="/seller/dashboard" component={SellerDashboard} />
         <Route path="/seller/auction/new" component={NewAuction} />
         <Route path="/seller/fulfill/:id" component={FulfillmentPage} />
-        <Route path="/seller/:id" component={SellerProfilePage} />
+        <Route path="/seller/:id" component={SellerProfilePage} /> {/* Existing route updated to use :id */}
         <Route path="/buyer/dashboard" component={BuyerDashboard} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/analytics" component={AnalyticsPage} />

@@ -765,7 +765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sellers = await storage.getUsers({ role: "seller" });
       const sellerAdmins = await storage.getUsers({ role: "seller_admin" });
       const allSellers = [...sellers, ...sellerAdmins];
-      
+
       const statusList = await Promise.all(allSellers.map(async (seller) => {
         const profile = await storage.getProfile(seller.id);
         return {
@@ -775,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stripeAccountStatus: profile?.stripeAccountStatus
         };
       }));
-      
+
       res.json(statusList);
     } catch (error) {
       console.error("Error fetching seller Stripe statuses:", error);
@@ -1552,31 +1552,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to get unread notifications count" });
     }
   });
-  
+
   // Add seller approval endpoint
   app.post("/api/admin/sellers/:id/approve", requireAdmin, async (req, res) => {
     try {
       const sellerId = parseInt(req.params.id);
       console.log(`[ADMIN] Approving seller with ID ${sellerId}`);
-      
+
       // Find the user associated with this seller ID
       const users = await storage.getUsers();
       const sellerUser = users.find(user => user.id === sellerId);
-      
+
       if (!sellerUser) {
         return res.status(404).json({ message: "Seller not found" });
       }
-      
+
       // Update the user's approved status
       await storage.updateUser(sellerId, { approved: true });
-      
+
       // Send notification to the user
       await NotificationService.createNotification(sellerId, {
         type: "account",
         title: "Account Approved",
         message: "Your seller account has been approved! You can now create auctions."
       });
-      
+
       console.log(`[ADMIN] Successfully approved seller ${sellerId}`);
       res.json({ success: true });
     } catch (error) {
@@ -1618,7 +1618,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch active sellers" });
     }
   });
-
 
   app.get("/api/analytics/market-stats", async (req, res) => {
     try {
@@ -1743,8 +1742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const categoryCount = validAuctions.reduce((acc, auction) => {
         const category = auction.category || "Uncategorized";
         acc[category] = (acc[category] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+        return acc;      }, {} as Record<string, number>);
 
       const popularCategories = Object.entries(categoryCount)
         .map(([category, count]) => ({ category, count }))
@@ -1845,6 +1843,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching active sellers:", error);
       res.status(500).json({ message: "Failed to fetch active sellers" });
+    }
+  });
+
+  // Add new endpoint to get a single seller by ID
+  app.get("/api/sellers/:id", async (req, res) => {
+    try {
+      const sellerId = parseInt(req.params.id);
+      console.log(`[SELLER PROFILE] Fetching seller ${sellerId}`);
+
+      // Get the user
+      const seller = await storage.getUser(sellerId);
+      if (!seller) {
+        console.log(`[SELLER PROFILE] Seller ${sellerId} not found`);
+        return res.status(404).json({ message: "Seller not found" });
+      }
+
+      // If user is not a seller or not approved, return 404
+      if ((seller.role !== "seller" && seller.role !== "seller_admin") || !seller.approved) {
+        console.log(`[SELLER PROFILE] User ${sellerId} is not an approved seller`, {
+          role: seller.role,
+          approved: seller.approved
+        });
+        return res.status(404).json({ message: "Seller not found" });
+      }
+
+      // Get profile and auctions
+      const profile = await storage.getProfile(sellerId);
+      const auctions = await storage.getAuctions({ 
+        sellerId: sellerId,
+        approved: true
+      });
+
+      console.log(`[SELLER PROFILE] Found seller with ${auctions.length} auctions`);
+      res.json({ 
+        seller,
+        profile,
+        auctions
+      });
+    } catch (error) {
+      console.error("[SELLER PROFILE] Error fetching seller:", error);
+      res.status(500).json({ message: "Failed to fetch seller profile" });
     }
   });
 
