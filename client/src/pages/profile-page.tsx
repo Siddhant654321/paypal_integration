@@ -284,7 +284,7 @@ export default function ProfilePage() {
             <>
               <Separator className="my-6" />
 
-              <div className="space-y-6">
+              <div className="space-y-6 bg-background/50 rounded-lg p-4 sm:p-6 border border-border/50">
                 <h2 className="text-lg font-semibold">Seller Information</h2>
 
                 <FormField
@@ -337,7 +337,7 @@ export default function ProfilePage() {
 
           <Separator className="my-6" />
 
-          <div className="space-y-6">
+          <div className="space-y-6 bg-background/50 rounded-lg p-4 sm:p-6 border border-border/50">
             <div className="flex items-center gap-2">
               <Bell className="h-5 w-5" />
               <h2 className="text-lg font-semibold">Email Notifications</h2>
@@ -476,16 +476,22 @@ export default function ProfilePage() {
             />
           </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={createProfileMutation.isPending}
-          >
-            {createProfileMutation.isPending && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
-            Save Profile
-          </Button>
+          <div className="mt-8 flex justify-end">
+            <Button
+              type="submit"
+              className="w-full sm:w-auto px-8"
+              disabled={createProfileMutation.isPending}
+            >
+              {createProfileMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Profile"
+              )}
+            </Button>
+          </div>
         </form>
       </Form>
     </div>
