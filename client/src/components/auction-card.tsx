@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { type Auction } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
-import { createSlug, slugify } from "../utils/formatters";
 import { Link } from "wouter";
 import { Store, MapPin, CreditCard } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -99,7 +98,7 @@ export default function AuctionCard({ auction, showStatus, actions }: Props) {
           </div>
           <div className="flex gap-2 items-center">
             {actions}
-            <Link href={`/auction/${auction.id}/${createSlug(auction.title)}`}>
+            <Link href={`/auction/${auction.id}`}>
               <Button variant="secondary">Bid Now</Button>
             </Link>
           </div>

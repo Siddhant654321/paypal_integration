@@ -34,16 +34,13 @@ export default function AuctionPage() {
   const queryClient = useQueryClient();
   const [timeLeft, setTimeLeft] = useState("");
 
-  // Handle both numerical IDs and IDs with title slugs
-  const auctionId = parseInt(params?.id?.split('-')[0] || '0');
-
   const { data: auction, isLoading: isLoadingAuction, refetch: refetchAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
-    queryKey: [`/api/auctions/${auctionId}`],
+    queryKey: [`/api/auctions/${params?.id}`],
     refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
 
   const { data: bids = [], isLoading: isLoadingBids, refetch: refetchBids } = useQuery<Bid[]>({
-    queryKey: [`/api/auctions/${auctionId}/bids`],
+    queryKey: [`/api/auctions/${params?.id}/bids`],
     enabled: !!auction,
     refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
@@ -125,12 +122,12 @@ export default function AuctionPage() {
     // Check if auction hasn't started yet
     const now = new Date();
     const startDate = new Date(auction.startDate);
-
+    
     // If auction hasn't started yet, show Preview badge
     if (now < startDate) {
       return <Badge variant="outline">Preview</Badge>;
     }
-
+    
     // Otherwise use status from database
     switch (auction.status) {
       case "active":
@@ -265,7 +262,7 @@ export default function AuctionPage() {
           <div className="prose max-w-none">
             <p className="whitespace-pre-wrap">{auction.description}</p>
           </div>
-
+          
           {/* Payment button for winning bidder */}
           {auction.status === "ended" && 
            user?.id === auction.winningBidderId && 

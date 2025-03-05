@@ -8,7 +8,6 @@ import AuctionCard from "@/components/auction-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import { formatCurrency, createSlug } from "@/utils/formatters";
 
 type BidWithAuction = Bid & {
   auction: Auction;

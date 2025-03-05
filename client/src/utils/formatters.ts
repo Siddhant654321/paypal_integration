@@ -48,27 +48,3 @@ export function formatDollarInput(input: string): string {
   }
   return cleaned;
 }
-
-export function createSlug(title: string): string {
-  return encodeURIComponent(title.toLowerCase().replace(/\s+/g, '-'));
-}
-
-export function getBadgeColor(status: string): string {
-
-}
-
-export function formatDateDistance(date: Date | string): string {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  return formatDistanceToNow(dateObj, { addSuffix: true });
-}
-
-export function slugify(text: string): string {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')         // Replace spaces with -
-    .replace(/&/g, '-and-')       // Replace & with 'and'
-    .replace(/[^\w\-]+/g, '')     // Remove all non-word characters
-    .replace(/\-\-+/g, '-');      // Replace multiple - with single -
-}
