@@ -21,7 +21,8 @@ export default function PopularCategoriesChart({ popularCategories }: PopularCat
 
   // Get the maximum count for normalization
   const maxCount = Math.max(...popularCategories.map(cat => cat.count));
-  const tealColor = '#43AA8B'; // rich-teal from theme
+  // Use the rich-teal color from the theme
+  const tealColor = '#43AA8B';
 
   return (
     <div className="space-y-4">
@@ -31,12 +32,15 @@ export default function PopularCategoriesChart({ popularCategories }: PopularCat
             <span className="text-sm font-medium">{cat.category}</span>
             <span className="text-sm text-muted-foreground">{cat.count} listings</span>
           </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted">
             <div 
-              className="absolute inset-y-0 left-0 rounded-full"
+              className="h-full rounded-full"
               style={{ 
-                width: `${(cat.count / maxCount) * 100}%`,
-                backgroundColor: tealColor
+                width: `${(cat.count / maxCount) * 100}%`, 
+                backgroundColor: tealColor,
+                position: 'absolute',
+                left: 0,
+                top: 0
               }}
             />
           </div>

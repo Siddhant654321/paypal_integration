@@ -22,7 +22,8 @@ export default function AveragePricesChart({ averagePrices }: AveragePricesChart
 
   // Get the maximum price for normalization
   const maxPrice = Math.max(...averagePrices.map(item => item.averagePrice));
-  const yellowColor = '#FFBA08'; // golden-yellow from theme
+  // Use the golden-yellow color from the theme
+  const yellowColor = '#FFBA08';
 
   return (
     <div className="space-y-4">
@@ -32,12 +33,15 @@ export default function AveragePricesChart({ averagePrices }: AveragePricesChart
             <span className="text-sm font-medium capitalize">{item.species}</span>
             <span className="text-sm text-muted-foreground">{formatPrice(item.averagePrice)}</span>
           </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted">
             <div 
-              className="absolute inset-y-0 left-0 rounded-full"
+              className="h-full rounded-full"
               style={{ 
-                width: `${(item.averagePrice / maxPrice) * 100}%`,
-                backgroundColor: yellowColor
+                width: `${(item.averagePrice / maxPrice) * 100}%`, 
+                backgroundColor: yellowColor,
+                position: 'absolute',
+                left: 0,
+                top: 0
               }}
             />
           </div>
