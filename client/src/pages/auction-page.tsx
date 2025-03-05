@@ -119,6 +119,16 @@ export default function AuctionPage() {
   const showSellerDecision = auction.status === "pending_seller_decision" && user?.id === auction.sellerId;
 
   const getStatusBadge = () => {
+    // Check if auction hasn't started yet
+    const now = new Date();
+    const startDate = new Date(auction.startDate);
+    
+    // If auction hasn't started yet, show Preview badge
+    if (now < startDate) {
+      return <Badge variant="outline">Preview</Badge>;
+    }
+    
+    // Otherwise use status from database
     switch (auction.status) {
       case "active":
         return <Badge>Active</Badge>;

@@ -44,7 +44,11 @@ function getValidImageUrl(auction: Auction): string {
 
 export default function AuctionCard({ auction, showStatus, actions }: Props) {
   const { user } = useAuth();
-  const isActive = new Date() >= new Date(auction.startDate) && new Date() <= new Date(auction.endDate);
+  const now = new Date();
+  const startDate = new Date(auction.startDate);
+  const endDate = new Date(auction.endDate);
+  const isActive = now >= startDate && now <= endDate;
+  const isUpcoming = now < startDate;
 
   // Check if current user is the winning bidder and payment is pending
   const isWinningBidder = user?.id === auction.winningBidderId;
@@ -54,11 +58,7 @@ export default function AuctionCard({ auction, showStatus, actions }: Props) {
     <Card className="overflow-hidden">
       <div className="aspect-square w-full bg-muted rounded-md overflow-hidden">
           <img
-            src={auction.imageUrl && auction.imageUrl.trim() !== '' ? 
-              auction.imageUrl : 
-              (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ?
-                auction.images[0] :
-                '/images/placeholder.jpg')}
+            src={getValidImageUrl(auction)}
             alt={auction.title}
             className="h-full w-full object-cover"
             onError={(e) => {
@@ -88,17 +88,18 @@ export default function AuctionCard({ auction, showStatus, actions }: Props) {
           <div>
             <div className="font-semibold">${(auction.currentPrice / 100).toFixed(2)}</div>
             <div className="text-sm text-muted-foreground">
-              {isActive
-                ? `Ends ${formatDistanceToNow(new Date(auction.endDate), {
-                    addSuffix: true,
-                  })}`
-                : "Auction ended"}
+              {isUpcoming 
+                ? "Starts " + formatDistanceToNow(startDate, { addSuffix: true })
+                : isActive 
+                  ? "Ends " + formatDistanceToNow(endDate, { addSuffix: true })
+                  : "Ended " + formatDistanceToNow(endDate, { addSuffix: true })
+              }
             </div>
           </div>
           <div className="flex gap-2 items-center">
             {actions}
             <Link href={`/auction/${auction.id}`}>
-              <Button variant="secondary">View Details</Button>
+              <Button variant="secondary">Bid Now</Button>
             </Link>
           </div>
         </div>
