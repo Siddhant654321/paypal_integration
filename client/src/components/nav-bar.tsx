@@ -1,4 +1,3 @@
-
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -80,14 +79,6 @@ export default function NavBar() {
       >
         <Home className="h-5 w-5 mr-1" />
         <span className="font-medium">Home</span>
-      </Link>
-
-      <Link 
-        href="/auctions" 
-        className="text-foreground hover:text-primary transition-colors"
-        onClick={onClick}
-      >
-        Auctions
       </Link>
 
       <Link 
@@ -227,9 +218,9 @@ export default function NavBar() {
                     <div className="flex flex-col gap-4 mb-8">
                       <NavItems onClick={() => setIsMenuOpen(false)} />
                     </div>
-                    
+
                     <Separator className="my-4" />
-                    
+
                     <div className="flex flex-col gap-4">
                       <UserMenu onClick={() => setIsMenuOpen(false)} />
                     </div>

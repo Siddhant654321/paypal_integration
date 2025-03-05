@@ -37,15 +37,21 @@ interface PayoutSchedule {
   interval: string;
 }
 
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
 const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const navigate = useNavigate();
 
-  // Redirect if not a seller
-  if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
-    return <Redirect to="/" />;
-  }
+  // Handle authentication check
+  useEffect(() => {
+    if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   // Fetch profile data
   const { data: profile } = useQuery({
@@ -56,6 +62,7 @@ const SellerDashboard = () => {
   const { data: auctions, isLoading: auctionsLoading } = useQuery<Auction[]>({
     queryKey: ["/api/seller/auctions"],
     select: (data) => data || [],
+    enabled: !!user && (user.role === "seller" || user.role === "seller_admin"),
   });
 
   const { data: stripeStatus, isLoading: stripeStatusLoading, refetch: refetchStripeStatus } = useQuery<StripeStatus>({
@@ -63,17 +70,23 @@ const SellerDashboard = () => {
     retry: 3,
     retryDelay: 1000,
     refetchInterval: (data) => data?.status === "pending" ? 5000 : false,
+    enabled: !!user && (user.role === "seller" || user.role === "seller_admin"),
   });
 
   const { data: balance } = useQuery<Balance>({
     queryKey: ["/api/seller/balance"],
-    enabled: stripeStatus?.status === "verified",
+    enabled: !!stripeStatus?.status && stripeStatus?.status === "verified",
   });
 
   const { data: payoutSchedule } = useQuery<PayoutSchedule>({
     queryKey: ["/api/seller/payout-schedule"],
-    enabled: stripeStatus?.status === "verified",
+    enabled: !!stripeStatus?.status && stripeStatus?.status === "verified",
   });
+  
+  // If not authenticated or not a seller, don't render the dashboard
+  if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
+    return null;
+  }
 
   // Enhanced check for Stripe success return
   useEffect(() => {
