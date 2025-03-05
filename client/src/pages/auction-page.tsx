@@ -260,7 +260,7 @@ export default function AuctionPage() {
           </div>
 
           <div className="prose max-w-none">
-            <p>{auction.description}</p>
+            <p className="whitespace-pre-wrap">{auction.description}</p>
           </div>
           
           {/* Payment button for winning bidder */}

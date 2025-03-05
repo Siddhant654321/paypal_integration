@@ -79,7 +79,7 @@ export default function AuctionCard({ auction, showStatus, actions }: Props) {
           )}
         </div>
         <h3 className="text-lg font-semibold mb-2">{auction.title}</h3>
-        <p className="text-sm text-muted-foreground line-clamp-2">
+        <p className="text-sm text-muted-foreground line-clamp-2 whitespace-pre-line">
           {auction.description}
         </p>
       </CardContent>
