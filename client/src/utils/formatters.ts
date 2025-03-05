@@ -48,3 +48,11 @@ export function formatDollarInput(input: string): string {
   }
   return cleaned;
 }
+
+export function createSlug(title: string): string {
+  return encodeURIComponent(title.toLowerCase().replace(/\s+/g, '-'));
+}
+
+export function getBadgeColor(status: string): string {
+
+}

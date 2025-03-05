@@ -65,6 +65,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { X } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import * as z from 'zod';
+import { formatCurrency, createSlug } from "@/utils/formatters"; // Import createSlug
+
 
 // Types
 type SellerStripeStatus = {
@@ -924,7 +926,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                     <LoadingSpinner className="h-6 w-6" />
                   </div>                ) : !bids?.length ? (
                   <p className="text-muted-foreground">No bids found</p>
-                ) : (
+                ): (
                   <div className="space-y-2">
                     {bids.map((bid) => (
                       <div key={bid.id} className="p-3 border rounded-lg">

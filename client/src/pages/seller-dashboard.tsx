@@ -8,7 +8,7 @@ import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatPrice } from '../utils/formatters';
+import { formatPrice, createSlug } from '../utils/formatters';
 import { useToast } from "@/hooks/use-toast";
 import {
   Alert,

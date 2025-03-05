@@ -122,12 +122,12 @@ export default function AuctionPage() {
     // Check if auction hasn't started yet
     const now = new Date();
     const startDate = new Date(auction.startDate);
-    
+
     // If auction hasn't started yet, show Preview badge
     if (now < startDate) {
       return <Badge variant="outline">Preview</Badge>;
     }
-    
+
     // Otherwise use status from database
     switch (auction.status) {
       case "active":
@@ -262,7 +262,7 @@ export default function AuctionPage() {
           <div className="prose max-w-none">
             <p className="whitespace-pre-wrap">{auction.description}</p>
           </div>
-          
+
           {/* Payment button for winning bidder */}
           {auction.status === "ended" && 
            user?.id === auction.winningBidderId && 
