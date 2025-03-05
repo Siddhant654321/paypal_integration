@@ -870,8 +870,8 @@ app.get("/api/analytics/market-stats", async (req, res) => {
       species
     });
 
-    // Get auctions data for analysis
-    const auctionFilters: any = { approved: true };
+    // Get auctions data for analysis - include all auctions for better data display
+    const auctionFilters: any = {};
     if (category !== "all") {
       auctionFilters.category = category;
     }
@@ -879,7 +879,9 @@ app.get("/api/analytics/market-stats", async (req, res) => {
       auctionFilters.species = species;
     }
 
+    // Get all auctions to ensure we have enough data for display
     const auctions = await storage.getAuctions(auctionFilters);
+    console.log(`[ANALYTICS] Found ${auctions.length} auctions for analysis`);
     
     // Get all bids for analysis
     let allBids = [];
@@ -887,6 +889,7 @@ app.get("/api/analytics/market-stats", async (req, res) => {
       const bids = await storage.getBidsForAuction(auction.id);
       allBids.push(...bids);
     }
+    console.log(`[ANALYTICS] Found ${allBids.length} total bids for analysis`);
 
     // Calculate active auctions
     const now = new Date();
@@ -900,9 +903,8 @@ app.get("/api/analytics/market-stats", async (req, res) => {
     const recentBids = allBids.filter(bid => new Date(bid.createdAt) >= thirtyDaysAgo);
     const activeBidders = [...new Set(recentBids.map(bid => bid.bidderId))].length;
 
-    // Process auction data for price trends
+    // Include all auctions in price trends, not just ended ones
     const priceData = auctions
-      .filter(auction => auction.status === "ended" && auction.winningBidderId)
       .map(auction => ({
         date: new Date(auction.endDate).toISOString().split('T')[0],
         price: auction.currentPrice,
@@ -913,16 +915,14 @@ app.get("/api/analytics/market-stats", async (req, res) => {
     // Get all species for filter dropdown
     const species_list = [...new Set(auctions.map(auction => auction.species))];
 
-    // Calculate average prices by species
+    // Calculate average prices by species - include all auctions
     const speciesPrices = {};
-    auctions
-      .filter(auction => auction.status === "ended" && auction.winningBidderId)
-      .forEach(auction => {
-        if (!speciesPrices[auction.species]) {
-          speciesPrices[auction.species] = [];
-        }
-        speciesPrices[auction.species].push(auction.currentPrice);
-      });
+    auctions.forEach(auction => {
+      if (!speciesPrices[auction.species]) {
+        speciesPrices[auction.species] = [];
+      }
+      speciesPrices[auction.species].push(auction.currentPrice);
+    });
     
     const averagePrices = Object.entries(speciesPrices).map(([species, prices]) => ({
       species,
@@ -942,14 +942,9 @@ app.get("/api/analytics/market-stats", async (req, res) => {
       .map(([category, count]) => ({ category, count }))
       .sort((a, b) => b.count - a.count);
 
-    // Get top performers (sellers and buyers)
-    const completedAuctions = auctions.filter(auction => 
-      auction.status === "ended" && auction.winningBidderId
-    );
-
-    // Calculate seller performance
+    // Consider all auctions for seller performance, not just completed ones
     const sellerStats = new Map();
-    completedAuctions.forEach(auction => {
+    auctions.forEach(auction => {
       if (!sellerStats.has(auction.sellerId)) {
         sellerStats.set(auction.sellerId, { total: 0, auctionsWon: 0 });
       }
@@ -958,15 +953,15 @@ app.get("/api/analytics/market-stats", async (req, res) => {
       stats.auctionsWon += 1;
     });
     
-    // Calculate buyer performance
+    // Get buyer performance from bids too, not just winning bids
     const buyerStats = new Map();
-    completedAuctions.forEach(auction => {
-      if (!buyerStats.has(auction.winningBidderId)) {
-        buyerStats.set(auction.winningBidderId, { total: 0, auctionsWon: 0 });
+    allBids.forEach(bid => {
+      if (!buyerStats.has(bid.bidderId)) {
+        buyerStats.set(bid.bidderId, { total: 0, bidsPlaced: 0 });
       }
-      const stats = buyerStats.get(auction.winningBidderId);
-      stats.total += auction.currentPrice;
-      stats.auctionsWon += 1;
+      const stats = buyerStats.get(bid.bidderId);
+      stats.total += bid.amount;
+      stats.bidsPlaced += 1;
     });
 
     // Get top seller
@@ -991,25 +986,26 @@ app.get("/api/analytics/market-stats", async (req, res) => {
       topBuyer = {
         userId: topBuyerId,
         name: buyerProfile?.fullName || "Anonymous Buyer",
-        ...topBuyerStats
+        total: topBuyerStats.total,
+        bidsPlaced: topBuyerStats.bidsPlaced
       };
     }
 
     const responseData = {
-      activeBidders,
+      activeBidders: activeBidders || 0,
       totalBids: allBids.length,
-      activeAuctions,
-      priceData,
-      species: species_list,
-      averagePrices,
-      popularCategories,
+      activeAuctions: activeAuctions || 0,
+      priceData: priceData || [],
+      species: species_list || [],
+      averagePrices: averagePrices || [],
+      popularCategories: popularCategories || [],
       topPerformers: {
         seller: topSeller,
         buyer: topBuyer
       }
     };
 
-    console.log(`[ANALYTICS] Successfully generated market stats`);
+    console.log(`[ANALYTICS] Successfully generated market stats with ${priceData.length} price data points`);
     res.json(responseData);
   } catch (error) {
     console.error("[ANALYTICS] Error generating market stats:", error);

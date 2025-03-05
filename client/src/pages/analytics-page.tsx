@@ -233,12 +233,24 @@ export default function AnalyticsPage() {
         </Card>
       </div>
         </>
-      ) : (
+      ) : (!marketStats || 
+           (marketStats.priceData.length === 0 && 
+            marketStats.popularCategories.length === 0 && 
+            marketStats.averagePrices.length === 0)) ? (
         <div className="py-8 text-center">
           <div className="mx-auto max-w-md p-6 bg-muted rounded-lg">
             <h3 className="text-xl font-semibold mb-2">No Market Data Available</h3>
             <p className="text-muted-foreground">
               There isn't enough auction data to display analytics yet. As more auctions complete, statistics will be shown here.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="py-8 text-center">
+          <div className="mx-auto max-w-md p-6 bg-primary/10 rounded-lg">
+            <h3 className="text-xl font-semibold mb-2">Limited Market Data</h3>
+            <p className="text-muted-foreground">
+              We have some auction data available. Check back regularly as more auctions complete for more comprehensive analytics.
             </p>
           </div>
         </div>

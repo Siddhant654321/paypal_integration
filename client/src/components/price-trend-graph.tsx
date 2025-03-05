@@ -195,7 +195,7 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
           </ResponsiveContainer>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <p>No price data available</p>
+            <p>No price data available yet. More data will be shown as auctions complete.</p>
             <p className="text-sm mt-2">Try selecting a different time frame or category</p>
           </div>
         )}
