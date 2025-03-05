@@ -791,7 +791,7 @@ export class DatabaseStorage implements IStorage {
       console.error("[STORAGE:general] Error getting profiles:", error);
       return [];
     }
-  },
+  }
 }
 
 export const storage = new DatabaseStorage();
