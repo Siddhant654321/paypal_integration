@@ -45,7 +45,7 @@ export function PopularCategoriesChart({ categories }: PopularCategoriesChartPro
               className="absolute inset-y-0 left-0 rounded-full"
               style={{ 
                 width: `${(cat.count / maxCount) * 100}%`,
-                backgroundColor: '#FFBA08' // golden-yellow from theme
+                backgroundColor: '#43AA8B' // rich-teal from theme
               }}
             />
           </div>
