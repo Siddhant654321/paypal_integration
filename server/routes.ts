@@ -857,6 +857,167 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auctionId = parseInt(req.params.id);
       const data = req.body;
 
+// Market Analytics Endpoints
+app.get("/api/analytics/market-stats", async (req, res) => {
+  try {
+    const timeFrame = req.query.timeFrame as string || "month";
+    const category = req.query.category as string || "all";
+    const species = req.query.species as string || "all";
+
+    console.log(`[ANALYTICS] Fetching market stats with filters:`, {
+      timeFrame,
+      category,
+      species
+    });
+
+    // Get auctions data for analysis
+    const auctionFilters: any = { approved: true };
+    if (category !== "all") {
+      auctionFilters.category = category;
+    }
+    if (species !== "all") {
+      auctionFilters.species = species;
+    }
+
+    const auctions = await storage.getAuctions(auctionFilters);
+    
+    // Get all bids for analysis
+    let allBids = [];
+    for (const auction of auctions) {
+      const bids = await storage.getBidsForAuction(auction.id);
+      allBids.push(...bids);
+    }
+
+    // Calculate active auctions
+    const now = new Date();
+    const activeAuctions = auctions.filter(
+      auction => new Date(auction.startDate) <= now && new Date(auction.endDate) >= now
+    ).length;
+
+    // Get unique bidders in the last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentBids = allBids.filter(bid => new Date(bid.createdAt) >= thirtyDaysAgo);
+    const activeBidders = [...new Set(recentBids.map(bid => bid.bidderId))].length;
+
+    // Process auction data for price trends
+    const priceData = auctions
+      .filter(auction => auction.status === "ended" && auction.winningBidderId)
+      .map(auction => ({
+        date: new Date(auction.endDate).toISOString().split('T')[0],
+        price: auction.currentPrice,
+        title: auction.title
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Get all species for filter dropdown
+    const species_list = [...new Set(auctions.map(auction => auction.species))];
+
+    // Calculate average prices by species
+    const speciesPrices = {};
+    auctions
+      .filter(auction => auction.status === "ended" && auction.winningBidderId)
+      .forEach(auction => {
+        if (!speciesPrices[auction.species]) {
+          speciesPrices[auction.species] = [];
+        }
+        speciesPrices[auction.species].push(auction.currentPrice);
+      });
+    
+    const averagePrices = Object.entries(speciesPrices).map(([species, prices]) => ({
+      species,
+      averagePrice: Math.round(prices.reduce((sum, price) => sum + price, 0) / prices.length)
+    }));
+
+    // Calculate popular categories
+    const categoryCount = {};
+    auctions.forEach(auction => {
+      if (!categoryCount[auction.category]) {
+        categoryCount[auction.category] = 0;
+      }
+      categoryCount[auction.category]++;
+    });
+    
+    const popularCategories = Object.entries(categoryCount)
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Get top performers (sellers and buyers)
+    const completedAuctions = auctions.filter(auction => 
+      auction.status === "ended" && auction.winningBidderId
+    );
+
+    // Calculate seller performance
+    const sellerStats = new Map();
+    completedAuctions.forEach(auction => {
+      if (!sellerStats.has(auction.sellerId)) {
+        sellerStats.set(auction.sellerId, { total: 0, auctionsWon: 0 });
+      }
+      const stats = sellerStats.get(auction.sellerId);
+      stats.total += auction.currentPrice;
+      stats.auctionsWon += 1;
+    });
+    
+    // Calculate buyer performance
+    const buyerStats = new Map();
+    completedAuctions.forEach(auction => {
+      if (!buyerStats.has(auction.winningBidderId)) {
+        buyerStats.set(auction.winningBidderId, { total: 0, auctionsWon: 0 });
+      }
+      const stats = buyerStats.get(auction.winningBidderId);
+      stats.total += auction.currentPrice;
+      stats.auctionsWon += 1;
+    });
+
+    // Get top seller
+    let topSeller = null;
+    if (sellerStats.size > 0) {
+      const [topSellerId, topSellerStats] = Array.from(sellerStats.entries())
+        .sort((a, b) => b[1].total - a[1].total)[0];
+      const sellerProfile = await storage.getProfile(topSellerId);
+      topSeller = {
+        userId: topSellerId,
+        name: sellerProfile?.businessName || "Anonymous Seller",
+        ...topSellerStats
+      };
+    }
+
+    // Get top buyer
+    let topBuyer = null;
+    if (buyerStats.size > 0) {
+      const [topBuyerId, topBuyerStats] = Array.from(buyerStats.entries())
+        .sort((a, b) => b[1].total - a[1].total)[0];
+      const buyerProfile = await storage.getProfile(topBuyerId);
+      topBuyer = {
+        userId: topBuyerId,
+        name: buyerProfile?.fullName || "Anonymous Buyer",
+        ...topBuyerStats
+      };
+    }
+
+    const responseData = {
+      activeBidders,
+      totalBids: allBids.length,
+      activeAuctions,
+      priceData,
+      species: species_list,
+      averagePrices,
+      popularCategories,
+      topPerformers: {
+        seller: topSeller,
+        buyer: topBuyer
+      }
+    };
+
+    console.log(`[ANALYTICS] Successfully generated market stats`);
+    res.json(responseData);
+  } catch (error) {
+    console.error("[ANALYTICS] Error generating market stats:", error);
+    res.status(500).json({ message: "Failed to generate market statistics" });
+  }
+});
+
+
       console.log("[ADMIN AUCTION UPDATE] Received update data:", {
         auctionId,
         updateData: data,

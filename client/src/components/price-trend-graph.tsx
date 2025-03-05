@@ -19,7 +19,7 @@ import { formatPrice } from "@/utils/formatters";
 interface PriceData {
   date: string;
   price: number;
-  medianPrice: number;
+  medianPrice?: number;
   title?: string;
 }
 

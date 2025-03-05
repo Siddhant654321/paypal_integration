@@ -74,19 +74,34 @@ export default function AnalyticsPage() {
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Check if we have valid market stats data
+  const hasData = marketStats && 
+    (marketStats.priceData?.length > 0 || 
+     marketStats.popularCategories?.length > 0);
+
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
       <h1 className="text-2xl md:text-3xl font-bold">Market Analytics</h1>
 
-      {/* Price Trend Graph with updated data format and teal dots */}
-      <PriceTrendGraph
-        data={marketStats?.priceData || []}
-        species={marketStats?.species || []}
-        dotColor={tealColor}
-        onTimeFrameChange={setTimeFrame}
-        onCategoryChange={setCategory}
-        onSpeciesChange={setSelectedSpecies}
-      />
+      {hasData ? (
+        <>
+          {/* Price Trend Graph with updated data format and teal dots */}
+          <PriceTrendGraph
+            data={marketStats?.priceData || []}
+            species={marketStats?.species || []}
+            dotColor={tealColor}
+            onTimeFrameChange={setTimeFrame}
+            onCategoryChange={setCategory}
+            onSpeciesChange={setSelectedSpecies}
+          />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         {/* Active Auctions Card */}
@@ -217,6 +232,17 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+        </>
+      ) : (
+        <div className="py-8 text-center">
+          <div className="mx-auto max-w-md p-6 bg-muted rounded-lg">
+            <h3 className="text-xl font-semibold mb-2">No Market Data Available</h3>
+            <p className="text-muted-foreground">
+              There isn't enough auction data to display analytics yet. As more auctions complete, statistics will be shown here.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Market Demand Section */}
       <div className="mt-8 space-y-4">
