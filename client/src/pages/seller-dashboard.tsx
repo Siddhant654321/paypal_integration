@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign, ExternalLink, AlertCircle, CheckCircle2 } fro
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatPrice } from '../utils/formatters';
 import { useToast } from "@/hooks/use-toast";
@@ -192,9 +192,30 @@ const SellerDashboard = () => {
            auction.description?.toLowerCase().includes(searchLower);
   }) : [];
 
+  const now = new Date();
+  const activeAuctions = useMemo(() => {
+    if (!auctions) return [];
+    return auctions.filter(auction => 
+      (auction.status === "active" || auction.status === "pending_seller_decision") &&
+      new Date(auction.endDate) > now
+    );
+  }, [auctions, now]);
+
+  const completedAuctions = useMemo(() => {
+    if (!auctions) return [];
+    return auctions.filter(auction => 
+      auction.status === "ended" || 
+      auction.status === "voided" || 
+      auction.status === "fulfilled" ||
+      auction.status === "pending_fulfillment" ||
+      (auction.status === "active" && new Date(auction.endDate) <= now)
+    );
+  }, [auctions, now]);
+
+
   const pendingAuctions = filteredAuctions.filter(auction => !auction.approved);
-  const approvedAuctions = filteredAuctions.filter(auction => auction.approved);
-  const endedAuctions = filteredAuctions.filter(auction => auction.status === "ended");
+  const approvedAuctions = filteredAuctions.filter(auction => auction.approved && activeAuctions.some(a => a.id === auction.id));
+  const endedAuctions = filteredAuctions.filter(auction => completedAuctions.some(a => a.id === auction.id));
 
   // Render account status section
   const renderAccountStatus = () => {
