@@ -9,6 +9,11 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 import type { Notification } from "@shared/schema";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function NavBar() {
   const { user } = useAuth();
@@ -115,61 +120,70 @@ export default function NavBar() {
           </Link>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           {user ? (
             <>
-              <div className="flex items-center gap-2">
-                {(user.role === "seller" || user.role === "seller_admin") && (
-                  <Link href="/seller/dashboard">
-                    <Button variant="ghost" size="sm" className="flex items-center gap-2">
-                      <LayoutDashboard className="h-4 w-4" />
-                      Seller Dashboard
-                    </Button>
-                  </Link>
-                )}
-                <Link href="/buyer/dashboard">
-                  <Button variant="ghost" size="sm">My Bids</Button>
-                </Link>
-                {(user.role === "admin" || user.role === "seller_admin") && (
-                  <Link href="/admin">
-                    <Button variant="ghost" size="sm">Admin</Button>
-                  </Link>
-                )}
-              </div>
+              <NotificationsMenu notifications={notifications} onMarkAllRead={handleMarkAllRead} />
 
-              <Separator orientation="vertical" className="h-6" />
-
-              <div className="flex items-center gap-2">
-                <NotificationsMenu 
-                  notifications={notifications} 
-                  onMarkAllRead={handleMarkAllRead} 
-                />
-
-                <Link href="/profile">
-                  <Button 
-                    variant={user.hasProfile ? "ghost" : "default"}
-                    size="sm"
-                    className={!user.hasProfile ? "bg-primary text-primary-foreground" : ""}
-                    onClick={() => {
-                      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
-                      if (user?.hasProfile) {
-                        setLocation('/profile');
-                      } else {
-                        setLocation('/profile?action=create');
-                      }
-                    }}
-                  >
-                    <UserCircle className="mr-2 h-4 w-4" />
-                    {user.hasProfile ? "Profile" : "Complete Profile"}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 text-xs sm:text-sm">
+                    <UserCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline truncate max-w-[80px] sm:max-w-[120px]">
+                      {user.name || user.email}
+                    </span>
                   </Button>
-                </Link>
-                <Button onClick={() => logoutMutation.mutate()} variant="ghost">Logout</Button>
-              </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuTrigger asChild>
+                    {(user.role === "seller" || user.role === "seller_admin") && (
+                      <Link href="/seller/dashboard">
+                        <Button variant="ghost" size="sm" className="flex items-center gap-2">
+                          <LayoutDashboard className="h-4 w-4" />
+                          Seller Dashboard
+                        </Button>
+                      </Link>
+                    )}
+                    <Link href="/buyer/dashboard">
+                      <Button variant="ghost" size="sm">My Bids</Button>
+                    </Link>
+                    {(user.role === "admin" || user.role === "seller_admin") && (
+                      <Link href="/admin">
+                        <Button variant="ghost" size="sm">Admin</Button>
+                      </Link>
+                    )}
+                    <Link href="/profile">
+                      <Button
+                        variant={user.hasProfile ? "ghost" : "default"}
+                        size="sm"
+                        className={!user.hasProfile ? "bg-primary text-primary-foreground" : ""}
+                        onClick={() => {
+                          queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+                          if (user?.hasProfile) {
+                            setLocation('/profile');
+                          } else {
+                            setLocation('/profile?action=create');
+                          }
+                        }}
+                      >
+                        <UserCircle className="mr-2 h-4 w-4" />
+                        {user.hasProfile ? "Profile" : "Complete Profile"}
+                      </Button>
+                    </Link>
+                    <Button onClick={() => logoutMutation.mutate()} variant="ghost">Logout</Button>
+                  </DropdownMenuTrigger>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : (
-            <Link href="/auth">
-              <Button>Login / Register</Button>
-            </Link>
+            <>
+              <Link href="/login">
+                <Button variant="ghost" size="sm" className="px-2 sm:px-3 text-xs sm:text-sm">Login</Button>
+              </Link>
+              <Link href="/register">
+                <Button variant="default" size="sm" className="px-2 sm:px-3 text-xs sm:text-sm">Register</Button>
+              </Link>
+            </>
           )}
         </div>
       </div>

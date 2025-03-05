@@ -1,3 +1,20 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add the xs breakpoint that's missing in default Tailwind */
+@layer utilities {
+  @variants responsive {
+    .xs\:inline {
+      display: inline;
+    }
+    .xs\:hidden {
+      display: none;
+    }
+  }
+}
+
 @import './styles/colors.css';
 
 @tailwind base;
