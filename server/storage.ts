@@ -41,7 +41,6 @@ export interface IStorage {
   markAllNotificationsAsRead(userId: number): Promise<void>;
   getUnreadNotificationsCount(userId: number): Promise<number>;
   updateUser(userId: number, updates: Partial<User>): Promise<User>;
-  getProfiles(): Promise<Profile[]>; // Added getProfiles method
 }
 
 export class DatabaseStorage implements IStorage {
@@ -780,16 +779,6 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       log(`Error creating notification: ${error}`);
       throw error;
-    }
-  }
-
-  // Get all profiles for admin use
-  async getProfiles(): Promise<Profile[]> {
-    try {
-      return await db.query.profiles.findMany();
-    } catch (error) {
-      console.error("[STORAGE:general] Error getting profiles:", error);
-      return [];
     }
   }
 }

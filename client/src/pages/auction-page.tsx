@@ -4,7 +4,7 @@ import { Auction, Bid, Profile } from "@shared/schema";
 import BidForm from "@/components/bid-form";
 import { formatDistanceToNow, differenceInSeconds } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Clock, Store, User, MapPin, CreditCard } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, Store, User, MapPin } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -28,14 +28,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Update the BidWithUser type to include bidder info
-type BidWithUser = Bid & {
-  bidder?: {
-    username: string;
-    email?: string;
-  };
-};
-
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
   const { user } = useAuth();
@@ -44,14 +36,13 @@ export default function AuctionPage() {
 
   const { data: auction, isLoading: isLoadingAuction, refetch: refetchAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
     queryKey: [`/api/auctions/${params?.id}`],
-    refetchInterval: 5000,
+    refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
 
-  // Update the bids query to use the new type
-  const { data: bids = [], isLoading: isLoadingBids, refetch: refetchBids } = useQuery<BidWithUser[]>({
+  const { data: bids = [], isLoading: isLoadingBids, refetch: refetchBids } = useQuery<Bid[]>({
     queryKey: [`/api/auctions/${params?.id}/bids`],
     enabled: !!auction,
-    refetchInterval: 5000,
+    refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
 
   useEffect(() => {
@@ -263,20 +254,20 @@ export default function AuctionPage() {
           <div className="prose max-w-none">
             <p>{auction.description}</p>
           </div>
-
+          
           {/* Payment button for winning bidder */}
-          {auction.status === "ended" &&
-            user?.id === auction.winningBidderId &&
-            auction.paymentStatus !== "completed" && (
-              <div className="mt-4">
-                <Link href={`/auction/${auction.id}/pay`}>
-                  <Button size="lg" className="w-full" variant="default">
-                    <CreditCard className="mr-2 h-5 w-5" />
-                    Complete Purchase
-                  </Button>
-                </Link>
-              </div>
-            )}
+          {auction.status === "ended" && 
+           user?.id === auction.winningBidderId && 
+           auction.paymentStatus !== "completed" && (
+            <div className="mt-4">
+              <Link href={`/auction/${auction.id}/pay`}>
+                <Button size="lg" className="w-full" variant="default">
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  Complete Purchase
+                </Button>
+              </Link>
+            </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-lg">
@@ -321,18 +312,10 @@ export default function AuctionPage() {
                     className="flex justify-between items-center p-3 bg-muted rounded-lg"
                   >
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{formatPrice(bid.amount)}</span>
-                        {bid.bidderId === user?.id && (
-                          <Badge variant="outline" className="ml-2">Your Bid</Badge>
-                        )}
-                        {(user?.role === "admin" || user?.role === "seller_admin") && bid.bidder && (
-                          <span className="text-sm text-muted-foreground">
-                            by {bid.bidder.username}
-                            {bid.bidder.email && ` (${bid.bidder.email})`}
-                          </span>
-                        )}
-                      </div>
+                      <span className="font-medium">{formatPrice(bid.amount)}</span>
+                      {bid.bidderId === user?.id && (
+                        <Badge variant="outline" className="ml-2">Your Bid</Badge>
+                      )}
                     </div>
                     <span className="text-sm text-muted-foreground">
                       {formatDistanceToNow(new Date(bid.timestamp), {

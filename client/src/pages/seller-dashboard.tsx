@@ -42,15 +42,8 @@ const SellerDashboard = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
 
-  console.log("[SellerDashboard] Rendering with user:", {
-    isAuthenticated: !!user,
-    role: user?.role,
-    id: user?.id
-  });
-
   // Redirect if not a seller
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
-    console.log("[SellerDashboard] User not authorized, redirecting");
     return <Redirect to="/" />;
   }
 
@@ -65,18 +58,11 @@ const SellerDashboard = () => {
     select: (data) => data || [],
   });
 
-  // Enhanced Stripe status query with better error handling and retry logic
   const { data: stripeStatus, isLoading: stripeStatusLoading, refetch: refetchStripeStatus } = useQuery<StripeStatus>({
     queryKey: ["/api/seller/status"],
     retry: 3,
     retryDelay: 1000,
-    refetchInterval: (data) => {
-      console.log("[SellerDashboard] Current Stripe status:", data?.status);
-      return data?.status === "pending" ? 5000 : false;
-    },
-    onError: (error) => {
-      console.error("[SellerDashboard] Error fetching Stripe status:", error);
-    }
+    refetchInterval: (data) => data?.status === "pending" ? 5000 : false,
   });
 
   const { data: balance } = useQuery<Balance>({
@@ -96,28 +82,17 @@ const SellerDashboard = () => {
       const success = urlParams.get('success');
       const refresh = urlParams.get('refresh');
 
-      console.log("[SellerDashboard] URL params:", {
-        success,
-        refresh,
-        pathname: window.location.pathname,
-        search: window.location.search
-      });
-
       if (success === 'true' || refresh === 'true') {
-        console.log("[SellerDashboard] Stripe redirect detected, checking account status...");
+        console.log("[Seller Dashboard] Stripe redirect detected, checking account status...");
 
         // Clear the query params first
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
 
-        // Wait a moment before checking status
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
         try {
           // Force refetch the seller status
-          console.log("[SellerDashboard] Initiating status refetch");
           const result = await refetchStripeStatus();
-          console.log("[SellerDashboard] Refetched status:", result.data);
+          console.log("[Seller Dashboard] Refetched status:", result.data);
 
           if (result.data?.status === "verified") {
             toast({
@@ -125,38 +100,19 @@ const SellerDashboard = () => {
               description: "Your Stripe account has been successfully verified!",
               variant: "default",
             });
-          } else if (result.data?.status === "pending") {
-            toast({
-              title: "Account Setup In Progress",
-              description: "Your account is being set up. Please complete any remaining verification steps.",
-            });
           } else {
             toast({
               title: "Account Status Updated",
-              description: "Your Stripe onboarding information has been received.",
+              description: "Please complete any remaining verification steps if required.",
             });
           }
         } catch (error) {
-          console.error("[SellerDashboard] Error checking stripe status:", error);
-
-          // Retry once after a short delay
-          setTimeout(async () => {
-            try {
-              const retryResult = await refetchStripeStatus();
-              console.log("[SellerDashboard] Retry status check:", retryResult.data);
-              toast({
-                title: "Account Status Updated",
-                description: "Your Stripe account information has been received.",
-              });
-            } catch (retryError) {
-              console.error("[SellerDashboard] Retry failed:", retryError);
-              toast({
-                title: "Connection Issue",
-                description: "Account connected but unable to verify current status. Please refresh the page.",
-                variant: "destructive",
-              });
-            }
-          }, 2000);
+          console.error("[Seller Dashboard] Error checking stripe status:", error);
+          toast({
+            title: "Error",
+            description: "Failed to check account status. Please refresh the page.",
+            variant: "destructive",
+          });
         }
       }
     };
@@ -168,7 +124,7 @@ const SellerDashboard = () => {
   const connectWithStripeMutation = useMutation({
     mutationFn: async () => {
       try {
-        console.log("[SellerDashboard] Starting Stripe Connect process...");
+        console.log("Starting Stripe Connect process...");
         const response = await fetch("/api/seller/connect", {
           method: "POST",
           headers: {
@@ -181,35 +137,37 @@ const SellerDashboard = () => {
           if (contentType && contentType.indexOf("application/json") !== -1) {
             try {
               const errorData = await response.json();
-              console.error("[SellerDashboard] Stripe Connect error:", errorData);
+              console.error("Stripe Connect error:", errorData);
               throw new Error(errorData.message || "Failed to connect with Stripe");
             } catch (parseError) {
-              console.error("[SellerDashboard] Error parsing JSON response:", parseError);
+              console.error("Error parsing JSON response:", parseError);
               throw new Error(`Failed to connect with Stripe. Status: ${response.status}`);
             }
           } else {
             const text = await response.text();
-            console.error("[SellerDashboard] Non-JSON error response:", text.substring(0, 200) + "...");
+            console.error("Non-JSON error response:", text.substring(0, 200) + "...");
             throw new Error(`Server error: ${response.status} ${response.statusText}`);
           }
         }
 
         const data = await response.json();
-        console.log("[SellerDashboard] Stripe Connect response:", data);
+        console.log("Stripe Connect response:", data);
 
-        if (!data.url) {
-          console.error("[SellerDashboard] No URL in response:", data);
+        const url = data.url;
+
+        if (!url) {
+          console.error("No URL in response:", data);
           throw new Error('No URL received from Stripe Connect');
         }
 
-        return data.url;
+        return url;
       } catch (error) {
-        console.error("[SellerDashboard] Stripe Connect error:", error);
+        console.error("Stripe Connect error:", error);
         throw error;
       }
     },
     onSuccess: (data) => {
-      console.log("[SellerDashboard] Successfully got Stripe Connect URL:", data.substring(0, 30) + "...");
+      console.log("Successfully got Stripe Connect URL:", data.substring(0, 30) + "...");
       window.open(data, '_blank', 'noopener,noreferrer');
 
       toast({
@@ -225,6 +183,7 @@ const SellerDashboard = () => {
       });
     }
   });
+
 
   // Filter auctions
   const filteredAuctions = auctions ? auctions.filter(auction => {

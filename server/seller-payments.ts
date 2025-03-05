@@ -107,27 +107,15 @@ export class SellerPaymentService {
 
       if (account.charges_enabled && account.payouts_enabled) {
         console.log("[STRIPE] Account fully verified");
-        
-        // Instead of using a non-existent function, let's use getProfiles and filter
-        try {
-          // Look up profile by stripeAccountId directly from the database
-          const profiles = await storage.getProfiles();
-          const matchingProfile = profiles.find(p => p.stripeAccountId === accountId);
-          
-          if (matchingProfile) {
-            console.log("[STRIPE] Found matching profile for account ID, updating to verified");
-            await storage.updateSellerStripeAccount(matchingProfile.userId, {
-              accountId: accountId,
-              status: "verified"
-            });
-          } else {
-            console.log("[STRIPE] No matching profile found for Stripe account ID:", accountId);
-          }
-        } catch (updateError) {
-          console.error("[STRIPE] Failed to update local profile status:", updateError);
-          // Continue with verification status even if profile update fails
+        // Update the local status if verified
+        const profile = await storage.findProfileByStripeAccountId(accountId);
+        if (profile) {
+          console.log("[STRIPE] Updating local profile status to verified");
+          await storage.updateSellerStripeAccount(profile.userId, {
+            accountId: accountId,
+            status: "verified"
+          });
         }
-        
         return "verified";
       } else if (account.details_submitted) {
         console.log("[STRIPE] Account pending verification");
@@ -141,11 +129,9 @@ export class SellerPaymentService {
       return "pending";
     } catch (error) {
       console.error("[STRIPE] Error checking account status:", error);
-      if (error && typeof error === 'object' && 'type' in error) {
-        if (error.type === 'StripePermissionError') {
-          console.log("[STRIPE] Permission error, marking as rejected");
-          return "rejected";
-        }
+      if (error instanceof Stripe.errors.PermissionError) {
+        console.log("[STRIPE] Permission error, marking as rejected");
+        return "rejected";
       }
       console.log("[STRIPE] Unknown error, marking as not_started");
       return "not_started";

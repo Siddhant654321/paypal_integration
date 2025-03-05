@@ -471,47 +471,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add auction bids endpoint
   app.get("/api/auctions/:id/bids", async (req, res) => {
     try {
-      console.log("[BIDS] Fetching bids for auction:", req.params.id, {
-        userRole: req.user?.role,
-        isAdmin: req.user?.role === "admin" || req.user?.role === "seller_admin"
-      });
-
       const bids = await storage.getBidsForAuction(parseInt(req.params.id));
-      console.log("[BIDS] Found", bids.length, "bids");
-
-      // If user is admin or seller_admin, include bidder information
-      if (req.user?.role === "admin" || req.user?.role === "seller_admin") {
-        console.log("[BIDS] User is admin, fetching bidder details");
-        
-        const bidsWithUsers = await Promise.all(bids.map(async (bid) => {
-          const bidder = await storage.getUser(bid.bidderId);
-          console.log("[BIDS] Retrieved bidder info for bid", bid.id, {
-            bidderId: bid.bidderId,
-            bidderFound: !!bidder,
-            bidderUsername: bidder?.username
-          });
-
-          return {
-            ...bid,
-            bidder: bidder ? {
-              username: bidder.username,
-              email: bidder.email
-            } : undefined
-          };
-        }));
-
-        console.log("[BIDS] Sending response with bidder details", {
-          totalBids: bidsWithUsers.length,
-          bidsWithBidders: bidsWithUsers.filter(b => b.bidder).length
-        });
-
-        return res.json(bidsWithUsers);
-      }
-
-      console.log("[BIDS] User is not admin, sending bids without bidder details");
       res.json(bids);
     } catch (error) {
-      console.error("[BIDS] Error fetching bids:", error);
+      console.error("Error fetching bids:", error);
       res.status(500).json({ message: "Failed to fetch bids" });
     }
   });
@@ -886,7 +849,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData: Partial<Auction> = {};
 
       console.log("Raw date fields from request:", {
-        startDate: data.startDate,endDate: data.endDate,
+        startDate: data.startDate,
+        endDate: data.endDate,
         start_date: data.start_date,
         end_date: data.end_date,
         startDateDay: data.startDateDay,
@@ -1762,7 +1726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      // Calculate activebidders (unique bidders across all auctions)
+      // Calculate active bidders (unique bidders across all auctions)
       const allBidders = new Set();
       let totalBidsCount = 0;
 
@@ -2091,30 +2055,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ status: "not_started" });
       }
 
-      try {
-        const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
+      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
 
-        // Update profile with latest status from Stripe if it's changed
-        if (profile.stripeAccountStatus !== status) {
-          await storage.updateSellerStripeAccount(req.user.id, {
-            accountId: profile.stripeAccountId,
-            status
-          });
-        }
-
-        return res.json({ 
-          status,
-          accountId: profile.stripeAccountId
-        });
-      } catch (stripeError) {
-        console.error("[Seller Status] Stripe error:", stripeError);
-        // Return the current known status from the database instead of failing
-        return res.json({
-          status: profile.stripeAccountStatus || "pending",
+      // Update profile with latest status from Stripe if it's changed
+      if (profile.stripeAccountStatus !== status) {
+        await storage.updateSellerStripeAccount(req.user.id, {
           accountId: profile.stripeAccountId,
-          error: "Could not refresh Stripe account status"
+          status
         });
       }
+
+      return res.json({ 
+        status,
+        accountId: profile.stripeAccountId
+      });
     } catch (error) {
       console.error("[Seller Status] Error:", error);
       return res.status(500).json({ 
