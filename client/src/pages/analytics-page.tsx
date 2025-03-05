@@ -188,7 +188,7 @@ export default function AnalyticsPage() {
                   formatter={(value) => [formatPrice(value as number), "Average Price"]}
                   contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
                 />
-                <Bar dataKey="averagePrice" fill={tertiaryColor} />
+                <Bar dataKey="averagePrice" fill={primaryColor} /> {/* Changed fill color */}
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -208,7 +208,7 @@ export default function AnalyticsPage() {
                 <Tooltip
                   contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
                 />
-                <Bar dataKey="count" fill={secondaryColor} />
+                <Bar dataKey="count" fill={secondaryColor} /> {/* Changed fill color */}
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

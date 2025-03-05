@@ -1,13 +1,14 @@
+
 import React from 'react';
 import { formatPrice } from '@/utils/formatters';
 
-interface AveragePriceData {
+interface AveragePriceItem {
   species: string;
   averagePrice: number;
 }
 
 interface AveragePricesChartProps {
-  averagePrices: AveragePriceData[];
+  averagePrices: AveragePriceItem[];
 }
 
 export default function AveragePricesChart({ averagePrices }: AveragePricesChartProps) {
@@ -27,11 +28,11 @@ export default function AveragePricesChart({ averagePrices }: AveragePricesChart
     <div className="space-y-4">
       {averagePrices.map((item, index) => (
         <div key={index} className="space-y-1">
-          <div className="flex justify-between text-sm">
-            <span>{item.species}</span>
-            <span className="text-muted-foreground">{formatPrice(item.averagePrice)}</span>
+          <div className="flex justify-between">
+            <span className="text-sm font-medium capitalize">{item.species}</span>
+            <span className="text-sm text-muted-foreground">{formatPrice(item.averagePrice)}</span>
           </div>
-          <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
             <div 
               className="absolute inset-y-0 left-0 rounded-full"
               style={{ 
