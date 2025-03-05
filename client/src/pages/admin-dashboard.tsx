@@ -60,7 +60,10 @@ import {
 import axios from "axios";
 import AuctionCard from "@/components/auction-card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-
+import { FileUpload } from "@/components/file-upload";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { X } from "lucide-react";
+import { Label } from "@/components/ui/label";
 
 // Types
 type SellerStripeStatus = {
@@ -277,6 +280,33 @@ function AdminDashboard() {
   const handleEditAuction = (auction: Auction) => {
     setSelectedAuction(auction);
   };
+
+  const updateAuctionMutation = useMutation({
+    mutationFn: async (values: any) => {
+      await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, values);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      toast({
+        title: "Success",
+        description: "Auction updated successfully",
+      });
+      if (onClose) onClose();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: "Failed to update auction: " + error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (values: any) => {
+    updateAuctionMutation.mutate(values);
+  };
+
 
   return (
     <div className="container mx-auto py-8">
@@ -802,6 +832,7 @@ function AdminDashboard() {
         <EditAuctionDialog
           auction={selectedAuction}
           onClose={closeEditDialog}
+          updateAuctionMutation={updateAuctionMutation}
         />
       )}
     </div>
@@ -899,8 +930,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                     {bids.map((bid) => (
                       <div key={bid.id} className="p-3 border rounded-lg">
                         <div className="flex justify-between items-center">
-                          <div>
-                            <p className="font-medium">${bid.amount}</p>
+                          <div>                          <p className="font-medium">${bid.amount}</p>
                             <p className="text-sm text-muted-foreground">
                               {new Date(bid.timestamp).toLocaleString()}
                             </p>
@@ -1061,7 +1091,7 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
   );
 }
 
-function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: () => void }) {
+function EditAuctionDialog({ auction, onClose, updateAuctionMutation }: { auction: Auction; onClose?: () => void; updateAuctionMutation: any }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [imageUrl, setImageUrl] = useState(auction.imageUrl || "");
@@ -1253,9 +1283,61 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
               />
             </div>
 
+            {/* Add image management section */}
+            <div className="space-y-2">
+              <Label>Images</Label>
+              <div className="grid gap-4">
+                <FileUpload
+                  value={form.watch("images")}
+                  onChange={(urls) => form.setValue("images", urls)}
+                  onRemove={(index) => {
+                    const currentImages = form.watch("images") || [];
+                    form.setValue(
+                      "images",
+                      currentImages.filter((_, i) => i !== index)
+                    );
+                  }}
+                  accept="image/*"
+                  maxFiles={5}
+                />
+
+                {/* Preview existing images */}
+                {form.watch("images")?.length > 0 && (
+                  <ScrollArea className="h-32 w-full rounded-md border">
+                    <div className="flex gap-2 p-2">
+                      {form.watch("images").map((url, index) => (
+                        <div key={url} className="relative">
+                          <img
+                            src={url}
+                            alt={`Auction image ${index + 1}`}
+                            className="h-24 w-24 rounded-md object-cover"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute -right-2 -top-2 h-6 w-6"
+                            onClick={() => {
+                              const currentImages = form.watch("images") || [];
+                              form.setValue(
+                                "images",
+                                currentImages.filter((_, i) => i !== index)
+                              );
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
+            </div>
+
             <DialogFooter>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting && (
+              <Button type="submit" disabled={updateAuctionMutation.isPending}>
+                {updateAuctionMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
                 Save Changes

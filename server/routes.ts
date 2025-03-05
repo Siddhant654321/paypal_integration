@@ -821,9 +821,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auctionId = parseInt(req.params.id);
       const data = req.body;
 
-      console.log("Received auction update data:", data);
-      console.log("Request body type:", typeof data);
-      console.log("Request body keys:", Object.keys(data));
+      console.log("[ADMIN AUCTION UPDATE] Received update data:", {
+        auctionId,
+        updateData: data,
+        hasImages: !!data.images
+      });
 
       // Get the existing auction to compare with
       const existingAuction = await storage.getAuction(auctionId);
@@ -831,311 +833,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Auction not found" });
       }
 
-      // Map legacy categories to new format if present
-      if (data.category) {
-        const categoryMap = {
-          "show": "Show Quality",
-          "purebred": "Purebred & Production",
-          "fun": "Fun & Mixed"
-        };
+      // Initialize update data object
+      const updateData: any = {
+        ...data,
+        images: data.images || existingAuction.images // Preserve existing images if none provided
+      };
 
-        if (categoryMap[data.category]) {
-          data.category = categoryMap[data.category];
-          console.log(`Mapped category from ${req.body.category} to ${data.category}`);
-        }
+      // Ensure we're not losing the primary image
+      if (!updateData.imageUrl && updateData.images?.length > 0) {
+        updateData.imageUrl = updateData.images[0];
       }
 
-      // Initialize update data object
-      const updateData: Partial<Auction> = {};
-
-      console.log("Raw date fields from request:", {
-        startDate: data.startDate,
-        endDate: data.endDate,
-        start_date: data.start_date,
-        end_date: data.end_date,
-        startDateDay: data.startDateDay,
-        startDateMonth: data.startDateMonth,
-        startDateYear: data.startDateYear,
-        endDateDay: data.endDateDay,
-        endDateMonth: data.endDateMonth,
-        endDateYear: data.endDateYear
+      console.log("[ADMIN AUCTION UPDATE] Processed update data:", {
+        images: updateData.images,
+        imageUrl: updateData.imageUrl
       });
 
-      // Look for date in various formats - log all attempts for debugging
-      console.log("Trying to parse dates from all possible formats");
-
-      // Direct date field handling
-      if(data.startDate) {
-        console.log("Found startDate field:", data.startDate);
-        if (typeof data.startDate === 'string') {
-          try {
-            const parsedDate = new Date(data.startDate);
-            if (!isNaN(parsedDate.getTime())) {
-              updateData.startDate = parsedDate;
-              console.log("Successfully parsed startDate:", updateData.startDate);
-            } else {
-              console.log("Invalid date format in startDate:", data.startDate);
-            }
-          } catch (e) {
-            console.error("Error parsing startDate:", e);
-          }
-        } else if (data.startDate instanceof Date) {
-          updateData.startDate = data.startDate;
-          console.log("Using Date object for startDate:", updateData.startDate);
-        }
-      }
-
-      if (data.endDate) {
-        console.log("Found endDate field:", data.endDate);
-        if (typeof data.endDate === 'string') {
-          try {
-            const parsedDate = new Date(data.endDate);
-            if (!isNaN(parsedDate.getTime())) {
-              updateData.endDate = parsedDate;
-              console.log("Successfully parsed endDate:", updateData.endDate);
-            } else {
-              console.log("Invalid date format in endDate:", data.endDate);
-            }
-          } catch (e) {
-            console.error("Error parsing endDate:", e);
-          }
-        } else if (data.endDate instanceof Date) {
-          updateData.endDate = data.endDate;
-          console.log("Using Date object for endDate:", updateData.endDate);
-        }
-      }
-
-      // Alternative field names
-      if (!updateData.startDate && data.start_date) {
-        console.log("Found start_date field:", data.start_date);
-        try {
-          const parsedDate = new Date(data.start_date);
-          if (!isNaN(parsedDate.getTime())) {
-            updateData.startDate = parsedDate;
-            console.log("Successfully parsed start_date:", updateData.startDate);
-          }
-        } catch (e) {
-          console.error("Error parsing start_date:", e);
-        }
-      }
-
-      if (!updateData.endDate && data.end_date) {
-        console.log("Found end_date field:", data.end_date);
-        try {
-          const parsedDate = new Date(data.end_date);
-          if (!isNaN(parsedDate.getTime())) {
-            updateData.endDate = parsedDate;
-            console.log("Successfully parsed end_date:", updateData.endDate);
-          }
-        } catch (e) {
-          console.error("Error parsing end_date:", e);
-        }
-      }
-
-      // Handle special case for date fields in form data
-      if (data.startDateMonth && data.startDateDay && data.startDateYear) {
-        try {
-          const startDate = new Date(
-            parseInt(data.startDateYear),
-            parseInt(data.startDateMonth) - 1, // JS months are 0-indexed
-            parseInt(data.startDateDay)
-          );
-
-          if (!isNaN(startDate.getTime())) {
-            updateData.startDate = startDate;
-            console.log("Setting startDate from parts:", updateData.startDate);
-          } else {
-            console.error("Invalid date created from parts:", {
-              year: data.startDateYear,
-              month: data.startDateMonth,
-              day: data.startDateDay
-            });
-          }
-        } catch (e) {
-          console.error("Error creating date from parts:", e);
-        }
-      }
-
-      if (data.endDateMonth && data.endDateDay && data.endDateYear) {
-        try {
-          const endDate = new Date(
-            parseInt(data.endDateYear),
-            parseInt(data.endDateMonth) - 1, // JS months are 0-indexed
-            parseInt(data.endDateDay)
-          );
-
-          if(!isNaN(endDate.getTime())) {
-            updateData.endDate = endDate;
-            console.log("Setting endDate from parts:", updateData.endDate);
-          } else {
-            console.error("Invalid date created from parts:", {
-              year: data.endDateYear,
-              month: data.endDateMonth,
-              day: data.endDateDay
-            });
-          }
-        } catch (e) {
-          console.error("Error creating date from parts:", e);
-        }
-      }
-
-      // Process price fields
-      if (data.startPrice !== undefined) {
-        updateData.startPrice = Number(data.startPrice);
-      }
-
-      if (data.reservePrice !== undefined) {
-        updateData.reservePrice = Number(data.reservePrice);
-      }
-
-      if (data.currentPrice !== undefined) {
-        updateData.currentPrice = Number(data.currentPrice);
-      }
-
-      // Process other fields
-      if (data.title !== undefined) updateData.title = data.title;
-      if (data.description !== undefined) updateData.description = data.description;
-      if (data.species !== undefined) updateData.species = data.species;
-      if (data.category !== undefined) updateData.category = data.category;
-      if (data.status !== undefined) updateData.status = data.status;
-      if (data.approved !== undefined) updateData.approved = data.approved;
-
-      // Handle date components if they were sent from a form
-      console.log("Checking for date components in the request");
-
-      // Always try to extract date information, regardless of other conditions
-      try {
-        // Start date from individual components
-        if (data.startDateYear && data.startDateMonth && data.startDateDay) {
-          console.log("Found startDate components:", {
-            year: data.startDateYear,
-            month: data.startDateMonth,
-            day: data.startDateDay
-          });
-
-          try {
-            // Create date from component parts, being careful about types
-            const year = parseInt(data.startDateYear);
-            const month = parseInt(data.startDateMonth) - 1; // JS months are 0-indexed
-            const day = parseInt(data.startDateDay);
-
-            console.log("Parsed startDate components:", { year, month, day });
-
-            if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-              const dateObj = new Date(year, month, day);
-
-              if (!isNaN(dateObj.getTime())) {
-                updateData.startDate = dateObj;
-                console.log("Successfully created startDate from components:", updateData.startDate);
-              } else {
-                console.log("Invalid date created from components");
-              }
-            }
-          } catch (e) {
-            console.error("Error creating startDate from components:", e);
-          }
-        }
-
-        // End date from individual components
-        if (data.endDateYear && data.endDateMonth && data.endDateDay) {
-          console.log("Found endDate components:", {
-            year: data.endDateYear,
-            month: data.endDateMonth,
-            day: data.endDateDay
-          });
-
-          try {
-            // Create date from component parts, being careful about types
-            const year = parseInt(data.endDateYear);
-            const month = parseInt(data.endDateMonth) - 1; // JS months are 0-indexed
-            const day = parseInt(data.endDateDay);
-
-            console.log("Parsed endDate components:", { year, month, day });
-
-            if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-              const dateObj = new Date(year, month, day);
-
-              if (!isNaN(dateObj.getTime())) {
-                updateData.endDate = dateObj;
-                console.log("Successfully created endDate from components:", updateData.endDate);
-              } else {
-                console.log("Invalid date created from components");
-              }
-            }
-          } catch (e) {
-            console.error("Error creating endDate from components:", e);
-          }
-        }
-
-        // Try to handle form data with various field names
-        if (!updateData.startDate || !updateData.endDate) {
-          console.log("Trying to extract dates from form data with various field names");
-
-          // Additional field name variations
-          const possibleStartDateFields = [
-            'startDate', 'start_date', 'auction_start_date', 
-            'auctionStartDate', 'start', 'beginDate'
-          ];
-
-          const possibleEndDateFields = [
-            'endDate', 'end_date', 'auction_end_date', 
-            'auctionEndDate', 'end', 'closeDate'
-          ];
-
-          // Try each possible field name for start date
-          if (!updateData.startDate) {
-            for (const field of possibleStartDateFields) {
-              if (data[field]) {
-                try {
-                  const parsedDate = new Date(data[field]);
-                  if (!isNaN(parsedDate.getTime())) {
-                    updateData.startDate = parsedDate;
-                    console.log(`Found valid startDate in field '${field}':`, updateData.startDate);
-                    break;
-                  }
-                } catch (e) {
-                  console.log(`Error parsing ${field}:`, e);
-                }
-              }
-            }
-          }
-
-          // Try each possible field name for end date
-          if (!updateData.endDate) {
-            for (const field of possibleEndDateFields) {
-              if (data[field]) {
-                try {
-                  const parsedDate = new Date(data[field]);
-                  if (!isNaN(parsedDate.getTime())) {
-                    updateData.endDate = parsedDate;
-                    console.log(`Found valid endDate in field '${field}':`, updateData.endDate);
-                    break;
-                  }
-                } catch (e) {
-                  console.log(`Error parsing ${field}:`, e);
-                }
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error processing date fields:", err);
-      }
-
-      // Make sure we actually have data to update
-      if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ 
-          message: "No valid data provided for update",
-          receivedData: data
-        });
-      }
-
-      console.log("Updating auction with processed data:", updateData);
       const updatedAuction = await storage.updateAuction(auctionId, updateData);
+      console.log("[ADMIN AUCTION UPDATE] Successfully updated auction:", {
+        id: updatedAuction.id,
+        imageCount: updatedAuction.images?.length || 0
+      });
+
       res.json(updatedAuction);
     } catch (error) {
-      console.error("Error updating auction:", error);
-      res.status(500).json({ 
+      console.error("[ADMIN AUCTION UPDATE] Error:", error);
+      res.status(500).json({
         message: "Failed to update auction",
         error: error instanceof Error ? error.message : String(error)
       });
@@ -2015,7 +1738,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.log("[Stripe Connect] Profile found:", profile.email);
 
-      console.log("[Stripe Connect] Creating seller account");
+      console.log("[StripeConnect] Creating seller account");
       const { accountId, url } = await SellerPaymentService.createSellerAccount(
         profile
       );

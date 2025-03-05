@@ -47,24 +47,39 @@ export const upload = multer({
 // Handler for file uploads
 export async function handleFileUpload(req: Request, res: Response) {
   try {
+    console.log("[UPLOAD] Starting file upload handling");
+
     if (!req.files || !Array.isArray(req.files)) {
+      console.log("[UPLOAD] No files uploaded");
       return res.status(400).json({ message: 'No files uploaded' });
     }
 
     // Process uploaded files
     const files = req.files as Express.Multer.File[];
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    console.log("[UPLOAD] Processing", files.length, "files");
+
+    // Get the correct base URL for the environment
+    const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
+    const host = process.env.NODE_ENV === 'production' ? 'poultryauction.co' : req.get('host');
+    const baseUrl = `${protocol}://${host}`;
+
+    console.log("[UPLOAD] Using base URL:", baseUrl);
 
     // Generate URLs for the uploaded files
-    const urls = files.map(file => `${baseUrl}/uploads/${file.filename}`);
+    const urls = files.map(file => {
+      const url = `${baseUrl}/uploads/${file.filename}`;
+      console.log("[UPLOAD] Generated URL:", url);
+      return url;
+    });
 
+    console.log("[UPLOAD] Successfully processed all files");
     res.status(201).json({ 
       message: 'Files uploaded successfully',
       urls,
       count: files.length
     });
   } catch (error) {
-    console.error('Error uploading files:', error);
+    console.error('[UPLOAD] Error uploading files:', error);
     res.status(500).json({ message: 'Failed to upload files' });
   }
 }
