@@ -89,6 +89,9 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
     return null;
   };
 
+  // Handle empty data case with a simple message
+  const hasData = data && data.length > 0;
+
   return (
     <Card>
       <CardHeader className="space-y-1.5 p-4 md:p-6">
@@ -133,7 +136,7 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
         </div>
       </CardHeader>
       <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
-        {formattedData && formattedData.length > 0 ? (
+        {hasData ? (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart 
               data={formattedData} 

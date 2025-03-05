@@ -82,16 +82,15 @@ export default function AnalyticsPage() {
     );
   }
 
-  // Check if we have valid market stats data
-  const hasData = marketStats && 
-    (marketStats.priceData?.length > 0 || 
-     marketStats.popularCategories?.length > 0);
+  // Always render the UI, even with empty data
+  // This ensures that filters and UI components are visible
+  const hasMarketStats = !!marketStats;
 
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
       <h1 className="text-2xl md:text-3xl font-bold">Market Analytics</h1>
 
-      {hasData ? (
+      {hasMarketStats ? (
         <>
           {/* Price Trend Graph with updated data format and teal dots */}
           <PriceTrendGraph
@@ -233,15 +232,12 @@ export default function AnalyticsPage() {
         </Card>
       </div>
         </>
-      ) : (!marketStats || 
-           (marketStats.priceData.length === 0 && 
-            marketStats.popularCategories.length === 0 && 
-            marketStats.averagePrices.length === 0)) ? (
+      ) : (
         <div className="py-8 text-center">
           <div className="mx-auto max-w-md p-6 bg-muted rounded-lg">
-            <h3 className="text-xl font-semibold mb-2">No Market Data Available</h3>
+            <h3 className="text-xl font-semibold mb-2">Loading Market Data...</h3>
             <p className="text-muted-foreground">
-              There isn't enough auction data to display analytics yet. As more auctions complete, statistics will be shown here.
+              Please wait while we retrieve the market analytics data.
             </p>
           </div>
         </div>
