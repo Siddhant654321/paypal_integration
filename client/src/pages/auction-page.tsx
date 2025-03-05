@@ -149,11 +149,9 @@ export default function AuctionPage() {
           <div className="aspect-square w-full overflow-hidden rounded-lg bg-muted">
             <img
               src={auction.imageUrl && auction.imageUrl.trim() !== '' ?
-                (auction.imageUrl.startsWith('http') || auction.imageUrl.startsWith('/') ?
-                  auction.imageUrl : `/uploads/${auction.imageUrl}`) :
+                auction.imageUrl :
                 (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ?
-                  (auction.images[0].startsWith('http') || auction.images[0].startsWith('/') ?
-                    auction.images[0] : `/uploads/${auction.images[0]}`) :
+                  auction.images[0] :
                   '/images/placeholder.jpg')}
               alt={auction.title}
               className="w-full h-full object-cover"
@@ -168,7 +166,7 @@ export default function AuctionPage() {
               {auction.images.map((img, index) => (
                 <div key={index} className="aspect-square overflow-hidden rounded cursor-pointer">
                   <img
-                    src={img.startsWith('http') || img.startsWith('/') ? img : `/uploads/${img}`}
+                    src={img}
                     alt={`${auction.title} - Image ${index + 1}`}
                     className="w-full h-full object-cover"
                     onError={(e) => {

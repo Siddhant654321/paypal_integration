@@ -52,16 +52,20 @@ export default function AuctionCard({ auction, showStatus, actions }: Props) {
 
   return (
     <Card className="overflow-hidden">
-      <div className="aspect-square w-full overflow-hidden bg-muted">
-        <img
-          src={getValidImageUrl(auction)}
-          alt={auction.title}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            e.currentTarget.src = '/images/placeholder.jpg';
-          }}
-        />
-      </div>
+      <div className="aspect-square w-full bg-muted rounded-md overflow-hidden">
+          <img
+            src={auction.imageUrl && auction.imageUrl.trim() !== '' ? 
+              auction.imageUrl : 
+              (auction.images && Array.isArray(auction.images) && auction.images.length > 0 ?
+                auction.images[0] :
+                '/images/placeholder.jpg')}
+            alt={auction.title}
+            className="h-full w-full object-cover"
+            onError={(e) => {
+              e.currentTarget.src = '/images/placeholder.jpg';
+            }}
+          />
+        </div>
       <CardContent className="p-4">
         <div className="flex gap-2 mb-2">
           <Badge>{auction.species}</Badge>
