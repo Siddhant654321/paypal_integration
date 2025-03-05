@@ -58,8 +58,8 @@ export class SellerPaymentService {
       // Create an account link for onboarding
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
-        refresh_url: `${BASE_URL}/seller-dashboard?refresh=true`,
-        return_url: `${BASE_URL}/seller-dashboard?success=true`,
+        refresh_url: `${BASE_URL}/seller/dashboard?refresh=true`,
+        return_url: `${BASE_URL}/seller/dashboard?success=true`,
         type: 'account_onboarding',
         collect: 'eventually_due',
       });
@@ -68,7 +68,7 @@ export class SellerPaymentService {
         throw new Error("Failed to generate Stripe Connect URL");
       }
 
-      console.log("Generated account link with return URL:", `${BASE_URL}/seller-dashboard?success=true`);
+      console.log("Generated account link with return URL:", `${BASE_URL}/seller/dashboard?success=true`);
 
       // Update profile with Stripe account ID and initial status
       await storage.updateSellerStripeAccount(profile.userId, {
@@ -161,7 +161,6 @@ export class SellerPaymentService {
       throw error;
     }
   }
-
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
       const profile = await storage.getProfile(sellerId);
