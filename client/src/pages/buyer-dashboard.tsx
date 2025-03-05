@@ -9,9 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-
 type BidWithAuction = Bid & {
   auction: Auction;
   isWinningBid: boolean;
@@ -21,33 +18,19 @@ type BidWithAuction = Bid & {
 export default function BuyerDashboard() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
-  const navigate = useNavigate();
-
-  // Handle authentication check
-  useEffect(() => {
-    if (!user || user.role !== "buyer") {
-      navigate("/");
-    }
-  }, [user, navigate]);
 
   const { data: bidsWithAuctions, isLoading } = useQuery<BidWithAuction[]>({
     queryKey: ["/api/user/bids"],
-    enabled: !!user && user.role === "buyer",
   });
 
   const filteredBids = bidsWithAuctions?.filter(bid =>
     bid.auction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    bid.auction.description?.toLowerCase().includes(searchTerm.toLowerCase() || "")
+    bid.auction.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
-  
-  // If not authenticated or not a buyer, don't render the dashboard
-  if (!user || user.role !== "buyer") {
-    return null;
-  }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 max-w-7xl">
-      <h1 className="text-2xl md:text-3xl font-bold mb-6 md:mb-8">My Bids</h1>
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <h1 className="text-3xl font-bold mb-8">My Bids</h1>
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />

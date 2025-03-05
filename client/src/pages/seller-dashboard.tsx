@@ -37,20 +37,15 @@ interface PayoutSchedule {
   interval: string;
 }
 
-import { useNavigate } from "react-router-dom";
-
 const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const navigate = useNavigate();
 
-  // Handle authentication check
-  useEffect(() => {
-    if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
-      navigate("/");
-    }
-  }, [user, navigate]);
+  // Redirect if not a seller
+  if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
+    return <Redirect to="/" />;
+  }
 
   // Fetch profile data
   const { data: profile } = useQuery({
@@ -61,7 +56,6 @@ const SellerDashboard = () => {
   const { data: auctions, isLoading: auctionsLoading } = useQuery<Auction[]>({
     queryKey: ["/api/seller/auctions"],
     select: (data) => data || [],
-    enabled: !!user && (user.role === "seller" || user.role === "seller_admin"),
   });
 
   const { data: stripeStatus, isLoading: stripeStatusLoading, refetch: refetchStripeStatus } = useQuery<StripeStatus>({
@@ -69,23 +63,17 @@ const SellerDashboard = () => {
     retry: 3,
     retryDelay: 1000,
     refetchInterval: (data) => data?.status === "pending" ? 5000 : false,
-    enabled: !!user && (user.role === "seller" || user.role === "seller_admin"),
   });
 
   const { data: balance } = useQuery<Balance>({
     queryKey: ["/api/seller/balance"],
-    enabled: !!stripeStatus?.status && stripeStatus?.status === "verified",
+    enabled: stripeStatus?.status === "verified",
   });
 
   const { data: payoutSchedule } = useQuery<PayoutSchedule>({
     queryKey: ["/api/seller/payout-schedule"],
-    enabled: !!stripeStatus?.status && stripeStatus?.status === "verified",
+    enabled: stripeStatus?.status === "verified",
   });
-  
-  // If not authenticated or not a seller, don't render the dashboard
-  if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
-    return null;
-  }
 
   // Enhanced check for Stripe success return
   useEffect(() => {
@@ -394,11 +382,11 @@ const SellerDashboard = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 max-w-7xl">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold">Seller Dashboard</h1>
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <h1 className="text-3xl font-bold">Seller Dashboard</h1>
         <Link href="/seller/auction/new">
-          <Button className="w-full sm:w-auto">
+          <Button>
             <Plus className="w-4 h-4 mr-2" />
             Create New Auction
           </Button>
