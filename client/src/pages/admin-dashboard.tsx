@@ -1097,7 +1097,6 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [imageUrl, setImageUrl] = useState(auction.imageUrl || "");
-  const [images, setImages] = useState(auction.images || []);
 
   const form = useForm<z.infer<typeof insertAuctionSchema>>({
     resolver: zodResolver(insertAuctionSchema),
@@ -1137,12 +1136,6 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
       });
     },
   });
-
-  const handleFileChange = (files: File[]) => {
-    if (files && files.length > 0) {
-      setImages(files);
-    }
-  };
 
   return (
     <Dialog open onOpenChange={() => onClose?.()}>
@@ -1338,7 +1331,16 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
               <div className="grid gap-4">
                 <FileUpload
                   value={form.watch("images")}
-                  onChange={handleFileChange}
+                  onChange={(urls) => {
+                    console.log("[EditAuction] New images uploaded:", urls);
+                    const currentImages = form.watch("images") || [];
+                    const newImages = [...currentImages, ...urls];
+                    form.setValue("images", newImages);
+
+                    if (!form.watch("imageUrl") && newImages.length > 0) {
+                      form.setValue("imageUrl", newImages[0]);
+                    }
+                  }}
                   onRemove={(index) => {
                     const currentImages = form.watch("images") || [];
                     const newImages = currentImages.filter((_, i) => i !== index);

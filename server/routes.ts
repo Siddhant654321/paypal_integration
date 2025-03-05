@@ -711,17 +711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // File upload endpoint
-  app.post("/api/upload", requireAuth, upload.array('files', 5), (req, res) => {
-  try {
-    handleFileUpload(req, res);
-  } catch (error) {
-    console.error('[UPLOAD] Uncaught error in file upload handler:', error);
-    res.status(500).json({ 
-      message: 'An unexpected error occurred during file upload',
-      error: error instanceof Error ? error.message : String(error)
-    });
-  }
-});
+  app.post("/api/upload", requireAuth, upload.array('files', 5), handleFileUpload);
 
   // Update the get users endpoint to properly filter by approval status
   app.get("/api/admin/users", requireAdmin, async (req, res) => {

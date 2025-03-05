@@ -1,3 +1,4 @@
+
 import React, { useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ export function FileUpload({
     if (!e.target.files || e.target.files.length === 0) return;
 
     const selectedFiles = Array.from(e.target.files);
-
+    
     // Limit number of files
     if (multiple && (previews.length + selectedFiles.length > maxFiles)) {
       alert(`You can upload a maximum of ${maxFiles} files.`);
@@ -34,7 +35,7 @@ export function FileUpload({
 
     // Create preview URLs
     const newPreviews = selectedFiles.map(file => URL.createObjectURL(file));
-
+    
     // Update state
     if (multiple) {
       setPreviews(prev => [...prev, ...newPreviews]);
@@ -50,20 +51,17 @@ export function FileUpload({
   };
 
   const removeFile = (index: number) => {
-    const newPreviews = [...previews];
-    const removedFileUrl = newPreviews[index];
-    URL.revokeObjectURL(removedFileUrl);
-    newPreviews.splice(index, 1);
-    setPreviews(newPreviews);
-
-    //Correctly update files array with remaining files
-    const remainingFiles = fileInputRef.current?.files;
-    if(remainingFiles){
-        onFilesChange(Array.from(remainingFiles));
-    } else {
-        onFilesChange([]);
+    setPreviews(prev => {
+      const newPreviews = [...prev];
+      URL.revokeObjectURL(newPreviews[index]);
+      newPreviews.splice(index, 1);
+      return newPreviews;
+    });
+    
+    // Notify parent that a file was removed
+    if (fileInputRef.current) {
+      onFilesChange([]); // We can't directly modify the FileList, so signal removal
     }
-
   };
 
   return (
