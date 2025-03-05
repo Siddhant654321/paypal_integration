@@ -107,7 +107,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Serve static files from uploads directory
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  const uploadsPath = path.join(process.cwd(), 'uploads');
+  app.use('/uploads', express.static(uploadsPath, {
+    maxAge: '1d', // Cache for 1 day
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, path) => {
+      if (path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png')) {
+        res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
+      }
+    }
+  }));
 
   // Middleware to check if user is authenticated
   const requireAuth = (req: any, res: any, next: any) => {

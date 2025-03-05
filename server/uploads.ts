@@ -11,10 +11,10 @@ const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 try {
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-    console.log("Created uploads directory at:", UPLOADS_DIR);
+    console.log("[UPLOAD] Created uploads directory at:", UPLOADS_DIR);
   }
 } catch (error) {
-  console.error("Error creating uploads directory:", error);
+  console.error("[UPLOAD] Error creating uploads directory:", error);
 }
 
 // Configure multer storage
@@ -44,6 +44,14 @@ export const upload = multer({
   }
 });
 
+// Helper function to get base URL
+function getBaseUrl(req: Request): string {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const protocol = isProduction ? 'https' : req.protocol;
+  const host = isProduction ? 'poultryauction.co' : req.get('host');
+  return `${protocol}://${host}`;
+}
+
 // Handler for file uploads
 export async function handleFileUpload(req: Request, res: Response) {
   try {
@@ -58,21 +66,25 @@ export async function handleFileUpload(req: Request, res: Response) {
     const files = req.files as Express.Multer.File[];
     console.log("[UPLOAD] Processing", files.length, "files");
 
-    // Get the correct base URL for the environment
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
-    const host = process.env.NODE_ENV === 'production' ? 'poultryauction.co' : req.get('host');
-    const baseUrl = `${protocol}://${host}`;
-
+    // Get base URL
+    const baseUrl = getBaseUrl(req);
     console.log("[UPLOAD] Using base URL:", baseUrl);
 
     // Generate URLs for the uploaded files
     const urls = files.map(file => {
       const url = `${baseUrl}/uploads/${file.filename}`;
-      console.log("[UPLOAD] Generated URL:", url);
+      console.log("[UPLOAD] Generated URL for file:", {
+        filename: file.filename,
+        url: url
+      });
       return url;
     });
 
-    console.log("[UPLOAD] Successfully processed all files");
+    console.log("[UPLOAD] Successfully processed all files:", {
+      count: files.length,
+      urls: urls
+    });
+
     res.status(201).json({ 
       message: 'Files uploaded successfully',
       urls,
