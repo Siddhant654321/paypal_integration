@@ -923,13 +923,15 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                   <div className="flex justify-center">
                     <LoadingSpinner className="h-6 w-6" />
                   </div>
-                ) : !bids?.length ? (                  <p className="text-muted-foreground">No bids found</p>
+                ) : !bids?.length ? (
+                  <p className="text-muted-foreground">No bids found</p>
                 ) : (
                   <div className="space-y-2">
                     {bids.map((bid) => (
                       <div key={bid.id} className="p-3 border rounded-lg">
                         <div className="flex justify-between items-center">
-                          <div>                          <p className="font-medium">${bid.amount}</p>
+                          <div>
+                            <p className="font-medium">${bid.amount}</p>
                             <p className="text-sm text-muted-foreground">
                               {new Date(bid.timestamp).toLocaleString()}
                             </p>
@@ -1095,7 +1097,6 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [imageUrl, setImageUrl] = useState(auction.imageUrl || "");
-  const [images, setImages] = useState<string[]>(auction.images || []);
 
   const form = useForm<z.infer<typeof insertAuctionSchema>>({
     resolver: zodResolver(insertAuctionSchema),
@@ -1115,7 +1116,7 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (values: any) => {
-      console.log("[EditAuction] Updating with values:", values);
+      console.log("[EditAuction] Updating auction with values:", values);
       return await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, values);
     },
     onSuccess: () => {
@@ -1288,38 +1289,15 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
               />
             </div>
 
-            {/* Add image management section */}
             <div className="space-y-2">
               <Label>Images</Label>
-              <div className="grid gap-4">
-                <FileUpload
-                  value={form.watch("images")}
-                  onChange={(urls) => {
-                    form.setValue("images", urls);
-                    // Set first image as primary if none exists
-                    if (!form.watch("imageUrl") && urls.length > 0) {
-                      form.setValue("imageUrl", urls[0]);
-                    }
-                  }}
-                  onRemove={(index) => {
-                    const currentImages = form.watch("images") || [];
-                    const newImages = currentImages.filter((_, i) => i !== index);
-                    form.setValue("images", newImages);
 
-                    // Update imageUrl if primary image was removed
-                    if (form.watch("imageUrl") === currentImages[index]) {
-                      form.setValue("imageUrl", newImages[0] || "");
-                    }
-                  }}
-                  accept="image/*"
-                  maxFiles={5}
-                />
-
-                {/* Preview existing images */}
-                {form.watch("images")?.length > 0 && (
+              {auction.images && auction.images.length > 0 && (
+                <div className="mb-4">
+                  <Label>Current Images</Label>
                   <ScrollArea className="h-32 w-full rounded-md border">
                     <div className="flex gap-2 p-2">
-                      {form.watch("images").map((url, index) => (
+                      {auction.images.map((url, index) => (
                         <div key={url} className="relative">
                           <img
                             src={url}
@@ -1336,7 +1314,6 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
                               const newImages = currentImages.filter((_, i) => i !== index);
                               form.setValue("images", newImages);
 
-                              // Update imageUrl if primary image was removed
                               if (form.watch("imageUrl") === url) {
                                 form.setValue("imageUrl", newImages[0] || "");
                               }
@@ -1348,7 +1325,34 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
                       ))}
                     </div>
                   </ScrollArea>
-                )}
+                </div>
+              )}
+
+              <div className="grid gap-4">
+                <FileUpload
+                  value={form.watch("images")}
+                  onChange={(urls) => {
+                    console.log("[EditAuction] New images uploaded:", urls);
+                    const currentImages = form.watch("images") || [];
+                    const newImages = [...currentImages, ...urls];
+                    form.setValue("images", newImages);
+
+                    if (!form.watch("imageUrl") && newImages.length > 0) {
+                      form.setValue("imageUrl", newImages[0]);
+                    }
+                  }}
+                  onRemove={(index) => {
+                    const currentImages = form.watch("images") || [];
+                    const newImages = currentImages.filter((_, i) => i !== index);
+                    form.setValue("images", newImages);
+
+                    if (form.watch("imageUrl") === currentImages[index]) {
+                      form.setValue("imageUrl", newImages[0] || "");
+                    }
+                  }}
+                  accept="image/*"
+                  maxFiles={5}
+                />
               </div>
             </div>
 
