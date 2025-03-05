@@ -471,10 +471,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add auction bids endpoint
   app.get("/api/auctions/:id/bids", async (req, res) => {
     try {
+      console.log("[BIDS] Fetching bids for auction:", req.params.id, {
+        userRole: req.user?.role,
+        isAdmin: req.user?.role === "admin" || req.user?.role === "seller_admin"
+      });
+
       const bids = await storage.getBidsForAuction(parseInt(req.params.id));
+      console.log("[BIDS] Found", bids.length, "bids");
+
+      // If user is admin or seller_admin, include bidder information
+      if (req.user?.role === "admin" || req.user?.role === "seller_admin") {
+        console.log("[BIDS] User is admin, fetching bidder details");
+        
+        const bidsWithUsers = await Promise.all(bids.map(async (bid) => {
+          const bidder = await storage.getUser(bid.bidderId);
+          console.log("[BIDS] Retrieved bidder info for bid", bid.id, {
+            bidderId: bid.bidderId,
+            bidderFound: !!bidder,
+            bidderUsername: bidder?.username
+          });
+
+          return {
+            ...bid,
+            bidder: bidder ? {
+              username: bidder.username,
+              email: bidder.email
+            } : undefined
+          };
+        }));
+
+        console.log("[BIDS] Sending response with bidder details", {
+          totalBids: bidsWithUsers.length,
+          bidsWithBidders: bidsWithUsers.filter(b => b.bidder).length
+        });
+
+        return res.json(bidsWithUsers);
+      }
+
+      console.log("[BIDS] User is not admin, sending bids without bidder details");
       res.json(bids);
     } catch (error) {
-      console.error("Error fetching bids:", error);
+      console.error("[BIDS] Error fetching bids:", error);
       res.status(500).json({ message: "Failed to fetch bids" });
     }
   });
@@ -849,8 +886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData: Partial<Auction> = {};
 
       console.log("Raw date fields from request:", {
-        startDate: data.startDate,
-        endDate: data.endDate,
+        startDate: data.startDate,endDate: data.endDate,
         start_date: data.start_date,
         end_date: data.end_date,
         startDateDay: data.startDateDay,
@@ -1726,7 +1762,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      // Calculate active bidders (unique bidders across all auctions)
+      // Calculate activebidders (unique bidders across all auctions)
       const allBidders = new Set();
       let totalBidsCount = 0;
 
