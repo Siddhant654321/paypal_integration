@@ -36,8 +36,8 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
   const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#8884d8';
   const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#ccc';
   const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#82ca9d';
-  const tealColor = '#43AA8B'; // Added teal color
-  const yellowColor = '#FFBA08'; // Added yellow color
+  const tealColor = '#43AA8B'; // rich-teal from theme
+  const yellowColor = '#FFBA08'; // golden-yellow from theme
 
   // Format data for display
   const [formattedData, setFormattedData] = useState(data);

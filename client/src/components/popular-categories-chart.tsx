@@ -1,27 +1,16 @@
+
 import React from 'react';
 
-// Function to get a color based on index
-const getColorForIndex = (index: number): string => {
-  // Colors from your theme
-  const colors = [
-    '#FFBA08', // golden-yellow
-    '#F77F00', // vibrant-orange
-    '#43AA8B', // rich-teal
-    '#E63946', // deep-red
-    '#1D3557'  // deep-blue
-  ];
-
-  return colors[index % colors.length];
-};
-
-interface PopularCategoriesChartProps {
-  categories: Array<{
-    category: string;
-    count: number;
-  }>;
+interface PopularCategory {
+  category: string;
+  count: number;
 }
 
-export function PopularCategoriesChart({ categories }: PopularCategoriesChartProps) {
+interface PopularCategoriesChartProps {
+  categories: PopularCategory[];
+}
+
+export default function PopularCategoriesChart({ categories }: PopularCategoriesChartProps) {
   if (!categories || categories.length === 0) {
     return (
       <div className="flex h-[200px] items-center justify-center">
@@ -32,24 +21,25 @@ export function PopularCategoriesChart({ categories }: PopularCategoriesChartPro
 
   // Get the maximum count for normalization
   const maxCount = Math.max(...categories.map(cat => cat.count));
+  const tealColor = '#43AA8B'; // rich-teal from theme
 
   return (
     <div className="space-y-4">
-      {categories.slice(0, 5).map((cat, index) => (
-        <div key={cat.category} className="flex items-center">
-          <div className="mr-2 w-32 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
-            {cat.category}
+      {categories.map((cat, index) => (
+        <div key={index} className="space-y-1">
+          <div className="flex justify-between text-sm">
+            <span>{cat.category}</span>
+            <span className="text-muted-foreground">{cat.count} listings</span>
           </div>
-          <div className="relative h-2 flex-1 rounded-full bg-muted">
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
             <div 
               className="absolute inset-y-0 left-0 rounded-full"
               style={{ 
                 width: `${(cat.count / maxCount) * 100}%`,
-                backgroundColor: '#43AA8B' // rich-teal from theme
+                backgroundColor: tealColor
               }}
             />
           </div>
-          <span className="ml-2 text-sm font-medium">{cat.count}</span>
         </div>
       ))}
     </div>
