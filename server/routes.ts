@@ -2055,20 +2055,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ status: "not_started" });
       }
 
-      const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
+      try {
+        const status = await SellerPaymentService.getAccountStatus(profile.stripeAccountId);
 
-      // Update profile with latest status from Stripe if it's changed
-      if (profile.stripeAccountStatus !== status) {
-        await storage.updateSellerStripeAccount(req.user.id, {
+        // Update profile with latest status from Stripe if it's changed
+        if (profile.stripeAccountStatus !== status) {
+          await storage.updateSellerStripeAccount(req.user.id, {
+            accountId: profile.stripeAccountId,
+            status
+          });
+        }
+
+        return res.json({ 
+          status,
+          accountId: profile.stripeAccountId
+        });
+      } catch (stripeError) {
+        console.error("[Seller Status] Stripe error:", stripeError);
+        // Return the current known status from the database instead of failing
+        return res.json({
+          status: profile.stripeAccountStatus || "pending",
           accountId: profile.stripeAccountId,
-          status
+          error: "Could not refresh Stripe account status"
         });
       }
-
-      return res.json({ 
-        status,
-        accountId: profile.stripeAccountId
-      });
     } catch (error) {
       console.error("[Seller Status] Error:", error);
       return res.status(500).json({ 

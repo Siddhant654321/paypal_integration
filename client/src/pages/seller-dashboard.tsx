@@ -89,31 +89,53 @@ const SellerDashboard = () => {
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
 
-        try {
-          // Force refetch the seller status
-          const result = await refetchStripeStatus();
-          console.log("[Seller Dashboard] Refetched status:", result.data);
+        // Wait a moment before checking status to ensure server has time to process
+        setTimeout(async () => {
+          try {
+            // Force refetch the seller status
+            const result = await refetchStripeStatus();
+            console.log("[Seller Dashboard] Refetched status:", result.data);
 
-          if (result.data?.status === "verified") {
-            toast({
-              title: "Account Verified",
-              description: "Your Stripe account has been successfully verified!",
-              variant: "default",
-            });
-          } else {
-            toast({
-              title: "Account Status Updated",
-              description: "Please complete any remaining verification steps if required.",
-            });
+            if (result.data?.status === "verified") {
+              toast({
+                title: "Account Verified",
+                description: "Your Stripe account has been successfully verified!",
+                variant: "default",
+              });
+            } else if (result.data?.status === "pending") {
+              toast({
+                title: "Account Setup In Progress",
+                description: "Your account is being set up. Please complete any remaining verification steps.",
+              });
+            } else {
+              toast({
+                title: "Account Status Updated",
+                description: "Your Stripe onboarding information has been received.",
+              });
+            }
+          } catch (error) {
+            console.error("[Seller Dashboard] Error checking stripe status:", error);
+            
+            // Retry once after a short delay
+            setTimeout(async () => {
+              try {
+                const retryResult = await refetchStripeStatus();
+                console.log("[Seller Dashboard] Retry status check:", retryResult.data);
+                toast({
+                  title: "Account Status Updated",
+                  description: "Your Stripe account information has been received.",
+                });
+              } catch (retryError) {
+                console.error("[Seller Dashboard] Retry failed:", retryError);
+                toast({
+                  title: "Connection Issue",
+                  description: "Account connected but unable to verify current status. Please refresh the page.",
+                  variant: "destructive",
+                });
+              }
+            }, 2000);
           }
-        } catch (error) {
-          console.error("[Seller Dashboard] Error checking stripe status:", error);
-          toast({
-            title: "Error",
-            description: "Failed to check account status. Please refresh the page.",
-            variant: "destructive",
-          });
-        }
+        }, 1000);
       }
     };
 
