@@ -64,6 +64,7 @@ import { FileUpload } from "@/components/file-upload";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { X } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import * as z from 'zod';
 
 // Types
 type SellerStripeStatus = {
@@ -283,7 +284,7 @@ function AdminDashboard() {
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (values: any) => {
-      await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, values);
+      await apiRequest("PATCH", `/api/admin/auctions/${selectedAuction?.id}`, values);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
@@ -292,7 +293,7 @@ function AdminDashboard() {
         title: "Success",
         description: "Auction updated successfully",
       });
-      if (onClose) onClose();
+      if (closeEditDialog) closeEditDialog();
     },
     onError: (error: any) => {
       toast({
@@ -832,7 +833,6 @@ function AdminDashboard() {
         <EditAuctionDialog
           auction={selectedAuction}
           onClose={closeEditDialog}
-          updateAuctionMutation={updateAuctionMutation}
         />
       )}
     </div>
@@ -923,8 +923,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                   <div className="flex justify-center">
                     <LoadingSpinner className="h-6 w-6" />
                   </div>
-                ) : !bids?.length ? (
-                  <p className="text-muted-foreground">No bids found</p>
+                ) : !bids?.length ? (                  <p className="text-muted-foreground">No bids found</p>
                 ) : (
                   <div className="space-y-2">
                     {bids.map((bid) => (
@@ -1023,7 +1022,8 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
     },
   });
 
-  return (    <Dialog>
+  return (
+    <Dialog>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           View Bids
@@ -1091,12 +1091,13 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
   );
 }
 
-function EditAuctionDialog({ auction, onClose, updateAuctionMutation }: { auction: Auction; onClose?: () => void; updateAuctionMutation: any }) {
+function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [imageUrl, setImageUrl] = useState(auction.imageUrl || "");
+  const [images, setImages] = useState<string[]>(auction.images || []);
 
-  const form = useForm({
+  const form = useForm<z.infer<typeof insertAuctionSchema>>({
     resolver: zodResolver(insertAuctionSchema),
     defaultValues: {
       title: auction.title,
@@ -1107,14 +1108,17 @@ function EditAuctionDialog({ auction, onClose, updateAuctionMutation }: { auctio
       reservePrice: auction.reservePrice,
       startDate: new Date(auction.startDate),
       endDate: new Date(auction.endDate),
-      imageUrl: auction.imageUrl || "",
-      images: auction.images,
+      imageUrl: auction.imageUrl || undefined,
+      images: auction.images || [],
     },
   });
 
-  const handleSubmit = async (values: any) => {
-    try {
-      await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, values);
+  const updateAuctionMutation = useMutation({
+    mutationFn: async (values: any) => {
+      console.log("[EditAuction] Updating with values:", values);
+      return await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, values);
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
       toast({
@@ -1122,27 +1126,28 @@ function EditAuctionDialog({ auction, onClose, updateAuctionMutation }: { auctio
         description: "Auction updated successfully",
       });
       if (onClose) onClose();
-    } catch (error) {
+    },
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to update auction",
+        description: "Failed to update auction: " + error.message,
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
   return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open onOpenChange={() => onClose?.()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Auction</DialogTitle>
           <DialogDescription>
-            Make changes to the auction listing here. Click save when you're done.
+            Update the auction details below.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(values => updateAuctionMutation.mutate(values))} className="space-y-4">
             <FormField
               control={form.control}
               name="title"
@@ -1289,13 +1294,22 @@ function EditAuctionDialog({ auction, onClose, updateAuctionMutation }: { auctio
               <div className="grid gap-4">
                 <FileUpload
                   value={form.watch("images")}
-                  onChange={(urls) => form.setValue("images", urls)}
+                  onChange={(urls) => {
+                    form.setValue("images", urls);
+                    // Set first image as primary if none exists
+                    if (!form.watch("imageUrl") && urls.length > 0) {
+                      form.setValue("imageUrl", urls[0]);
+                    }
+                  }}
                   onRemove={(index) => {
                     const currentImages = form.watch("images") || [];
-                    form.setValue(
-                      "images",
-                      currentImages.filter((_, i) => i !== index)
-                    );
+                    const newImages = currentImages.filter((_, i) => i !== index);
+                    form.setValue("images", newImages);
+
+                    // Update imageUrl if primary image was removed
+                    if (form.watch("imageUrl") === currentImages[index]) {
+                      form.setValue("imageUrl", newImages[0] || "");
+                    }
                   }}
                   accept="image/*"
                   maxFiles={5}
@@ -1319,10 +1333,13 @@ function EditAuctionDialog({ auction, onClose, updateAuctionMutation }: { auctio
                             className="absolute -right-2 -top-2 h-6 w-6"
                             onClick={() => {
                               const currentImages = form.watch("images") || [];
-                              form.setValue(
-                                "images",
-                                currentImages.filter((_, i) => i !== index)
-                              );
+                              const newImages = currentImages.filter((_, i) => i !== index);
+                              form.setValue("images", newImages);
+
+                              // Update imageUrl if primary image was removed
+                              if (form.watch("imageUrl") === url) {
+                                form.setValue("imageUrl", newImages[0] || "");
+                              }
                             }}
                           >
                             <X className="h-4 w-4" />
