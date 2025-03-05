@@ -924,7 +924,8 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                     <LoadingSpinner className="h-6 w-6" />
                   </div>                ) : !bids?.length ? (
                   <p className="text-muted-foreground">No bids found</p>
-                ) : (                  <div className="space-y-2">
+                ) : (
+                  <div className="space-y-2">
                     {bids.map((bid) => (
                       <div key={bid.id} className="p-3 border rounded-lg">
                         <div className="flex justify-between items-center">
@@ -1355,19 +1356,27 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
                 <FileUpload
                   accept="image/*"
                   maxFiles={5}
-                  onFilesChange={(files) => {
-                    const imageUrls = files.map((file) => URL.createObjectURL(file));
+                  onChange={(urls: string[]) => {
                     const currentImages = form.watch("images") || [];
-                    const newImages = [...currentImages, ...imageUrls];
+                    const newImages = [...currentImages, ...urls];
                     console.log("[EditAuction] Updating images:", {
                       current: currentImages,
-                      new: imageUrls,
+                      new: urls,
                       combined: newImages
                     });
                     form.setValue("images", newImages);
 
                     if (!form.watch("imageUrl") && newImages.length > 0) {
                       form.setValue("imageUrl", newImages[0]);
+                    }
+                  }}
+                  onRemove={(index: number) => {
+                    const currentImages = form.watch("images") || [];
+                    const newImages = currentImages.filter((_, i) => i !== index);
+                    form.setValue("images", newImages);
+
+                    if (form.watch("imageUrl") === currentImages[index]) {
+                      form.setValue("imageUrl", newImages[0] || "");
                     }
                   }}
                 />

@@ -9,7 +9,6 @@ interface FileUploadProps {
   accept?: string;
   maxFiles?: number;
   previewUrls?: string[];
-  onRemove?: (index: number) => void;
 }
 
 export function FileUpload({
@@ -65,10 +64,6 @@ export function FileUpload({
         onFilesChange([]);
     }
 
-    // Call onRemove callback if provided
-    if (onRemove) {
-      onRemove(index);
-    }
   };
 
   return (
