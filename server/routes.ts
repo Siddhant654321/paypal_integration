@@ -525,15 +525,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auctionId = req.query.auctionId ? parseInt(req.query.auctionId as string) : undefined;
 
       // If auctionId is provided, get bids for that auction
-      // Otherwise, return an error as we should always specify an auction
       if (!auctionId) {
         return res.status(400).json({ message: "Auction ID is required" });
       }
 
+      // Get bids with bidder information
       const bids = await storage.getBidsForAuction(auctionId);
-      res.json(bids);
+      const bidsWithBidders = await Promise.all(
+        bids.map(async (bid) => {
+          const bidder = await storage.getUser(bid.bidderId);
+          const bidderProfile = await storage.getProfile(bid.bidderId);
+          return {
+            ...bid,
+            bidder: {
+              username: bidder?.username,
+              fullName: bidderProfile?.fullName,
+              email: bidderProfile?.email
+            }
+          };
+        })
+      );
+
+      console.log(`[ADMIN BIDS] Retrieved ${bidsWithBidders.length} bids with bidder details for auction ${auctionId}`);
+      res.json(bidsWithBidders);
     } catch (error) {
-      console.error("Error fetching bids:", error);
+      console.error("[ADMIN BIDS] Error fetching bids:", error);
       res.status(500).json({ message: "Failed to fetch bids" });
     }
   });
@@ -1357,238 +1373,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
-  app.get("/api/analytics/market-stats", async (req, res) => {
-    try {
-      const timeFrame = req.query.timeFrame as string || 'month';
-      const category = req.query.category as string;
-      const species = req.query.species as string;
-
-      console.log("[ANALYTICS] Fetching market stats with params:", { timeFrame, category, species });
-
-      // Get all auctions based on filters
-      const auctions = await storage.getAuctions({
-        category: category === 'all' ? undefined : category,
-        species: species === 'all' ? undefined : species,
-        approved: true
-      });
-
-      console.log("[ANALYTICS] Found auctions:", auctions.length);
-
-      // Filter and transform auction data for the price trend
-      const now = new Date();
-      const cutoffDate = new Date();
-      switch (timeFrame) {
-        case 'week':
-          cutoffDate.setDate(cutoffDate.getDate() - 7);
-          break;
-        case 'year':
-          cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
-          break;
-        default: // month
-          cutoffDate.setMonth(cutoffDate.getMonth() - 1);
-      }
-
-      // Log the date filtering
-      console.log("[ANALYTICS] Cutoff date:", cutoffDate);
-      console.log("[ANALYTICS] Current date:", now);
-
-      // Include both active and ended auctions that have prices
-      // For active auctions, we'll use their current data
-      const validAuctions = auctions.filter(auction => {
-        // Convert string dates to Date objects for accurate comparison
-        const auctionEndDate = new Date(auction.endDate);
-        const auctionStartDate = new Date(auction.startDate);
-
-        // Check if the auction has a valid price
-        const hasValidPrice = auction.currentPrice > 0 || auction.startPrice > 0;
-
-        // Include if auction is after cutoff date OR is currently active
-        const isAfterCutoff = auctionEndDate >= cutoffDate;
-        const isActive = auctionEndDate >= now;
-
-        return hasValidPrice && (isAfterCutoff || isActive);
-      });
-
-      console.log("[ANALYTICS] Valid auctions after filtering:", validAuctions.length);
-
-      // Sort auctions by date - use end date for completed auctions or current date for active ones
-      const sortedAuctions = validAuctions.sort((a, b) => {
-        const dateA = new Date(a.endDate).getTime();
-        const dateB = new Date(b.endDate).getTime();
-        return dateA - dateB;
-      });
-
-      console.log("[ANALYTICS] Sorted auctions dates:", sortedAuctions.map(a => 
-        ({ id: a.id, title: a.title, start: a.startDate, end: a.endDate, price: a.currentPrice || a.startPrice }))
-      );
-
-      // Create price data points
-      const priceData = sortedAuctions.map(auction => {
-        // Use current price if available, otherwise use start price
-        const price = auction.currentPrice > 0 ? auction.currentPrice : auction.startPrice;
-
-        // For active auctions, use today's date instead of end date
-        const auctionEndDate = new Date(auction.endDate);
-        const dateForPoint = auctionEndDate > now ? new Date() : auctionEndDate;
-
-        return {
-          date: dateForPoint.toISOString(),
-          price: price,
-          title: auction.title,
-          // Calculate moving average for trend line
-          medianPrice: calculateMovingAverage(
-            sortedAuctions,
-            dateForPoint,
-            price
-          )
-        };
-      });
-
-      console.log("[ANALYTICS] Generated price data points:", priceData.length);
-
-      // Calculate other stats
-      const activeAuctions = auctions.filter(
-        auction => new Date(auction.endDate) > now
-      ).length;
-
-      // Get all bids for the filtered auctions
-      const allBids = await Promise.all(
-        validAuctions.map(async auction => {
-          const bids = await storage.getBidsForAuction(auction.id);
-          return { auctionId: auction.id, bids };
-        })
-      );
-
-      // Calculate active bidders (unique bidders across all auctions)
-      const allBidders = new Set();
-      let totalBidsCount = 0;
-
-      allBids.forEach(({ bids }) => {
-        bids.forEach(bid => {
-          allBidders.add(bid.bidderId);
-          totalBidsCount++;
-        });
-      });
-
-      const activeBidders = allBidders.size;
-      const totalBids = totalBidsCount;
-
-      console.log("[ANALYTICS] Active bidders:", activeBidders);
-      console.log("[ANALYTICS] Total bids:", totalBids);
-
-      // Calculate popular categories
-      const categoryCount = validAuctions.reduce((acc, auction) => {
-        const category = auction.category || "Uncategorized";
-        acc[category] = (acc[category] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const popularCategories = Object.entries(categoryCount)
-        .map(([category, count]) => ({ category, count }))
-        .sort((a, b) => b.count - a.count);
-
-      console.log("[ANALYTICS] Popular categories:", popularCategories);
-
-      // Calculate average prices by species
-      const speciesPrices = validAuctions.reduce((acc, auction) => {
-        const price = auction.currentPrice || auction.startPrice;
-        if (!acc[auction.species]) {
-          acc[auction.species] = { total: 0, count: 0 };
-        }
-        acc[auction.species].total += price;
-        acc[auction.species].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
-
-      const averagePrices = Object.entries(speciesPrices).map(([species, data]) => ({
-        species,
-        averagePrice: Math.round(data.total / data.count)
-      }));
-
-      const response = {
-        activeBidders,
-        totalBids,
-        priceData,
-        activeAuctions,
-        species: [...new Set(auctions.map(a => a.species))],
-        averagePrices,
-        topPerformers: {
-          seller: null,
-          buyer: null
-        },
-        popularCategories
-      };
-
-      console.log("[ANALYTICS] Response generated with price data points:", 
-        response.priceData.length);
-
-      res.json(response);
-    } catch (error) {
-      console.error("[ANALYTICS] Error fetching market stats:", error);
-      res.status(500).json({ message: "Failed to fetch market statistics" });
-    }
-  });
-
-  // Helper function to calculate moving average for trend line
-  function calculateMovingAverage(
-    auctions: any[],
-    currentDate: Date,
-    currentPrice: number,
-    windowDays = 7
-  ): number {
-    const windowStart = new Date(currentDate);
-    windowStart.setDate(windowStart.getDate() - windowDays);
-
-    const windowPrices = auctions
-      .filter(a => {
-        const auctionDate = new Date(a.endDate);
-        return auctionDate >= windowStart && auctionDate <= currentDate;
-      })
-      .map(a => a.currentPrice || a.startPrice);
-
-    if (windowPrices.length === 0) return currentPrice;
-
-    const sum = windowPrices.reduce((acc, price) => acc + price, 0);
-    return Math.round(sum / windowPrices.length);
-  }
-
-  app.get("/api/sellers/active", async (req, res) => {
-    try {
-      // Get all approved sellers
-      const sellers = await storage.getUsers({ 
-        role: "seller",
-        approved: true 
-      });
-      // Get profiles and recent auctions for each seller
-      const sellersWithDetails = await Promise.all(
-        sellers.map(async (seller) => {
-          const profile = await storage.getProfile(seller.id);
-          const auctions = await storage.getAuctions({ 
-            sellerId: seller.id,
-            approved: true
-          });
-          return {
-            ...seller,
-            profile,
-            auctions: auctions.slice(0, 3) // Only return the 3 most recent auctions
-          };
-        })
-      );
-      // Filter out sellers without profiles or active approved auctions
-      const activeSellers = sellersWithDetails.filter(
-        seller => seller.profile && 
-                 seller.auctions.some(auction => 
-                   auction.status === "active" && 
-                   auction.approved === true
-                 )
-      );
-      res.json(activeSellers);
-    } catch (error) {
-      console.error("Error fetching active sellers:", error);
-      res.status(500).json({ message: "Failed to fetch active sellers" });
-    }
-  });
-
   app.get("/api/analytics/auction-bids", async (req, res) => {
     try {
       // Get all auctions with their bids
@@ -1965,7 +1749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get seller's auctions
       const auctions = await storage.getAuctions({ sellerId });
-      console.log(`[SELLER] Found ${auctions.length} auctions for seller ${sellerId}`);
+      console.log(`[SELLER] Found ${auctions.length} auctions for seller${sellerId}`);
 
       // Combine and return all data
       const sellerData = {
