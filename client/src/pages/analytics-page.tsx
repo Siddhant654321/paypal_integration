@@ -128,37 +128,34 @@ export default function AnalyticsPage() {
         </Card>
 
         {/* Top Performers Card */}
-        <Card className="col-span-full">
+        <Card className="col-span-full md:col-span-1">
           <CardHeader className="space-y-1.5 p-4 md:p-6">
-            <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
-              <Trophy className="h-5 w-5 text-yellow-500" />
-              Top Performers (Last 30 Days)
-            </CardTitle>
+            <CardTitle className="text-lg md:text-xl">Top Performers</CardTitle>
           </CardHeader>
           <CardContent className="p-4 md:p-6 pt-0">
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-6">
               {/* Top Seller */}
               <div className="space-y-3">
                 <h3 className="font-semibold">Top Seller</h3>
-                {marketStats?.topPerformers.seller ? (
+                {marketStats?.topPerformers?.seller ? (
                   <div className="bg-muted p-4 rounded-lg">
                     <div className="font-medium">{marketStats.topPerformers.seller.name}</div>
                     <div className="text-sm text-muted-foreground mt-2">
                       Total Sales: {formatPrice(marketStats.topPerformers.seller.total)}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Auctions Completed: {marketStats.topPerformers.seller.auctionsWon}
+                      Auctions Sold: {marketStats.topPerformers.seller.auctionsWon}
                     </div>
                   </div>
                 ) : (
-                  <div className="text-sm text-muted-foreground">No sales data available</div>
+                  <div className="text-sm text-muted-foreground">No seller data available</div>
                 )}
               </div>
 
               {/* Top Buyer */}
               <div className="space-y-3">
                 <h3 className="font-semibold">Top Buyer</h3>
-                {marketStats?.topPerformers.buyer ? (
+                {marketStats?.topPerformers?.buyer ? (
                   <div className="bg-muted p-4 rounded-lg">
                     <div className="font-medium">{marketStats.topPerformers.buyer.name}</div>
                     <div className="text-sm text-muted-foreground mt-2">

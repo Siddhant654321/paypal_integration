@@ -1926,7 +1926,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeAuctions,
         species: [...new Set(auctions.map(a => a.species))],
         averagePrices,
-        popularCategories
+        popularCategories,
+        topPerformers: {
+          seller: null,
+          buyer: null
+        }
       };
 
       console.log("[ANALYTICS] Response summary:", {
