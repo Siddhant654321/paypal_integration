@@ -24,45 +24,16 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // Health check endpoint
-app.get("/api/status", async (_req, res) => {
-  try {
-    // Test database connection
-    await db.execute(sql`SELECT 1`);
-    res.json({ 
-      status: "ok", 
-      database: "connected",
-      timestamp: new Date().toISOString() 
-    });
-  } catch (error) {
-    console.error("[STATUS] Database connection error:", error);
-    res.status(500).json({ 
-      status: "error", 
-      database: "disconnected",
-      timestamp: new Date().toISOString() 
-    });
-  }
+app.get("/api/status", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-async function startServer(port: number = DEFAULT_PORT, retries = 3): Promise<void> {
+async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   try {
-    // Test database connection with retries
+    // Test database connection
     console.log("[SERVER] Testing database connection...");
-    let lastError;
-    for (let i = 0; i < retries; i++) {
-      try {
-        await db.execute(sql`SELECT 1`);
-        console.log("[SERVER] Database connection successful");
-        break;
-      } catch (error) {
-        lastError = error;
-        console.error(`[SERVER] Database connection attempt ${i + 1} failed:`, error);
-        if (i < retries - 1) {
-          console.log("[SERVER] Retrying in 2 seconds...");
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
-    }
-    if (lastError) throw lastError;
+    await db.execute(sql`SELECT 1`);
+    console.log("[SERVER] Database connection successful");
 
     // Setup routes
     console.log("[SERVER] Setting up routes...");
@@ -105,13 +76,7 @@ async function startServer(port: number = DEFAULT_PORT, retries = 3): Promise<vo
       // Handle graceful shutdown
       const shutdown = () => {
         console.log('[SERVER] Shutting down gracefully...');
-        server.close(async () => {
-          try {
-            await db.execute(sql`SELECT 1`); // Final connection check
-            console.log('[SERVER] Database connection closed');
-          } catch (error) {
-            console.error('[SERVER] Error closing database connection:', error);
-          }
+        server.close(() => {
           console.log('[SERVER] Server closed');
           process.exit(0);
         });
