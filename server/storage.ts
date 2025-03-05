@@ -170,6 +170,20 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+  
+  async findProfileByStripeAccountId(stripeAccountId: string): Promise<Profile | undefined> {
+    try {
+      log(`Finding profile by Stripe account ID: ${stripeAccountId}`, "stripe");
+      const [profile] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.stripeAccountId, stripeAccountId));
+      return profile;
+    } catch (error) {
+      log(`Error finding profile by Stripe account ID ${stripeAccountId}: ${error}`, "stripe");
+      return undefined;
+    }
+  }
 
   async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
