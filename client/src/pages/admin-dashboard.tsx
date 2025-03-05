@@ -705,7 +705,7 @@ function AdminDashboard() {
               </TabsContent>
 
               <TabsContent value="active">
-                <div className="space-y-4">
+                <div className="space-y-4 p-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input

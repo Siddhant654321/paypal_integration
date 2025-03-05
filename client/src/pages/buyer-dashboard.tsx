@@ -29,8 +29,8 @@ export default function BuyerDashboard() {
   );
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold mb-8">My Bids</h1>
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 max-w-7xl">
+      <h1 className="text-2xl md:text-3xl font-bold mb-6 md:mb-8">My Bids</h1>
 
       <div className="relative mb-6">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
