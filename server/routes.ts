@@ -870,8 +870,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Initialize update data object
-      const updateData: any = {
-        ...data,
+      const updateData: any = {        ...data,
         images: data.images || existingAuction.images // Preserve existing images if none provided
       };
 
@@ -1782,7 +1781,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const category = req.query.category as string;
       const species = req.query.species as string;
 
-      console.log("[ANALYTICS] Fetching market stats with params:", { timeFrame, category, species });
+      console.log("[ANALYTICS] Starting market stats calculation with params:", {
+        timeFrame,
+        category,
+        species,
+        timestamp: new Date().toISOString()
+      });
 
       // Get all auctions based on filters
       const auctions = await storage.getAuctions({
@@ -1791,7 +1795,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         approved: true
       });
 
-      console.log("[ANALYTICS] Found auctions:", auctions.length);
+      console.log("[ANALYTICS] Initial auction query results:", {
+        totalAuctions: auctions.length,
+        categories: [...new Set(auctions.map(a => a.category))],
+        species: [...new Set(auctions.map(a => a.species))]
+      });
 
       // Filter and transform auction data for the price trend
       const now = new Date();
@@ -1807,25 +1815,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           cutoffDate.setMonth(cutoffDate.getMonth() - 1);
       }
 
-      // Log the date filtering
-      console.log("[ANALYTICS] Time range:", {
-        cutoffDate: cutoffDate.toISOString(),
-        currentDate: now.toISOString(),
-        timeFrame
-      });
-
       // Include both active and ended auctions that have prices
       const validAuctions = auctions.filter(auction => {
         const auctionEndDate = new Date(auction.endDate);
-        const auctionStartDate = new Date(auction.startDate);
         const hasValidPrice = auction.currentPrice > 0 || auction.startPrice > 0;
         const isAfterCutoff = auctionEndDate >= cutoffDate;
         const isActive = auctionEndDate >= now;
 
+        // Log invalid auctions for debugging
+        if (!hasValidPrice) {
+          console.log("[ANALYTICS] Auction excluded - no valid price:", {
+            id: auction.id,
+            title: auction.title,
+            currentPrice: auction.currentPrice,
+            startPrice: auction.startPrice
+          });
+        }
+
         return hasValidPrice && (isAfterCutoff || isActive);
       });
 
-      console.log("[ANALYTICS] Valid auctions after filtering:", validAuctions.length);
+      console.log("[ANALYTICS] Valid auctions after filtering:", {
+        total: validAuctions.length,
+        timeRange: {
+          start: cutoffDate.toISOString(),
+          end: now.toISOString()
+        }
+      });
 
       // Sort auctions by date
       const sortedAuctions = validAuctions.sort((a, b) => {
@@ -1844,15 +1860,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           date: dateForPoint.toISOString(),
           price: price,
           title: auction.title,
-          medianPrice: calculateMovingAverage(
-            sortedAuctions,
-            dateForPoint,
-            price
-          )
+          medianPrice: calculateMovingAverage(sortedAuctions, dateForPoint, price)
         };
       });
-
-      console.log("[ANALYTICS] Generated price data points:", priceData.length);
 
       // Calculate market statistics
       const activeAuctions = auctions.filter(
@@ -1880,8 +1890,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const activeBidders = allBidders.size;
       const totalBids = totalBidsCount;
-
-      console.log("[ANALYTICS] Bidder stats:", { activeBidders, totalBids });
 
       // Calculate category statistics
       const categoryCount = validAuctions.reduce((acc, auction) => {
@@ -1921,11 +1929,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         popularCategories
       };
 
-      console.log("[ANALYTICS] Response generated successfully");
+      console.log("[ANALYTICS] Response summary:", {
+        dataPoints: priceData.length,
+        activeBidders,
+        totalBids,
+        activeAuctions,
+        categoriesCount: popularCategories.length,
+        speciesCount: averagePrices.length
+      });
+
       res.json(response);
     } catch (error) {
-      console.error("[ANALYTICS] Error fetching market stats:", error);
-      res.status(500).json({ message: "Failed to fetch market statistics" });
+      console.error("[ANALYTICS] Error processing market stats:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch market statistics",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 

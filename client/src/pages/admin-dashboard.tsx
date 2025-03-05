@@ -922,8 +922,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                 {isLoadingBids ? (
                   <div className="flex justifycenter p-4">
                     <LoadingSpinner className="h-6 w-6" />
-                  </div>
-                ) : !bids?.length ? (
+                  </div>                ) : !bids?.length ? (
                   <p className="text-muted-foreground">No bids found</p>
                 ) : (
                   <div className="space-y-2">
@@ -1096,7 +1095,6 @@ function ViewBidsDialog({ auctionId, auctionTitle }: { auctionId: number; auctio
 function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [imageUrl, setImageUrl] = useState(auction.imageUrl || "");
 
   const form = useForm<z.infer<typeof insertAuctionSchema>>({
     resolver: zodResolver(insertAuctionSchema),
@@ -1109,6 +1107,7 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
       reservePrice: auction.reservePrice,
       startDate: new Date(auction.startDate),
       endDate: new Date(auction.endDate),
+      // Initialize with existing images
       imageUrl: auction.imageUrl || undefined,
       images: auction.images || [],
     },
@@ -1116,17 +1115,18 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (values: any) => {
-      console.log("[EditAuction] Submitting update with values:", {
-        ...values,
-        imageCount: values.images?.length || 0
-      });
-
-      // Ensure images array is properly formatted
+      // Ensure we have the correct image data structure
       const updateData = {
         ...values,
-        images: values.images || [],
-        imageUrl: values.imageUrl || (values.images?.length > 0 ? values.images[0] : null)
+        images: Array.isArray(values.images) ? values.images : [],
+        imageUrl: values.imageUrl || (Array.isArray(values.images) && values.images.length > 0 ? values.images[0] : null)
       };
+
+      console.log("[EditAuction] Submitting update:", {
+        auctionId: auction.id,
+        imageCount: updateData.images.length,
+        imageUrl: updateData.imageUrl
+      });
 
       return await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, updateData);
     },
@@ -1149,12 +1149,6 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
     },
   });
 
-  const handleFileChange = (files: File[]) => {
-    if (files && files.length > 0) {
-      setImages(files);
-    }
-  };
-
   return (
     <Dialog open onOpenChange={() => onClose?.()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -1167,6 +1161,7 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(values => updateAuctionMutation.mutate(values))} className="space-y-4">
+            {/* Title field */}
             <FormField
               control={form.control}
               name="title"
@@ -1181,6 +1176,7 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
               )}
             />
 
+            {/* Description field */}
             <FormField
               control={form.control}
               name="description"
@@ -1195,59 +1191,68 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="species"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Species</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select species" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="chicken">Chicken</SelectItem>
-                        <SelectItem value="duck">Duck</SelectItem>
-                        <SelectItem value="goose">Goose</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Species field */}
+            <FormField
+              control={form.control}
+              name="species"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Species</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select species" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bantam">Bantam</SelectItem>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="waterfowl">Waterfowl</SelectItem>
+                      <SelectItem value="quail">Quail</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Show Quality">Show Quality</SelectItem>
-                        <SelectItem value="Purebred & Production">Purebred & Production</SelectItem>
-                        <SelectItem value="Fun & Mixed">Fun & Mixed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            {/* Category field */}
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Show Quality">Show Quality</SelectItem>
+                      <SelectItem value="Purebred & Production">Purebred & Production</SelectItem>
+                      <SelectItem value="Fun & Mixed">Fun & Mixed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
+            {/* Price fields */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="startPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Price ($)</FormLabel>
+                    <FormLabel>Start Price</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1259,9 +1264,9 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
                 name="reservePrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Reserve Price ($)</FormLabel>
+                    <FormLabel>Reserve Price</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1269,6 +1274,7 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
               />
             </div>
 
+            {/* Date fields */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -1307,9 +1313,9 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
               />
             </div>
 
+            {/* Image section */}
             <div className="space-y-2">
               <Label>Images</Label>
-
               {form.watch("images")?.length > 0 && (
                 <div className="mb-4">
                   <Label>Current Images</Label>
@@ -1320,10 +1326,9 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
                           <img
                             src={url}
                             alt={`Auction image ${index + 1}`}
-                            className="h-24 w-24 rounded-md object-cover"
+                            className="h-24 w-24 object-cover rounded-md"
                           />
                           <Button
-                            type="button"
                             variant="destructive"
                             size="icon"
                             className="absolute -right-2 -top-2 h-6 w-6"
@@ -1332,6 +1337,7 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
                               const newImages = currentImages.filter((_, i) => i !== index);
                               form.setValue("images", newImages);
 
+                              // Update primary image if needed
                               if (form.watch("imageUrl") === url) {
                                 form.setValue("imageUrl", newImages[0] || "");
                               }
@@ -1348,18 +1354,23 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
 
               <div className="grid gap-4">
                 <FileUpload
-                  value={form.watch("images")}
-                  onChange={(urls) => {
+                  accept="image/*"
+                  maxFiles={5}
+                  onChange={(urls: string[]) => {
                     const currentImages = form.watch("images") || [];
                     const newImages = [...currentImages, ...urls];
-                    console.log("[EditAuction] Updating images:", { current: currentImages, new: urls, combined: newImages });
+                    console.log("[EditAuction] Updating images:", {
+                      current: currentImages,
+                      new: urls,
+                      combined: newImages
+                    });
                     form.setValue("images", newImages);
 
                     if (!form.watch("imageUrl") && newImages.length > 0) {
                       form.setValue("imageUrl", newImages[0]);
                     }
                   }}
-                  onRemove={(index) => {
+                  onRemove={(index: number) => {
                     const currentImages = form.watch("images") || [];
                     const newImages = currentImages.filter((_, i) => i !== index);
                     form.setValue("images", newImages);
@@ -1368,14 +1379,15 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
                       form.setValue("imageUrl", newImages[0] || "");
                     }
                   }}
-                  accept="image/*"
-                  maxFiles={5}
                 />
               </div>
             </div>
 
             <DialogFooter>
-              <Button type="submit" disabled={updateAuctionMutation.isPending}>
+              <Button
+                type="submit"
+                disabled={updateAuctionMutation.isPending}
+              >
                 {updateAuctionMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
