@@ -920,7 +920,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
               <div>
                 <h3 className="font-semibold mb-4">Bid History</h3>
                 {isLoadingBids ? (
-                  <div className="flex justify-center">
+                  <div className="flex justifycenter p-4">
                     <LoadingSpinner className="h-6 w-6" />
                   </div>
                 ) : !bids?.length ? (
@@ -1097,7 +1097,6 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [imageUrl, setImageUrl] = useState(auction.imageUrl || "");
-  const [images, setImages] = useState(auction.images || []);
 
   const form = useForm<z.infer<typeof insertAuctionSchema>>({
     resolver: zodResolver(insertAuctionSchema),
@@ -1117,8 +1116,19 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (values: any) => {
-      console.log("[EditAuction] Updating auction with values:", values);
-      return await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, values);
+      console.log("[EditAuction] Submitting update with values:", {
+        ...values,
+        imageCount: values.images?.length || 0
+      });
+
+      // Ensure images array is properly formatted
+      const updateData = {
+        ...values,
+        images: values.images || [],
+        imageUrl: values.imageUrl || (values.images?.length > 0 ? values.images[0] : null)
+      };
+
+      return await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, updateData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
@@ -1130,6 +1140,7 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
       if (onClose) onClose();
     },
     onError: (error: any) => {
+      console.error("[EditAuction] Update failed:", error);
       toast({
         title: "Error",
         description: "Failed to update auction: " + error.message,
@@ -1299,12 +1310,12 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
             <div className="space-y-2">
               <Label>Images</Label>
 
-              {auction.images && auction.images.length > 0 && (
+              {form.watch("images")?.length > 0 && (
                 <div className="mb-4">
                   <Label>Current Images</Label>
                   <ScrollArea className="h-32 w-full rounded-md border">
                     <div className="flex gap-2 p-2">
-                      {auction.images.map((url, index) => (
+                      {form.watch("images").map((url, index) => (
                         <div key={url} className="relative">
                           <img
                             src={url}
@@ -1338,7 +1349,16 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
               <div className="grid gap-4">
                 <FileUpload
                   value={form.watch("images")}
-                  onChange={handleFileChange}
+                  onChange={(urls) => {
+                    const currentImages = form.watch("images") || [];
+                    const newImages = [...currentImages, ...urls];
+                    console.log("[EditAuction] Updating images:", { current: currentImages, new: urls, combined: newImages });
+                    form.setValue("images", newImages);
+
+                    if (!form.watch("imageUrl") && newImages.length > 0) {
+                      form.setValue("imageUrl", newImages[0]);
+                    }
+                  }}
                   onRemove={(index) => {
                     const currentImages = form.watch("images") || [];
                     const newImages = currentImages.filter((_, i) => i !== index);
