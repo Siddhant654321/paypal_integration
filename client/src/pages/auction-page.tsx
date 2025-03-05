@@ -34,13 +34,16 @@ export default function AuctionPage() {
   const queryClient = useQueryClient();
   const [timeLeft, setTimeLeft] = useState("");
 
+  // Handle both numerical IDs and IDs with title slugs
+  const auctionId = parseInt(params?.id?.split('-')[0] || '0');
+
   const { data: auction, isLoading: isLoadingAuction, refetch: refetchAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
-    queryKey: [`/api/auctions/${params?.id}`],
+    queryKey: [`/api/auctions/${auctionId}`],
     refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
 
   const { data: bids = [], isLoading: isLoadingBids, refetch: refetchBids } = useQuery<Bid[]>({
-    queryKey: [`/api/auctions/${params?.id}/bids`],
+    queryKey: [`/api/auctions/${auctionId}/bids`],
     enabled: !!auction,
     refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
