@@ -19,7 +19,7 @@ import { formatPrice } from "@/utils/formatters";
 interface PriceData {
   date: string;
   price: number;
-  medianPrice?: number;
+  medianPrice: number;
   title?: string;
 }
 
@@ -89,9 +89,6 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
     return null;
   };
 
-  // Handle empty data case with a simple message
-  const hasData = data && data.length > 0;
-
   return (
     <Card>
       <CardHeader className="space-y-1.5 p-4 md:p-6">
@@ -136,7 +133,7 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
         </div>
       </CardHeader>
       <CardContent className="p-4 md:p-6 pt-0 h-[300px]">
-        {hasData ? (
+        {formattedData && formattedData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart 
               data={formattedData} 
@@ -198,7 +195,7 @@ export function PriceTrendGraph({ data, species, onTimeFrameChange, onCategoryCh
           </ResponsiveContainer>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <p>No price data available yet. More data will be shown as auctions complete.</p>
+            <p>No price data available</p>
             <p className="text-sm mt-2">Try selecting a different time frame or category</p>
           </div>
         )}

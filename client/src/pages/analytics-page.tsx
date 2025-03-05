@@ -74,33 +74,19 @@ export default function AnalyticsPage() {
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  // Always render the UI, even with empty data
-  // This ensures that filters and UI components are visible
-  const hasMarketStats = !!marketStats;
-
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
       <h1 className="text-2xl md:text-3xl font-bold">Market Analytics</h1>
 
-      {hasMarketStats ? (
-        <>
-          {/* Price Trend Graph with updated data format and teal dots */}
-          <PriceTrendGraph
-            data={marketStats?.priceData || []}
-            species={marketStats?.species || []}
-            dotColor={tealColor}
-            onTimeFrameChange={setTimeFrame}
-            onCategoryChange={setCategory}
-            onSpeciesChange={setSelectedSpecies}
-          />
+      {/* Price Trend Graph with updated data format and teal dots */}
+      <PriceTrendGraph
+        data={marketStats?.priceData || []}
+        species={marketStats?.species || []}
+        dotColor={tealColor}
+        onTimeFrameChange={setTimeFrame}
+        onCategoryChange={setCategory}
+        onSpeciesChange={setSelectedSpecies}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
         {/* Active Auctions Card */}
@@ -231,26 +217,6 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
-        </>
-      ) : (
-        <div className="py-8 text-center">
-          <div className="mx-auto max-w-md p-6 bg-muted rounded-lg">
-            <h3 className="text-xl font-semibold mb-2">Loading Market Data...</h3>
-            <p className="text-muted-foreground">
-              Please wait while we retrieve the market analytics data.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="py-8 text-center">
-          <div className="mx-auto max-w-md p-6 bg-primary/10 rounded-lg">
-            <h3 className="text-xl font-semibold mb-2">Limited Market Data</h3>
-            <p className="text-muted-foreground">
-              We have some auction data available. Check back regularly as more auctions complete for more comprehensive analytics.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Market Demand Section */}
       <div className="mt-8 space-y-4">
