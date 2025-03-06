@@ -19,13 +19,7 @@ export async function placeBid(auctionId: number, amount: number) {
     const response = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, { amount });
     return response;
   } catch (error: any) {
-    // Check for different types of profile errors
-    if (
-      error.response?.status === 403 && 
-      (error.response?.data?.error === "profile_incomplete" || 
-       error.response?.data?.message?.includes("profile"))
-    ) {
-      console.log("Profile error detected:", error.response?.data);
+    if (error.response?.status === 403 && error.response?.data?.error === "profile_incomplete") {
       throw new Error("Profile incomplete. Please complete your profile before bidding.");
     }
     throw error;
