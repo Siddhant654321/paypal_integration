@@ -8,6 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { dollarsToCents, formatDollarInput, formatPrice, centsToDollars } from "@/utils/formatters";
+import { useNavigate } from "react-router-dom";
 
 type Props = {
   auctionId: number;
@@ -18,6 +19,7 @@ type Props = {
 export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props) {
   const [amount, setAmount] = useState("");
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const bidMutation = useMutation({
     mutationFn: async (bidAmount: number) => {
@@ -32,16 +34,16 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
       setAmount("");
       // Log success message
       console.log("Bid placed successfully for auction:", auctionId);
-      
+
       // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
       queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
-      
+
       // Force refetch the auction and bids data
       queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
-      
+
       // Notify parent component after the invalidation
       if (onBidSuccess) {
         setTimeout(() => {
@@ -55,28 +57,33 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
       });
     },
     onError: (error: any) => {
-      let errorMessage = "An unexpected error occurred";
-
-      if (error.message) {
-        errorMessage = error.message;
+      // Check for different types of profile-related errors
+      if (
+        error.message?.includes("Profile incomplete") || 
+        error.message?.includes("profile before bidding") ||
+        (error.response?.data?.error === "profile_incomplete") ||
+        (error.response?.data?.message?.includes("complete your profile"))
+      ) {
+        toast({
+          title: "Profile Required",
+          description: "Please complete your profile before bidding. Click here to update your profile.",
+          variant: "destructive",
+          action: (
+            <Button
+              variant="outline"
+              onClick={() => navigate("/profile")}
+            >
+              Update Profile
+            </Button>
+          ),
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.response?.data?.message || error.message || "Failed to place bid",
+          variant: "destructive",
+        });
       }
-
-      if (error.response) {
-        try {
-          const responseData = error.response.json();
-          if (responseData && responseData.message) {
-            errorMessage = responseData.message;
-          }
-        } catch (e) {
-          // Ignore JSON parsing errors
-        }
-      }
-
-      toast({
-        title: "Failed to place bid",
-        description: errorMessage,
-        variant: "destructive",
-      });
     },
   });
 
