@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription, AlertTitle, AlertCircle } from "@nextui-org/react";
+//Removed import for Alert component from @nextui-org/react as per instructions.
 import { Info as InfoIcon } from "lucide-react";
 
 
@@ -298,7 +298,7 @@ export default function AuctionPage() {
 
           {user && isActive && user.id !== auction.sellerId && (
             <>
-              <Alert className="bg-blue-50 border-blue-200 mb-4">
+              <Alert variant="warning" className="bg-blue-50 border-blue-200 mb-4">
                 <InfoIcon className="h-4 w-4 text-blue-600" />
                 <AlertTitle className="text-blue-800">Profile Required</AlertTitle>
                 <AlertDescription className="text-blue-700">
