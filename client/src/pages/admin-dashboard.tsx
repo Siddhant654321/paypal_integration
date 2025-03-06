@@ -81,6 +81,22 @@ type User = {
   hasProfile: boolean;
 };
 
+type SellerProfile = {
+  userId: number;
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  businessName: string;
+  breedSpecialty: string;
+  npipNumber: string;
+};
+
+
 function AdminDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -111,6 +127,12 @@ function AdminDashboard() {
 
   const { data: sellerStripeStatuses } = useQuery<SellerStripeStatus[]>({
     queryKey: ["/api/admin/sellers/stripe-status"],
+    enabled: !!user && (user.role === "admin" || user.role === "seller_admin"),
+  });
+
+  // Get seller profiles for checking completeness
+  const { data: sellerProfiles } = useQuery<SellerProfile[]>({
+    queryKey: ["/api/admin/profiles"],
     enabled: !!user && (user.role === "admin" || user.role === "seller_admin"),
   });
 
@@ -429,22 +451,52 @@ function AdminDashboard() {
                             </CardDescription>
                           </CardHeader>
                           <CardContent>
-                            <div>
-                              <strong>Status:</strong>{" "}
+                            <div className="mt-2 flex flex-col gap-1">
+                              <div className="text-sm font-medium">Stripe Status:</div>
                               {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status ? (
-                                <Badge
-                                  variant={
-                                    sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status === "complete"
-                                      ? "success"
-                                      : sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status === "pending"
-                                        ? "outline"
-                                        : "secondary"
-                                  }
+                                <Badge variant={
+                                  sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status === "verified"
+                                    ? "success"
+                                    : "warning"
+                                }
                                 >
                                   {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status.replace("_", " ")}
                                 </Badge>
                               ) : (
                                 <Badge variant="destructive">Not Started</Badge>
+                              )}
+                            </div>
+                            <div className="mt-2 flex flex-col gap-1">
+                              <div className="text-sm font-medium">Profile Completeness:</div>
+                              {sellerProfiles?.find(p => p.userId === seller.id) ? (
+                                <div className="flex flex-col gap-1 text-sm">
+                                  <div className="flex items-center gap-1">
+                                    <span>NPIP:</span>
+                                    {sellerProfiles?.find(p => p.userId === seller.id)?.npipNumber ? (
+                                      <Badge variant="success">Complete</Badge>
+                                    ) : (
+                                      <Badge variant="destructive">Missing</Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span>Email:</span>
+                                    {sellerProfiles?.find(p => p.userId === seller.id)?.email ? (
+                                      <Badge variant="success">Complete</Badge>
+                                    ) : (
+                                      <Badge variant="destructive">Missing</Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span>Address:</span>
+                                    {sellerProfiles?.find(p => p.userId === seller.id)?.address ? (
+                                      <Badge variant="success">Complete</Badge>
+                                    ) : (
+                                      <Badge variant="destructive">Missing</Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <Badge variant="destructive">No Profile</Badge>
                               )}
                             </div>
                             {/* Add approval button for pending sellers */}
@@ -459,7 +511,7 @@ function AdminDashboard() {
                                       <AlertDialogTitle>Approve Seller</AlertDialogTitle>
                                       <AlertDialogDescription>
                                         Are you sure you want to approve {seller.username} as a seller?
-                                        {!sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status || sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status !== "complete" ? (
+                                        {!sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status || sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status !== "verified" ? (
                                           <div className="mt-2 text-destructive">
                                             Warning: This seller has not completed their Stripe verification.
                                           </div>
@@ -922,7 +974,8 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                 {isLoadingBids ? (
                   <div className="flex justifycenter p-4">
                     <LoadingSpinner className="h-6 w-6" />
-                  </div>                ) : !bids?.length ? (
+                  </div>
+                ) : !bids?.length ? (
                   <p className="text-muted-foreground">No bids found</p>
                 ) : (
                   <div className="space-y-2">

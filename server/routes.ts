@@ -784,6 +784,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add endpoint to get all profiles (for admin use)
+  app.get("/api/admin/profiles", requireAdmin, async (req, res) => {
+    try {
+      console.log("[ADMIN] Fetching all profiles");
+      
+      // Get all sellers
+      const sellers = await storage.getUsers({ 
+        role: "seller"
+      });
+      const sellerAdmins = await storage.getUsers({ 
+        role: "seller_admin" 
+      });
+      const allSellers = [...sellers, ...sellerAdmins];
+      
+      // Get profiles for all sellers
+      const profiles = await Promise.all(
+        allSellers.map(async (seller) => {
+          const profile = await storage.getProfile(seller.id);
+          return profile ? {...profile, userId: seller.id} : null;
+        })
+      );
+      
+      // Filter out null profiles
+      const validProfiles = profiles.filter(Boolean);
+      
+      console.log(`[ADMIN] Found ${validProfiles.length} seller profiles`);
+      res.json(validProfiles);
+    } catch (error) {
+      console.error("[ADMIN] Error fetching profiles:", error);
+      res.status(500).json({ message: "Failed to fetch profiles" });
+    }
+  });
+
   // Add routes for getting user's bids and auctions
   app.get("/api/admin/users/:userId/bids", requireAdmin, async (req, res) => {
     try {
@@ -798,6 +831,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/sellers/stripe-status", requireAdmin, async (req, res) => {
     try {
+      console.log("[ADMIN] Fetching Stripe status for sellers");
+      
       const sellers = await storage.getUsers({ role: "seller" });
       const sellerAdmins = await storage.getUsers({ role: "seller_admin" });
       const allSellers = [...sellers, ...sellerAdmins];
@@ -808,10 +843,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sellerId: seller.id,
           username: seller.username,
           hasStripeAccount: !!profile?.stripeAccountId,
-          stripeAccountStatus: profile?.stripeAccountStatus
+          stripeAccountStatus: profile?.stripeAccountStatus,
+          status: profile?.stripeAccountStatus || "not_started"
         };
       }));
 
+      console.log(`[ADMIN] Retrieved Stripe status for ${statusList.length} sellers`);
       res.json(statusList);
     } catch (error) {
       console.error("Error fetching seller Stripe statuses:", error);
