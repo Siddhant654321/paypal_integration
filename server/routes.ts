@@ -19,21 +19,48 @@ import type { User } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
-// Add middleware to check profile completion
+// Update the requireProfile middleware
 const requireProfile = async (req: any, res: any, next: any) => {
   if (!req.isAuthenticated()) {
     console.log("[PROFILE CHECK] User not authenticated");
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  console.log("[PROFILE CHECK] User authentication state:", {
+  console.log("[PROFILE CHECK] Checking profile completeness for user:", {
     userId: req.user?.id,
     role: req.user?.role,
-    username: req.user?.username,
-    isAuthenticated: req.isAuthenticated()
+    username: req.user?.username
   });
 
-  return next();
+  try {
+    const profile = await storage.getProfile(req.user.id);
+
+    if (!profile) {
+      console.log("[PROFILE CHECK] No profile found");
+      return res.status(403).json({ 
+        message: "Please complete your profile before bidding",
+        requiredFields: ["fullName", "email", "address", "city", "state", "zipCode"]
+      });
+    }
+
+    // Check required fields
+    const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
+    const missingFields = requiredFields.filter(field => !profile[field]);
+
+    if (missingFields.length > 0) {
+      console.log("[PROFILE CHECK] Missing required fields:", missingFields);
+      return res.status(403).json({
+        message: "Please complete your profile before bidding",
+        missingFields: missingFields
+      });
+    }
+
+    console.log("[PROFILE CHECK] Profile verification successful");
+    next();
+  } catch (error) {
+    console.error("[PROFILE CHECK] Error verifying profile:", error);
+    res.status(500).json({ message: "Failed to verify profile" });
+  }
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -837,7 +864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sellerAdmins = await storage.getUsers({ role: "seller_admin" });
       const allSellers = [...sellers, ...sellerAdmins];
 
-      const statusList = await Promise.all(allSellers.map(async (seller) => {
+      const statusList = await Promise.all(allSellers.map(async(seller) => {
         const profile = await storage.getProfile(seller.id);
         return {
           sellerId: seller.id,
@@ -1203,7 +1230,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-
 
   // Endpoint to retrieve a checkout session URL
   app.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
