@@ -13,3 +13,15 @@ export async function sendBuyerNotification(userId: number, message: string): Pr
     message
   });
 }
+
+export async function placeBid(auctionId: number, amount: number) {
+  try {
+    const response = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, { amount });
+    return response;
+  } catch (error: any) {
+    if (error.response?.status === 403 && error.response?.data?.error === "profile_incomplete") {
+      throw new Error("Profile incomplete. Please complete your profile before bidding.");
+    }
+    throw error;
+  }
+}

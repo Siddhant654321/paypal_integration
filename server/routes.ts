@@ -311,7 +311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Place bid on auction (anyone can bid except the seller of the auction)
-  app.post("/api/auctions/:id/bid", requireAuth, requireProfile, async (req, res) => {
+  app.post("/api/auctions/:id/bid", requireAuth, async (req, res) => {
     try {
       // Set content type header
       res.setHeader('Content-Type', 'application/json');
@@ -323,7 +323,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // First check if user has a complete profile
       const profile = await storage.getProfile(req.user.id);
       if (!profile) {
+        console.log("[BID] Profile check failed: No profile found for user", req.user.id);
         return res.status(403).json({ 
+          error: "profile_incomplete",
           message: "Please complete your profile before bidding",
           requiredFields: ["fullName", "email", "address", "city", "state", "zipCode"]
         });
@@ -334,7 +336,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const missingFields = requiredFields.filter(field => !profile[field]);
 
       if (missingFields.length > 0) {
+        console.log("[BID] Profile check failed: Missing fields", missingFields);
         return res.status(403).json({
+          error: "profile_incomplete",
           message: "Please complete your profile before bidding",
           missingFields: missingFields
         });
@@ -394,111 +398,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bid = await storage.createBid(bidData);
       console.log("[BID] Bid created successfully:", bid);
 
-      // Check if bid was placed in the last 5 minutes and extend if necessary
-      const timeUntilEnd = endTime.getTime() - now.getTime();
-      const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-      console.log("[BID EXTENSION] Checking bid timing:", {
-        auctionId: auction.id,
-        auctionTitle: auction.title,
-        currentTime: now.toISOString(),
-        auctionEndTime: endTime.toISOString(),
-        timeUntilEnd: timeUntilEnd / 1000, // Convert to seconds for readability
-        extensionThreshold: fiveMinutes / 1000,
-        shouldExtend: timeUntilEnd <= fiveMinutes
-      });
-
-      if (timeUntilEnd <= fiveMinutes) {
-        const newEndDate = new Date(now.getTime() + fiveMinutes);
-        console.log("[BID EXTENSION] Extending auction:", {
-          auctionId: auction.id,
-          auctionTitle: auction.title,
-          originalEndDate: endTime.toISOString(),
-          newEndDate: newEndDate.toISOString(),
-          extensionAmount: fiveMinutes / 1000
-        });
-
-        await storage.updateAuction(auction.id, {
-          endDate: newEndDate,
-          status: "active"
-        });
-
-        console.log("[BID EXTENSION] Auction successfully extended");
-
-        // Send notification about auction extension
-        try {
-          const { NotificationService } = await import('./notification-service');
-
-          // Notify seller
-          console.log("[BID EXTENSION] Notifying seller:", auction.sellerId);
-          await NotificationService.notifyAuctionExtended(
-            auction.sellerId,
-            auction.title,
-            newEndDate
-          );
-
-          // Get all unique bidders for this auction
-          const auctionBids = await storage.getBidsForAuction(auction.id);
-          const uniqueBidders = [...new Set(auctionBids.map(bid => bid.bidderId))];
-
-          console.log("[BID EXTENSION] Notifying other bidders:", {
-            totalBidders: uniqueBidders.length,
-            currentBidder: req.user.id
-          });
-
-          // Notify all bidders about the extension
-          for (const bidderId of uniqueBidders) {
-            if (bidderId !== req.user.id) { // Don't notify the current bidder
-              await NotificationService.notifyAuctionExtended(
-                bidderId,
-                auction.title,
-                newEndDate
-              );
-            }
-          }
-
-          console.log("[BID EXTENSION] Successfully notified all participants");
-        } catch (notifyError) {
-          console.error("[BID EXTENSION] Failed to send notifications:", notifyError);
-          // Continue with bid process even if notifications fail
-        }
-      }
-
-      // Send notification to the seller about the new bid
-      try {
-        console.log("[NOTIFICATION] Sending bid notifications");
-        const { NotificationService } = await import('./notification-service');
-
-        await NotificationService.notifyNewBid(
-          auction.sellerId,
-          auction.title,
-          amount
-        );
-        console.log("[NOTIFICATION] Seller notification sent");
-
-        // Get previous bids to notify outbid user
-        const previousBids = await storage.getBidsForAuction(auction.id);
-        if (previousBids.length > 1) {
-          // Sort by amount in descending order to get the second highest bid
-          const sortedBids = previousBids.sort((a, b) => b.amount - a.amount);
-          const secondHighestBid = sortedBids[1];
-
-          // Only notify if it's a different bidder
-          if (secondHighestBid.bidderId !== req.user.id) {
-            await NotificationService.notifyOutbid(
-              secondHighestBid.bidderId,
-              auction.title,
-              amount
-            );
-            console.log("[NOTIFICATION] Previous bidder notification sent");
-          }
-        }
-      } catch (notifyError) {
-        console.error("[NOTIFICATION] Failed to send bid notification:", notifyError);
-      }
-
       // Return successful bid response
-      return res.status(201).json(bid);
+      return res.status(201).json({
+        ...bid,
+        message: "Bid placed successfully"
+      });
     } catch (error) {
       console.error("[BID] Error:", error);
       return res.status(500).json({
@@ -1722,7 +1626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (payment && payment.status === "completed" && !payment.payoutProcessed) {
         try {
           // Now that we have tracking info, create the payout to the seller
-          awaitSellerPaymentService.createPayout(
+          await SellerPaymentService.createPayout(
             payment.id,
             auction.sellerId,
             payment.sellerPayout
