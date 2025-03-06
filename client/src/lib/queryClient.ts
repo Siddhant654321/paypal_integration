@@ -5,8 +5,16 @@ async function throwIfResNotOk(res: Response) {
     const text = await res.text();
     try {
       const json = JSON.parse(text);
+      // Preserve full error response for profile_incomplete
+      if (res.status === 403 && json.error === "profile_incomplete") {
+        const error = new Error(json.message);
+        error.name = "ProfileIncompleteError";
+        Object.assign(error, json); // Add all error properties to the error object
+        throw error;
+      }
       throw new Error(json.message || `${res.status}: ${res.statusText}`);
     } catch (e) {
+      if (e.name === "ProfileIncompleteError") throw e;
       throw new Error(`${res.status}: ${text || res.statusText}`);
     }
   }
@@ -16,7 +24,7 @@ export async function apiRequest<T>(
   method: string,
   url: string,
   data?: unknown | undefined,
-): Promise<Response> {
+): Promise<T> {
   console.log(`[API] ${method} ${url}`, { data });
 
   const response = await fetch(url, {
@@ -32,7 +40,8 @@ export async function apiRequest<T>(
     statusText: response.statusText
   });
 
-  return response;
+  await throwIfResNotOk(response);
+  return response.json();
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

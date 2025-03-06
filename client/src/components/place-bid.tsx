@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import { placeBid } from "@/services/auction-service";
 import { Loader2 } from "lucide-react";
 
@@ -15,7 +15,7 @@ interface PlaceBidProps {
 
 export function PlaceBid({ auctionId, currentPrice, onBidPlaced }: PlaceBidProps) {
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm({
@@ -29,39 +29,43 @@ export function PlaceBid({ auctionId, currentPrice, onBidPlaced }: PlaceBidProps
       setIsSubmitting(true);
       const amount = Math.round(parseFloat(data.amount) * 100); // Convert to cents
 
-      await placeBid(auctionId, amount);
-      
-      toast({
-        title: "Success",
-        description: "Bid placed successfully!",
-      });
+      try {
+        await placeBid(auctionId, amount);
 
-      if (onBidPlaced) {
-        onBidPlaced();
-      }
-    } catch (error: any) {
-      console.error("[BID] Error placing bid:", error);
+        toast({
+          title: "Success",
+          description: "Bid placed successfully!",
+        });
 
-      if (error.message?.includes("Profile incomplete")) {
-        toast({
-          title: "Profile Required",
-          description: "Please complete your profile before bidding. Click here to update your profile.",
-          variant: "destructive",
-          action: (
-            <Button
-              variant="outline"
-              onClick={() => navigate("/profile")}
-            >
-              Update Profile
-            </Button>
-          ),
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to place bid",
-          variant: "destructive",
-        });
+        if (onBidPlaced) {
+          onBidPlaced();
+        }
+      } catch (error: any) {
+        console.error("[BID] Error placing bid:", error);
+
+        // Check for profile incomplete error
+        if (error.name === "ProfileIncompleteError") {
+          const missingFields = error.missingFields?.join(", ") || "required information";
+          toast({
+            title: "Profile Required",
+            description: `Please complete your profile before bidding. Missing: ${missingFields}`,
+            variant: "destructive",
+            action: (
+              <Button
+                variant="outline"
+                onClick={() => navigate("/profile")}
+              >
+                Update Profile
+              </Button>
+            ),
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: error.message || "Failed to place bid",
+            variant: "destructive",
+          });
+        }
       }
     } finally {
       setIsSubmitting(false);

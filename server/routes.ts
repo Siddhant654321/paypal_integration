@@ -322,21 +322,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // First check if user has a complete profile
       const profile = await storage.getProfile(req.user.id);
+
+      console.log("[BID] Checking profile for user:", {
+        userId: req.user.id,
+        hasProfile: !!profile,
+        username: req.user.username
+      });
+
       if (!profile) {
-        console.log("[BID] Profile check failed: No profile found for user", req.user.id);
+        console.log("[BID] No profile found");
         return res.status(403).json({ 
           error: "profile_incomplete",
           message: "Please complete your profile before bidding",
-          requiredFields: ["fullName", "email", "address", "city", "state", "zipCode"]
+          missingFields: ["fullName", "email", "address", "city", "state", "zipCode"]
         });
       }
 
-      // Check required profile fields
+      // Check required profile fields with strict validation
       const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
-      const missingFields = requiredFields.filter(field => !profile[field]);
+      const missingFields = requiredFields.filter(field => {
+        const value = profile[field];
+        return !value || (typeof value === 'string' && value.trim() === '');
+      });
+
+      console.log("[BID] Profile field validation:", {
+        userId: req.user.id,
+        missingFields,
+        profileFields: requiredFields.reduce((acc, field) => {
+          acc[field] = profile[field] ? profile[field].trim() : '';
+          return acc;
+        }, {} as Record<string, string>)
+      });
 
       if (missingFields.length > 0) {
-        console.log("[BID] Profile check failed: Missing fields", missingFields);
+        console.log("[BID] Missing required fields:", missingFields);
         return res.status(403).json({
           error: "profile_incomplete",
           message: "Please complete your profile before bidding",
@@ -344,9 +363,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Continue with bid placement logic...
       const auctionId = parseInt(req.params.id);
-      console.log(`[BID] Processing new bid for auction ${auctionId} from user ${req.user.id}`);
-
       if (isNaN(auctionId)) {
         return res.status(400).json({ message: "Invalid auction ID" });
       }
@@ -361,7 +379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You cannot bid on your own auction" });
       }
 
-      // Convert amount to number if it's a string (and ensure it's in cents)
+      // Convert amount to number if it's a string
       let amount;
       if (typeof req.body.amount === 'string') {
         amount = Math.round(parseFloat(req.body.amount) * 100);
@@ -386,8 +404,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Auction has ended" });
       }
 
-      console.log(`[BID] Amount validated: $${amount/100} for auction "${auction.title}"`);
-
       const bidData = {
         auctionId: auction.id,
         bidderId: req.user.id,
@@ -407,7 +423,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("[BID] Error:", error);
       return res.status(500).json({
         message: "Failed to place bid",
-        error: error instanceof Error ? error.message : "Unknown error"
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   });
@@ -538,6 +554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch user bids" });
     }
   });
+
 
 
   // Profile routes
@@ -1655,7 +1672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ success: true });
     } catch (error) {
       console.error("Error fulfilling auction:", error);
-      return res.status(500).json({ message: "Failed to fulfill auction" });
+      res.status(500).json({ message: "Failed to fulfill auction" });
     }
   });
 
@@ -1726,7 +1743,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add seller profile endpoint
   app.get("/api/sellers/:id", async (req, res) => {
     try {
-      const sellerId = parseInt(req.params.id);
+      constsellerId = parseInt(req.params.id);
       console.log(`[SELLER] Fetching seller profile for ID: ${sellerId}`);
 
       // Get the seller
