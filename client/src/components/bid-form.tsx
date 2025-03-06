@@ -32,16 +32,16 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
       setAmount("");
       // Log success message
       console.log("Bid placed successfully for auction:", auctionId);
-
+      
       // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
       queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
-
+      
       // Force refetch the auction and bids data
       queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
-
+      
       // Notify parent component after the invalidation
       if (onBidSuccess) {
         setTimeout(() => {
@@ -65,27 +65,6 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
         try {
           const responseData = error.response.json();
           if (responseData && responseData.message) {
-            // Handle profile-related errors specially
-            if (responseData.code === "PROFILE_REQUIRED" || responseData.code === "INCOMPLETE_PROFILE") {
-              toast({
-                title: "Profile information required",
-                description: (
-                  <div className="flex flex-col gap-2">
-                    <p>{responseData.message}</p>
-                    <Button
-                      variant="outline"
-                      className="mt-1"
-                      onClick={() => window.location.href = '/profile'}
-                    >
-                      Complete your profile
-                    </Button>
-                  </div>
-                ),
-                variant: "destructive",
-                duration: 10000, // Show for longer
-              });
-              return;
-            }
             errorMessage = responseData.message;
           }
         } catch (e) {

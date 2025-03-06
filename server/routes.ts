@@ -33,32 +33,6 @@ const requireProfile = async (req: any, res: any, next: any) => {
     isAuthenticated: req.isAuthenticated()
   });
 
-  // Check if user has a complete profile
-  const profile = await storage.getProfile(req.user.id);
-  
-  if (!profile) {
-    console.log("[PROFILE CHECK] User has no profile");
-    return res.status(403).json({ 
-      message: "You must complete your profile before bidding", 
-      code: "PROFILE_REQUIRED"
-    });
-  }
-  
-  // Check required fields
-  const missingFields = [];
-  if (!profile.fullName) missingFields.push("name");
-  if (!profile.email) missingFields.push("email");
-  if (!profile.address || !profile.city || !profile.state || !profile.zipCode) missingFields.push("address");
-  
-  if (missingFields.length > 0) {
-    console.log("[PROFILE CHECK] User has incomplete profile:", missingFields);
-    return res.status(403).json({ 
-      message: `Your profile is missing: ${missingFields.join(', ')}`,
-      missingFields,
-      code: "INCOMPLETE_PROFILE"
-    });
-  }
-
   return next();
 };
 

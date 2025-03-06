@@ -27,9 +27,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-//Removed import for Alert component from @nextui-org/react as per instructions.
-import { Info as InfoIcon } from "lucide-react";
-
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
@@ -125,12 +122,12 @@ export default function AuctionPage() {
     // Check if auction hasn't started yet
     const now = new Date();
     const startDate = new Date(auction.startDate);
-
+    
     // If auction hasn't started yet, show Preview badge
     if (now < startDate) {
       return <Badge variant="outline">Preview</Badge>;
     }
-
+    
     // Otherwise use status from database
     switch (auction.status) {
       case "active":
@@ -265,20 +262,20 @@ export default function AuctionPage() {
           <div className="prose max-w-none">
             <p className="whitespace-pre-wrap">{auction.description}</p>
           </div>
-
+          
           {/* Payment button for winning bidder */}
-          {auction.status === "ended" &&
-            user?.id === auction.winningBidderId &&
-            auction.paymentStatus !== "completed" && (
-              <div className="mt-4">
-                <Link href={`/auction/${auction.id}/pay`}>
-                  <Button size="lg" className="w-full" variant="default">
-                    {/*<CreditCard className="mr-2 h-5 w-5" />*/} {/* CreditCard icon is missing */}
-                    Complete Purchase
-                  </Button>
-                </Link>
-              </div>
-            )}
+          {auction.status === "ended" && 
+           user?.id === auction.winningBidderId && 
+           auction.paymentStatus !== "completed" && (
+            <div className="mt-4">
+              <Link href={`/auction/${auction.id}/pay`}>
+                <Button size="lg" className="w-full" variant="default">
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  Complete Purchase
+                </Button>
+              </Link>
+            </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-lg">
@@ -297,23 +294,14 @@ export default function AuctionPage() {
           </div>
 
           {user && isActive && user.id !== auction.sellerId && (
-            <>
-              <Alert variant="warning" className="bg-blue-50 border-blue-200 mb-4">
-                <InfoIcon className="h-4 w-4 text-blue-600" />
-                <AlertTitle className="text-blue-800">Profile Required</AlertTitle>
-                <AlertDescription className="text-blue-700">
-                  You need to complete your profile (name, email, and address) before placing a bid.
-                </AlertDescription>
-              </Alert>
-              <BidForm
-                auctionId={auction.id}
-                currentPrice={auction.currentPrice}
-                onBidSuccess={() => {
-                  refetchAuction();
-                  refetchBids();
-                }}
-              />
-            </>
+            <BidForm
+              auctionId={auction.id}
+              currentPrice={auction.currentPrice}
+              onBidSuccess={() => {
+                refetchAuction();
+                refetchBids();
+              }}
+            />
           )}
 
           {user && user.id === auction.sellerId && (
