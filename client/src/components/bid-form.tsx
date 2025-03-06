@@ -8,7 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { dollarsToCents, formatDollarInput, formatPrice, centsToDollars } from "@/utils/formatters";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 
 type Props = {
   auctionId: number;
@@ -19,7 +19,7 @@ type Props = {
 export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props) {
   const [amount, setAmount] = useState("");
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   const bidMutation = useMutation({
     mutationFn: async (bidAmount: number) => {
@@ -71,7 +71,7 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
           action: (
             <Button
               variant="outline"
-              onClick={() => navigate("/profile")}
+              onClick={() => setLocation("/profile")}
             >
               Update Profile
             </Button>
