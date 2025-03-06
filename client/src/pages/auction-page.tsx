@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Auction, Bid, Profile } from "@shared/schema";
-//import BidForm from "@/components/bid-form";  //This import is missing from original code and needs to be added if BidForm exists.
+import BidForm from "@/components/bid-form";
 import { formatDistanceToNow, differenceInSeconds } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowLeft, Clock, Store, User, MapPin } from "lucide-react";
@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription, AlertTitle, AlertCircle } from "@nextui-org/react"; // Assuming this is the correct import for Alert components.  You'll likely need to install @nextui-org/react.
+import { Alert, AlertDescription, AlertTitle, AlertCircle } from "@nextui-org/react";
 import { Info as InfoIcon } from "lucide-react";
 
 
@@ -305,15 +305,14 @@ export default function AuctionPage() {
                   You need to complete your profile (name, email, and address) before placing a bid.
                 </AlertDescription>
               </Alert>
-              {/* BidForm component is missing from original code and needs to be added */}
-              {/* <BidForm
+              <BidForm
                 auctionId={auction.id}
                 currentPrice={auction.currentPrice}
                 onBidSuccess={() => {
                   refetchAuction();
                   refetchBids();
                 }}
-              /> */}
+              />
             </>
           )}
 
