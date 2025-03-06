@@ -23,50 +23,43 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
 
   const bidMutation = useMutation({
     mutationFn: async (bidAmount: number) => {
-      const bidData = {
-        auctionId,
-        amount: dollarsToCents(bidAmount), // Convert dollars to cents for storage
-      };
-      const res = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, bidData);
-      return res.json();
+      const amountInCents = dollarsToCents(bidAmount);
+      try {
+        const response = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, { amount: amountInCents });
+        // Check if the response contains a profile error message
+        if (response.error === "profile_incomplete") {
+          throw new Error("Profile incomplete");
+        }
+        return response;
+      } catch (error: any) {
+        // Re-throw the error so it goes to onError handler
+        throw error;
+      }
     },
     onSuccess: () => {
       setAmount("");
-      // Log success message
-      console.log("Bid placed successfully for auction:", auctionId);
-
-      // Invalidate all related queries
-      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/auctions'] });
-
-      // Force refetch the auction and bids data
-      queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}`] });
-      queryClient.refetchQueries({ queryKey: [`/api/auctions/${auctionId}/bids`] });
-
-      // Notify parent component after the invalidation
-      if (onBidSuccess) {
-        setTimeout(() => {
-          onBidSuccess();
-        }, 100); // Small delay to ensure invalidation completes
-      }
-
+      onBidSuccess?.();
       toast({
         title: "Bid placed successfully",
         description: "Your bid has been recorded",
       });
     },
     onError: (error: any) => {
-      // Check for different types of profile-related errors
+      console.error("Bid error:", error);
+
+      // Check for profile-related errors with more thorough checks
+      const errorResponse = error.response?.data;
+      const errorMessage = error.message || "";
+
       if (
-        error.message?.includes("Profile incomplete") || 
-        error.message?.includes("profile before bidding") ||
-        (error.response?.data?.error === "profile_incomplete") ||
-        (error.response?.data?.message?.includes("complete your profile"))
+        errorMessage.includes("Profile incomplete") || 
+        errorMessage.includes("profile before bidding") ||
+        (errorResponse?.error === "profile_incomplete") ||
+        (errorResponse?.message && errorResponse.message.includes("complete your profile"))
       ) {
         toast({
           title: "Profile Required",
-          description: "Please complete your profile before bidding. Click here to update your profile.",
+          description: "Please complete your profile before bidding.",
           variant: "destructive",
           action: (
             <Button
@@ -80,7 +73,7 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
       } else {
         toast({
           title: "Error",
-          description: error.response?.data?.message || error.message || "Failed to place bid",
+          description: errorResponse?.message || errorMessage || "Failed to place bid",
           variant: "destructive",
         });
       }
