@@ -320,6 +320,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
+      // First check if user has a complete profile
+      const profile = await storage.getProfile(req.user.id);
+      if (!profile) {
+        return res.status(403).json({ 
+          message: "Please complete your profile before bidding",
+          requiredFields: ["fullName", "email", "address", "city", "state", "zipCode"]
+        });
+      }
+
+      // Check required profile fields
+      const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
+      const missingFields = requiredFields.filter(field => !profile[field]);
+
+      if (missingFields.length > 0) {
+        return res.status(403).json({
+          message: "Please complete your profile before bidding",
+          missingFields: missingFields
+        });
+      }
+
       const auctionId = parseInt(req.params.id);
       console.log(`[BID] Processing new bid for auction ${auctionId} from user ${req.user.id}`);
 
@@ -1702,7 +1722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (payment && payment.status === "completed" && !payment.payoutProcessed) {
         try {
           // Now that we have tracking info, create the payout to the seller
-          await SellerPaymentService.createPayout(
+          awaitSellerPaymentService.createPayout(
             payment.id,
             auction.sellerId,
             payment.sellerPayout
