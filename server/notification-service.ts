@@ -19,6 +19,14 @@ export class NotificationService {
         throw new Error("Missing required notification fields");
       }
 
+      // Check user exists
+      const user = await storage.getUser(userId);
+      if (!user) {
+        log(`Warning: Attempting to create notification for non-existent user ${userId}`);
+      } else {
+        log(`Creating notification for user ${userId} (${user.username})`);
+      }
+
       // Extract reference field before sending to storage
       const { reference, ...notificationData } = notification;
       
@@ -30,7 +38,12 @@ export class NotificationService {
         reference: reference || null,
       });
 
-      log(`Successfully created notification:`, createdNotification);
+      log(`Successfully created notification (ID: ${createdNotification.id}):`, {
+        userId,
+        title: createdNotification.title,
+        type: createdNotification.type,
+        reference: createdNotification.reference
+      });
 
       // Also send email notification if applicable
       try {

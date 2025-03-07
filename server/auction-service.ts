@@ -1,144 +1,157 @@
 import { storage } from "./storage";
 import { NotificationService } from "./notification-service";
+import { EmailService } from "./email-service";
 
 export class AuctionService {
   static async checkAndNotifyEndingAuctions(): Promise<void> {
     try {
+      console.log("[AUCTION SERVICE] Checking for auctions ending soon at " + new Date().toISOString());
+
       // Get all active auctions
-      const auctions = await storage.getAuctions({ status: "active" });
+      const activeAuctions = await storage.getAuctions({
+        status: "active",
+        approved: true
+      });
+
+      console.log(`[AUCTION SERVICE] Found ${activeAuctions.length} active auctions to check`);
+
       const now = new Date();
-      console.log(`[AUCTION SERVICE] Checking for auctions ending soon at ${now.toISOString()}`);
-      console.log(`[AUCTION SERVICE] Found ${auctions.length} active auctions to check`);
+      const oneHourInMs = 60 * 60 * 1000;
 
-      for (const auction of auctions) {
-        const endTime = new Date(auction.endDate);
-        const timeUntilEnd = endTime.getTime() - now.getTime();
-        const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
+      for (const auction of activeAuctions) {
+        const endDate = new Date(auction.endDate);
+        const timeUntilEnd = endDate.getTime() - now.getTime();
 
-        // Check if auction ends in approximately one hour
-        if (timeUntilEnd > 0 && timeUntilEnd <= oneHour) {
-          // Check if we've already sent a notification for this auction
+        // If auction ends in 1 hour (with a 5-minute window for processing)
+        const oneHourWindowStart = oneHourInMs - (5 * 60 * 1000);
+        const oneHourWindowEnd = oneHourInMs + (5 * 60 * 1000);
+
+        if (timeUntilEnd > oneHourWindowStart && timeUntilEnd < oneHourWindowEnd) {
+          console.log(`[AUCTION SERVICE] Auction #${auction.id} (${auction.title}) ends soon in ${Math.round(timeUntilEnd / (60 * 1000))} minutes`);
+
+          // Check if we've already sent notifications for this auction's ending
           const existingNotifications = await storage.getNotificationsByTypeAndReference(
             "auction_ending_soon", 
             auction.id.toString()
           );
-          
+
           if (existingNotifications.length > 0) {
-            console.log(`[AUCTION SERVICE] Skipping notification for auction #${auction.id} - already sent`);
-            continue; // Skip if we've already sent a notification
+            console.log(`[AUCTION SERVICE] Skipping auction #${auction.id} - already sent ending notifications (${existingNotifications.length} found)`);
+            continue;
           }
-          
-          console.log(`[AUCTION SERVICE] Sending notifications for auction #${auction.id} ending soon`);
-          
-          // Get all unique bidders for this auction
+
+          // Get all bidders for this auction
           const bids = await storage.getBidsForAuction(auction.id);
-          const uniqueBidders = [...new Set(bids.map(bid => bid.bidderId))];
+          const uniqueBidderIds = [...new Set(bids.map(bid => bid.bidderId))];
 
-          // Notify seller
-          await NotificationService.notifyAuctionOneHourRemaining(
-            auction.sellerId,
-            auction.title,
-            endTime,
-            auction.id
-          );
-
-          // Notify all bidders
-          for (const bidderId of uniqueBidders) {
+          // Notify each bidder
+          for (const bidderId of uniqueBidderIds) {
             await NotificationService.notifyAuctionOneHourRemaining(
               bidderId,
               auction.title,
-              endTime,
+              endDate,
               auction.id
             );
           }
-          
-          console.log(`[AUCTION SERVICE] Successfully sent notifications for auction #${auction.id}`);
+
+          // Also notify the seller
+          await NotificationService.notifyAuctionOneHourRemaining(
+            auction.sellerId,
+            auction.title,
+            endDate,
+            auction.id
+          );
         }
       }
     } catch (error) {
-      console.error("Error checking ending auctions:", error);
+      console.error("[AUCTION SERVICE] Error checking for ending auctions:", error);
     }
   }
 
   static async checkAndNotifyCompletedAuctions(): Promise<void> {
     try {
-      // Get auctions that have just ended but haven't been processed
-      const auctions = await storage.getAuctions({ status: "active" });
+      console.log("[AUCTION SERVICE] Checking for completed auctions at " + new Date().toISOString());
+
+      // Get all active auctions
+      const activeAuctions = await storage.getAuctions({
+        status: "active",
+        approved: true
+      });
+
+      console.log(`[AUCTION SERVICE] Found ${activeAuctions.length} active auctions to check`);
+
       const now = new Date();
 
-      console.log(`[AUCTION SERVICE] Checking for completed auctions at ${now.toISOString()}`);
-      console.log(`[AUCTION SERVICE] Found ${auctions.length} active auctions to check`);
+      for (const auction of activeAuctions) {
+        const endDate = new Date(auction.endDate);
 
-      for (const auction of auctions) {
-        const endTime = new Date(auction.endDate);
-        
-        if (endTime <= now) {
-          console.log(`[AUCTION SERVICE] Auction #${auction.id} "${auction.title}" has ended at ${endTime.toISOString()}`);
-          
-          // Check if we've already processed this auction
+        // If auction has ended
+        if (endDate <= now) {
+          console.log(`[AUCTION SERVICE] Auction #${auction.id} (${auction.title}) has ended`);
+
+          // Check if we've already sent notifications for this auction's completion
           const existingNotifications = await storage.getNotificationsByTypeAndReference(
             "auction_completed", 
             auction.id.toString()
           );
-          
+
           if (existingNotifications.length > 0) {
-            console.log(`[AUCTION SERVICE] Skipping auction #${auction.id} - already processed`);
-            continue; // Skip if we've already processed this auction
+            console.log(`[AUCTION SERVICE] Skipping auction #${auction.id} - already sent completion notifications (${existingNotifications.length} found)`);
+            continue;
           }
-          
+
           // Get all bids for this auction
           const bids = await storage.getBidsForAuction(auction.id);
-          console.log(`[AUCTION SERVICE] Auction #${auction.id} has ${bids.length} bids`);
-          
-          const uniqueBidders = [...new Set(bids.map(bid => bid.bidderId))];
-          
-          // Get the winning bid (highest amount)
+
+          // Determine the winning bid (if any)
           let winningBid = null;
           if (bids.length > 0) {
-            winningBid = bids.reduce((highest, current) => 
-              current.amount > highest.amount ? current : highest
-            , bids[0]);
-            console.log(`[AUCTION SERVICE] Winning bid: ${winningBid.amount} by user ${winningBid.bidderId}`);
+            // Sort by amount (desc) and timestamp (asc)
+            const sortedBids = [...bids].sort((a, b) => {
+              if (a.amount !== b.amount) return b.amount - a.amount;
+              return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+            });
+            winningBid = sortedBids[0];
+
+            // Update the auction with the winning bidder
+            await storage.updateAuction(auction.id, {
+              winningBidderId: winningBid.bidderId,
+              status: "ended"
+            });
           } else {
-            console.log(`[AUCTION SERVICE] No bids for auction #${auction.id}`);
+            // No bids placed, just mark as ended
+            await storage.updateAuction(auction.id, {
+              status: "ended"
+            });
           }
 
-          // Mark auction as ended with correct status
-          const updateData = { 
-            status: "ended",
-            winningBidderId: winningBid?.bidderId || null
-          };
-          
-          console.log(`[AUCTION SERVICE] Updating auction #${auction.id} with:`, updateData);
-          await storage.updateAuction(auction.id, updateData);
-
-          // Notify seller
-          await NotificationService.notifyAuctionComplete(
-            auction.sellerId,
-            auction.title,
-            false,
-            winningBid?.amount || auction.startPrice,
-            true,
-            auction.id
-          );
-
-          // Notify all bidders
-          for (const bidderId of uniqueBidders) {
+          // Notify all unique bidders
+          const uniqueBidderIds = [...new Set(bids.map(bid => bid.bidderId))];
+          for (const bidderId of uniqueBidderIds) {
+            const isWinner = winningBid && bidderId === winningBid.bidderId;
             await NotificationService.notifyAuctionComplete(
               bidderId,
               auction.title,
-              bidderId === winningBid?.bidderId,
-              winningBid?.amount || auction.startPrice,
+              isWinner,
+              winningBid ? winningBid.amount : auction.currentPrice,
               false,
               auction.id
             );
           }
-          
-          console.log(`[AUCTION SERVICE] Successfully processed auction #${auction.id}`);
+
+          // Notify the seller
+          await NotificationService.notifyAuctionComplete(
+            auction.sellerId,
+            auction.title,
+            false,
+            winningBid ? winningBid.amount : auction.currentPrice,
+            true,
+            auction.id
+          );
         }
       }
     } catch (error) {
-      console.error("Error processing completed auctions:", error);
+      console.error("[AUCTION SERVICE] Error checking for completed auctions:", error);
     }
   }
 }

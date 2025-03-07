@@ -405,6 +405,27 @@ export default function ProfilePage() {
                   </FormItem>
                 )}
               />
+              
+              <FormField
+                control={form.control}
+                name="emailAuctionNotifications"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Auction Notifications</FormLabel>
+                      <FormDescription>
+                        Receive emails when auctions are ending or have completed
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
 
               {(user.role === "seller" || user.role === "seller_admin") && (
                 <FormField

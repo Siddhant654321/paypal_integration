@@ -1468,9 +1468,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Set up periodic checks for auction notifications
-  const NOTIFICATION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
+  const NOTIFICATION_CHECK_INTERVAL = 15 * 60 * 1000; // Check every 15 minutes
   setInterval(async () => {
     try {
+      console.log("[NOTIFICATION CHECK] Running scheduled auction notification check at", new Date().toISOString());
       await AuctionService.checkAndNotifyEndingAuctions();
       await AuctionService.checkAndNotifyCompletedAuctions();
     } catch (error) {
