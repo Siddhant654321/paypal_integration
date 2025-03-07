@@ -867,7 +867,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.get("/api/admin/users/:userId/auctions", requireAdmin, async (req, res) => {
       try {
         const userId = parseInt(req.params.userId);
-        const auctions = await storage.getAuctions({ sellerId: userId });
+        const auctions = awaitstorage.getAuctions({ sellerId: userId });
         res.json(auctions);
       } catch (error) {
         console.error("Error fetching user auctions:", error);
