@@ -49,6 +49,8 @@ export interface IStorage {
   createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout>;
   getPaymentsByAuctionId(auctionId: number): Promise<Payment[]>;
   getUserByEmail(email: string): Promise<User | undefined>; // Added getUserByEmail
+  deleteBid(bidId: number): Promise<void>;
+  deleteBidsForAuction(auctionId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -366,6 +368,7 @@ export class DatabaseStorage implements IStorage {
   async deleteBid(bidId: number): Promise<void> {
     try {
       log(`Deleting bid ${bidId}`);
+      await db.delete(bids).where(eq(bids.id, bidId)).execute();
     } catch (error) {
       log(`Error deleting bid ${bidId}: ${error}`);
       throw error;
@@ -964,6 +967,11 @@ export class DatabaseStorage implements IStorage {
       log(`Error getting user by email ${email}: ${error}`);
       throw error;
     }
+  }
+
+  async deleteBidsForAuction(auctionId: number): Promise<void> {
+    console.log(`[STORAGE] Deleting all bids for auction: ${auctionId}`);
+    await db.delete(bids).where(eq(bids.auctionId, auctionId)).execute();
   }
 }
 

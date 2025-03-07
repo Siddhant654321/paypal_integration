@@ -875,14 +875,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    //  // Admin auction management
+    // Admin auction management
     router.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
       try {
-        await storage.deleteAuction(parseInt(req.params.id));
-        res.sendStatus(200);
+        const auctionId = parseInt(req.params.id);
+        
+        if (isNaN(auctionId)) {
+          return res.status(400).json({ message: "Invalid auction ID" });
+        }
+        
+        console.log(`[ADMIN] Deleting auction with ID: ${auctionId}`);
+        
+        // Get auction to check if it exists
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          console.log(`[ADMIN] Auction ${auctionId} not found for deletion`);
+          return res.status(404).json({ message: "Auction not found" });
+        }
+        
+        // Delete associated bids first to avoid foreign key constraints
+        await storage.deleteBidsForAuction(auctionId);
+        
+        // Delete the auction
+        await storage.deleteAuction(auctionId);
+        
+        console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
+        return res.status(200).json({ success: true, message: "Auction deleted successfully" });
       } catch (error) {
-        console.error("Error deleting auction:", error);
-        res.status(500).json({ message: "Failed to delete auction" });
+        console.error("[ADMIN] Error deleting auction:", error);
+        return res.status(500).json({ 
+          message: "Failed to delete auction", 
+          error: error instanceof Error ? error.message : String(error) 
+        });
       }
     });
 
