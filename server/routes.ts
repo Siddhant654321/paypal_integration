@@ -19,6 +19,7 @@ import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { NotificationService } from "./notification-service";
 import passport from 'passport'; //Import passport
+import { hashPassword } from './utils/password';  // Add import at the top with other imports
 
 
 // Create an Express router instance
@@ -95,7 +96,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     app.use(router);
 
 
-    // Add authentication endpoints with enhanced logging and response handling
+    // Add registration endpoint at the beginning of authentication endpoints section
+    // Register endpoint with enhanced validation and error handling
+    router.post("/api/register", async (req, res) => {
+      try {
+        console.log("[AUTH] Registration attempt for username:", req.body.username);
+
+        if (!req.body.username || !req.body.password) {
+          return res.status(400).json({ 
+            message: "Username and password are required" 
+          });
+        }
+
+        // Check if username already exists
+        const existingUser = await storage.getUserByUsername(req.body.username);
+        if (existingUser) {
+          console.log("[AUTH] Registration failed: Username already exists");
+          return res.status(400).json({ 
+            message: "Username already exists" 
+          });
+        }
+
+        // Hash password and create user
+        const hashedPassword = await hashPassword(req.body.password);
+        const user = await storage.createUser({
+          username: req.body.username,
+          password: hashedPassword,
+          role: req.body.role || "buyer", // Default to buyer if no role specified
+          approved: req.body.role === "buyer", // Auto-approve buyers
+          hasProfile: false
+        });
+
+        console.log("[AUTH] User registered successfully:", {
+          id: user.id,
+          username: user.username,
+          role: user.role
+        });
+
+        // Log the user in automatically after registration
+        req.login(user, (err) => {
+          if (err) {
+            console.error("[AUTH] Auto-login after registration failed:", err);
+            return res.status(500).json({ 
+              message: "Registration successful but failed to create session" 
+            });
+          }
+
+          res.status(201).json({
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            approved: user.approved,
+            hasProfile: user.hasProfile
+          });
+        });
+
+      } catch (error) {
+        console.error("[AUTH] Registration error:", error);
+        res.status(500).json({ 
+          message: "Failed to register user",
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    });
+
+    // Update the login endpoint to use proper passport authentication
     router.post("/api/login", (req, res, next) => {
       if (!req.body.username || !req.body.password) {
         console.log("[AUTH] Login failed: Missing credentials");
@@ -196,6 +261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           console.log("[AUTH] Logout completed successfully");
           
+
           // Always return success
           return res.status(200).json({ 
             message: "Logged out successfully", 
@@ -803,7 +869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get user's auctions if they're a seller
         if (user?.role === "seller" || user?.role === "seller_admin") {
           const auctions = await storage.getAuctions({ sellerId: userId });
-          return res.json({ ...profile, auctions });
+          returnres.json({ ...profile, auctions });
         }
 
         res.json(profile);
@@ -1662,7 +1728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           accountId: profile.stripeAccountId
         });
       } catch (error) {
-        console.error("[Seller Status] Error:", error);
+        console.errorerror("[Seller Status] Error:", error);
         return res.status(500).json({ 
           message: "Failed to fetch seller status",
           error: error instanceof Error ? error.message : String(error)
