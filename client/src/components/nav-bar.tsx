@@ -26,26 +26,28 @@ export default function NavBar() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      try {
-        await axios.post('/api/logout');
-        console.log('Logged out successfully');
-        return true;
-      } catch (error) {
-        console.error('Logout error:', error);
-        throw error;
+      const response = await apiRequest("POST", "/api/logout");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Logout failed");
       }
+      return true;
     },
     onSuccess: () => {
       console.log('Logged out successfully');
+      queryClient.clear();
       queryClient.setQueryData(['/api/user'], null);
-      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
       setLocation('/');
+      toast({
+        title: 'Logged out',
+        description: 'You have been successfully logged out.'
+      });
     },
     onError: (error) => {
       console.error('Logout error:', error);
       toast({
         title: 'Logout failed',
-        description: 'An error occurred during logout.',
+        description: error instanceof Error ? error.message : 'An error occurred during logout.',
         variant: 'destructive',
       });
     },
