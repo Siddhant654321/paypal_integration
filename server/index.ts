@@ -11,10 +11,31 @@ async function initializeServer() {
   try {
     log("Starting server initialization", "startup");
 
-    // Test database connection
-    log("Testing database connection...", "startup");
-    await db.execute(sql`SELECT 1`);
-    log("Database connection successful", "startup");
+    // Verify environment variables
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL environment variable is not set");
+    }
+    if (!process.env.SESSION_SECRET) {
+      log("Warning: SESSION_SECRET not set, using default value", "startup");
+    }
+
+    // Test database connection with retry logic
+    let retries = 5;
+    while (retries > 0) {
+      try {
+        log("Testing database connection...", "startup");
+        await db.execute(sql`SELECT 1`);
+        log("Database connection successful", "startup");
+        break;
+      } catch (error) {
+        retries--;
+        if (retries === 0) {
+          throw new Error(`Failed to connect to database after 5 attempts: ${error}`);
+        }
+        log(`Database connection failed, retrying... (${retries} attempts remaining)`, "startup");
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
 
     // Basic middleware setup
     log("Setting up middleware", "startup");

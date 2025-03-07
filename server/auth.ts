@@ -22,17 +22,17 @@ export function setupAuth(app: Express) {
 
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'defaultsecret123',
-    resave: false, // Changed to false to prevent unnecessary session saves
-    saveUninitialized: false, // Changed to false for better security
+    resave: false,
+    saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      secure: isProduction, // Only use secure cookies in production
+      secure: isProduction,
       httpOnly: true,
       sameSite: isProduction ? 'strict' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     },
     name: 'poultry.sid',
-    proxy: isProduction // Trust proxy in production
+    proxy: isProduction
   };
 
   if (isProduction) {
@@ -60,7 +60,10 @@ export function setupAuth(app: Express) {
           return done(null, false, { message: "Invalid username or password" });
         }
 
-        console.log("[AUTH] User authenticated successfully:", { id: user.id, role: user.role });
+        console.log("[AUTH] User authenticated successfully:", {
+          id: user.id,
+          role: user.role
+        });
         return done(null, user);
       } catch (error) {
         console.error("[AUTH] Authentication error:", error);
@@ -70,7 +73,10 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => {
-    console.log("[AUTH] Serializing user:", { id: user.id, role: user.role });
+    console.log("[AUTH] Serializing user:", {
+      id: user.id,
+      role: user.role
+    });
     done(null, user.id);
   });
 
@@ -94,10 +100,10 @@ export function setupAuth(app: Express) {
       const profile = await storage.getProfile(userId);
       user.hasProfile = !!profile;
 
-      console.log("[AUTH] User deserialized successfully:", { 
-        id: user.id, 
-        role: user.role, 
-        hasProfile: user.hasProfile 
+      console.log("[AUTH] User deserialized successfully:", {
+        id: user.id,
+        role: user.role,
+        hasProfile: user.hasProfile
       });
 
       done(null, user);

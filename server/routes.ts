@@ -113,7 +113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const user = await storage.authenticateUser(req.body.username, req.body.password);
 
         if (!user) {
-          console.log("[AUTH] Login failed: Invalid credentials");
+          console.log("[AUTH] Login failed: Invalid credentials for user", req.body.username);
           return res.status(401).json({ 
             message: "Invalid username or password" 
           });
@@ -133,7 +133,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           console.log("[AUTH] Session created successfully");
-          res.json(user);
+          res.json({
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            approved: user.approved,
+            hasProfile: user.hasProfile
+          });
         });
 
       } catch (error) {

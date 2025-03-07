@@ -826,23 +826,35 @@ export class DatabaseStorage implements IStorage {
 
   async authenticateUser(username: string, password: string): Promise<User | undefined> {
     try {
-      log(`Authenticating user ${username}`, "auth");
+      log(`Attempting to authenticate user ${username}`, "auth");
+
       const user = await this.getUserByUsername(username);
       if (!user) {
-        log(`User ${username} not found`, "auth");
+        log(`User ${username} not found in database`, "auth");
         return undefined;
       }
 
+      log(`Found user ${username}, validating stored password format`, "auth");
+      if (!user.password || !user.password.includes('.')) {
+        log(`Invalid password format for user ${username}:`, {
+          hasPassword: !!user.password,
+          format: user.password?.includes('.') ? 'hash.salt' : 'invalid'
+        }, "auth");
+        return undefined;
+      }
+
+      log(`Comparing passwords for user ${username}`, "auth");
       const isValid = await comparePasswords(password, user.password);
+
       if (!isValid) {
         log(`Invalid password for user ${username}`, "auth");
         return undefined;
       }
 
-      log(`User ${username} authenticated successfully`, "auth");
+      log(`Authentication successful for user ${username}`, "auth");
       return user;
     } catch (error) {
-      log(`Error authenticating user ${username}: ${error}`, "auth");
+      log(`Error during authentication for user ${username}: ${error}`, "auth");
       throw error;
     }
   }
