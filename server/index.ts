@@ -11,7 +11,7 @@ async function initializeServer() {
   try {
     log("Starting server initialization", "startup");
 
-    // Verify environment variables
+    // Check critical environment variables
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL environment variable is not set");
     }

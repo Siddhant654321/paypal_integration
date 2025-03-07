@@ -852,11 +852,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Fix the typo in the admin auctions endpoint
     router.get("/api/admin/users/:userId/auctions", requireAdmin, async (req, res) => {
       try {
         const userId = parseInt(req.params.userId);
-        const auctions = awaitstorage.getAuctions({ sellerId: userId });
-        res.json(auctions);
+        const auctions = await storage.getAuctions({ sellerId: userId });        res.json(auctions);
       } catch (error) {
         console.error("Error fetching user auctions:", error);
         res.status(500).json({ message: "Failed to fetch user auctions" });
@@ -1730,13 +1730,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Return the status from profile
               return {
                 sellerId: seller.id,
-                status: profile.stripeAccountStatus || "not_started"
+                status: profile?.stripeAccountStatus || "not_started"
               };
             } catch (error) {
               console.error(`[ADMIN] Error getting Stripe status for seller ${seller.id}:`, error);
               return {
                 sellerId: seller.id,
-                status: "not_started"
+                status: "error"
               };
             }
           })
