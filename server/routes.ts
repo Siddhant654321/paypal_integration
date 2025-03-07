@@ -18,6 +18,7 @@ import { AIPricingService } from "./ai-service";
 import type { User } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import { NotificationService } from "./notification-service";
 
 // Update the requireProfile middleware
 const requireProfile = async (req: any, res: any, next: any) => {
@@ -1743,36 +1744,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add seller profile endpoint
   app.get("/api/sellers/:id", async (req, res) => {
     try {
-      constsellerId = parseInt(req.params.id);
+      const sellerId = parseInt(req.params.id);
       console.log(`[SELLER] Fetching seller profile for ID: ${sellerId}`);
 
       // Get the seller
       const seller = await storage.getUser(sellerId);
       if (!seller) {
-        console.log(`[SELLER] Seller not found with ID: ${sellerId}`);
         return res.status(404).json({ message: "Seller not found" });
       }
 
-      // Get seller's profile
+      // Get the seller's profile
       const profile = await storage.getProfile(sellerId);
       if (!profile) {
-        console.log(`[SELLER] Profile not found for seller ID: ${sellerId}`);
         return res.status(404).json({ message: "Seller profile not found" });
       }
 
-      // Get seller's auctions
-      const auctions = await storage.getAuctions({ sellerId });
-      console.log(`[SELLER] Found ${auctions.length} auctions for seller${sellerId}`);
+      // Get seller's active auctions
+      const auctions = await storage.getAuctions({ 
+        sellerId, 
+        status: "active",
+        approved: true 
+      });
 
-      // Combine and return all data
-      const sellerData = {
-        ...seller,
+      res.json({
         profile,
-        auctions
-      };
-
-      console.log(`[SELLER] Successfully compiled seller data for ID: ${sellerId}`);
-      res.json(sellerData);
+        activeAuctions: auctions.length
+      });
     } catch (error) {
       console.error("[SELLER] Error fetching seller profile:", error);
       res.status(500).json({ message: "Failed to fetch seller profile" });
