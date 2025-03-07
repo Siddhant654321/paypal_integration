@@ -14,11 +14,12 @@ import { SellerPaymentService } from "./seller-payments";
 import { EmailService } from "./email-service"; 
 import { AuctionService } from "./auction-service";
 import { AIPricingService } from "./ai-service";
-import type { User } from "@shared/schema"; 
+import type { User, InsertUser } from "@shared/schema"; 
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { NotificationService } from "./notification-service";
 import passport from 'passport'; //Import passport
+import { hashPassword } from './auth';
 
 
 // Create an Express router instance
@@ -858,7 +859,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userId = parseInt(req.params.userId);
         const auctions = await storage.getAuctions({ sellerId: userId });        res.json(auctions);
       } catch (error) {
-        console.error("Error fetching user auctions:", error);
+        console.error("Error fetching userauctions:", error);
         res.status(500).json({ message: "Failed to fetch user auctions" });
       }
     });
@@ -2093,3 +2094,82 @@ router.get("/api/session/check", (req: Express.Request, res: Express.Response) =
     });
   }
 });
+
+app.post("/api/register", async (req, res) => {
+    try {
+      const userData = req.body as InsertUser;
+      console.log("[ROUTES] Registration attempt:", userData.username);
+
+      // Validate the user data against the schema
+      const validationResult = insertUserSchema.safeParse(userData);
+      if (!validationResult.success) {
+        console.error("[ROUTES] Registration validation error:", validationResult.error);
+        return res.status(400).json({
+          message: "Invalid user data",
+          errors: validationResult.error.format(),
+        });
+      }
+
+      // Check if username exists
+      const existingUser = await storage.getUserByUsername(userData.username);
+      if (existingUser) {
+        console.log("[ROUTES] Registration failed: Username exists", userData.username);
+        return res.status(400).json({ message: "Username already exists" });
+      }
+
+      // Check if email exists
+      const existingEmail = await storage.getUserByEmail(userData.email);
+      if (existingEmail) {
+        console.log("[ROUTES] Registration failed: Email exists", userData.email);
+        return res.status(400).json({ message: "Email already in use" });
+      }
+
+      // Hash the password
+      const hashedPassword = await hashPassword(userData.password);
+
+      // Create the user in the database
+      const newUser = await storage.createUser({
+        ...userData,
+        password: hashedPassword,
+        approved: userData.role === "buyer", // Auto-approve buyers
+        emailNotificationsEnabled: true
+      });
+
+      console.log("[ROUTES] User registered successfully:", newUser.id);
+      res.status(201).json({ 
+        message: "User registered successfully",
+        userId: newUser.id,
+        username: newUser.username,
+        role: newUser.role 
+      });
+    } catch (error) {
+      console.error("[ROUTES] Registration error:", error);
+      res.status(500).json({ 
+        message: "Registration failed: " + (error instanceof Error ? error.message : "Unknown error") 
+      });
+    }
+  });
+
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err, user, info) => {
+      if (err) {
+        console.error("[ROUTES] Login error:", err);
+        return res.status(500).json({ message: "Internal server error" });
+      }
+
+      if (!user) {
+        console.log("[ROUTES] Login failed:", info?.message || "Authentication failed");
+        return res.status(401).json({ message: info?.message || "Invalid username or password" });
+      }
+
+      req.logIn(user, (loginErr) => {
+        if (loginErr) {
+          console.error("[ROUTES] Session login error:", loginErr);
+          return res.status(500).json({ message: "Failed to create session" });
+        }
+
+        console.log("[ROUTES] User logged in successfully:", user.id);
+        return res.json(user);
+      });
+    })(req, res, next);
+  });

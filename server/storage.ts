@@ -48,6 +48,7 @@ export interface IStorage {
   updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment>;
   createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout>;
   getPaymentsByAuctionId(auctionId: number): Promise<Payment[]>;
+  getUserByEmail(email: string): Promise<User | undefined>; // Added getUserByEmail
 }
 
 export class DatabaseStorage implements IStorage {
@@ -948,6 +949,19 @@ export class DatabaseStorage implements IStorage {
       return result;
     } catch (error) {
       log(`Error getting payments for auction ${auctionId}: ${error}`, "payments");
+      throw error;
+    }
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    try {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email));
+      return user;
+    } catch (error) {
+      log(`Error getting user by email ${email}: ${error}`);
       throw error;
     }
   }

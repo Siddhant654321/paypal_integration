@@ -68,32 +68,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (userData: InsertUser): Promise<SelectUser> => {
-      console.log("[AUTH] Attempting registration");
-      const response = await apiRequest("POST", "/api/register", userData);
+    mutationFn: async (userData: InsertUser) => {
+      console.log("[AUTH] Registering user:", userData.username);
 
-      if (!response.ok) {
-        throw new Error("Registration failed");
+      try {
+        // Use direct fetch for registration
+        const response = await fetch('/api/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(userData)
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          console.error("[AUTH] Registration API error:", data);
+          throw new Error(data.message || "Registration failed");
+        }
+
+        console.log("[AUTH] Registration response:", data);
+        return data;
+      } catch (err) {
+        console.error("[AUTH] Registration network error:", err);
+        throw err;
       }
-
-      const data = await response.json();
-      console.log("[AUTH] Registration response:", data);
-      return data as SelectUser;
     },
-    onSuccess: (user: SelectUser) => {
-      console.log("[AUTH] Registration successful, updating cache");
-      queryClient.setQueryData(["/api/user"], user);
-      setLocation("/");
+    onSuccess: (data) => {
+      console.log("[AUTH] Registration successful:", data);
+
       toast({
-        title: "Welcome!",
-        description: "Your account has been created successfully.",
+        title: "Registration successful",
+        description: "Please log in with your new account",
       });
+
+      // Redirect to login tab
+      setTimeout(() => {
+        setLocation("/auth?tab=login");
+      }, 1000);
     },
     onError: (error: Error) => {
       console.error("[AUTH] Registration error:", error);
+
       toast({
         title: "Registration failed",
-        description: error.message || "Failed to create account",
+        description: error.message || "An error occurred during registration",
         variant: "destructive",
       });
     },
