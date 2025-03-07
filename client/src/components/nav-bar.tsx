@@ -26,18 +26,58 @@ export default function NavBar() {
 
   // Use the same logout function from AuthContext for consistency
   const { logout } = useAuth();
-  
+
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      return logout();
+      try {
+        // Use direct fetch for more reliable session handling
+        const response = await fetch('/api/logout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // Log the response details for debugging
+        console.log("[AUTH] Logout response:", await response.json().catch(() => ({ success: true })));
+
+        // Even if response is not OK, we still want to clear client-side session
+        console.log("[AUTH] Clearing client-side session data");
+        return true;
+      } catch (error) {
+        console.error('Logout network error:', error);
+        // Still return success to clear the local session state
+        return true;
+      }
     },
     onSuccess: () => {
-      console.log('Logged out successfully from navbar');
-      setIsMenuOpen(false); // Close menu after logout
+      // Always clear the query cache and user data
+      queryClient.clear();
+      queryClient.setQueryData(['/api/user'], null);
+
+      // Force refresh user state by invalidating the query
+      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+
+      // Navigate to home page
+      setLocation('/');
+
+      toast({
+        title: 'Logged out',
+        description: 'You have been successfully logged out.'
+      });
     },
-    onError: (error) => {
-      console.error('Logout error in navbar:', error);
-      // Toast is already handled in the auth hook
+    onError: () => {
+      // Even on error, clear client state to ensure user is logged out locally
+      queryClient.clear();
+      queryClient.setQueryData(['/api/user'], null);
+      setLocation('/');
+
+      toast({
+        title: 'Partial logout',
+        description: 'You have been logged out on this device, but there may have been an issue with the server.',
+        variant: 'default',
+      });
     },
   });
 
