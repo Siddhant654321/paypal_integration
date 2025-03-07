@@ -322,46 +322,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // First check if user has a complete profile
-      const profile = await storage.getProfile(req.user.id);
+      if (!req.user.hasProfile) {
+        const profile = await storage.getProfile(req.user.id);
 
-      console.log("[BID] Checking profile for user:", {
-        userId: req.user.id,
-        hasProfile: !!profile,
-        username: req.user.username
-      });
-
-      if (!profile) {
-        console.log("[BID] No profile found");
-        return res.status(403).json({ 
-          error: "profile_incomplete",
-          message: "Please complete your profile before bidding",
-          missingFields: ["fullName", "email", "address", "city", "state", "zipCode"]
+        console.log("[BID] Checking profile for user:", {
+          userId: req.user.id,
+          hasProfile: !!profile,
+          username: req.user.username
         });
-      }
 
-      // Check required profile fields with strict validation
-      const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
-      const missingFields = requiredFields.filter(field => {
-        const value = profile[field];
-        return !value || (typeof value === 'string' && value.trim() === '');
-      });
+        if (!profile) {
+          console.log("[BID] No profile found");
+          return res.status(403).json({ 
+            error: "profile_incomplete",
+            message: "Please complete your profile before bidding",
+            missingFields: ["fullName", "email", "address", "city", "state", "zipCode"]
+          });
+        }
 
-      console.log("[BID] Profile field validation:", {
-        userId: req.user.id,
-        missingFields,
-        profileFields: requiredFields.reduce((acc, field) => {
-          acc[field] = profile[field] ? profile[field].trim() : '';
-          return acc;
-        }, {} as Record<string, string>)
-      });
-
-      if (missingFields.length > 0) {
-        console.log("[BID] Missing required fields:", missingFields);
-        return res.status(403).json({
-          error: "profile_incomplete",
-          message: "Please complete your profile before bidding",
-          missingFields: missingFields
+        // Check required profile fields with strict validation
+        const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
+        const missingFields = requiredFields.filter(field => {
+          const value = profile[field];
+          return !value || (typeof value === 'string' && value.trim() === '');
         });
+
+        if (missingFields.length > 0) {
+          console.log("[BID] Missing required fields:", missingFields);
+          return res.status(403).json({
+            error: "profile_incomplete",
+            message: "Please complete your profile before bidding",
+            missingFields: missingFields
+          });
+        }
       }
 
       // Continue with bid placement logic...
@@ -380,13 +373,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You cannot bid on your own auction" });
       }
 
-      // Convert amount to number if it's a string
-      let amount;
-      if (typeof req.body.amount === 'string') {
-        amount = Math.round(parseFloat(req.body.amount) * 100);
-      } else {
-        amount = req.body.amount;
-      }
+      let amount = typeof req.body.amount === 'string' 
+        ? Math.round(parseFloat(req.body.amount) * 100)
+        : req.body.amount;
 
       if (isNaN(amount)) {
         return res.status(400).json({ message: "Bid amount must be a valid number" });
@@ -580,6 +569,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...profileData,
           userId: req.user.id,
         });
+      }
+
+      // Update user's hasProfile status
+      const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
+      const hasAllFields = requiredFields.every(field => {
+        const value = profile[field];
+        return value && typeof value === 'string' && value.trim() !== '';
+      });
+
+      if (hasAllFields) {
+        await storage.updateUser(req.user.id, { hasProfile: true });
       }
 
       res.status(201).json(profile);
@@ -847,7 +847,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin auction management
+  //  // Admin auction management
   app.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteAuction(parseInt(req.params.id));
