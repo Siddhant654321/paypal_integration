@@ -18,6 +18,8 @@ import type { User } from "@shared/schema";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { NotificationService } from "./notification-service";
+import passport from 'passport'; //Import passport
+
 
 // Create an Express router instance
 const router = express.Router();
@@ -94,45 +96,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
     // Add authentication endpoints with enhanced logging and response handling
-    router.post("/api/login", async (req, res) => {
-      try {
-        console.log("[AUTH] Login attempt:", {
-          username: req.body.username,
-          hasPassword: !!req.body.password
+    router.post("/api/login", (req, res, next) => {
+      if (!req.body.username || !req.body.password) {
+        console.log("[AUTH] Login failed: Missing credentials");
+        return res.status(400).json({ 
+          message: "Username and password are required" 
         });
+      }
 
-        res.setHeader('Content-Type', 'application/json');
-
-        if (!req.body.username || !req.body.password) {
-          console.log("[AUTH] Login failed: Missing credentials");
-          return res.status(400).json({ 
-            message: "Username and password are required" 
-          });
+      passport.authenticate("local", (err, user, info) => {
+        if (err) {
+          console.error("[AUTH] Login error:", err);
+          return res.status(500).json({ message: "Authentication failed" });
         }
-
-        const user = await storage.authenticateUser(req.body.username, req.body.password);
-
         if (!user) {
-          console.log("[AUTH] Login failed: Invalid credentials for user", req.body.username);
-          return res.status(401).json({ 
-            message: "Invalid username or password" 
-          });
+          console.log("[AUTH] Login failed: Invalid credentials");
+          return res.status(401).json({ message: info?.message || "Invalid credentials" });
         }
-
-        console.log("[AUTH] User authenticated successfully:", {
-          id: user.id,
-          role: user.role
-        });
-
-        req.login(user, (err) => {
-          if (err) {
-            console.error("[AUTH] Session creation failed:", err);
-            return res.status(500).json({ 
-              message: "Failed to create session" 
-            });
+        req.login(user, (loginErr) => {
+          if (loginErr) {
+            console.error("[AUTH] Session creation error:", loginErr);
+            return res.status(500).json({ message: "Failed to create session" });
           }
-
-          console.log("[AUTH] Session created successfully");
+          console.log("[AUTH] Login successful for user:", {
+            id: user.id,
+            username: user.username,
+            role: user.role
+          });
           res.json({
             id: user.id,
             username: user.username,
@@ -141,19 +131,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             hasProfile: user.hasProfile
           });
         });
-
-      } catch (error) {
-        console.error("[AUTH] Login error:", error);
-        res.status(500).json({ 
-          message: "Authentication failed",
-          error: error instanceof Error ? error.message : "Unknown error"
-        });
-      }
+      })(req, res, next);
     });
 
     // Logout endpoint with proper session cleanup
     router.post("/api/logout", (req, res) => {
-      console.log("[AUTH] Logout attempt");
+      console.log("[AUTH] Logout attempt", {
+        isAuthenticated: req.isAuthenticated(),
+        sessionID: req.sessionID
+      });
       const wasLoggedIn = req.isAuthenticated();
 
       req.logout((err) => {
@@ -168,7 +154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("[AUTH] Session destruction error:", sessionErr);
           }
 
-          // Clear the session cookie
+          // Clear the session cookie with the same settings as when it was created
           res.clearCookie('poultry.sid', {
             path: '/',
             httpOnly: true,
@@ -180,6 +166,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: wasLoggedIn ? "Logged out successfully" : "No active session",
             success: true
           });
+
+          console.log("[AUTH] Logout completed successfully");
         });
       });
     });
