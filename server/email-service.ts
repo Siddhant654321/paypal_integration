@@ -40,7 +40,7 @@ const emailTemplates = {
     html: data.status === 'ending soon'
       ? `
         <h2>Auction Ending Soon</h2>
-        <p>The auction "${data.auctionTitle}" will end in 12 hours.</p>
+        <p>The auction "${data.auctionTitle}" will end in 1 hour.</p>
         <p>Log in now to check the current status and place your final bids!</p>
       `
       : data.isWinner
@@ -54,6 +54,30 @@ const emailTemplates = {
           <p>The auction "${data.auctionTitle}" has ended.</p>
           <p>Log in to your account to view the final results.</p>
         `,
+  }),
+  auction_ending_soon: (data: { auctionTitle: string }) => ({
+    subject: `Auction Ending Soon: ${data.auctionTitle}`,
+    html: `
+      <h2>Auction Ending Soon</h2>
+      <p>The auction "${data.auctionTitle}" will end in 1 hour.</p>
+      <p>Log in now to check the current status and place your final bids!</p>
+    `,
+  }),
+  auction_completed: (data: { auctionTitle: string; isWinner?: boolean }) => ({
+    subject: data.isWinner 
+      ? `Congratulations! You've Won: ${data.auctionTitle}` 
+      : `Auction Ended: ${data.auctionTitle}`,
+    html: data.isWinner
+      ? `
+        <h2>Congratulations! You've Won!</h2>
+        <p>You are the winning bidder for "${data.auctionTitle}"!</p>
+        <p>Log in to your account to complete the payment and arrange delivery.</p>
+      `
+      : `
+        <h2>Auction Has Ended</h2>
+        <p>The auction "${data.auctionTitle}" has ended.</p>
+        <p>Log in to your account to view the final results.</p>
+      `,
   }),
   payment: (data: { amount: number; status: string }) => ({
     subject: 'Payment Notification',

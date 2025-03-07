@@ -524,6 +524,27 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+  
+  async getNotificationsByTypeAndReference(type: string, reference: string): Promise<Notification[]> {
+    try {
+      log(`Getting notifications of type ${type} with reference ${reference}`);
+      const results = await db
+        .select()
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.type, type),
+            eq(notifications.reference, reference)
+          )
+        );
+        
+      log(`Found ${results.length} notifications of type ${type} with reference ${reference}`);
+      return results;
+    } catch (error) {
+      log(`Error getting notifications by type and reference: ${error}`);
+      throw error;
+    }
+  }
 
   async getLastNotification(): Promise<Notification | undefined> {
     try {

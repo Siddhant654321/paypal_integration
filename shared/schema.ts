@@ -59,6 +59,7 @@ export const notifications = pgTable('notifications', {
   read: boolean('read').default(false),
   createdAt: timestamp('created_at').defaultNow(),
   data: text('data'),
+  reference: text("reference"), // Reference to the entity this notification is about (e.g., auction ID)
 });
 
 // Create insert schema for notifications

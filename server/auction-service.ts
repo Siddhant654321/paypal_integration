@@ -7,6 +7,8 @@ export class AuctionService {
       // Get all active auctions
       const auctions = await storage.getAuctions({ status: "active" });
       const now = new Date();
+      console.log(`[AUCTION SERVICE] Checking for auctions ending soon at ${now.toISOString()}`);
+      console.log(`[AUCTION SERVICE] Found ${auctions.length} active auctions to check`);
 
       for (const auction of auctions) {
         const endTime = new Date(auction.endDate);
@@ -15,6 +17,19 @@ export class AuctionService {
 
         // Check if auction ends in approximately one hour
         if (timeUntilEnd > 0 && timeUntilEnd <= oneHour) {
+          // Check if we've already sent a notification for this auction
+          const existingNotifications = await storage.getNotificationsByTypeAndReference(
+            "auction_ending_soon", 
+            auction.id.toString()
+          );
+          
+          if (existingNotifications.length > 0) {
+            console.log(`[AUCTION SERVICE] Skipping notification for auction #${auction.id} - already sent`);
+            continue; // Skip if we've already sent a notification
+          }
+          
+          console.log(`[AUCTION SERVICE] Sending notifications for auction #${auction.id} ending soon`);
+          
           // Get all unique bidders for this auction
           const bids = await storage.getBidsForAuction(auction.id);
           const uniqueBidders = [...new Set(bids.map(bid => bid.bidderId))];
@@ -23,7 +38,8 @@ export class AuctionService {
           await NotificationService.notifyAuctionOneHourRemaining(
             auction.sellerId,
             auction.title,
-            endTime
+            endTime,
+            auction.id
           );
 
           // Notify all bidders
@@ -31,9 +47,12 @@ export class AuctionService {
             await NotificationService.notifyAuctionOneHourRemaining(
               bidderId,
               auction.title,
-              endTime
+              endTime,
+              auction.id
             );
           }
+          
+          console.log(`[AUCTION SERVICE] Successfully sent notifications for auction #${auction.id}`);
         }
       }
     } catch (error) {
@@ -55,6 +74,17 @@ export class AuctionService {
         
         if (endTime <= now) {
           console.log(`[AUCTION SERVICE] Auction #${auction.id} "${auction.title}" has ended at ${endTime.toISOString()}`);
+          
+          // Check if we've already processed this auction
+          const existingNotifications = await storage.getNotificationsByTypeAndReference(
+            "auction_completed", 
+            auction.id.toString()
+          );
+          
+          if (existingNotifications.length > 0) {
+            console.log(`[AUCTION SERVICE] Skipping auction #${auction.id} - already processed`);
+            continue; // Skip if we've already processed this auction
+          }
           
           // Get all bids for this auction
           const bids = await storage.getBidsForAuction(auction.id);
@@ -88,7 +118,8 @@ export class AuctionService {
             auction.title,
             false,
             winningBid?.amount || auction.startPrice,
-            true
+            true,
+            auction.id
           );
 
           // Notify all bidders
@@ -97,7 +128,9 @@ export class AuctionService {
               bidderId,
               auction.title,
               bidderId === winningBid?.bidderId,
-              winningBid?.amount || auction.startPrice
+              winningBid?.amount || auction.startPrice,
+              false,
+              auction.id
             );
           }
           

@@ -9,7 +9,7 @@ const log = (message: string, data?: any, context: string = 'notification') => {
 export class NotificationService {
   static async createNotification(
     userId: number,
-    notification: Omit<InsertNotification, "userId">
+    notification: Omit<InsertNotification, "userId"> & { reference?: string }
   ): Promise<InsertNotification> {
     try {
       log(`Creating notification for user ${userId}`, notification);
@@ -19,11 +19,15 @@ export class NotificationService {
         throw new Error("Missing required notification fields");
       }
 
+      // Extract reference field before sending to storage
+      const { reference, ...notificationData } = notification;
+      
       const createdNotification = await storage.createNotification({
-        ...notification,
+        ...notificationData,
         userId,
         read: false,
         createdAt: new Date(),
+        reference: reference || null,
       });
 
       log(`Successfully created notification:`, createdNotification);
@@ -32,12 +36,21 @@ export class NotificationService {
       try {
         const user = await storage.getUser(userId);
         if (user && user.emailNotificationsEnabled) {
-          await EmailService.sendNotification(notification.type, user, {
-            message: notification.message,
-            auctionTitle: notification.message.split('"')[1], // Extract auction title from message
-            status: 'new',
-          });
-          log(`Email notification sent successfully to user ${userId}`);
+          // Check if it's appropriate to send email for this notification type
+          const shouldSendEmail = user.emailAuctionNotifications && 
+            (notification.type === 'auction_ending_soon' || notification.type === 'auction_completed');
+            
+          if (shouldSendEmail) {
+            await EmailService.sendNotification(notification.type, user, {
+              message: notification.message,
+              auctionTitle: notification.message.split('"')[1], // Extract auction title from message
+              status: notification.type === 'auction_ending_soon' ? 'ending soon' : 'ended',
+              isWinner: notification.title.includes('Won') || notification.title.includes('Congratulations'),
+            });
+            log(`Email notification sent successfully to user ${userId}`);
+          } else {
+            log(`Skipping email for user ${userId} (notifications not enabled for type ${notification.type})`);
+          }
         }
       } catch (emailError) {
         log(`Failed to send email notification: ${emailError}`);
@@ -180,15 +193,17 @@ export class NotificationService {
   static async notifyAuctionOneHourRemaining(
     userId: number,
     auctionTitle: string,
-    endTime: Date
+    endTime: Date,
+    auctionId: number
   ): Promise<void> {
     log(`Notifying user ${userId} about auction "${auctionTitle}" ending in one hour`);
     return this.createNotification(
       userId,
       {
-        type: "auction",
+        type: "auction_ending_soon",
         title: "Auction Ending Soon",
         message: `The auction "${auctionTitle}" will end in one hour at ${endTime.toLocaleTimeString()}`,
+        reference: auctionId.toString()
       }
     );
   }
@@ -198,7 +213,8 @@ export class NotificationService {
     auctionTitle: string,
     isWinner: boolean,
     finalPrice: number,
-    isSeller: boolean = false
+    isSeller: boolean = false,
+    auctionId: number
   ): Promise<void> {
     let title: string;
     let message: string;
@@ -224,9 +240,10 @@ export class NotificationService {
     return this.createNotification(
       userId,
       {
-        type: "auction",
+        type: "auction_completed",
         title,
         message,
+        reference: auctionId.toString()
       }
     );
   }
