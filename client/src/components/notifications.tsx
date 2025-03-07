@@ -22,31 +22,29 @@ export function NotificationsMenu({
   notifications = [],
   onMarkAllRead
 }: NotificationsMenuProps) {
-  const queryClient = useQueryClient();
-
-  // Use React Query for notifications with polling
-  const { data: notificationsData = [], error: notificationsError } = useQuery<Notification[]>({
-    queryKey: ["/api/notifications"],
-    // Poll every 30 seconds when the component is mounted
-    refetchInterval: 30000,
-    // Don't poll when window is not focused
-    refetchIntervalInBackground: false,
-    // Only retry 3 times on error
-    retry: 3,
-    // Keep data fresh for 10 seconds
-    staleTime: 10000,
-    onError: (error: unknown) => {
-      console.error("[Notifications] Error fetching notifications:", error);
-    }
+  // Enhanced debug logging
+  console.log("[NotificationsMenu] Rendering with notifications:", {
+    total: notifications?.length || 0,
+    unread: notifications?.filter(n => !n.read)?.length || 0,
+    notifications: notifications?.map(n => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      read: n.read,
+      createdAt: n.createdAt,
+      message: n.message?.substring(0, 30) + (n.message && n.message.length > 30 ? '...' : '')
+    })) || []
   });
 
-  // Use notifications from props or query
-  const allNotifications = notifications.length > 0 ? notifications : notificationsData;
-  const unreadCount = allNotifications.filter(n => !n.read).length;
+  const queryClient = useQueryClient();
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  console.log("[NotificationsMenu] Unread count:", unreadCount);
 
   // Add mutation for marking a single notification as read
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: number) => {
+      console.log("[NotificationsMenu] Marking notification as read:", notificationId);
       await apiRequest("POST", `/api/notifications/${notificationId}/read`);
     },
     onSuccess: () => {
@@ -58,6 +56,7 @@ export function NotificationsMenu({
   // Add mutation for marking all notifications as read
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
+      console.log("[NotificationsMenu] Marking all notifications as read");
       await apiRequest("POST", "/api/notifications/mark-all-read");
     },
     onSuccess: () => {
@@ -66,15 +65,6 @@ export function NotificationsMenu({
       onMarkAllRead?.();
     }
   });
-
-  // Show simplified bell icon if there's an error
-  if (notificationsError) {
-    return (
-      <Button variant="ghost" size="icon" className="relative">
-        <Bell className="h-5 w-5" />
-      </Button>
-    );
-  }
 
   return (
     <DropdownMenu>
@@ -106,47 +96,50 @@ export function NotificationsMenu({
           )}
         </div>
         <DropdownMenuSeparator />
-        {allNotifications.length === 0 ? (
+        {notifications.length === 0 ? (
           <div className="p-4 text-center text-sm text-muted-foreground">
             No notifications
           </div>
         ) : (
           <div className="max-h-[300px] overflow-y-auto">
-            {allNotifications.map((notification: Notification) => (
-              <DropdownMenuItem
-                key={notification.id}
-                className={cn(
-                  "flex flex-col items-start gap-1 p-4 cursor-pointer",
-                  !notification.read && "bg-accent/50"
-                )}
-                onClick={() => markAsReadMutation.mutate(notification.id)}
-              >
-                <div className="flex w-full justify-between gap-4">
-                  <span className="font-medium leading-none">
-                    {notification.title}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(notification.createdAt!).toLocaleDateString()}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {notification.message}
-                </p>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "text-xs",
-                      notification.type === "bid" && "text-green-500",
-                      notification.type === "auction" && "text-blue-500",
-                      notification.type === "admin" && "text-red-500",
-                      notification.type === "payment" && "text-yellow-500"
-                    )}
-                  >
-                    {notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}
-                  </span>
-                </div>
-              </DropdownMenuItem>
-            ))}
+            {notifications.map((notification) => {
+              console.log("[NotificationsMenu] Rendering notification:", notification);
+              return (
+                <DropdownMenuItem
+                  key={notification.id}
+                  className={cn(
+                    "flex flex-col items-start gap-1 p-4 cursor-pointer",
+                    !notification.read && "bg-accent/50"
+                  )}
+                  onClick={() => markAsReadMutation.mutate(notification.id)}
+                >
+                  <div className="flex w-full justify-between gap-4">
+                    <span className="font-medium leading-none">
+                      {notification.title}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(notification.createdAt!).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {notification.message}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "text-xs",
+                        notification.type === "bid" && "text-green-500",
+                        notification.type === "auction" && "text-blue-500",
+                        notification.type === "admin" && "text-red-500",
+                        notification.type === "payment" && "text-yellow-500"
+                      )}
+                    >
+                      {notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              );
+            })}
           </div>
         )}
       </DropdownMenuContent>
