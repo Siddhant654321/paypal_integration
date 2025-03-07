@@ -322,39 +322,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // First check if user has a complete profile
+      const profile = await storage.getProfile(req.user.id);
+
+      console.log("[BID] Checking profile for user:", {
+        userId: req.user.id,
+        hasProfile: req.user.hasProfile,
+        profileExists: !!profile,
+        username: req.user.username
+      });
+
+      if (!profile) {
+        console.log("[BID] No profile found");
+        return res.status(403).json({ 
+          error: "profile_incomplete",
+          message: "Please complete your profile before bidding",
+          missingFields: ["fullName", "email", "address", "city", "state", "zipCode"]
+        });
+      }
+
+      // Check required profile fields with strict validation
+      const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
+      const missingFields = requiredFields.filter(field => {
+        const value = profile[field];
+        return !value || (typeof value === 'string' && value.trim() === '');
+      });
+
+      if (missingFields.length > 0) {
+        console.log("[BID] Missing required fields:", missingFields);
+        return res.status(403).json({
+          error: "profile_incomplete",
+          message: "Please complete your profile before bidding",
+          missingFields: missingFields
+        });
+      }
+
+      // If profile is complete but hasProfile flag is false, update it
       if (!req.user.hasProfile) {
-        const profile = await storage.getProfile(req.user.id);
-
-        console.log("[BID] Checking profile for user:", {
-          userId: req.user.id,
-          hasProfile: !!profile,
-          username: req.user.username
-        });
-
-        if (!profile) {
-          console.log("[BID] No profile found");
-          return res.status(403).json({ 
-            error: "profile_incomplete",
-            message: "Please complete your profile before bidding",
-            missingFields: ["fullName", "email", "address", "city", "state", "zipCode"]
-          });
-        }
-
-        // Check required profile fields with strict validation
-        const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
-        const missingFields = requiredFields.filter(field => {
-          const value = profile[field];
-          return !value || (typeof value === 'string' && value.trim() === '');
-        });
-
-        if (missingFields.length > 0) {
-          console.log("[BID] Missing required fields:", missingFields);
-          return res.status(403).json({
-            error: "profile_incomplete",
-            message: "Please complete your profile before bidding",
-            missingFields: missingFields
-          });
-        }
+        await storage.updateUser(req.user.id, { hasProfile: true });
       }
 
       // Continue with bid placement logic...
