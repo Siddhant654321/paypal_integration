@@ -338,3 +338,33 @@ export type Payout = typeof payouts.$inferSelect;
 export type InsertPayout = z.infer<typeof insertPayoutSchema>;
 export type Fulfillment = typeof fulfillments.$inferSelect;
 export type InsertFulfillment = z.infer<typeof insertFulfillmentSchema>;
+
+// Update the payment status type
+export type PaymentStatus = "pending" | "processing" | "completed" | "failed";
+
+// Add seller payouts table
+export const sellerPayouts = pgTable("seller_payouts", {
+  id: serial("id").primaryKey(),
+  sellerId: integer("seller_id").notNull().references(() => users.id),
+  paymentId: integer("payment_id").notNull().references(() => payments.id),
+  amount: integer("amount").notNull(),
+  stripeTransferId: text("stripe_transfer_id"),
+  status: text("status", {
+    enum: ["pending", "processing", "completed", "failed"]
+  }).notNull().default("pending"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Add seller payout schemas
+export const insertSellerPayoutSchema = createInsertSchema(sellerPayouts)
+  .omit({
+    id: true,
+    stripeTransferId: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+  });
+
+export type SellerPayout = typeof sellerPayouts.$inferSelect;
+export type InsertSellerPayout = z.infer<typeof insertSellerPayoutSchema>;

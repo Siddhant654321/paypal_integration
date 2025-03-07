@@ -5,6 +5,7 @@ import { Store } from "express-session";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
 import pg from 'pg';
+import { comparePasswords } from './auth';
 
 function log(message: string, context = "general") {
   console.log(`[STORAGE:${context}] ${message}`);
@@ -825,95 +826,116 @@ export class DatabaseStorage implements IStorage {
 
   async authenticateUser(username: string, password: string): Promise<User | undefined> {
     try {
+      log(`Authenticating user ${username}`, "auth");
       const user = await this.getUserByUsername(username);
       if (!user) {
+        log(`User ${username} not found`, "auth");
         return undefined;
       }
 
-      const isValid = await comparePasswords(password, user.password); // Assuming comparePasswords function exists elsewhere
+      const isValid = await comparePasswords(password, user.password);
       if (!isValid) {
+        log(`Invalid password for user ${username}`, "auth");
         return undefined;
       }
 
+      log(`User ${username} authenticated successfully`, "auth");
       return user;
     } catch (error) {
-      log(`Error authenticating user ${username}: ${error}`);
+      log(`Error authenticating user ${username}: ${error}`, "auth");
       throw error;
     }
   }
 
   async insertPayment(paymentData: InsertPayment): Promise<Payment> {
     try {
-      log(`Creating payment record for auction ${paymentData.auctionId}`);
+      log(`Creating payment record for auction ${paymentData.auctionId}`, "payments");
       const [payment] = await db
         .insert(payments)
         .values(paymentData)
         .returning();
+
+      log(`Payment record created: ${payment.id}`, "payments");
       return payment;
     } catch (error) {
-      log(`Error creating payment: ${error}`);
+      log(`Error creating payment: ${error}`, "payments");
       throw error;
     }
   }
 
   async findPaymentByStripeId(stripeSessionId: string): Promise<Payment | undefined> {
     try {
-      log(`Finding payment by Stripe session ID: ${stripeSessionId}`);
+      log(`Finding payment by Stripe session ID: ${stripeSessionId}`, "payments");
       const [payment] = await db
         .select()
         .from(payments)
-        .where(eq(payments.stripeSessionId, stripeSessionId));
+        .where(eq(payments.stripePaymentIntentId, stripeSessionId));
       return payment;
     } catch (error) {
-      log(`Error finding payment by Stripe session ID ${stripeSessionId}: ${error}`);
+      log(`Error finding payment by Stripe session ID ${stripeSessionId}: ${error}`, "payments");
       throw error;
     }
   }
 
   async updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment> {
     try {
-      log(`Updating payment ${paymentId} status to ${status}`);
+      log(`Updating payment ${paymentId} status to ${status}`, "payments");
       const [payment] = await db
         .update(payments)
-        .set({ status })
+        .set({ 
+          status,
+          updatedAt: new Date()
+        })
         .where(eq(payments.id, paymentId))
         .returning();
+
+      if (!payment) {
+        throw new Error(`Payment ${paymentId} not found`);
+      }
+
+      log(`Payment ${paymentId} status updated to ${status}`, "payments");
       return payment;
     } catch (error) {
-      log(`Error updating payment status: ${error}`);
+      log(`Error updating payment status: ${error}`, "payments");
       throw error;
     }
   }
 
   async createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout> {
     try {
-      log(`Creating seller payout for seller ${sellerId}`);
+      log(`Creating seller payout for seller ${sellerId}`, "payouts");
       const [payout] = await db
         .insert(sellerPayouts)
         .values({
           ...data,
           sellerId,
+          status: "pending",
           createdAt: new Date(),
           updatedAt: new Date()
         })
         .returning();
+
+      log(`Seller payout created: ${payout.id}`, "payouts");
       return payout;
     } catch (error) {
-      log(`Error creating seller payout: ${error}`);
+      log(`Error creating seller payout: ${error}`, "payouts");
       throw error;
     }
   }
 
   async getPaymentsByAuctionId(auctionId: number): Promise<Payment[]> {
     try {
-      log(`Getting payments for auction ${auctionId}`);
-      const payments = await db
+      log(`Getting payments for auction ${auctionId}`, "payments");
+      const result = await db
         .select()
         .from(payments)
-        .where(eq(payments.auctionId, auctionId));
-      return payments;
+        .where(eq(payments.auctionId, auctionId))
+        .orderBy(desc(payments.createdAt));
+
+      log(`Found ${result.length} payments for auction ${auctionId}`, "payments");
+      return result;
     } catch (error) {
-      log(`Error getting payments for auction ${auctionId}: ${error}`);
+      log(`Error getting payments for auction ${auctionId}: ${error}`, "payments");
       throw error;
     }
   }

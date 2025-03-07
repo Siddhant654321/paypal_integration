@@ -854,10 +854,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   //  // Admin auction management
   app.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
     try {
-      awaitstorage.deleteAuction(parseInt(req.params.id));
+      await storage.deleteAuction(parseInt(req.params.id));
       res.sendStatus(200);
     } catch (error) {
-      console.error("Error deleting auction:", error);res.status(500).json({ message: "Failed to delete auction" });
+      console.error("Error deleting auction:", error);
+      res.status(500).json({ message: "Failed to delete auction" });
     }
   });
 
@@ -1739,7 +1740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("[ADMIN] Successfully deleted user and profile");
             res.json({ message: "User deleted successfully" });
-    } catch (error) {
+    }catch (error) {
       console.error("[ADMIN] Error deleting user:", error);
       res.status(500).json({ message: "Failed to delete user" });
     }
