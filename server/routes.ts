@@ -142,19 +142,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const wasLoggedIn = req.isAuthenticated();
 
+      // Handle the case where there's no session
+      if (!req.session) {
+        console.log("[AUTH] No session found during logout");
+        res.clearCookie('poultry.sid', {
+          path: '/',
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined,
+          sameSite: 'lax'
+        });
+        return res.status(200).json({ 
+          message: "No active session", 
+          success: true 
+        });
+      }
+
+      // If not authenticated, still clear cookie and return success
+      if (!wasLoggedIn) {
+        console.log("[AUTH] Not authenticated during logout");
+        res.clearCookie('poultry.sid', {
+          path: '/',
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined,
+          sameSite: 'lax'
+        });
+        return res.status(200).json({ 
+          message: "No active session", 
+          success: true 
+        });
+      }
+
+      // Handle authenticated user logout
       req.logout((err) => {
         if (err) {
           console.error("[AUTH] Logout error:", err);
-          return res.status(500).json({ message: "Failed to logout" });
+          // Even if logout fails, still try to destroy session
         }
 
         // Destroy the session
         req.session.destroy((sessionErr) => {
           if (sessionErr) {
             console.error("[AUTH] Session destruction error:", sessionErr);
+            // Even on session destruction error, we continue with clearing the cookie
           }
 
-          // Clear the session cookie with the same settings as when it was created
+          // Clear the session cookie
           res.clearCookie('poultry.sid', {
             path: '/',
             httpOnly: true,
@@ -162,12 +194,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sameSite: 'lax'
           });
 
-          res.json({ 
-            message: wasLoggedIn ? "Logged out successfully" : "No active session",
-            success: true
-          });
-
           console.log("[AUTH] Logout completed successfully");
+          
+          // Always return success
+          return res.status(200).json({ 
+            message: "Logged out successfully", 
+            success: true 
+          });
         });
       });
     });
@@ -852,11 +885,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Fix the typo in the admin auctions endpoint
     router.get("/api/admin/users/:userId/auctions", requireAdmin, async (req, res) => {
       try {
         const userId = parseInt(req.params.userId);
-        const auctions = await storage.getAuctions({ sellerId: userId });        res.json(auctions);
+        const auctions = awaitstorage.getAuctions({ sellerId: userId });
+        res.json(auctions);
       } catch (error) {
         console.error("Error fetching user auctions:", error);
         res.status(500).json({ message: "Failed to fetch user auctions" });
@@ -1730,13 +1763,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Return the status from profile
               return {
                 sellerId: seller.id,
-                status: profile?.stripeAccountStatus || "not_started"
+                status: profile.stripeAccountStatus || "not_started"
               };
             } catch (error) {
               console.error(`[ADMIN] Error getting Stripe status for seller ${seller.id}:`, error);
               return {
                 sellerId: seller.id,
-                status: "error"
+                status: "not_started"
               };
             }
           })

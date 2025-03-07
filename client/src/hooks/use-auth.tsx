@@ -102,27 +102,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logoutMutation = useMutation({
     mutationFn: async () => {
       console.log("[AUTH] Attempting logout");
-      const response = await apiRequest("POST", "/api/logout");
-      if (!response.ok) {
-        throw new Error("Logout failed");
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      try {
+        const response = await fetch('/api/logout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        let success = response.ok;
+        let message = "Logged out successfully";
+
+        try {
+          const data = await response.json();
+          message = data.message || message;
+        } catch (parseError) {
+          console.log("[AUTH] No JSON response from logout endpoint");
+        }
+
+        console.log("[AUTH] Logout response:", { success, message });
+        return { success, message };
+      } catch (err) {
+        clearTimeout(timeoutId);
+        console.error("[AUTH] Logout network error:", err);
+        return { 
+          success: true, // Consider network errors as successful logout for client side
+          message: "Session ended locally" 
+        };
       }
     },
-    onSuccess: () => {
-      console.log("[AUTH] Logout successful, clearing cache");
+    onSuccess: (result) => {
+      console.log("[AUTH] Clearing client-side session data");
+      // Always clear cache and user data
       queryClient.clear();
       queryClient.setQueryData(["/api/user"], null);
+
+      // Redirect to auth page
       setLocation("/auth");
+
       toast({
         title: "Logged out",
         description: "You have been successfully logged out.",
       });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       console.error("[AUTH] Logout error:", error);
+      // Still clear client-side state on error
+      queryClient.clear();
+      queryClient.setQueryData(["/api/user"], null);
+      setLocation("/auth");
+
       toast({
-        title: "Logout failed",
-        description: error.message || "Failed to log out",
-        variant: "destructive",
+        title: "Logged out",
+        description: "Your session has been ended.",
       });
     },
   });

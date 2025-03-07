@@ -24,32 +24,20 @@ export default function NavBar() {
     staleTime: 5000
   });
 
+  // Use the same logout function from AuthContext for consistency
+  const { logout } = useAuth();
+  
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/logout");
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Logout failed");
-      }
-      return true;
+      return logout();
     },
     onSuccess: () => {
-      console.log('Logged out successfully');
-      queryClient.clear();
-      queryClient.setQueryData(['/api/user'], null);
-      setLocation('/');
-      toast({
-        title: 'Logged out',
-        description: 'You have been successfully logged out.'
-      });
+      console.log('Logged out successfully from navbar');
+      setIsMenuOpen(false); // Close menu after logout
     },
     onError: (error) => {
-      console.error('Logout error:', error);
-      toast({
-        title: 'Logout failed',
-        description: error instanceof Error ? error.message : 'An error occurred during logout.',
-        variant: 'destructive',
-      });
+      console.error('Logout error in navbar:', error);
+      // Toast is already handled in the auth hook
     },
   });
 
