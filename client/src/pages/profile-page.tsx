@@ -41,12 +41,13 @@ const defaultValues: InsertProfile = {
   emailAuctionNotifications: true,
   emailPaymentNotifications: true,
   emailAdminNotifications: true,
+  emailDailyUpdates: false,
 };
 
 export default function ProfilePage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
-  const queryClient = useQueryClient(); // Added queryClient
+  const queryClient = useQueryClient(); 
 
   if (!user) {
     return <Redirect to="/auth" />;
@@ -82,6 +83,7 @@ export default function ProfilePage() {
         emailAuctionNotifications: profile.emailAuctionNotifications,
         emailPaymentNotifications: profile.emailPaymentNotifications,
         emailAdminNotifications: profile.emailAdminNotifications,
+        emailDailyUpdates: profile.emailDailyUpdates,
       });
     }
   }, [profile, form]);
@@ -100,7 +102,6 @@ export default function ProfilePage() {
       return res.json();
     },
     onSuccess: () => {
-      // Update the user data in the React Query cache
       queryClient.invalidateQueries({ queryKey: ['/api/user'] });
       const currentUser = queryClient.getQueryData(['/api/user']);
       if (currentUser) {
@@ -405,16 +406,16 @@ export default function ProfilePage() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
-                name="emailAuctionNotifications"
+                name="emailDailyUpdates"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Auction Notifications</FormLabel>
+                      <FormLabel className="text-base">Daily Auction Updates</FormLabel>
                       <FormDescription>
-                        Receive emails when auctions are ending or have completed
+                        Receive daily emails about new auctions with descriptions and photos
                       </FormDescription>
                     </div>
                     <FormControl>

@@ -1,12 +1,15 @@
-
 import nodemailer from 'nodemailer';
 import { User } from '@shared/schema';
 
-// Initialize nodemailer transport
+const BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://poultryauction.co'
+  : 'http://localhost:5000';
+
+// Create reusable transporter object
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
+  secure: false, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD,
@@ -15,106 +18,167 @@ const transporter = nodemailer.createTransport({
 
 // Email templates for different notification types
 const emailTemplates = {
-  bid: (data: { auctionTitle: string; bidAmount: number; isOutbid?: boolean }) => ({
-    subject: data.isOutbid 
-      ? `You've been outbid on ${data.auctionTitle}`
-      : `New Bid on ${data.auctionTitle}`,
+  bid: (data: { auctionTitle: string; bidAmount: number; isOutbid?: boolean; auctionId: number }) => ({
+    subject: data.isOutbid
+      ? `Time to Return: You've been outbid on ${data.auctionTitle}`
+      : `Exciting News: New Bid on ${data.auctionTitle}`,
     html: data.isOutbid
       ? `
-        <h2>You've Been Outbid!</h2>
-        <p>Someone has placed a higher bid of $${data.bidAmount} on "${data.auctionTitle}".</p>
-        <p>Log in now to place a new bid!</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Don't Miss Out - A New Higher Bid Has Been Placed!</h2>
+          <p>Someone has placed a competitive bid of $${data.bidAmount.toFixed(2)} on "${data.auctionTitle}".</p>
+          <p>This is your chance to stay in the game! The auction is still active, and you could still win these exceptional birds.</p>
+          <div style="margin: 20px 0;">
+            <a href="${BASE_URL}/auction/${data.auctionId}"
+               style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px;">
+              Return to Auction
+            </a>
+          </div>
+          <p>Remember: Quality poultry investments are worth protecting. Don't let this opportunity slip away!</p>
+          <p>Good luck!</p>
+        </div>
       `
       : `
-        <h2>New Bid Received</h2>
-        <p>A new bid of $${data.bidAmount} has been placed on your auction "${data.auctionTitle}".</p>
-        <p>Log in to your account to view the details.</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Great News! Your Auction is Gaining Interest</h2>
+          <p>A new bid of $${data.bidAmount.toFixed(2)} has been placed on your auction "${data.auctionTitle}".</p>
+          <div style="margin: 20px 0;">
+            <a href="${BASE_URL}/auction/${data.auctionId}"
+               style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px;">
+              View Auction Details
+            </a>
+          </div>
+          <p>Keep an eye on your auction as it progresses. We'll notify you of any further developments.</p>
+        </div>
       `,
   }),
-  auction: (data: { auctionTitle: string; status: string; isWinner?: boolean }) => ({
-    subject: `Auction ${data.status === 'ending soon' 
-      ? 'Ending Soon' 
-      : data.isWinner 
-        ? 'Won!' 
-        : 'Ended'}: ${data.auctionTitle}`,
-    html: data.status === 'ending soon'
-      ? `
-        <h2>Auction Ending Soon</h2>
-        <p>The auction "${data.auctionTitle}" will end in 1 hour.</p>
-        <p>Log in now to check the current status and place your final bids!</p>
-      `
-      : data.isWinner
-        ? `
-          <h2>Congratulations! You've Won!</h2>
-          <p>You are the winning bidder for "${data.auctionTitle}"!</p>
-          <p>Log in to your account to complete the payment and arrange delivery.</p>
-        `
-        : `
-          <h2>Auction Has Ended</h2>
-          <p>The auction "${data.auctionTitle}" has ended.</p>
-          <p>Log in to your account to view the final results.</p>
-        `,
-  }),
-  auction_ending_soon: (data: { auctionTitle: string }) => ({
-    subject: `Auction Ending Soon: ${data.auctionTitle}`,
+
+  auction_ending_soon: (data: { auctionTitle: string; auctionId: number; currentPrice: number }) => ({
+    subject: `Last Call: ${data.auctionTitle} Ending Soon`,
     html: `
-      <h2>Auction Ending Soon</h2>
-      <p>The auction "${data.auctionTitle}" will end in 1 hour.</p>
-      <p>Log in now to check the current status and place your final bids!</p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Don't Miss Out - Auction Ending Soon!</h2>
+        <p>The auction for "${data.auctionTitle}" will end in just 1 hour.</p>
+        <p>Current bid: $${data.currentPrice.toFixed(2)}</p>
+        <div style="margin: 20px 0;">
+          <a href="${BASE_URL}/auction/${data.auctionId}"
+             style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px;">
+            Place Your Final Bid
+          </a>
+        </div>
+        <p>This is your last chance to secure these quality birds. Don't let this opportunity pass you by!</p>
+        <p>Remember: Quality investments in poultry are worth pursuing.</p>
+      </div>
     `,
   }),
-  auction_completed: (data: { auctionTitle: string; isWinner?: boolean }) => ({
-    subject: data.isWinner 
-      ? `Congratulations! You've Won: ${data.auctionTitle}` 
-      : `Auction Ended: ${data.auctionTitle}`,
+
+  auction_completed: (data: {
+    auctionTitle: string;
+    auctionId: number;
+    finalPrice: number;
+    isWinner?: boolean;
+    isSeller?: boolean;
+  }) => ({
+    subject: data.isWinner
+      ? `Congratulations! You've Won: ${data.auctionTitle}`
+      : data.isSeller
+        ? `Auction Complete: ${data.auctionTitle} Has Sold`
+        : `Auction Update: ${data.auctionTitle} Has Ended`,
     html: data.isWinner
       ? `
-        <h2>Congratulations! You've Won!</h2>
-        <p>You are the winning bidder for "${data.auctionTitle}"!</p>
-        <p>Log in to your account to complete the payment and arrange delivery.</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>🎊 Congratulations on Your Winning Bid! 🎊</h2>
+          <p>You are the winning bidder for "${data.auctionTitle}" with a final bid of $${data.finalPrice.toFixed(2)}!</p>
+          <div style="margin: 20px 0;">
+            <a href="${BASE_URL}/auction/${data.auctionId}/payment"
+               style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px;">
+              Complete Your Purchase
+            </a>
+          </div>
+          <p>Next Steps:</p>
+          <ol>
+            <li>Complete your payment to secure your purchase</li>
+            <li>Await shipping information from the seller</li>
+            <li>Prepare for the arrival of your new birds</li>
+          </ol>
+          <p>Thank you for being part of our community!</p>
+        </div>
       `
-      : `
-        <h2>Auction Has Ended</h2>
-        <p>The auction "${data.auctionTitle}" has ended.</p>
-        <p>Log in to your account to view the final results.</p>
-      `,
+      : data.isSeller
+        ? `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Your Auction Has Successfully Concluded!</h2>
+            <p>Your auction "${data.auctionTitle}" has ended with a final price of $${data.finalPrice.toFixed(2)}.</p>
+            <div style="margin: 20px 0;">
+              <a href="${BASE_URL}/auction/${data.auctionId}"
+                 style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px;">
+                View Auction Details
+              </a>
+            </div>
+            <p>Next Steps:</p>
+            <ol>
+              <li>Await payment confirmation from the buyer</li>
+              <li>Prepare the birds for shipping</li>
+              <li>Update the tracking information once shipped</li>
+            </ol>
+            <p>Thank you for choosing our platform!</p>
+          </div>
+        `
+        : `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Auction Update</h2>
+            <p>The auction "${data.auctionTitle}" has ended with a final price of $${data.finalPrice.toFixed(2)}.</p>
+            <p>While you didn't win this time, we have many more quality auctions available!</p>
+            <div style="margin: 20px 0;">
+              <a href="${BASE_URL}/auctions"
+                 style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px;">
+                Browse More Auctions
+              </a>
+            </div>
+            <p>Keep watching for new listings that match your interests.</p>
+          </div>
+        `,
   }),
-  payment: (data: { amount: number; status: string }) => ({
-    subject: 'Payment Notification',
-    html: `
-      <h2>Payment Update</h2>
-      <p>A payment of $${data.amount} has been ${data.status}.</p>
-      <p>Log in to your account to view the transaction details.</p>
-    `,
-  }),
-  admin: (data: { message: string }) => ({
-    subject: 'Administrative Notification',
-    html: `
-      <h2>Administrative Notice</h2>
-      <p>${data.message}</p>
-    `,
-  }),
-  fulfillment: (data: { 
-    auctionTitle: string; 
-    shippingCarrier: string;
-    trackingNumber: string;
-    shippingDate: string;
-    estimatedDeliveryDate?: string;
+
+  daily_update: (data: {
+    newAuctions: Array<{
+      id: number;
+      title: string;
+      description: string;
+      imageUrl: string;
+      startingPrice: number;
+      endDate: Date;
+    }>;
   }) => ({
-    subject: `Shipping Update: ${data.auctionTitle}`,
+    subject: `New Poultry Auctions Available Today`,
     html: `
-      <h2>Your Item Has Been Shipped!</h2>
-      <p>The seller has shipped your item from auction "${data.auctionTitle}".</p>
-      <p><strong>Shipping Details:</strong></p>
-      <ul>
-        <li>Carrier: ${data.shippingCarrier}</li>
-        <li>Tracking Number: ${data.trackingNumber}</li>
-        <li>Shipped On: ${new Date(data.shippingDate).toLocaleDateString()}</li>
-        ${data.estimatedDeliveryDate ? 
-          `<li>Estimated Delivery: ${new Date(data.estimatedDeliveryDate).toLocaleDateString()}</li>` 
-          : ''}
-      </ul>
-      <p>Log in to your account to view more details.</p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Today's New Auctions</h2>
+        <p>Here are the latest additions to our auction platform:</p>
+        ${data.newAuctions.map(auction => `
+          <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 4px;">
+            <img src="${auction.imageUrl}" alt="${auction.title}" style="max-width: 100%; height: auto; margin-bottom: 10px;">
+            <h3>${auction.title}</h3>
+            <p>${auction.description}</p>
+            <p>Starting at: $${auction.startingPrice.toFixed(2)}</p>
+            <p>Ends: ${auction.endDate.toLocaleDateString()}</p>
+            <a href="${BASE_URL}/auction/${auction.id}"
+               style="background-color: #4CAF50; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; display: inline-block;">
+              View Auction
+            </a>
+          </div>
+        `).join('')}
+        <div style="margin-top: 20px;">
+          <a href="${BASE_URL}/auctions"
+             style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px;">
+            View All Auctions
+          </a>
+        </div>
+        <p style="margin-top: 20px; font-size: 12px; color: #666;">
+          You're receiving this email because you opted in to daily auction updates.
+          <a href="${BASE_URL}/profile">Manage your email preferences</a>
+        </p>
+      </div>
     `,
   }),
 };
@@ -129,16 +193,45 @@ export class EmailService {
       // Get the email template based on notification type
       const template = emailTemplates[type](data as any);
 
-      // Send the email
+      // Send the email using nodemailer
       await transporter.sendMail({
-        from: `"Pips 'n Chicks" <${process.env.SMTP_USER}>`,
+        from: {
+          name: 'Pips \'n Chicks Auctions',
+          address: process.env.SMTP_USER || 'notifications@poultryauction.co'
+        },
         to: user.email,
         ...template,
       });
 
+      console.log(`[EMAIL] Successfully sent ${type} notification to ${user.email}`);
       return true;
     } catch (error) {
-      console.error('Failed to send email notification:', error);
+      console.error('[EMAIL] Failed to send notification:', error);
+      return false;
+    }
+  }
+
+  static async sendDailyUpdate(users: User[], newAuctions: any[]) {
+    try {
+      const template = emailTemplates.daily_update({ newAuctions });
+
+      // Send to all users who opted in for daily updates
+      const emailPromises = users.map(user =>
+        transporter.sendMail({
+          from: {
+            name: 'Pips \'n Chicks Auctions',
+            address: process.env.SMTP_USER || 'notifications@poultryauction.co'
+          },
+          to: user.email,
+          ...template,
+        })
+      );
+
+      await Promise.all(emailPromises);
+      console.log(`[EMAIL] Successfully sent daily updates to ${users.length} users`);
+      return true;
+    } catch (error) {
+      console.error('[EMAIL] Failed to send daily updates:', error);
       return false;
     }
   }
@@ -146,79 +239,11 @@ export class EmailService {
   static async verifyConnection() {
     try {
       await transporter.verify();
+      console.log('[EMAIL] SMTP connection verified successfully');
       return true;
     } catch (error) {
-      console.error('Email service verification failed:', error);
+      console.error('[EMAIL] SMTP connection verification failed:', error);
       return false;
     }
-  }
-
-  static async sendEmail(to: string, subject: string, body: string): Promise<void> {
-    try {
-      console.log("[EMAIL] Would send email:");
-      console.log(`  To: ${to}`);
-      console.log(`  Subject: ${subject}`);
-      console.log(`  Body: ${body}`);
-      
-      // In a production environment, you would integrate with an email service
-      // like SendGrid, Mailgun, AWS SES, etc. here
-      
-      console.log("[EMAIL] Email sending simulated (no actual email sent)");
-    } catch (error) {
-      console.error("[EMAIL] Error sending email:", error);
-      throw error;
-    }
-  }
-
-  static async sendWinningBidEmail(
-    email: string, 
-    auctionTitle: string, 
-    bidAmount: number
-  ): Promise<void> {
-    const subject = `Congratulations! You won the auction for "${auctionTitle}"`;
-    const body = `
-      Hello,
-      
-      Congratulations! You have won the auction for "${auctionTitle}" with a bid of $${(bidAmount/100).toFixed(2)}.
-      
-      Please proceed to payment to complete your purchase.
-      
-      Thank you,
-      Pips 'n Chicks Auctions Team
-    `;
-    
-    await this.sendEmail(email, subject, body);
-  }
-
-  static async sendAuctionEndedEmail(
-    email: string, 
-    auctionTitle: string, 
-    soldPrice: number | null
-  ): Promise<void> {
-    let subject, body;
-    
-    if (soldPrice) {
-      subject = `Your auction "${auctionTitle}" has ended and sold!`;
-      body = `
-        Hello,
-        
-        Your auction "${auctionTitle}" has ended and sold for $${(soldPrice/100).toFixed(2)}.
-        
-        Thank you,
-        Pips 'n Chicks Auctions Team
-      `;
-    } else {
-      subject = `Your auction "${auctionTitle}" has ended`;
-      body = `
-        Hello,
-        
-        Your auction "${auctionTitle}" has ended without any bids.
-        
-        Thank you,
-        Pips 'n Chicks Auctions Team
-      `;
-    }
-    
-    await this.sendEmail(email, subject, body);
   }
 }

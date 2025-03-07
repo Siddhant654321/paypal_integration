@@ -31,6 +31,7 @@ export const profiles = pgTable("profiles", {
   emailAuctionNotifications: boolean("email_auction_notifications").notNull().default(true),
   emailPaymentNotifications: boolean("email_payment_notifications").notNull().default(true),
   emailAdminNotifications: boolean("email_admin_notifications").notNull().default(true),
+  emailDailyUpdates: boolean("email_daily_updates").notNull().default(false),
   // Seller specific fields
   businessName: text("business_name"),
   breedSpecialty: text("breed_specialty"),
@@ -182,6 +183,7 @@ export const insertProfileSchema = createInsertSchema(profiles)
     emailAuctionNotifications: z.boolean().default(true),
     emailPaymentNotifications: z.boolean().default(true),
     emailAdminNotifications: z.boolean().default(true),
+    emailDailyUpdates: z.boolean().default(false),
   });
 
 export const insertAuctionSchema = createInsertSchema(auctions)
