@@ -1,57 +1,71 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic } from "./vite";
+import { setupVite, serveStatic, log } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
-const app = express();
-const DEFAULT_PORT = 5000;
+async function initializeServer() {
+  const app = express();
+  const DEFAULT_PORT = 5000;
 
-// Basic middleware setup
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-// Simple request logging
-app.use((req, res, next) => {
-  console.log(`[REQUEST] ${req.method} ${req.path}`);
-  next();
-});
-
-// Basic error handling
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("[ERROR]", err);
-  res.status(500).json({ message: "Internal server error" });
-});
-
-// Health check endpoint
-app.get("/api/status", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   try {
+    log("Starting server initialization", "startup");
+
     // Test database connection
-    console.log("[SERVER] Testing database connection...");
+    log("Testing database connection...", "startup");
     await db.execute(sql`SELECT 1`);
-    console.log("[SERVER] Database connection successful");
+    log("Database connection successful", "startup");
+
+    // Basic middleware setup
+    log("Setting up middleware", "startup");
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: false }));
+
+    // Request logging middleware
+    app.use((req, res, next) => {
+      log(`${req.method} ${req.path}`, "request");
+      next();
+    });
+
+    // Basic error handling
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      console.error("[ERROR]", err);
+      res.status(500).json({ message: "Internal server error" });
+    });
+
+    // Health check endpoint
+    app.get("/api/status", (_req, res) => {
+      res.json({ status: "ok", timestamp: new Date().toISOString() });
+    });
+
+    return app;
+  } catch (error) {
+    log(`Fatal error during server initialization: ${error}`, "startup");
+    throw error;
+  }
+}
+
+async function startServer(port: number = 5000): Promise<void> {
+  try {
+    const app = await initializeServer();
 
     // Setup routes
-    console.log("[SERVER] Setting up routes...");
+    log("Setting up routes...", "startup");
     const server = await registerRoutes(app);
-    console.log("[SERVER] Routes setup complete");
+    log("Routes setup complete", "startup");
 
     // Setup frontend
     try {
       if (process.env.NODE_ENV === "production") {
-        console.log("[SERVER] Setting up static file serving...");
+        log("Setting up static file serving...", "startup");
         serveStatic(app);
       } else {
-        console.log("[SERVER] Setting up Vite development server...");
+        log("Setting up Vite development server...", "startup");
         await setupVite(app, server);
       }
-      console.log("[SERVER] Frontend setup complete");
+      log("Frontend setup complete", "startup");
     } catch (frontendError) {
-      console.error("[SERVER] Frontend setup error:", frontendError);
+      log(`Frontend setup error: ${frontendError}`, "startup");
       // Continue server startup even if frontend setup fails
     }
 
@@ -61,23 +75,23 @@ async function startServer(port: number = DEFAULT_PORT): Promise<void> {
         port,
         host: "0.0.0.0",
       }, () => {
-        console.log(`[SERVER] Server started on port ${port}`);
+        log(`Server started on port ${port}`, "startup");
         resolve();
       }).on('error', (error: any) => {
         if (error.code === 'EADDRINUSE') {
-          console.error(`[SERVER] Port ${port} is already in use`);
+          log(`Port ${port} is already in use`, "startup");
           reject(error);
         } else {
-          console.error('[SERVER] Server error:', error);
+          log(`Server error: ${error}`, "startup");
           reject(error);
         }
       });
 
       // Handle graceful shutdown
       const shutdown = () => {
-        console.log('[SERVER] Shutting down gracefully...');
+        log('Shutting down gracefully...', "startup");
         server.close(() => {
-          console.log('[SERVER] Server closed');
+          log('Server closed', "startup");
           process.exit(0);
         });
       };
@@ -88,14 +102,17 @@ async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
   } catch (error: any) {
     if (error.code === 'EADDRINUSE') {
-      console.log(`[SERVER] Retrying with port ${port + 1}`);
+      log(`Retrying with port ${port + 1}`, "startup");
       await startServer(port + 1);
     } else {
-      console.error("[SERVER] Fatal error during startup:", error);
+      log(`Fatal error during startup: ${error}`, "startup");
       process.exit(1);
     }
   }
 }
 
 // Start the server
-startServer();
+startServer().catch((error) => {
+  log(`Unhandled error during server startup: ${error}`, "startup");
+  process.exit(1);
+});

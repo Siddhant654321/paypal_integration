@@ -5,7 +5,7 @@ import { Store } from "express-session";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
 import pg from 'pg';
-import { comparePasswords } from './auth';
+import { comparePasswords } from './utils/password';
 
 function log(message: string, context = "general") {
   console.log(`[STORAGE:${context}] ${message}`);
