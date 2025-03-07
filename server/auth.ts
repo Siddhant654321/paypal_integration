@@ -29,21 +29,32 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  // Check if we're in production (including Replit environment)
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
+
+  if (!process.env.SESSION_SECRET) {
+    console.warn("WARNING: SESSION_SECRET not set. Using insecure default secret.");
+  }
+
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'defaultsecret123',
-    resave: true,
-    saveUninitialized: true,
+    resave: false, // Changed to false to prevent unnecessary session saves
+    saveUninitialized: false, // Changed to false for better security
     store: storage.sessionStore,
     cookie: {
-      secure: false, // Set to false for development
+      secure: isProduction, // Only use secure cookies in production
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: isProduction ? 'strict' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     },
-    name: 'poultry.sid' // Custom session name
+    name: 'poultry.sid',
+    proxy: isProduction // Trust proxy in production
   };
 
-  app.set("trust proxy", 1);
+  if (isProduction) {
+    app.set("trust proxy", 1);
+  }
+
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
@@ -51,11 +62,21 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
+        console.log("[AUTH] Login attempt for username:", username);
         const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
+
+        if (!user) {
+          console.log("[AUTH] User not found:", username);
           return done(null, false, { message: "Invalid username or password" });
         }
-        console.log("[AUTH] User authenticated:", { id: user.id, role: user.role });
+
+        const isValid = await comparePasswords(password, user.password);
+        if (!isValid) {
+          console.log("[AUTH] Invalid password for user:", username);
+          return done(null, false, { message: "Invalid username or password" });
+        }
+
+        console.log("[AUTH] User authenticated successfully:", { id: user.id, role: user.role });
         return done(null, user);
       } catch (error) {
         console.error("[AUTH] Authentication error:", error);
@@ -71,9 +92,8 @@ export function setupAuth(app: Express) {
 
   passport.deserializeUser(async (id: string | number, done) => {
     try {
-      // Ensure id is a number
       const userId = typeof id === 'string' ? parseInt(id, 10) : id;
-      console.log("[AUTH] Deserializing user:", { userId, type: typeof userId });
+      console.log("[AUTH] Deserializing user:", { userId });
 
       if (isNaN(userId)) {
         console.error("[AUTH] Invalid user ID during deserialization:", { id });
@@ -95,7 +115,7 @@ export function setupAuth(app: Express) {
         role: user.role, 
         hasProfile: user.hasProfile 
       });
-      
+
       done(null, user);
     } catch (error) {
       console.error("[AUTH] Deserialization error:", error);
@@ -103,49 +123,86 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/register", async (req, res, next) => {
+  // Enhanced authentication routes with better error handling
+  app.post("/api/register", async (req, res) => {
     try {
+      if (!req.body.username || !req.body.password) {
+        return res.status(400).json({ message: "Username and password are required" });
+      }
+
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
+      const hashedPassword = await hashPassword(req.body.password);
       const user = await storage.createUser({
         ...req.body,
-        password: await hashPassword(req.body.password),
+        password: hashedPassword,
       });
 
       req.login(user, (err) => {
-        if (err) return next(err);
+        if (err) {
+          console.error("[AUTH] Login error after registration:", err);
+          return res.status(500).json({ message: "Failed to login after registration" });
+        }
         res.status(201).json(user);
       });
     } catch (error) {
-      next(error);
+      console.error("[AUTH] Registration error:", error);
+      res.status(500).json({ 
+        message: "Registration failed",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
   app.post("/api/login", (req, res, next) => {
+    if (!req.body.username || !req.body.password) {
+      return res.status(400).json({ message: "Username and password are required" });
+    }
+
     passport.authenticate("local", (err, user, info) => {
-      if (err) return next(err);
-      if (!user) {
-        return res.status(401).json({ message: info?.message || "Authentication failed" });
+      if (err) {
+        console.error("[AUTH] Login error:", err);
+        return res.status(500).json({ message: "Authentication failed" });
       }
-      req.login(user, (err) => {
-        if (err) return next(err);
+      if (!user) {
+        return res.status(401).json({ message: info?.message || "Invalid credentials" });
+      }
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          console.error("[AUTH] Session creation error:", loginErr);
+          return res.status(500).json({ message: "Failed to create session" });
+        }
         res.status(200).json(user);
       });
     })(req, res, next);
   });
 
-  app.post("/api/logout", (req, res, next) => {
+  app.post("/api/logout", (req, res) => {
+    const wasLoggedIn = req.isAuthenticated();
     req.logout((err) => {
-      if (err) return next(err);
-      res.sendStatus(200);
+      if (err) {
+        console.error("[AUTH] Logout error:", err);
+        return res.status(500).json({ message: "Failed to logout" });
+      }
+      req.session.destroy((sessionErr) => {
+        if (sessionErr) {
+          console.error("[AUTH] Session destruction error:", sessionErr);
+        }
+        res.clearCookie('poultry.sid');
+        res.json({ 
+          message: wasLoggedIn ? "Logged out successfully" : "No active session"
+        });
+      });
     });
   });
 
   app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
     res.json(req.user);
   });
 }

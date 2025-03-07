@@ -15,15 +15,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
-const PRODUCTION_URL = 'https://poultryauction.co';
-const DEVELOPMENT_URL = 'http://localhost:5000';
+// Use Replit's domain or localhost for development
+const BASE_URL = process.env.REPL_SLUG 
+  ? `https://${process.env.REPL_SLUG}.replit.dev`
+  : 'http://localhost:5000';
 
-// Use production URL if we're in production, otherwise use development URL
-// Added explicit check for Replit environment
-const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
-const BASE_URL = IS_PRODUCTION ? PRODUCTION_URL : DEVELOPMENT_URL;
-
-console.log(`Using base URL for payments: ${BASE_URL}`);
+console.log(`[PAYMENTS] Using base URL for payments: ${BASE_URL}`);
 
 export class PaymentService {
   static async createCheckoutSession(
@@ -33,9 +30,12 @@ export class PaymentService {
     baseUrl: string = BASE_URL
   ): Promise<{
     sessionId: string;
+    url: string;
     payment: InsertPayment;
   }> {
     try {
+      console.log(`[PAYMENTS] Creating checkout session for auction ${auctionId}, buyer ${buyerId}`);
+
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
@@ -67,6 +67,13 @@ export class PaymentService {
         stripePaymentIntentId: '',
         status: 'pending' as const,
       };
+
+      console.log(`[PAYMENTS] Creating Stripe checkout session with data:`, {
+        auctionId,
+        totalAmount,
+        platformFee,
+        sellerPayout
+      });
 
       // Create Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
@@ -112,6 +119,15 @@ export class PaymentService {
         cancel_url: `${baseUrl}/auction/${auctionId}?payment=cancelled`,
       });
 
+      if (!session.url) {
+        throw new Error("Failed to generate Stripe checkout URL");
+      }
+
+      console.log(`[PAYMENTS] Created checkout session:`, {
+        sessionId: session.id,
+        url: session.url
+      });
+
       // Update the payment with the Stripe session ID
       const payment = await storage.insertPayment({
         ...paymentData,
@@ -125,13 +141,14 @@ export class PaymentService {
 
       return {
         sessionId: session.id,
+        url: session.url,
         payment,
       };
 
     } catch (error) {
-      console.error("Stripe session creation error:", error);
+      console.error("[PAYMENTS] Stripe session creation error:", error);
       if (error instanceof Stripe.errors.StripeError) {
-        console.error("Stripe API Error:", {
+        console.error("[PAYMENTS] Stripe API Error:", {
           type: error.type,
           code: error.code,
           message: error.message

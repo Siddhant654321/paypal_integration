@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest, notifications, type Notification, type InsertNotification } from "@shared/schema";
+import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest, notifications, type Notification, type InsertNotification, payments, type Payment, type InsertPayment, PaymentStatus, sellerPayouts, type SellerPayout, type InsertSellerPayout } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
 import { Store } from "express-session";
@@ -21,14 +21,14 @@ export interface IStorage {
   updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile>;
   createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction>;
   getAuction(id: number): Promise<Auction | undefined>;
-  getAuctions(filters?: { 
+  getAuctions(filters?: {
     sellerId?: number;
     approved?: boolean;
     species?: string;
     category?: string;
     status?: string;
   }): Promise<Auction[]>;
-  getUsers(filters?: { 
+  getUsers(filters?: {
     approved?: boolean;
     role?: string;
     lastLoginAfter?: Date;
@@ -41,6 +41,12 @@ export interface IStorage {
   markAllNotificationsAsRead(userId: number): Promise<void>;
   getUnreadNotificationsCount(userId: number): Promise<number>;
   updateUser(userId: number, updates: Partial<User>): Promise<User>;
+  authenticateUser(username: string, password: string): Promise<User | undefined>;
+  insertPayment(paymentData: InsertPayment): Promise<Payment>;
+  findPaymentByStripeId(stripeSessionId: string): Promise<Payment | undefined>;
+  updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment>;
+  createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout>;
+  getPaymentsByAuctionId(auctionId: number): Promise<Payment[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -170,7 +176,7 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
-  
+
   async findProfileByStripeAccountId(stripeAccountId: string): Promise<Profile | undefined> {
     try {
       log(`Finding profile by Stripe account ID: ${stripeAccountId}`, "stripe");
@@ -221,7 +227,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getAuctions(filters?: { 
+  async getAuctions(filters?: {
     sellerId?: number;
     approved?: boolean;
     species?: string;
@@ -325,7 +331,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getUsers(filters?: { 
+  async getUsers(filters?: {
     approved?: boolean;
     role?: string;
     lastLoginAfter?: Date;
@@ -382,7 +388,7 @@ export class DatabaseStorage implements IStorage {
       const [updatedAuction] = await db.transaction(async (tx) => {
         return await tx
           .update(auctions)
-          .set({ 
+          .set({
             approved: true,
             status: "active"
           })
@@ -524,7 +530,7 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
-  
+
   async getNotificationsByTypeAndReference(type: string, reference: string): Promise<Notification[]> {
     try {
       log(`Getting notifications of type ${type} with reference ${reference}`);
@@ -537,7 +543,7 @@ export class DatabaseStorage implements IStorage {
             eq(notifications.reference, reference)
           )
         );
-        
+
       log(`Found ${results.length} notifications of type ${type} with reference ${reference}`);
       return results;
     } catch (error) {
@@ -813,6 +819,101 @@ export class DatabaseStorage implements IStorage {
       return notification;
     } catch (error) {
       log(`Error creating notification: ${error}`);
+      throw error;
+    }
+  }
+
+  async authenticateUser(username: string, password: string): Promise<User | undefined> {
+    try {
+      const user = await this.getUserByUsername(username);
+      if (!user) {
+        return undefined;
+      }
+
+      const isValid = await comparePasswords(password, user.password); // Assuming comparePasswords function exists elsewhere
+      if (!isValid) {
+        return undefined;
+      }
+
+      return user;
+    } catch (error) {
+      log(`Error authenticating user ${username}: ${error}`);
+      throw error;
+    }
+  }
+
+  async insertPayment(paymentData: InsertPayment): Promise<Payment> {
+    try {
+      log(`Creating payment record for auction ${paymentData.auctionId}`);
+      const [payment] = await db
+        .insert(payments)
+        .values(paymentData)
+        .returning();
+      return payment;
+    } catch (error) {
+      log(`Error creating payment: ${error}`);
+      throw error;
+    }
+  }
+
+  async findPaymentByStripeId(stripeSessionId: string): Promise<Payment | undefined> {
+    try {
+      log(`Finding payment by Stripe session ID: ${stripeSessionId}`);
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.stripeSessionId, stripeSessionId));
+      return payment;
+    } catch (error) {
+      log(`Error finding payment by Stripe session ID ${stripeSessionId}: ${error}`);
+      throw error;
+    }
+  }
+
+  async updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment> {
+    try {
+      log(`Updating payment ${paymentId} status to ${status}`);
+      const [payment] = await db
+        .update(payments)
+        .set({ status })
+        .where(eq(payments.id, paymentId))
+        .returning();
+      return payment;
+    } catch (error) {
+      log(`Error updating payment status: ${error}`);
+      throw error;
+    }
+  }
+
+  async createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout> {
+    try {
+      log(`Creating seller payout for seller ${sellerId}`);
+      const [payout] = await db
+        .insert(sellerPayouts)
+        .values({
+          ...data,
+          sellerId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      return payout;
+    } catch (error) {
+      log(`Error creating seller payout: ${error}`);
+      throw error;
+    }
+  }
+
+  async getPaymentsByAuctionId(auctionId: number): Promise<Payment[]> {
+    try {
+      log(`Getting payments for auction ${auctionId}`);
+      const payments = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.auctionId, auctionId));
+      return payments;
+    } catch (error) {
+      log(`Error getting payments for auction ${auctionId}: ${error}`);
       throw error;
     }
   }

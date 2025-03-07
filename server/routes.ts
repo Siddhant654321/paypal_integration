@@ -12,10 +12,10 @@ import { buffer } from "micro";
 import Stripe from "stripe";
 import { SellerPaymentService } from "./seller-payments";
 import { insertFulfillmentSchema } from "@shared/schema"; 
-import { EmailService } from "./email"; 
+import { EmailService } from "./email-service"; 
 import { AuctionService } from "./auction-service";
 import { AIPricingService } from "./ai-service";
-import type { User } from "./storage";
+import type { User } from "@shared/schema"; 
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { NotificationService } from "./notification-service";
@@ -854,11 +854,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   //  // Admin auction management
   app.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
     try {
-      await storage.deleteAuction(parseInt(req.params.id));
+      awaitstorage.deleteAuction(parseInt(req.params.id));
       res.sendStatus(200);
     } catch (error) {
-      console.error("Error deleting auction:", error);
-      res.status(500).json({ message: "Failed to delete auction" });
+      console.error("Error deleting auction:", error);res.status(500).json({ message: "Failed to delete auction" });
     }
   });
 
@@ -1739,9 +1738,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteUser(userId);
 
       console.log("[ADMIN] Successfully deleted user and profile");
-      res.json({ message: "User deleted successfully" });
+            res.json({ message: "User deleted successfully" });
     } catch (error) {
-      console.error("[ADMINADMIN] Error deleting user:", error);
+      console.error("[ADMIN] Error deleting user:", error);
       res.status(500).json({ message: "Failed to delete user" });
     }
   });
@@ -2024,45 +2023,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
+// Helper function for consistent logging
 const log = (message: string, context: string = 'general') => {
-  console.log(`[${context}] ${message}`);
-}
-  app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    console.log(`[${context}] ${message}`);
+  };
+
+  app.get("/api/user", (req: Express.Request, res: Express.Response) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
     res.json(req.user);
   });
 
   // Add a session checker endpoint
-  app.get("/api/session/check", (req, res) => {
+  app.get("/api/session/check", (req: Express.Request, res: Express.Response) => {
     console.log("[SESSION] Checking session status:", {
       isAuthenticated: req.isAuthenticated(),
       sessionID: req.sessionID,
       user: req.user ? {
         id: req.user.id,
-        username: req.user.username,
         role: req.user.role
       } : null
     });
 
     if (req.isAuthenticated()) {
-      return res.json({
+      res.json({
         authenticated: true,
-        user: {
-          id: req.user.id,
-          username: req.user.username,
-          role: req.user.role,
-          hasProfile: req.user.hasProfile
-        }
+        user: req.user
       });
     } else {
-      return res.json({
+      res.json({
         authenticated: false,
-        sessionID: req.sessionID
+        message: "No active session"
       });
     }
   });
-}
-
-const log = (message: string, context: string = 'general') => {
-  console.log(`[${context}] ${message}`);
-}
