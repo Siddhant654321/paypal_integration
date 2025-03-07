@@ -761,7 +761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/profiles", requireAdmin, async (req, res) => {
     try {
       console.log("[ADMIN] Fetching all profiles");
-      
+
       // Get all sellers
       const sellers = await storage.getUsers({ 
         role: "seller"
@@ -770,7 +770,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         role: "seller_admin" 
       });
       const allSellers = [...sellers, ...sellerAdmins];
-      
+
       // Get profiles for all sellers
       const profiles = await Promise.all(
         allSellers.map(async (seller) => {
@@ -778,10 +778,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return profile ? {...profile, userId: seller.id} : null;
         })
       );
-      
+
       // Filter out null profiles
       const validProfiles = profiles.filter(Boolean);
-      
+
       console.log(`[ADMIN] Found ${validProfiles.length} seller profiles`);
       res.json(validProfiles);
     } catch (error) {
@@ -805,7 +805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/sellers/stripe-status", requireAdmin, async (req, res) => {
     try {
       console.log("[ADMIN] Fetching Stripe status for sellers");
-      
+
       const sellers = await storage.getUsers({ role: "seller" });
       const sellerAdmins = await storage.getUsers({ role: "seller_admin" });
       const allSellers = [...sellers, ...sellerAdmins];
@@ -1159,7 +1159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // Get the base URL from the request
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-      // Create Stripe Checkout session
+      // Create Stripe Checkout session with baseUrl parameter
       const { sessionId, payment } = await PaymentService.createCheckoutSession(
         auctionId,
         req.user.id,
@@ -1741,7 +1741,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[ADMIN] Successfully deleted user and profile");
       res.json({ message: "User deleted successfully" });
     } catch (error) {
-      console.error("[ADMIN] Error deleting user:", error);
+      console.error("[ADMINADMIN] Error deleting user:", error);
       res.status(500).json({ message: "Failed to delete user" });
     }
   });

@@ -29,7 +29,8 @@ export class PaymentService {
   static async createCheckoutSession(
     auctionId: number,
     buyerId: number,
-    includeInsurance: boolean = false
+    includeInsurance: boolean = false,
+    baseUrl: string = BASE_URL
   ): Promise<{
     sessionId: string;
     payment: InsertPayment;
@@ -107,8 +108,8 @@ export class PaymentService {
           sellerId: auction.sellerId.toString(),
           includeInsurance: includeInsurance.toString(),
         },
-        success_url: `${BASE_URL}/auction/${auctionId}?payment=success`,
-        cancel_url: `${BASE_URL}/auction/${auctionId}?payment=cancelled`,
+        success_url: `${baseUrl}/auction/${auctionId}?payment=success`,
+        cancel_url: `${baseUrl}/auction/${auctionId}?payment=cancelled`,
       });
 
       // Update the payment with the Stripe session ID
