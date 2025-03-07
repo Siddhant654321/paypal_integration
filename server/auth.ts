@@ -30,15 +30,15 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET!,
-    resave: false,
-    saveUninitialized: false,
+    secret: process.env.SESSION_SECRET || 'defaultsecret123',
+    resave: true,
+    saveUninitialized: true,
     store: storage.sessionStore,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Set to false for development
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     },
     name: 'poultry.sid' // Custom session name
   };
@@ -75,13 +75,27 @@ export function setupAuth(app: Express) {
       const userId = typeof id === 'string' ? parseInt(id, 10) : id;
       console.log("[AUTH] Deserializing user:", { userId, type: typeof userId });
 
+      if (isNaN(userId)) {
+        console.error("[AUTH] Invalid user ID during deserialization:", { id });
+        return done(null, false);
+      }
+
       const user = await storage.getUser(userId);
       if (!user) {
         console.error("[AUTH] User not found during deserialization:", { userId });
         return done(null, false);
       }
 
-      console.log("[AUTH] User deserialized successfully:", { id: user.id, role: user.role });
+      // Include hasProfile flag in the session
+      const profile = await storage.getProfile(userId);
+      user.hasProfile = !!profile;
+
+      console.log("[AUTH] User deserialized successfully:", { 
+        id: user.id, 
+        role: user.role, 
+        hasProfile: user.hasProfile 
+      });
+      
       done(null, user);
     } catch (error) {
       console.error("[AUTH] Deserialization error:", error);

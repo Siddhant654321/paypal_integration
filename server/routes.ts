@@ -2027,3 +2027,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 const log = (message: string, context: string = 'general') => {
   console.log(`[${context}] ${message}`);
 }
+  app.get("/api/user", (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    res.json(req.user);
+  });
+
+  // Add a session checker endpoint
+  app.get("/api/session/check", (req, res) => {
+    console.log("[SESSION] Checking session status:", {
+      isAuthenticated: req.isAuthenticated(),
+      sessionID: req.sessionID,
+      user: req.user ? {
+        id: req.user.id,
+        username: req.user.username,
+        role: req.user.role
+      } : null
+    });
+
+    if (req.isAuthenticated()) {
+      return res.json({
+        authenticated: true,
+        user: {
+          id: req.user.id,
+          username: req.user.username,
+          role: req.user.role,
+          hasProfile: req.user.hasProfile
+        }
+      });
+    } else {
+      return res.json({
+        authenticated: false,
+        sessionID: req.sessionID
+      });
+    }
+  });
+}
+
+const log = (message: string, context: string = 'general') => {
+  console.log(`[${context}] ${message}`);
+}
