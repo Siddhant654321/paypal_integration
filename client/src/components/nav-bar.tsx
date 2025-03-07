@@ -24,59 +24,31 @@ export default function NavBar() {
     staleTime: 5000
   });
 
-  // Use the same logout function from AuthContext for consistency
-  const { logout } = useAuth();
-
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      try {
-        // Use direct fetch for more reliable session handling
-        const response = await fetch('/api/logout', {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-
-        // Log the response details for debugging
-        console.log("[AUTH] Logout response:", await response.json().catch(() => ({ success: true })));
-
-        // Even if response is not OK, we still want to clear client-side session
-        console.log("[AUTH] Clearing client-side session data");
-        return true;
-      } catch (error) {
-        console.error('Logout network error:', error);
-        // Still return success to clear the local session state
-        return true;
+      const response = await apiRequest("POST", "/api/logout");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Logout failed");
       }
+      return true;
     },
     onSuccess: () => {
-      // Always clear the query cache and user data
+      console.log('Logged out successfully');
       queryClient.clear();
       queryClient.setQueryData(['/api/user'], null);
-
-      // Force refresh user state by invalidating the query
-      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
-
-      // Navigate to home page
       setLocation('/');
-
       toast({
         title: 'Logged out',
         description: 'You have been successfully logged out.'
       });
     },
-    onError: () => {
-      // Even on error, clear client state to ensure user is logged out locally
-      queryClient.clear();
-      queryClient.setQueryData(['/api/user'], null);
-      setLocation('/');
-
+    onError: (error) => {
+      console.error('Logout error:', error);
       toast({
-        title: 'Partial logout',
-        description: 'You have been logged out on this device, but there may have been an issue with the server.',
-        variant: 'default',
+        title: 'Logout failed',
+        description: error instanceof Error ? error.message : 'An error occurred during logout.',
+        variant: 'destructive',
       });
     },
   });
