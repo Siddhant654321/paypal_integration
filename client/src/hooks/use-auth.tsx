@@ -38,30 +38,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData): Promise<SelectUser> => {
       console.log("[AUTH] Attempting login with credentials:", credentials.username);
-      const response = await apiRequest("POST", "/api/login", credentials);
 
-      if (!response.ok) {
-        throw new Error("Authentication failed");
+      // Log the API call for debugging
+      console.log("[API] POST /api/login", { data: credentials });
+
+      try {
+        // Use a more explicit fetch with detailed logging
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Critical for session cookies
+          body: JSON.stringify(credentials)
+        });
+
+        // Log the response status
+        console.log("[API] Response from /api/login:", {
+          status: response.status,
+          ok: response.ok,
+          statusText: response.statusText
+        });
+
+        // Handle non-JSON responses gracefully
+        let data;
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          console.error("[AUTH] Error parsing JSON response:", parseError);
+          data = {};
+        }
+
+        if (!response.ok) {
+          throw new Error(data.message || "Login failed");
+        }
+
+        return data;
+      } catch (err) {
+        console.error("[AUTH] Login network error:", err);
+        throw err;
       }
-
-      const data = await response.json();
-      console.log("[AUTH] Login response:", data);
-      return data as SelectUser;
     },
-    onSuccess: (user: SelectUser) => {
-      console.log("[AUTH] Login successful, updating cache");
-      queryClient.setQueryData(["/api/user"], user);
-      setLocation("/");
+    onSuccess: (userData) => {
+      console.log("[AUTH] Login successful, setting user data:", userData);
+
+      // Update cache with user data
+      queryClient.setQueryData(["/api/user"], userData);
+
+      // Force refresh user data
+      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+
+      // Verify session with a separate request
+      fetch('/api/session/check', { 
+        credentials: 'include'
+      }).then(resp => resp.json())
+        .then(data => console.log("[AUTH] Session verified:", data))
+        .catch(err => console.error("[AUTH] Session verification failed:", err));
+
       toast({
         title: "Welcome back!",
-        description: "You have been successfully logged in.",
+        description: `You've successfully logged in as ${userData.username}`,
       });
+
+      setLocation("/");
     },
     onError: (error: Error) => {
       console.error("[AUTH] Login error:", error);
+
       toast({
         title: "Login failed",
-        description: error.message || "Authentication failed",
+        description: error.message || "An error occurred during login",
         variant: "destructive",
       });
     },

@@ -24,32 +24,83 @@ export default function NavBar() {
     staleTime: 5000
   });
 
+  // Use the same logout function from AuthContext for consistency
+  const { logout } = useAuth();
+
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/logout");
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Logout failed");
+      try {
+        console.log("[AUTH] Starting logout process");
+
+        // Use direct fetch with explicit logging
+        const response = await fetch('/api/logout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // Log response status
+        console.log("[AUTH] Logout response status:", {
+          status: response.status,
+          ok: response.ok
+        });
+
+        // Parse response if possible
+        let data = { success: response.ok };
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          console.log("[AUTH] No JSON in logout response");
+        }
+
+        console.log("[AUTH] Logout response data:", data);
+
+        // Always return success to ensure client-side cleanup
+        return true;
+      } catch (error) {
+        console.error('[AUTH] Logout network error:', error);
+        // Still return success to clear the local session state
+        return true;
       }
-      return true;
     },
     onSuccess: () => {
-      console.log('Logged out successfully');
+      console.log("[AUTH] Logout successful, clearing client state");
+
+      // Clear all query cache
       queryClient.clear();
       queryClient.setQueryData(['/api/user'], null);
-      setLocation('/');
-      toast({
-        title: 'Logged out',
-        description: 'You have been successfully logged out.'
-      });
+
+      // Force refresh user state
+      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+
+      // Add a small delay before navigation to ensure state is updated
+      setTimeout(() => {
+        setLocation('/');
+
+        toast({
+          title: 'Logged out',
+          description: 'You have been successfully logged out.'
+        });
+      }, 100);
     },
-    onError: (error) => {
-      console.error('Logout error:', error);
-      toast({
-        title: 'Logout failed',
-        description: error instanceof Error ? error.message : 'An error occurred during logout.',
-        variant: 'destructive',
-      });
+    onError: () => {
+      console.log("[AUTH] Logout encountered an error, still clearing client state");
+
+      // Even on error, clear client state
+      queryClient.clear();
+      queryClient.setQueryData(['/api/user'], null);
+
+      setTimeout(() => {
+        setLocation('/');
+
+        toast({
+          title: 'Logged out',
+          description: 'You have been logged out on this device.',
+          variant: 'default',
+        });
+      }, 100);
     },
   });
 

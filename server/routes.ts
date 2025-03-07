@@ -2071,31 +2071,43 @@ router.get("/api/user", (req: Express.Request, res: Express.Response) => {
   res.json(req.user);
 });
 
-// Add a session checker endpoint
+// Add a session checker endpoint with enhanced logging
 router.get("/api/session/check", (req: Express.Request, res: Express.Response) => {
   console.log("[SESSION] Checking session status:", {
     isAuthenticated: req.isAuthenticated(),
     sessionID: req.sessionID,
+    hasCookies: !!req.headers.cookie,
+    cookies: req.headers.cookie,
     user: req.user ? {
       id: req.user.id,
-      role: req.user.role
+      role: req.user.role,
+      username: req.user.username
     } : null
   });
 
   if (req.isAuthenticated()) {
+    // Return full user data for authenticated sessions
     res.json({
       authenticated: true,
-      user: req.user
+      user: req.user,
+      sessionID: req.sessionID
     });
   } else {
+    // Check if there's a session cookie present but not valid
+    const hasSessionCookie = req.headers.cookie?.includes('poultry.sid');
+    
     res.json({
       authenticated: false,
-      message: "No active session"
+      message: hasSessionCookie ? 
+        "Session cookie present but not authenticated" : 
+        "No active session",
+      hasCookie: hasSessionCookie
     });
   }
 });
 
-app.post("/api/register", async (req, res) => {
+// Add registration endpoint to the router (not directly on app)
+router.post("/api/register", async (req, res) => {
     try {
       const userData = req.body as InsertUser;
       console.log("[ROUTES] Registration attempt:", userData.username);
@@ -2148,28 +2160,6 @@ app.post("/api/register", async (req, res) => {
         message: "Registration failed: " + (error instanceof Error ? error.message : "Unknown error") 
       });
     }
-  });
+});
 
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
-      if (err) {
-        console.error("[ROUTES] Login error:", err);
-        return res.status(500).json({ message: "Internal server error" });
-      }
-
-      if (!user) {
-        console.log("[ROUTES] Login failed:", info?.message || "Authentication failed");
-        return res.status(401).json({ message: info?.message || "Invalid username or password" });
-      }
-
-      req.logIn(user, (loginErr) => {
-        if (loginErr) {
-          console.error("[ROUTES] Session login error:", loginErr);
-          return res.status(500).json({ message: "Failed to create session" });
-        }
-
-        console.log("[ROUTES] User logged in successfully:", user.id);
-        return res.json(user);
-      });
-    })(req, res, next);
-  });
+// Remove the duplicate login endpoint as it's already defined earlier in the file
