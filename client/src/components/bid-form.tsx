@@ -23,12 +23,20 @@ export default function BidForm({ auctionId, currentPrice, onBidSuccess }: Props
 
   const bidMutation = useMutation({
     mutationFn: async (bidAmount: number) => {
-      const bidData = {
-        auctionId,
-        amount: dollarsToCents(bidAmount), // Convert dollars to cents for storage
-      };
-      const res = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, bidData);
-      return res.json();
+      try {
+        const amountInCents = dollarsToCents(bidAmount);
+        const response = await apiRequest("POST", `/api/auctions/${auctionId}/bid`, { amount: amountInCents });
+
+        // Handle JSON response to check for profile errors
+        if (response && response.error === "profile_incomplete") {
+          throw new Error("Profile incomplete");
+        }
+
+        return response;
+      } catch (error) {
+        console.error("Bid error:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       setAmount("");
