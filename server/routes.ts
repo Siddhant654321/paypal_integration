@@ -145,18 +145,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Logout endpoint with proper session cleanup
     router.post("/api/logout", (req, res) => {
       console.log("[AUTH] Logout attempt");
-      res.setHeader('Content-Type', 'application/json');
+      const wasLoggedIn = req.isAuthenticated();
+
       req.logout((err) => {
         if (err) {
           console.error("[AUTH] Logout error:", err);
-          return res.status(500).json({ 
-            message: "Failed to logout" 
-          });
+          return res.status(500).json({ message: "Failed to logout" });
         }
-        console.log("[AUTH] Logout successful");
-        res.json({ message: "Logged out successfully" });
+
+        // Destroy the session
+        req.session.destroy((sessionErr) => {
+          if (sessionErr) {
+            console.error("[AUTH] Session destruction error:", sessionErr);
+          }
+
+          // Clear the session cookie
+          res.clearCookie('poultry.sid', {
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined,
+            sameSite: 'lax'
+          });
+
+          res.json({ 
+            message: wasLoggedIn ? "Logged out successfully" : "No active session",
+            success: true
+          });
+        });
       });
     });
 
