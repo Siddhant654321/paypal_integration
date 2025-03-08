@@ -142,6 +142,8 @@ export class PaymentService {
         payoutProcessed: false,
       };
 
+      console.log("[PAYMENTS] Payment data for validation:", paymentData);
+      
       // Insert the payment record
       const validatedPayment = insertPaymentSchema.parse(paymentData);
       const payment = await storage.insertPayment(validatedPayment);
