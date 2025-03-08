@@ -74,7 +74,9 @@ export default function PaymentPage() {
     setIsProcessing(true);
 
     try {
+      setError(null);
       console.log("Creating checkout session...");
+      
       // Create checkout session
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
@@ -83,41 +85,69 @@ export default function PaymentPage() {
         body: JSON.stringify({ includeInsurance })
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        if (errorData.code === "AUTH_REQUIRED") {
+        if (responseData.code === "AUTH_REQUIRED") {
+          toast({
+            variant: "destructive",
+            title: "Authentication Required",
+            description: "Please log in to proceed with payment."
+          });
           setLocation('/auth');
-          throw new Error("Please log in to proceed with payment");
+          return;
         }
-        throw new Error(errorData.message || 'Failed to create payment session');
+        throw new Error(responseData.message || 'Failed to create payment session');
       }
 
-      const { sessionId } = await response.json();
+      const { sessionId, url } = responseData;
       console.log("Got session ID:", sessionId);
-
-      // Initialize Stripe and redirect to checkout
-      const stripe = await stripePromise;
-      if (!stripe) {
-        throw new Error("Could not initialize Stripe");
+      
+      if (url) {
+        // If we got a URL directly from the server, use it
+        console.log("Redirecting to checkout URL from server:", url);
+        window.location.href = url;
+      } else if (sessionId) {
+        // Otherwise, try to initialize Stripe and redirect
+        console.log("Initializing Stripe with session ID");
+        const stripe = await stripePromise;
+        
+        if (!stripe) {
+          throw new Error("Could not initialize Stripe");
+        }
+        
+        // Redirect to the specific checkout session
+        const { error } = await stripe.redirectToCheckout({
+          sessionId: sessionId
+        });
+        
+        if (error) {
+          console.error("Stripe redirect error:", error);
+          throw new Error(error.message);
+        }
+      } else {
+        // Fallback to getting the URL from a separate endpoint
+        console.log("No URL or valid session ID, falling back to checkout session endpoint");
+        
+        const checkoutSession = await fetch(`/api/checkout-session/${sessionId}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
+        });
+        
+        if (!checkoutSession.ok) {
+          throw new Error("Failed to get checkout session URL");
+        }
+        
+        const { url } = await checkoutSession.json();
+        
+        if (!url) {
+          throw new Error("No checkout URL returned from server");
+        }
+        
+        // Redirect directly to the Stripe checkout URL
+        window.location.href = url;
       }
-
-      console.log("Redirecting to Stripe checkout...");
-
-      // Get the checkout session to extract the URL
-      const checkoutSession = await fetch(`/api/checkout-session/${sessionId}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      });
-
-      if (!checkoutSession.ok) {
-        throw new Error("Failed to get checkout session URL");
-      }
-
-      const { url } = await checkoutSession.json();
-
-      // Redirect directly to the Stripe checkout URL
-      window.location.href = url;
 
       // Show success message
       toast({

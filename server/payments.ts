@@ -84,6 +84,11 @@ export class PaymentService {
           transfer_data: {
             destination: sellerProfile.stripeAccountId,
           },
+          metadata: {
+            auctionId: auctionId.toString(),
+            buyerId: buyerId.toString(),
+            sellerId: auction.sellerId.toString(),
+          },
         },
         line_items: [
           {
@@ -115,7 +120,7 @@ export class PaymentService {
           sellerId: auction.sellerId.toString(),
           includeInsurance: includeInsurance.toString(),
         },
-        success_url: `${baseUrl}/auction/${auctionId}?payment=success`,
+        success_url: `${baseUrl}/auction/${auctionId}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/auction/${auctionId}?payment=cancelled`,
       });
 

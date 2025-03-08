@@ -1181,46 +1181,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
       try {
         // Log authentication state
-        console.log('Payment request authentication:', {
+        console.log('[PAYMENT] Payment request authentication:', {
           isAuthenticated: req.isAuthenticated(),
           userId: req.user?.id,
-          session: req.session
+          timestamp: new Date().toISOString()
         });
+        
         if (!req.user) {
+          console.log('[PAYMENT] Unauthorized payment attempt - no user in session');
           return res.status(401).json({
             message: "Unauthorized - Please log in again",
             code: "AUTH_REQUIRED"
           });
         }
+        
         const auctionId = parseInt(req.params.id);
         const { includeInsurance = false } = req.body;
+        
+        console.log(`[PAYMENT] Creating payment session for auction ${auctionId}, buyer ${req.user.id}, insurance: ${includeInsurance}`);
+        
         const auction = await storage.getAuction(auctionId);
         if (!auction) {
+          console.log(`[PAYMENT] Auction not found: ${auctionId}`);
           return res.status(404).json({ message: "Auction not found" });
         }
+        
         // Verify this user won the auction
         if (auction.winningBidderId !== req.user.id) {
+          console.log(`[PAYMENT] Unauthorized payment - user ${req.user.id} is not the winner of auction ${auctionId}`);
           return res.status(403).json({
             message: "Only the winning bidder can pay",
             code: "NOT_WINNER"
           });
         }
+        
         // Get the base URL from the request
         const baseUrl = `${req.protocol}://${req.get('host')}`;
-        // Create Stripe Checkout session with baseUrl parameter
-        const { sessionId, payment } = await PaymentService.createCheckoutSession(
+        console.log(`[PAYMENT] Using base URL: ${baseUrl}`);
+        
+        // Create Stripe Checkout session
+        const { sessionId, url, payment } = await PaymentService.createCheckoutSession(
           auctionId,
           req.user.id,
           includeInsurance,
           baseUrl
         );
-        res.json({ sessionId, payment });
+        
+        console.log(`[PAYMENT] Successfully created checkout session ${sessionId} with URL: ${url}`);
+        
+        res.json({ 
+          sessionId, 
+          url, 
+          payment,
+          success: true
+        });
       } catch (error) {
-        console.error("Payment creation error:", error);
+        console.error("[PAYMENT] Payment creation error:", error);
+        let errorMessage = "Failed to create payment session";
+        let errorCode = "PAYMENT_CREATION_FAILED";
+        
+        // Check for specific Stripe errors
+        if (error instanceof Error) {
+          if (error.message.includes("Stripe account")) {
+            errorMessage = "Seller has not completed their payment setup";
+            errorCode = "SELLER_SETUP_INCOMPLETE";
+          } else if (error.message.includes("API key")) {
+            errorMessage = "Payment system configuration error";
+            errorCode = "STRIPE_CONFIG_ERROR";
+          }
+        }
+        
         res.status(500).json({
-          message: "Failed to create payment session",
+          message: errorMessage,
           details: error instanceof Error ? error.message : "Unknown error",
-          code: "PAYMENT_CREATION_FAILED"
+          code: errorCode
         });
       }
     });
