@@ -69,7 +69,6 @@ export class PaymentService {
           transfer_data: {
             destination: sellerProfile.stripeAccountId,
           },
-          // Application fee stays with the platform
           application_fee_amount: platformFee + insuranceFee,
         },
         line_items: [
