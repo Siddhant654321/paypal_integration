@@ -93,6 +93,24 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
     }
   };
 
+  // Get the auction status display
+  const getStatusBadge = () => {
+    if (isPendingSellerDecision) {
+      return <Badge variant="warning">Pending Seller Decision</Badge>;
+    }
+    if (showStatus) {
+      return (
+        <Badge variant={auction.approved ? "default" : "secondary"}>
+          {auction.approved ? "Approved" : "Pending Approval"}
+        </Badge>
+      );
+    }
+    if (auction.status === "voided") {
+      return <Badge variant="destructive">Voided</Badge>;
+    }
+    return null;
+  };
+
   return (
     <Card className="overflow-hidden">
       <div className="aspect-square w-full bg-muted rounded-md overflow-hidden">
@@ -106,19 +124,12 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
         />
       </div>
       <CardContent className="p-4">
-        <div className="flex gap-2 mb-2">
+        <div className="flex gap-2 mb-2 flex-wrap">
           <Badge>{auction.species}</Badge>
           <Badge variant="outline">
             {auction.category}
           </Badge>
-          {showStatus && (
-            <Badge variant={auction.approved ? "default" : "secondary"}>
-              {auction.approved ? "Approved" : "Pending Approval"}
-            </Badge>
-          )}
-          {isPendingSellerDecision && (
-            <Badge variant="warning">Pending Seller Decision</Badge>
-          )}
+          {getStatusBadge()}
         </div>
         <h3 className="text-lg font-semibold mb-2">{auction.title}</h3>
         <p className="text-sm text-muted-foreground line-clamp-2 whitespace-pre-line">
@@ -140,7 +151,7 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
           </div>
           <div className="flex gap-2 items-center">
             {actions}
-            {!isPendingSellerDecision && (
+            {!isPendingSellerDecision && auction.status !== "voided" && (
               <Link href={`/auction/${auction.id}`}>
                 <Button variant="secondary">View Details</Button>
               </Link>

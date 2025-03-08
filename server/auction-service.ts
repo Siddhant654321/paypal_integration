@@ -36,13 +36,13 @@ export class AuctionService {
           );
 
           if (existingNotifications.length > 0) {
-            console.log(`[AUCTION SERVICE] Skipping auction #${auction.id} - already sent ending notifications (${existingNotifications.length} found)`);
+            console.log(`[AUCTION SERVICE] Skipping auction #${auction.id} - already sent ending notifications`);
             continue;
           }
 
           // Get all bidders for this auction
           const bids = await storage.getBidsForAuction(auction.id);
-          const uniqueBidderIds = [...new Set(bids.map(bid => bid.bidderId))];
+          const uniqueBidderIds = Array.from(new Set(bids.map(bid => bid.bidderId)));
 
           // Notify each bidder
           for (const bidderId of uniqueBidderIds) {
@@ -113,19 +113,23 @@ export class AuctionService {
             });
             winningBid = sortedBids[0];
 
-            // Check if winning bid meets reserve price
-            const metReserve = winningBid.amount >= auction.reservePrice;
-            console.log(`[AUCTION SERVICE] Auction #${auction.id} final bid: $${winningBid.amount/100}, reserve: $${auction.reservePrice/100}, met reserve: ${metReserve}`);
+            console.log(`[AUCTION SERVICE] Processing auction #${auction.id} completion:`, {
+              highestBid: winningBid.amount,
+              reservePrice: auction.reservePrice,
+              belowReserve: winningBid.amount < auction.reservePrice
+            });
 
             // Update the auction with the winning bidder and appropriate status
             await storage.updateAuction(auction.id, {
               winningBidderId: winningBid.bidderId,
-              status: metReserve ? "ended" : "pending_seller_decision",
-              paymentStatus: metReserve ? "pending" : "failed"
+              currentPrice: winningBid.amount,
+              status: winningBid.amount >= auction.reservePrice ? "ended" : "pending_seller_decision",
+              paymentStatus: winningBid.amount >= auction.reservePrice ? "pending" : "failed"
             });
 
             // Notify seller if below reserve
-            if (!metReserve) {
+            if (winningBid.amount < auction.reservePrice) {
+              console.log(`[AUCTION SERVICE] Auction #${auction.id} ended below reserve, notifying seller`);
               await NotificationService.notifySellerBelowReserve(
                 auction.sellerId,
                 auction.title,
@@ -137,12 +141,13 @@ export class AuctionService {
           } else {
             // No bids placed, mark as ended
             await storage.updateAuction(auction.id, {
-              status: "ended"
+              status: "ended",
+              paymentStatus: "failed"
             });
           }
 
           // Notify all unique bidders
-          const uniqueBidderIds = [...new Set(bids.map(bid => bid.bidderId))];
+          const uniqueBidderIds = Array.from(new Set(bids.map(bid => bid.bidderId)));
           for (const bidderId of uniqueBidderIds) {
             const isWinner = winningBid && bidderId === winningBid.bidderId;
             const metReserve = winningBid && winningBid.amount >= auction.reservePrice;
