@@ -1,6 +1,5 @@
 import Stripe from "stripe";
 import { storage } from "./storage";
-import { insertPaymentSchema } from "@shared/schema";
 import { NotificationService } from "./notification-service";
 
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -19,15 +18,13 @@ const BASE_URL = process.env.REPL_SLUG
   ? `https://${process.env.REPL_SLUG}.replit.dev`
   : 'http://localhost:5000';
 
-console.log(`[PAYMENTS] Using base URL for payments: ${BASE_URL}`);
-
 export class PaymentService {
   static async createCheckoutSession(
     auctionId: number,
     buyerId: number,
     includeInsurance: boolean = false,
     baseUrl: string = BASE_URL
-  ): Promise<{ sessionId: string; url: string; payment: any }> {
+  ) {
     try {
       console.log(`[PAYMENTS] Creating checkout session for auction ${auctionId}, buyer ${buyerId}`);
 
@@ -106,7 +103,9 @@ export class PaymentService {
         },
       });
 
-      console.log(`[PAYMENTS] Created Stripe session: ${session.id} for auction ${auctionId}`);
+      if (!session.url) {
+        throw new Error("Failed to generate Stripe checkout URL");
+      }
 
       // Create a payment record
       const paymentData = {
@@ -122,9 +121,9 @@ export class PaymentService {
         stripePaymentIntentId: session.payment_intent as string,
       };
 
+      // Create payment record
       console.log("[PAYMENTS] Creating payment record:", paymentData);
-
-      const payment = await storage.insertPayment(paymentData);
+      const payment = await storage.createPayment(paymentData);
 
       // Update auction status
       await storage.updateAuction(auctionId, {
@@ -134,7 +133,7 @@ export class PaymentService {
 
       return {
         sessionId: session.id,
-        url: session.url || "",
+        url: session.url,
         payment,
       };
     } catch (error) {
