@@ -58,9 +58,9 @@ export class PaymentService {
             product_data: {
               name: auction.title,
               description: `Auction #${auction.id}`,
-              images: [auction.imageUrl],
+              images: auction.imageUrl ? [auction.imageUrl] : undefined,
             },
-            unit_amount: amount, // Amount in cents
+            unit_amount: amount,
           },
           quantity: 1,
         },
@@ -71,7 +71,7 @@ export class PaymentService {
               name: "Platform Fee",
               description: "10% fee for using the platform",
             },
-            unit_amount: platformFee, // Amount in cents
+            unit_amount: platformFee,
           },
           quantity: 1,
         }
@@ -86,7 +86,7 @@ export class PaymentService {
               name: "Insurance Fee",
               description: "Insurance for your purchase",
             },
-            unit_amount: insuranceFee, // Amount in cents
+            unit_amount: insuranceFee,
           },
           quantity: 1,
         });
@@ -94,7 +94,6 @@ export class PaymentService {
 
       // Create Stripe Checkout Session
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
         mode: "payment",
         line_items: lineItems,
         success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
@@ -106,6 +105,8 @@ export class PaymentService {
           },
         },
       });
+
+      console.log(`[PAYMENTS] Created Stripe session: ${session.id} for auction ${auctionId}`);
 
       // Create a payment record
       const paymentData = {
@@ -121,65 +122,21 @@ export class PaymentService {
         stripePaymentIntentId: session.payment_intent as string,
       };
 
-      console.log("[PAYMENTS] Creating payment record:", JSON.stringify(paymentData));
+      console.log("[PAYMENTS] Creating payment record:", paymentData);
 
-      try {
-        // Insert payment with full data including session ID
-        const payment = await storage.insertPayment({
-          ...paymentData,
-          payoutProcessed: false
-        });
+      const payment = await storage.insertPayment(paymentData);
 
-        console.log("[PAYMENTS] Payment record created successfully:", payment);
+      // Update auction status
+      await storage.updateAuction(auctionId, {
+        status: "pending_payment",
+        paymentStatus: "pending"
+      });
 
-        // Update auction status
-        await storage.updateAuction(auctionId, {
-          paymentStatus: "pending",
-        });
-
-        console.log(`[PAYMENTS] Checkout session created: ${session.id}`);
-        return {
-          sessionId: session.id,
-          url: session.url || "",
-          payment,
-        };
-      } catch (e) {
-        console.error("[PAYMENTS] Error creating payment record:", e);
-        
-        // Try with minimal required fields as a fallback
-        try {
-          const minimalPaymentData = {
-            auctionId,
-            buyerId,
-            sellerId: auction.sellerId,
-            amount: totalAmount,
-            platformFee,
-            sellerPayout,
-            insuranceFee: insuranceFee || 0,
-            status: 'pending',
-            stripePaymentIntentId: session.payment_intent as string,
-          };
-          
-          console.log("[PAYMENTS] Trying with minimal payment data:", minimalPaymentData);
-          const payment = await storage.insertPayment(minimalPaymentData);
-          
-          // Update auction status
-          await storage.updateAuction(auctionId, {
-            paymentStatus: "pending",
-          });
-          
-          console.log(`[PAYMENTS] Checkout session created (fallback): ${session.id}`);
-          return {
-            sessionId: session.id,
-            url: session.url || "",
-            payment,
-          };
-        } catch (fallbackError) {
-          console.error("[PAYMENTS] Fallback payment creation also failed:", fallbackError);
-          // Throw a more descriptive error
-          throw new Error(`Failed to create payment record: ${e.message}. Fallback also failed: ${fallbackError.message}`);
-        }
-      }
+      return {
+        sessionId: session.id,
+        url: session.url || "",
+        payment,
+      };
     } catch (error) {
       console.error("[PAYMENTS] Error creating checkout session:", error);
       throw error;
