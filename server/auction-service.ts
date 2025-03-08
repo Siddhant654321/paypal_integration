@@ -87,7 +87,12 @@ export class AuctionService {
 
         // If auction has ended
         if (endDate <= now) {
-          console.log(`[AUCTION SERVICE] Auction #${auction.id} (${auction.title}) has ended`);
+          console.log(`[AUCTION SERVICE] Processing auction #${auction.id} completion:`, {
+            title: auction.title,
+            currentPrice: auction.currentPrice,
+            reservePrice: auction.reservePrice,
+            endDate: auction.endDate
+          });
 
           // Check if we've already sent notifications for this auction's completion
           const existingNotifications = await storage.getNotificationsByTypeAndReference(
@@ -113,18 +118,28 @@ export class AuctionService {
             });
             winningBid = sortedBids[0];
 
-            console.log(`[AUCTION SERVICE] Processing auction #${auction.id} completion:`, {
+            console.log(`[AUCTION SERVICE] Auction #${auction.id} final status:`, {
               highestBid: winningBid.amount,
               reservePrice: auction.reservePrice,
-              belowReserve: winningBid.amount < auction.reservePrice
+              belowReserve: winningBid.amount < auction.reservePrice,
+              currentStatus: auction.status
             });
 
             // Update the auction with the winning bidder and appropriate status
+            const newStatus = winningBid.amount >= auction.reservePrice ? "ended" : "pending_seller_decision";
+            const newPaymentStatus = winningBid.amount >= auction.reservePrice ? "pending" : "failed";
+
+            console.log(`[AUCTION SERVICE] Updating auction #${auction.id} status:`, {
+              newStatus,
+              newPaymentStatus,
+              winningBidderId: winningBid.bidderId
+            });
+
             await storage.updateAuction(auction.id, {
               winningBidderId: winningBid.bidderId,
               currentPrice: winningBid.amount,
-              status: winningBid.amount >= auction.reservePrice ? "ended" : "pending_seller_decision",
-              paymentStatus: winningBid.amount >= auction.reservePrice ? "pending" : "failed"
+              status: newStatus,
+              paymentStatus: newPaymentStatus
             });
 
             // Notify seller if below reserve
@@ -140,6 +155,7 @@ export class AuctionService {
             }
           } else {
             // No bids placed, mark as ended
+            console.log(`[AUCTION SERVICE] Auction #${auction.id} ended with no bids`);
             await storage.updateAuction(auction.id, {
               status: "ended",
               paymentStatus: "failed"

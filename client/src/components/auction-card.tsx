@@ -61,6 +61,15 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
   const needsPayment = isWinningBidder && auction.paymentStatus === "pending";
   const isPendingSellerDecision = auction.status === "pending_seller_decision";
 
+  console.log(`[AuctionCard] Rendering auction #${auction.id}:`, {
+    status: auction.status,
+    currentPrice: auction.currentPrice,
+    reservePrice: auction.reservePrice,
+    isPendingSellerDecision,
+    isWinningBidder,
+    needsPayment
+  });
+
   const handleSellerDecision = async (accept: boolean) => {
     try {
       const response = await apiRequest(
