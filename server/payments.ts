@@ -68,12 +68,9 @@ export class PaymentService {
           // Set up the transfer to the connected account
           transfer_data: {
             destination: sellerProfile.stripeAccountId,
-            // The amount to transfer to the connected account (in cents)
-            amount: baseAmount, 
           },
           // Application fee stays with the platform
           application_fee_amount: platformFee + insuranceFee,
-          // Do not specify amount here, it comes from line items
         },
         line_items: [
           {
