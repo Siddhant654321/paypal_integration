@@ -10,14 +10,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2023-10-16"
 });
 
-const PRODUCTION_URL = 'https://poultryauction.co';
-const DEVELOPMENT_URL = 'http://localhost:5000';
-
-// Use production URL if we're in production, otherwise use development URL
-const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
-const BASE_URL = IS_PRODUCTION ? 
-  `https://${process.env.REPL_SLUG}.replit.dev` : 
-  DEVELOPMENT_URL;
+const BASE_URL = process.env.REPL_SLUG 
+  ? `https://${process.env.REPL_SLUG}.replit.dev`
+  : 'http://localhost:5000';
 
 console.log(`[STRIPE CONNECT] Using base URL: ${BASE_URL}`);
 
@@ -25,16 +20,6 @@ export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
       console.log("[STRIPE CONNECT] Creating seller account for:", profile.email);
-
-      // Clean up any existing account first
-      if (profile.stripeAccountId) {
-        try {
-          console.log("[STRIPE CONNECT] Deleting existing account:", profile.stripeAccountId);
-          await stripe.accounts.del(profile.stripeAccountId);
-        } catch (error) {
-          console.warn("[STRIPE CONNECT] Could not delete existing account:", error);
-        }
-      }
 
       // Create a new Connect Express account
       const account = await stripe.accounts.create({
@@ -53,7 +38,7 @@ export class SellerPaymentService {
 
       console.log("[STRIPE CONNECT] Account created:", account.id);
 
-      // Create an account link for onboarding
+      // Create onboarding link
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
         refresh_url: `${BASE_URL}/seller/dashboard?refresh=true`,
@@ -66,12 +51,7 @@ export class SellerPaymentService {
         throw new Error("Failed to generate Stripe Connect onboarding URL");
       }
 
-      console.log("[STRIPE CONNECT] Generated onboarding link:", {
-        accountId: account.id,
-        returnUrl: `${BASE_URL}/seller/dashboard?success=true`
-      });
-
-      // Update profile with Stripe account ID and initial status
+      // Update profile with account info
       await storage.updateSellerStripeAccount(profile.userId, {
         accountId: account.id,
         status: "pending"
@@ -108,7 +88,7 @@ export class SellerPaymentService {
 
       if (account.charges_enabled && account.payouts_enabled) {
         return "verified";
-      } 
+      }
 
       if (account.details_submitted) {
         return "pending";
@@ -182,6 +162,7 @@ export class SellerPaymentService {
         throw new Error("Seller has no Stripe account");
       }
 
+      // Create transfer to connected account
       const transfer = await stripe.transfers.create({
         amount,
         currency: 'usd',
@@ -189,6 +170,7 @@ export class SellerPaymentService {
         transfer_group: `payment_${paymentId}`,
       });
 
+      // Record payout in database
       await storage.createSellerPayout({
         sellerId,
         paymentId,
@@ -197,7 +179,7 @@ export class SellerPaymentService {
         status: 'pending'
       });
     } catch (error) {
-      console.error("Error creating payout:", error);
+      console.error("[STRIPE CONNECT] Error creating payout:", error);
       throw error;
     }
   }

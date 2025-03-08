@@ -120,10 +120,11 @@ export const payments = pgTable("payments", {
   amount: integer("amount").notNull(), // in cents
   platformFee: integer("platform_fee").notNull(), // in cents
   sellerPayout: integer("seller_payout").notNull(), // in cents
-  insuranceFee: integer("insurance_fee").notNull(), // in cents
-  stripeSessionId: varchar("stripe_session_id", { length: 256 }),
+  insuranceFee: integer("insurance_fee").notNull().default(0), // in cents
+  stripeSessionId: varchar("stripe_session_id", { length: 256 }).notNull(),
   stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 256 }).notNull(),
-  status: varchar("status", { enum: ["pending", "completed", "failed"] }).notNull(),
+  stripeTransferId: varchar("stripe_transfer_id", { length: 256 }),
+  status: varchar("status", { enum: ["pending", "processing", "completed", "failed"] }).notNull(),
   payoutProcessed: boolean("payout_processed").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

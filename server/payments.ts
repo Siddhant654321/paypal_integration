@@ -57,11 +57,19 @@ export class PaymentService {
         sellerAccountId: sellerProfile.stripeAccountId
       });
 
-      // Create Stripe session
+      // Create Stripe checkout session with destination charge
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
         success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/auction/${auction.id}?payment_canceled=true`,
+        payment_intent_data: {
+          // Configure transfer to connected account
+          transfer_data: {
+            destination: sellerProfile.stripeAccountId,
+          },
+          // Set platform fee
+          application_fee_amount: platformFee + insuranceFee,
+        },
         line_items: [
           {
             price_data: {
@@ -98,12 +106,6 @@ export class PaymentService {
             quantity: 1,
           }] : []),
         ],
-        payment_intent_data: {
-          application_fee_amount: platformFee + insuranceFee,
-          transfer_data: {
-            destination: sellerProfile.stripeAccountId,
-          },
-        },
       });
 
       if (!session.url) {
