@@ -4,10 +4,13 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { type Auction } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
-import { Store, MapPin, CreditCard } from "lucide-react";
+import { Store, MapPin, CreditCard, Check, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { formatPrice } from "../utils/formatters";
 import React from 'react';
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Props = {
   auction: Auction;
@@ -42,8 +45,10 @@ function getValidImageUrl(auction: Auction): string {
   return '/images/placeholder.jpg';
 }
 
-export default function AuctionCard({ auction, showStatus, actions }: Props) {
+export default function AuctionCard({ auction, showStatus = false, actions }: Props) {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const now = new Date();
   const startDate = new Date(auction.startDate);
   const endDate = new Date(auction.endDate);
@@ -52,20 +57,54 @@ export default function AuctionCard({ auction, showStatus, actions }: Props) {
 
   // Check if current user is the winning bidder and payment is pending
   const isWinningBidder = user?.id === auction.winningBidderId;
+  const isSeller = user?.id === auction.sellerId;
   const needsPayment = isWinningBidder && auction.paymentStatus === "pending";
+  const isPendingSellerDecision = auction.status === "pending_seller_decision";
+
+  const handleSellerDecision = async (accept: boolean) => {
+    try {
+      const response = await apiRequest(
+        "POST",
+        `/api/auctions/${auction.id}/seller-decision`,
+        { accept }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to process decision");
+      }
+
+      toast({
+        title: accept ? "Bid Accepted" : "Auction Voided",
+        description: accept 
+          ? "The buyer will be notified to complete payment" 
+          : "The auction has been voided",
+      });
+
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ["/api/auctions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction.id}`] });
+
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to process your decision. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <Card className="overflow-hidden">
       <div className="aspect-square w-full bg-muted rounded-md overflow-hidden">
-          <img
-            src={getValidImageUrl(auction)}
-            alt={auction.title}
-            className="h-full w-full object-cover"
-            onError={(e) => {
-              e.currentTarget.src = '/images/placeholder.jpg';
-            }}
-          />
-        </div>
+        <img
+          src={getValidImageUrl(auction)}
+          alt={auction.title}
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            e.currentTarget.src = '/images/placeholder.jpg';
+          }}
+        />
+      </div>
       <CardContent className="p-4">
         <div className="flex gap-2 mb-2">
           <Badge>{auction.species}</Badge>
@@ -76,6 +115,9 @@ export default function AuctionCard({ auction, showStatus, actions }: Props) {
             <Badge variant={auction.approved ? "default" : "secondary"}>
               {auction.approved ? "Approved" : "Pending Approval"}
             </Badge>
+          )}
+          {isPendingSellerDecision && (
+            <Badge variant="warning">Pending Seller Decision</Badge>
           )}
         </div>
         <h3 className="text-lg font-semibold mb-2">{auction.title}</h3>
@@ -98,16 +140,38 @@ export default function AuctionCard({ auction, showStatus, actions }: Props) {
           </div>
           <div className="flex gap-2 items-center">
             {actions}
-            <Link href={`/auction/${auction.id}`}>
-              <Button variant="secondary">Bid Now</Button>
-            </Link>
+            {!isPendingSellerDecision && (
+              <Link href={`/auction/${auction.id}`}>
+                <Button variant="secondary">View Details</Button>
+              </Link>
+            )}
           </div>
         </div>
 
-        {/* Only show Pay Now button to the auction winner */}
-        {auction.status === "ended" && 
-         ((isWinningBidder && needsPayment) || 
-          (user?.id === auction.winningBidderId)) && (
+        {/* Show seller decision buttons if pending seller decision */}
+        {isPendingSellerDecision && isSeller && (
+          <div className="flex gap-2 w-full mt-2">
+            <Button 
+              onClick={() => handleSellerDecision(true)}
+              className="flex-1"
+              variant="default"
+            >
+              <Check className="mr-2 h-4 w-4" />
+              Accept Bid
+            </Button>
+            <Button 
+              onClick={() => handleSellerDecision(false)}
+              className="flex-1"
+              variant="destructive"
+            >
+              <X className="mr-2 h-4 w-4" />
+              Void Auction
+            </Button>
+          </div>
+        )}
+
+        {/* Only show Pay Now button to the auction winner when payment is needed */}
+        {auction.status === "ended" && needsPayment && (
           <Link href={`/auction/${auction.id}/pay`}>
             <Button size="sm" className="w-full" variant="default">
               <CreditCard className="mr-2 h-4 w-4" />

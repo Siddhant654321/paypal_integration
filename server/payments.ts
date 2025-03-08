@@ -42,20 +42,26 @@ export class PaymentService {
         throw new Error("Auction not found");
       }
 
-      // Check if auction is ready for payment
-      if (auction.status !== "ended" && auction.status !== "pending_payment") {
-        throw new Error("Auction is not ready for payment");
-      }
-
       // Verify if the buyer is the winning bidder
       if (auction.winningBidderId !== buyerId) {
         throw new Error("Only the winning bidder can make payment");
       }
 
-      // If auction ended below reserve, check if seller accepted
-      if (auction.currentPrice < auction.reservePrice && 
-          auction.status !== "pending_payment") {
+      // Check auction status for payment eligibility
+      const validPaymentStatuses = ["ended", "pending_payment"];
+      if (!validPaymentStatuses.includes(auction.status)) {
+        throw new Error("Auction is not ready for payment");
+      }
+
+      // If auction ended below reserve and seller hasn't accepted
+      if (auction.currentPrice < auction.reservePrice && auction.status !== "pending_payment") {
         throw new Error("Waiting for seller decision on below-reserve bid");
+      }
+
+      // Get seller's Stripe account ID
+      const sellerProfile = await storage.getProfile(auction.sellerId);
+      if (!sellerProfile?.stripeAccountId) {
+        throw new Error("Seller has not completed Stripe onboarding");
       }
 
       // Calculate amounts
@@ -64,25 +70,6 @@ export class PaymentService {
       const totalAmount = baseAmount + insuranceFee;
       const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const sellerPayout = baseAmount - platformFee;
-
-      // Get seller's Stripe account ID
-      const sellerProfile = await storage.getProfile(auction.sellerId);
-      if (!sellerProfile?.stripeAccountId) {
-        throw new Error("Seller has not completed Stripe onboarding");
-      }
-
-      // Create payment record
-      const paymentData = {
-        auctionId,
-        buyerId,
-        sellerId: auction.sellerId,
-        amount: totalAmount,
-        platformFee,
-        sellerPayout,
-        insuranceFee,
-        status: 'pending' as const,
-        stripePaymentIntentId: '',
-      };
 
       console.log(`[PAYMENTS] Creating Stripe checkout session with data:`, {
         auctionId,
@@ -149,16 +136,23 @@ export class PaymentService {
         url: session.url
       });
 
-      // Update the payment with the Stripe session ID
-      const payment = await storage.insertPayment({
-        ...paymentData,
+      // Create payment record
+      const payment = await storage.createPayment({
+        auctionId,
+        buyerId,
+        sellerId: auction.sellerId,
+        amount: totalAmount,
+        platformFee,
+        sellerPayout,
+        insuranceFee,
+        status: 'pending',
         stripePaymentIntentId: session.payment_intent as string,
       });
 
       // Mark auction as payment processing
       await storage.updateAuction(auctionId, {
-        paymentStatus: "pending",
         status: "pending_payment",
+        paymentStatus: "pending"
       });
 
       return {
@@ -192,8 +186,8 @@ export class PaymentService {
 
       // Update auction status
       await storage.updateAuction(payment.auctionId, {
-        paymentStatus: "completed",
         status: "pending_fulfillment",
+        paymentStatus: "completed"
       });
 
       // Notify the seller
@@ -226,9 +220,9 @@ export class PaymentService {
 
       // Update auction status - if below reserve, return to pending seller decision
       await storage.updateAuction(payment.auctionId, {
-        paymentStatus: "failed",
         status: auction.currentPrice < auction.reservePrice ? 
-          "pending_seller_decision" : "ended"
+          "pending_seller_decision" : "ended",
+        paymentStatus: "failed"
       });
 
       // Notify the seller
