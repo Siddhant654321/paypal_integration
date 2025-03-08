@@ -864,6 +864,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Endpoint for sellers to accept/reject below-reserve bids
+    router.post("/api/auctions/:id/seller-decision", requireAuth, requireApprovedSeller, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        const { accept } = req.body;
+
+        if (typeof accept !== 'boolean') {
+          return res.status(400).json({ message: "Decision (accept) must be provided as true or false" });
+        }
+
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Verify the seller owns this auction
+        if (!req.user || auction.sellerId !== req.user.id) {
+          return res.status(403).json({ message: "You can only make decisions for your own auctions" });
+        }
+
+        // Verify auction is in correct state
+        if (auction.status !== "pending_seller_decision") {
+          return res.status(400).json({ message: "This auction is not pending seller decision" });
+        }
+
+        if (accept) {
+          // Accept the bid - move to payment pending
+          await storage.updateAuction(auctionId, {
+            status: "ended",
+            paymentStatus: "pending"
+          });
+
+          // Notify the winning bidder
+          if (auction.winningBidderId) {
+            await NotificationService.notifyBuyerBidAccepted(
+              auction.winningBidderId,
+              auction.title,
+              auction.currentPrice
+            );
+          }
+        } else {
+          // Reject the bid - void the auction
+          await storage.updateAuction(auctionId, {
+            status: "voided",
+            paymentStatus: "failed"
+          });
+
+          // Notify the winning bidder
+          if (auction.winningBidderId) {
+            await NotificationService.notifyBuyerBidRejected(
+              auction.winningBidderId,
+              auction.title,
+              auction.currentPrice
+            );
+          }
+        }
+
+        res.json({
+          message: accept ? "Bid accepted, buyer will be notified to complete payment" : "Auction voided, buyer will be notified",
+          auction: await storage.getAuction(auctionId)
+        });
+
+      } catch (error) {
+        console.error("[AUCTION] Error handling seller decision:", error);
+        res.status(500).json({ 
+          message: "Failed to process seller decision",
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    });
+
     // Admin profile management
     router.delete("/api/admin/profiles/:userId", requireAdmin, async (req, res) => {
       try {

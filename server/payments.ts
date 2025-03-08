@@ -42,6 +42,22 @@ export class PaymentService {
         throw new Error("Auction not found");
       }
 
+      // Check if auction is ready for payment
+      if (auction.status !== "ended" && auction.status !== "pending_payment") {
+        throw new Error("Auction is not ready for payment");
+      }
+
+      // Verify if the buyer is the winning bidder
+      if (auction.winningBidderId !== buyerId) {
+        throw new Error("Only the winning bidder can make payment");
+      }
+
+      // If auction ended below reserve, check if seller accepted
+      if (auction.currentPrice < auction.reservePrice && 
+          auction.status !== "pending_payment") {
+        throw new Error("Waiting for seller decision on below-reserve bid");
+      }
+
       // Calculate amounts
       const baseAmount = auction.currentPrice;
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
@@ -64,8 +80,8 @@ export class PaymentService {
         platformFee,
         sellerPayout,
         insuranceFee,
-        stripePaymentIntentId: '',
         status: 'pending' as const,
+        stripePaymentIntentId: '',
       };
 
       console.log(`[PAYMENTS] Creating Stripe checkout session with data:`, {
@@ -141,6 +157,7 @@ export class PaymentService {
 
       // Mark auction as payment processing
       await storage.updateAuction(auctionId, {
+        paymentStatus: "pending",
         status: "pending_payment",
       });
 
@@ -175,6 +192,7 @@ export class PaymentService {
 
       // Update auction status
       await storage.updateAuction(payment.auctionId, {
+        paymentStatus: "completed",
         status: "pending_fulfillment",
       });
 
@@ -185,9 +203,6 @@ export class PaymentService {
         "completed"
       );
 
-      // We'll create the payout after fulfillment now, not immediately
-      // The payout will be triggered in the fulfillment route when 
-      // tracking information is provided
     } catch (error) {
       console.error("Error handling payment success:", error);
       throw error;
@@ -201,12 +216,19 @@ export class PaymentService {
         throw new Error("Payment not found");
       }
 
+      const auction = await storage.getAuction(payment.auctionId);
+      if (!auction) {
+        throw new Error("Auction not found");
+      }
+
       // Update payment status
       await storage.updatePaymentStatus(payment.id, "failed");
 
-      // Update auction status
+      // Update auction status - if below reserve, return to pending seller decision
       await storage.updateAuction(payment.auctionId, {
-        status: "active",
+        paymentStatus: "failed",
+        status: auction.currentPrice < auction.reservePrice ? 
+          "pending_seller_decision" : "ended"
       });
 
       // Notify the seller

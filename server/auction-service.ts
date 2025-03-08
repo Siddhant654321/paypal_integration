@@ -96,7 +96,7 @@ export class AuctionService {
           );
 
           if (existingNotifications.length > 0) {
-            console.log(`[AUCTION SERVICE] Skipping auction #${auction.id} - already sent completion notifications (${existingNotifications.length} found)`);
+            console.log(`[AUCTION SERVICE] Skipping auction #${auction.id} - already sent completion notifications`);
             continue;
           }
 
@@ -113,13 +113,29 @@ export class AuctionService {
             });
             winningBid = sortedBids[0];
 
-            // Update the auction with the winning bidder
+            // Check if winning bid meets reserve price
+            const metReserve = winningBid.amount >= auction.reservePrice;
+            console.log(`[AUCTION SERVICE] Auction #${auction.id} final bid: $${winningBid.amount/100}, reserve: $${auction.reservePrice/100}, met reserve: ${metReserve}`);
+
+            // Update the auction with the winning bidder and appropriate status
             await storage.updateAuction(auction.id, {
               winningBidderId: winningBid.bidderId,
-              status: "ended"
+              status: metReserve ? "ended" : "pending_seller_decision",
+              paymentStatus: metReserve ? "pending" : "failed"
             });
+
+            // Notify seller if below reserve
+            if (!metReserve) {
+              await NotificationService.notifySellerBelowReserve(
+                auction.sellerId,
+                auction.title,
+                winningBid.amount,
+                auction.reservePrice,
+                auction.id
+              );
+            }
           } else {
-            // No bids placed, just mark as ended
+            // No bids placed, mark as ended
             await storage.updateAuction(auction.id, {
               status: "ended"
             });
@@ -129,13 +145,16 @@ export class AuctionService {
           const uniqueBidderIds = [...new Set(bids.map(bid => bid.bidderId))];
           for (const bidderId of uniqueBidderIds) {
             const isWinner = winningBid && bidderId === winningBid.bidderId;
+            const metReserve = winningBid && winningBid.amount >= auction.reservePrice;
+
             await NotificationService.notifyAuctionComplete(
               bidderId,
               auction.title,
               isWinner,
               winningBid ? winningBid.amount : auction.currentPrice,
               false,
-              auction.id
+              auction.id,
+              isWinner && !metReserve ? "below_reserve" : undefined
             );
           }
 
@@ -146,7 +165,8 @@ export class AuctionService {
             false,
             winningBid ? winningBid.amount : auction.currentPrice,
             true,
-            auction.id
+            auction.id,
+            winningBid && winningBid.amount < auction.reservePrice ? "below_reserve" : undefined
           );
         }
       }
