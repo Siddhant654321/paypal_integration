@@ -54,7 +54,8 @@ export class PaymentService {
       }
 
       // If auction ended below reserve and seller hasn't accepted
-      if (auction.currentPrice < auction.reservePrice && auction.status !== "pending_payment") {
+      if (auction.currentPrice < auction.reservePrice && 
+          auction.status !== "pending_payment") {
         throw new Error("Waiting for seller decision on below-reserve bid");
       }
 
