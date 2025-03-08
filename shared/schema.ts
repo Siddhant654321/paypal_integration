@@ -121,6 +121,7 @@ export const payments = pgTable("payments", {
   platformFee: integer("platform_fee").notNull(), // in cents
   sellerPayout: integer("seller_payout").notNull(), // in cents
   insuranceFee: integer("insurance_fee").notNull(), // in cents
+  stripeSessionId: varchar("stripe_session_id"),
   stripePaymentIntentId: varchar("stripe_payment_intent_id").notNull(),
   status: varchar("status", { enum: ["pending", "completed", "failed"] }).notNull(),
   payoutProcessed: boolean("payout_processed").default(false).notNull(),

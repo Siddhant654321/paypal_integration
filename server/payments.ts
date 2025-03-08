@@ -124,7 +124,7 @@ export class PaymentService {
       console.log("[PAYMENTS] Creating payment record:", JSON.stringify(paymentData));
 
       try {
-        // Try to insert with payoutProcessed field
+        // Insert payment with full data including session ID
         const payment = await storage.insertPayment({
           ...paymentData,
           payoutProcessed: false
@@ -144,22 +144,41 @@ export class PaymentService {
           payment,
         };
       } catch (e) {
-        console.error("[PAYMENTS] Error with payoutProcessed, trying without it:", e);
-
-        // If that fails, try without the payoutProcessed field
-        const payment = await storage.insertPayment(paymentData);
-
-        // Update auction status
-        await storage.updateAuction(auctionId, {
-          paymentStatus: "pending",
-        });
-
-        console.log(`[PAYMENTS] Checkout session created (fallback): ${session.id}`);
-        return {
-          sessionId: session.id,
-          url: session.url || "",
-          payment,
-        };
+        console.error("[PAYMENTS] Error creating payment record:", e);
+        
+        // Try with minimal required fields as a fallback
+        try {
+          const minimalPaymentData = {
+            auctionId,
+            buyerId,
+            sellerId: auction.sellerId,
+            amount: totalAmount,
+            platformFee,
+            sellerPayout,
+            insuranceFee: insuranceFee || 0,
+            status: 'pending',
+            stripePaymentIntentId: session.payment_intent as string,
+          };
+          
+          console.log("[PAYMENTS] Trying with minimal payment data:", minimalPaymentData);
+          const payment = await storage.insertPayment(minimalPaymentData);
+          
+          // Update auction status
+          await storage.updateAuction(auctionId, {
+            paymentStatus: "pending",
+          });
+          
+          console.log(`[PAYMENTS] Checkout session created (fallback): ${session.id}`);
+          return {
+            sessionId: session.id,
+            url: session.url || "",
+            payment,
+          };
+        } catch (fallbackError) {
+          console.error("[PAYMENTS] Fallback payment creation also failed:", fallbackError);
+          // Throw a more descriptive error
+          throw new Error(`Failed to create payment record: ${e.message}. Fallback also failed: ${fallbackError.message}`);
+        }
       }
     } catch (error) {
       console.error("[PAYMENTS] Error creating checkout session:", error);
