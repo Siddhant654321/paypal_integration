@@ -27,7 +27,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { CreditCard } from "lucide-react";
 
 
 export default function AuctionPage() {
@@ -85,7 +86,10 @@ export default function AuctionPage() {
   // Mutation for payment creation
   const paymentMutation = useMutation({
     mutationFn: async ({ includeInsurance = false }) => {
-      console.log("Creating checkout session...");
+      console.log("<div className="flex items-center gap-2">
+  <CreditCard className="h-4 w-4 animate-pulse" />
+  <span>Creating checkout session...</span>
+</div>");
       const response = await fetch(`/api/auctions/${auction?.id}/pay`, {
         method: 'POST',
         headers: {
