@@ -144,9 +144,30 @@ export class PaymentService {
 
       console.log("[PAYMENTS] Payment data for validation:", paymentData);
       
-      // Insert the payment record
-      const validatedPayment = insertPaymentSchema.parse(paymentData);
-      const payment = await storage.insertPayment(validatedPayment);
+      try {
+        // Insert the payment record
+        const validatedPayment = insertPaymentSchema.parse(paymentData);
+        const payment = await storage.insertPayment(validatedPayment);
+      } catch (insertError) {
+        console.error("[PAYMENTS] Error inserting payment record:", insertError);
+        
+        // Try without payoutProcessed if that's causing the issue
+        const fallbackPaymentData = {
+          auctionId,
+          buyerId,
+          sellerId: auction.sellerId,
+          amount: totalAmount,
+          platformFee,
+          sellerPayout,
+          insuranceFee,
+          status: 'pending',
+          stripePaymentIntentId: session.payment_intent as string,
+        };
+        
+        console.log("[PAYMENTS] Attempting fallback payment insert");
+        const validatedFallbackPayment = insertPaymentSchema.parse(fallbackPaymentData);
+        const payment = await storage.insertPayment(validatedFallbackPayment);
+      }
 
       // Update auction status
       await storage.updateAuction(auctionId, {
