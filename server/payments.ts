@@ -175,4 +175,109 @@ export class PaymentService {
       throw error;
     }
   }
+
+  static async createCheckoutSession(
+    auctionId: number,
+    buyerId: number,
+    includeInsurance: boolean = false,
+    baseUrl: string
+  ) {
+    try {
+      // Get auction details
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        throw new Error("Auction not found");
+      }
+
+      // Verify buyer is winning bidder
+      if (auction.winningBidderId !== buyerId) {
+        throw new Error("Only the winning bidder can make payment");
+      }
+
+      // Get seller's Stripe account
+      const sellerProfile = await storage.getProfile(auction.sellerId);
+      if (!sellerProfile?.stripeAccountId) {
+        throw new Error("Seller has not completed their Stripe account setup");
+      }
+
+      // Calculate amounts
+      const baseAmount = auction.currentPrice;
+      const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
+      const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
+      const totalAmount = baseAmount + platformFee + insuranceFee;
+
+      console.log("[PAYMENTS] Creating checkout session:", {
+        baseAmount,
+        platformFee,
+        insuranceFee,
+        totalAmount,
+        sellerId: auction.sellerId,
+        sellerStripeAccount: sellerProfile.stripeAccountId
+      });
+
+      // Create a Stripe Checkout Session
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'payment',
+        success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/auctions/${auctionId}`,
+        payment_intent_data: {
+          transfer_data: {
+            destination: sellerProfile.stripeAccountId,
+          },
+          application_fee_amount: platformFee + insuranceFee,
+        },
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Payment for "${auction.title}"`,
+                description: 'Auction payment including fees'
+              },
+              unit_amount: totalAmount,
+            },
+            quantity: 1,
+          },
+        ],
+        metadata: {
+          auctionId: auction.id.toString(),
+          buyerId: buyerId.toString(),
+          sellerId: auction.sellerId.toString(),
+        }
+      });
+
+      // Create payment record
+      const payment = await storage.insertPayment({
+        auctionId,
+        buyerId,
+        sellerId: auction.sellerId,
+        amount: totalAmount,
+        platformFee,
+        sellerPayout: baseAmount - platformFee,
+        insuranceFee,
+        stripeSessionId: session.id,
+        stripePaymentIntentId: session.payment_intent as string,
+        status: 'pending'
+      });
+
+      // Update auction status
+      await storage.updateAuction(auctionId, {
+        paymentStatus: "pending"
+      });
+
+      return {
+        sessionId: session.id,
+        url: session.url,
+        payment
+      };
+
+    } catch (error) {
+      console.error("[PAYMENTS] Error creating checkout session:", error);
+      if (error instanceof Stripe.errors.StripeError) {
+        throw new Error(`Stripe error: ${error.message}`);
+      }
+      throw error;
+    }
+  }
 }
