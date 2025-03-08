@@ -61,14 +61,32 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
   const needsPayment = isWinningBidder && auction.paymentStatus === "pending";
   const isPendingSellerDecision = auction.status === "pending_seller_decision";
 
-  console.log(`[AuctionCard] Rendering auction #${auction.id}:`, {
+  console.log(`[AuctionCard] Auction #${auction.id} status check:`, {
     status: auction.status,
     currentPrice: auction.currentPrice,
     reservePrice: auction.reservePrice,
     isPendingSellerDecision,
-    isWinningBidder,
-    needsPayment
+    winningBidderId: auction.winningBidderId,
+    isSeller,
+    isWinningBidder
   });
+
+  const getStatusBadge = () => {
+    if (auction.status === "pending_seller_decision") {
+      return <Badge variant="warning">Pending Seller Decision</Badge>;
+    }
+    if (showStatus) {
+      return (
+        <Badge variant={auction.approved ? "default" : "secondary"}>
+          {auction.approved ? "Approved" : "Pending Approval"}
+        </Badge>
+      );
+    }
+    if (auction.status === "voided") {
+      return <Badge variant="destructive">Voided</Badge>;
+    }
+    return null;
+  };
 
   const handleSellerDecision = async (accept: boolean) => {
     try {
@@ -84,8 +102,8 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
 
       toast({
         title: accept ? "Bid Accepted" : "Auction Voided",
-        description: accept 
-          ? "The buyer will be notified to complete payment" 
+        description: accept
+          ? "The buyer will be notified to complete payment"
           : "The auction has been voided",
       });
 
@@ -100,24 +118,6 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
         variant: "destructive",
       });
     }
-  };
-
-  // Get the auction status display
-  const getStatusBadge = () => {
-    if (isPendingSellerDecision) {
-      return <Badge variant="warning">Pending Seller Decision</Badge>;
-    }
-    if (showStatus) {
-      return (
-        <Badge variant={auction.approved ? "default" : "secondary"}>
-          {auction.approved ? "Approved" : "Pending Approval"}
-        </Badge>
-      );
-    }
-    if (auction.status === "voided") {
-      return <Badge variant="destructive">Voided</Badge>;
-    }
-    return null;
   };
 
   return (
@@ -150,9 +150,9 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
           <div>
             <div className="font-semibold">${(auction.currentPrice / 100).toFixed(2)}</div>
             <div className="text-sm text-muted-foreground">
-              {isUpcoming 
+              {isUpcoming
                 ? "Starts " + formatDistanceToNow(startDate, { addSuffix: true })
-                : isActive 
+                : isActive
                   ? "Ends " + formatDistanceToNow(endDate, { addSuffix: true })
                   : "Ended " + formatDistanceToNow(endDate, { addSuffix: true })
               }
@@ -171,7 +171,7 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
         {/* Show seller decision buttons if pending seller decision */}
         {isPendingSellerDecision && isSeller && (
           <div className="flex gap-2 w-full mt-2">
-            <Button 
+            <Button
               onClick={() => handleSellerDecision(true)}
               className="flex-1"
               variant="default"
@@ -179,7 +179,7 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
               <Check className="mr-2 h-4 w-4" />
               Accept Bid
             </Button>
-            <Button 
+            <Button
               onClick={() => handleSellerDecision(false)}
               className="flex-1"
               variant="destructive"

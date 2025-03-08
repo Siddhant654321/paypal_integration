@@ -118,23 +118,27 @@ export class AuctionService {
             });
             winningBid = sortedBids[0];
 
-            console.log(`[AUCTION SERVICE] Auction #${auction.id} final status:`, {
-              highestBid: winningBid.amount,
+            console.log(`[AUCTION SERVICE] Processing auction completion:`, {
+              auctionId: auction.id,
+              title: auction.title,
+              currentPrice: winningBid.amount,
               reservePrice: auction.reservePrice,
-              belowReserve: winningBid.amount < auction.reservePrice,
-              currentStatus: auction.status
+              belowReserve: winningBid.amount < auction.reservePrice
             });
 
-            // Update the auction with the winning bidder and appropriate status
-            const newStatus = winningBid.amount >= auction.reservePrice ? "ended" : "pending_seller_decision";
-            const newPaymentStatus = winningBid.amount >= auction.reservePrice ? "pending" : "failed";
+            // Set appropriate status based on reserve price
+            const belowReserve = winningBid.amount < auction.reservePrice;
+            const newStatus = belowReserve ? "pending_seller_decision" : "ended";
+            const newPaymentStatus = belowReserve ? "failed" : "pending";
 
-            console.log(`[AUCTION SERVICE] Updating auction #${auction.id} status:`, {
+            console.log(`[AUCTION SERVICE] Setting auction status:`, {
+              auctionId: auction.id,
               newStatus,
               newPaymentStatus,
-              winningBidderId: winningBid.bidderId
+              belowReserve
             });
 
+            // Update auction status
             await storage.updateAuction(auction.id, {
               winningBidderId: winningBid.bidderId,
               currentPrice: winningBid.amount,
@@ -142,9 +146,9 @@ export class AuctionService {
               paymentStatus: newPaymentStatus
             });
 
-            // Notify seller if below reserve
-            if (winningBid.amount < auction.reservePrice) {
-              console.log(`[AUCTION SERVICE] Auction #${auction.id} ended below reserve, notifying seller`);
+            // If below reserve, notify seller
+            if (belowReserve) {
+              console.log(`[AUCTION SERVICE] Notifying seller of below-reserve bid`);
               await NotificationService.notifySellerBelowReserve(
                 auction.sellerId,
                 auction.title,
