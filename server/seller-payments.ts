@@ -7,43 +7,40 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-02-24.acacia"
+  apiVersion: "2023-10-16"
 });
 
 const PRODUCTION_URL = 'https://poultryauction.co';
 const DEVELOPMENT_URL = 'http://localhost:5000';
 
 // Use production URL if we're in production, otherwise use development URL
-// Added explicit check for Replit environment
 const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
-const BASE_URL = IS_PRODUCTION ? PRODUCTION_URL : DEVELOPMENT_URL;
+const BASE_URL = IS_PRODUCTION ? 
+  `https://${process.env.REPL_SLUG}.replit.dev` : 
+  DEVELOPMENT_URL;
 
-console.log(`Using base URL for Stripe Connect: ${BASE_URL}`);
+console.log(`[STRIPE CONNECT] Using base URL: ${BASE_URL}`);
 
 export class SellerPaymentService {
   static async createSellerAccount(profile: Profile): Promise<{ accountId: string; url: string }> {
     try {
-      console.log("Creating seller account for:", profile.email);
-      console.log("Using base URL:", BASE_URL);
+      console.log("[STRIPE CONNECT] Creating seller account for:", profile.email);
 
       // Clean up any existing account first
       if (profile.stripeAccountId) {
         try {
-          console.log("Deleting existing Stripe account:", profile.stripeAccountId);
+          console.log("[STRIPE CONNECT] Deleting existing account:", profile.stripeAccountId);
           await stripe.accounts.del(profile.stripeAccountId);
-          console.log("Successfully deleted existing account");
         } catch (error) {
-          console.warn("Could not delete existing account:", error);
+          console.warn("[STRIPE CONNECT] Could not delete existing account:", error);
         }
       }
 
       // Create a new Connect Express account
-      console.log("Creating new Stripe Connect account");
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'US',
         email: profile.email,
-        business_type: 'individual',
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
@@ -53,7 +50,8 @@ export class SellerPaymentService {
           mcc: "0742", // Veterinary Services, which includes animal breeding
         },
       });
-      console.log("Stripe account created with ID:", account.id);
+
+      console.log("[STRIPE CONNECT] Account created:", account.id);
 
       // Create an account link for onboarding
       const accountLink = await stripe.accountLinks.create({
@@ -65,10 +63,13 @@ export class SellerPaymentService {
       });
 
       if (!accountLink.url) {
-        throw new Error("Failed to generate Stripe Connect URL");
+        throw new Error("Failed to generate Stripe Connect onboarding URL");
       }
 
-      console.log("Generated account link with return URL:", `${BASE_URL}/seller/dashboard?success=true`);
+      console.log("[STRIPE CONNECT] Generated onboarding link:", {
+        accountId: account.id,
+        returnUrl: `${BASE_URL}/seller/dashboard?success=true`
+      });
 
       // Update profile with Stripe account ID and initial status
       await storage.updateSellerStripeAccount(profile.userId, {
@@ -80,59 +81,75 @@ export class SellerPaymentService {
         accountId: account.id,
         url: accountLink.url,
       };
-
     } catch (error) {
-      console.error("Error creating seller account:", error);
+      console.error("[STRIPE CONNECT] Error creating seller account:", error);
+      if (error instanceof Stripe.errors.StripeError) {
+        throw new Error(`Stripe error: ${error.message}`);
+      }
       throw error;
     }
   }
 
   static async getAccountStatus(accountId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
     try {
-      console.log("[STRIPE] Checking account status for:", accountId);
-
       if (!accountId) {
-        console.log("[STRIPE] No account ID provided, returning not_started");
         return "not_started";
       }
 
       const account = await stripe.accounts.retrieve(accountId);
-      console.log("[STRIPE] Retrieved account status:", {
+
+      console.log("[STRIPE CONNECT] Account status check:", {
+        accountId,
         charges_enabled: account.charges_enabled,
         payouts_enabled: account.payouts_enabled,
         details_submitted: account.details_submitted,
         requirements: account.requirements?.currently_due,
-        disabled_reason: account.requirements?.disabled_reason
       });
 
       if (account.charges_enabled && account.payouts_enabled) {
-        console.log("[STRIPE] Account fully verified");
-        
-        // We don't have a findProfileByStripeAccountId function, so we'll skip this part
-        // Instead, the status will be updated when viewed in the seller dashboard
-        
         return "verified";
-      } else if (account.details_submitted) {
-        console.log("[STRIPE] Account pending verification");
+      } 
+
+      if (account.details_submitted) {
         return "pending";
-      } else if (account.requirements?.disabled_reason) {
-        console.log("[STRIPE] Account rejected:", account.requirements.disabled_reason);
+      }
+
+      if (account.requirements?.disabled_reason) {
         return "rejected";
       }
 
-      console.log("[STRIPE] Account pending completion");
       return "pending";
     } catch (error) {
-      console.error("[STRIPE] Error checking account status:", error);
-      
-      // Safer error handling to avoid "instanceof" issues
-      if (error && typeof error === 'object' && 'type' in error && error.type === 'StripePermissionError') {
-        console.log("[STRIPE] Permission error, marking as rejected");
+      console.error("[STRIPE CONNECT] Error checking account status:", error);
+      if (error instanceof Stripe.errors.StripeError && 
+          error.type === 'StripePermissionError') {
         return "rejected";
       }
-      
-      console.log("[STRIPE] Unknown error, marking as not_started");
       return "not_started";
+    }
+  }
+
+  static async refreshOnboardingLink(accountId: string): Promise<string> {
+    try {
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${BASE_URL}/seller/dashboard?refresh=true`,
+        return_url: `${BASE_URL}/seller/dashboard?success=true`,
+        type: 'account_onboarding',
+        collect: 'eventually_due',
+      });
+
+      if (!accountLink.url) {
+        throw new Error("Failed to generate Stripe Connect onboarding URL");
+      }
+
+      return accountLink.url;
+    } catch (error) {
+      console.error("[STRIPE CONNECT] Error refreshing onboarding link:", error);
+      if (error instanceof Stripe.errors.StripeError) {
+        throw new Error(`Stripe error: ${error.message}`);
+      }
+      throw error;
     }
   }
 
@@ -142,11 +159,10 @@ export class SellerPaymentService {
         stripeAccount: accountId,
       });
     } catch (error) {
-      console.error("Error getting balance:", error);
+      console.error("[STRIPE CONNECT] Error getting balance:", error);
       throw error;
     }
   }
-
   static async getPayoutSchedule(accountId: string) {
     try {
       const account = await stripe.accounts.retrieve(accountId);
