@@ -27,7 +27,7 @@ export class PaymentService {
     buyerId: number,
     includeInsurance: boolean = false,
     baseUrl: string = BASE_URL
-  ) {
+  ): Promise<{ sessionId: string; url: string; payment: any }> {
     try {
       console.log(`[PAYMENTS] Creating checkout session for auction ${auctionId}, buyer ${buyerId}`);
 
@@ -37,98 +37,77 @@ export class PaymentService {
         throw new Error("Auction not found");
       }
 
-      console.log(`[PAYMENTS] Validating auction ${auctionId}:`, {
-        status: auction.status,
-        winningBidderId: auction.winningBidderId,
-        currentPrice: auction.currentPrice,
-        reservePrice: auction.reservePrice
-      });
-
-      // Verify if the buyer is the winning bidder
-      if (auction.winningBidderId !== buyerId) {
-        throw new Error("Only the winning bidder can make payment");
-      }
-
-      // Check auction status for payment eligibility
-      if (auction.status !== "ended" && auction.status !== "pending_payment") {
-        throw new Error("Auction is not ready for payment");
-      }
+      // Calculate fees
+      const amount = auction.currentPrice;
+      const platformFee = Math.round(amount * PLATFORM_FEE_PERCENTAGE);
+      const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
+      const totalAmount = amount + platformFee + insuranceFee;
+      const sellerPayout = amount;
 
       // Get seller's Stripe account ID
       const sellerProfile = await storage.getProfile(auction.sellerId);
       if (!sellerProfile?.stripeAccountId) {
-        throw new Error("Seller has not completed Stripe onboarding");
+        throw new Error("Seller has not completed their Stripe account setup");
       }
 
-      // Calculate amounts
-      const baseAmount = auction.currentPrice;
-      const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
-      const totalAmount = baseAmount + insuranceFee;
-      const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
-      const sellerPayout = baseAmount - platformFee;
+      // Prepare line items for checkout
+      const lineItems = [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: auction.title,
+              description: `Auction #${auction.id}`,
+              images: [auction.imageUrl],
+            },
+            unit_amount: amount, // Amount in cents
+          },
+          quantity: 1,
+        },
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "Platform Fee",
+              description: "10% fee for using the platform",
+            },
+            unit_amount: platformFee, // Amount in cents
+          },
+          quantity: 1,
+        }
+      ];
 
-      console.log(`[PAYMENTS] Payment details:`, {
-        baseAmount,
-        insuranceFee,
-        totalAmount,
-        platformFee,
-        sellerPayout
-      });
+      // Add insurance if selected
+      if (includeInsurance) {
+        lineItems.push({
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "Insurance Fee",
+              description: "Insurance for your purchase",
+            },
+            unit_amount: insuranceFee, // Amount in cents
+          },
+          quantity: 1,
+        });
+      }
 
-      // Create Stripe Checkout session
+      // Create Stripe Checkout Session
       const session = await stripe.checkout.sessions.create({
-        mode: 'payment',
-        payment_method_types: ['card'],
+        payment_method_types: ["card"],
+        mode: "payment",
+        line_items: lineItems,
+        success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/auctions/${auction.id}?payment_canceled=true`,
         payment_intent_data: {
-          application_fee_amount: platformFee,
+          application_fee_amount: platformFee + insuranceFee,
           transfer_data: {
             destination: sellerProfile.stripeAccountId,
           },
-          metadata: {
-            auctionId: auctionId.toString(),
-            buyerId: buyerId.toString(),
-            sellerId: auction.sellerId.toString(),
-          },
         },
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: auction.title,
-                description: `Auction Payment - ${auction.species}`,
-              },
-              unit_amount: baseAmount,
-            },
-            quantity: 1,
-          },
-          ...(includeInsurance ? [{
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: 'Shipping Insurance',
-                description: 'Insurance coverage for shipping',
-              },
-              unit_amount: INSURANCE_FEE,
-            },
-            quantity: 1,
-          }] : []),
-        ],
-        metadata: {
-          auctionId: auctionId.toString(),
-          buyerId: buyerId.toString(),
-          sellerId: auction.sellerId.toString(),
-          includeInsurance: includeInsurance.toString(),
-        },
-        success_url: `${baseUrl}/auction/${auctionId}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/auction/${auctionId}?payment=cancelled`,
       });
 
-      if (!session.url) {
-        throw new Error("Failed to generate Stripe checkout URL");
-      }
-
-      // Insert payment record
+      // Create a payment record
       const paymentData = {
         auctionId,
         buyerId,
@@ -136,51 +115,52 @@ export class PaymentService {
         amount: totalAmount,
         platformFee,
         sellerPayout,
-        insuranceFee,
+        insuranceFee: insuranceFee || 0,
         status: 'pending',
+        stripeSessionId: session.id,
         stripePaymentIntentId: session.payment_intent as string,
-        payoutProcessed: false,
       };
 
-      console.log("[PAYMENTS] Payment data for validation:", paymentData);
-      
+      console.log("[PAYMENTS] Creating payment record:", JSON.stringify(paymentData));
+
       try {
-        // Insert the payment record
-        const validatedPayment = insertPaymentSchema.parse(paymentData);
-        const payment = await storage.insertPayment(validatedPayment);
-      } catch (insertError) {
-        console.error("[PAYMENTS] Error inserting payment record:", insertError);
-        
-        // Try without payoutProcessed if that's causing the issue
-        const fallbackPaymentData = {
-          auctionId,
-          buyerId,
-          sellerId: auction.sellerId,
-          amount: totalAmount,
-          platformFee,
-          sellerPayout,
-          insuranceFee,
-          status: 'pending',
-          stripePaymentIntentId: session.payment_intent as string,
+        // Try to insert with payoutProcessed field
+        const payment = await storage.insertPayment({
+          ...paymentData,
+          payoutProcessed: false
+        });
+
+        console.log("[PAYMENTS] Payment record created successfully:", payment);
+
+        // Update auction status
+        await storage.updateAuction(auctionId, {
+          paymentStatus: "pending",
+        });
+
+        console.log(`[PAYMENTS] Checkout session created: ${session.id}`);
+        return {
+          sessionId: session.id,
+          url: session.url || "",
+          payment,
         };
-        
-        console.log("[PAYMENTS] Attempting fallback payment insert");
-        const validatedFallbackPayment = insertPaymentSchema.parse(fallbackPaymentData);
-        const payment = await storage.insertPayment(validatedFallbackPayment);
+      } catch (e) {
+        console.error("[PAYMENTS] Error with payoutProcessed, trying without it:", e);
+
+        // If that fails, try without the payoutProcessed field
+        const payment = await storage.insertPayment(paymentData);
+
+        // Update auction status
+        await storage.updateAuction(auctionId, {
+          paymentStatus: "pending",
+        });
+
+        console.log(`[PAYMENTS] Checkout session created (fallback): ${session.id}`);
+        return {
+          sessionId: session.id,
+          url: session.url || "",
+          payment,
+        };
       }
-
-      // Update auction status
-      await storage.updateAuction(auctionId, {
-        status: "pending_payment",
-        paymentStatus: "pending"
-      });
-
-      return {
-        sessionId: session.id,
-        url: session.url,
-        payment,
-      };
-
     } catch (error) {
       console.error("[PAYMENTS] Error creating checkout session:", error);
       throw error;

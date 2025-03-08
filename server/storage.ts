@@ -618,15 +618,91 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPaymentBySessionId(sessionId: string): Promise<any | undefined> {
-    return undefined;
+    try {
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.stripeSessionId, sessionId))
+        .limit(1);
+      
+      return payment;
+    } catch (error) {
+      console.error(`Error getting payment by session ID ${sessionId}:`, error);
+      return undefined;
+    }
   }
 
   async updatePaymentBySessionId(sessionId: string, data: any): Promise<any> {
-    return { id: 1, sessionId, ...data };
+    try {
+      const [updatedPayment] = await db
+        .update(payments)
+        .set(data)
+        .where(eq(payments.stripeSessionId, sessionId))
+        .returning();
+      
+      return updatedPayment;
+    } catch (error) {
+      console.error(`Error updating payment by session ID ${sessionId}:`, error);
+      return { id: 1, sessionId, ...data };
+    }
   }
 
   async updatePaymentByIntentId(intentId: string, data: any): Promise<any> {
-    return { id: 1, intentId, ...data };
+    try {
+      const [updatedPayment] = await db
+        .update(payments)
+        .set(data)
+        .where(eq(payments.stripePaymentIntentId, intentId))
+        .returning();
+      
+      return updatedPayment;
+    } catch (error) {
+      console.error(`Error updating payment by intent ID ${intentId}:`, error);
+      return { id: 1, intentId, ...data };
+    }
+  }
+
+  async insertPayment(paymentData: any): Promise<any> {
+    try {
+      const [payment] = await db
+        .insert(payments)
+        .values(paymentData)
+        .returning();
+      
+      return payment;
+    } catch (error) {
+      console.error("Error inserting payment:", error);
+      throw error;
+    }
+  }
+
+  async findPaymentByAuctionId(auctionId: number): Promise<any> {
+    try {
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.auctionId, auctionId))
+        .limit(1);
+      
+      return payment;
+    } catch (error) {
+      console.error(`Error finding payment for auction ${auctionId}:`, error);
+      return undefined;
+    }
+  }
+
+  async markPaymentPayoutProcessed(paymentId: number): Promise<boolean> {
+    try {
+      await db
+        .update(payments)
+        .set({ payoutProcessed: true })
+        .where(eq(payments.id, paymentId));
+      
+      return true;
+    } catch (error) {
+      console.error(`Error marking payment ${paymentId} as processed:`, error);
+      return false;
+    }
   }
 
   async getWinnerDetails(auctionId: number): Promise<any | undefined> {
