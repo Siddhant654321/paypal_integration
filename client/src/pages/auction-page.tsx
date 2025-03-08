@@ -1,10 +1,10 @@
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Auction, Bid, Profile } from "@shared/schema";
 import BidForm from "@/components/bid-form";
 import { formatDistanceToNow, differenceInSeconds } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Clock, Store, User, MapPin, CreditCard, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, Store, User, MapPin } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -27,15 +27,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useToast } from "@/hooks/use-toast";
-import { CreditCard, Loader2, AlertCircle } from "lucide-react";
-
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const [timeLeft, setTimeLeft] = useState("");
 
   const { data: auction, isLoading: isLoadingAuction, refetch: refetchAuction } = useQuery<Auction & { sellerProfile?: Profile }>({
@@ -48,75 +44,6 @@ export default function AuctionPage() {
     enabled: !!auction,
     refetchInterval: 5000, // Refetch every 5 seconds to keep data fresh
   });
-
-  // Add seller decision mutation
-  const sellerDecisionMutation = useMutation({
-    mutationFn: async (accept: "accept" | "void") => {
-      const response = await fetch(`/api/auctions/${auction?.id}/seller-decision`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ decision: accept }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to update auction');
-      }
-
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auction?.id}`] });
-      toast({
-        title: "Decision recorded",
-        description: "Auction has been updated with your decision.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save your decision",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Mutation for payment creation
-  const paymentMutation = useMutation({
-    mutationFn: async ({ includeInsurance = false }) => {
-      console.log("Creating checkout session...");
-      const response = await fetch(`/api/auctions/${auction?.id}/pay`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ includeInsurance }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create payment');
-      }
-
-      return response.json();
-    },
-    onSuccess: (data) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    },
-    onError: (error) => {
-      console.log("Payment error:", error);
-      toast({
-        title: "Payment Error",
-        description: error.message || "Failed to create payment",
-        variant: "destructive",
-      });
-    },
-  });
-
 
   useEffect(() => {
     if (!auction) return;
@@ -190,22 +117,17 @@ export default function AuctionPage() {
 
   const isActive = new Date() >= new Date(auction.startDate) && new Date() <= new Date(auction.endDate);
   const showSellerDecision = auction.status === "pending_seller_decision" && user?.id === auction.sellerId;
-  const pendingSellerDecision = auction.status === "pending_seller_decision";
-  const belowReserve = auction.winningBidderId && auction.currentPrice < auction.reservePrice;
-  const isWinner = user && user.id === auction.winningBidderId;
-  const needsPayment = isWinner && auction.paymentStatus === "pending";
-
 
   const getStatusBadge = () => {
     // Check if auction hasn't started yet
     const now = new Date();
     const startDate = new Date(auction.startDate);
-
+    
     // If auction hasn't started yet, show Preview badge
     if (now < startDate) {
       return <Badge variant="outline">Preview</Badge>;
     }
-
+    
     // Otherwise use status from database
     switch (auction.status) {
       case "active":
@@ -340,76 +262,20 @@ export default function AuctionPage() {
           <div className="prose max-w-none">
             <p className="whitespace-pre-wrap">{auction.description}</p>
           </div>
-
+          
           {/* Payment button for winning bidder */}
-          {needsPayment && (
+          {auction.status === "ended" && 
+           user?.id === auction.winningBidderId && 
+           auction.paymentStatus !== "completed" && (
             <div className="mt-4">
-              <Button 
-                onClick={() => paymentMutation.mutate({ includeInsurance: false })}
-                className="w-full"
-                disabled={paymentMutation.isPending}
-              >
-                {paymentMutation.isPending ? 'Processing...' : 
-                 <>
-                   <CreditCard className="mr-2 h-4 w-4" />
-                   Pay Now
-                 </>
-                }
-              </Button>
+              <Link href={`/auction/${auction.id}/pay`}>
+                <Button size="lg" className="w-full" variant="default">
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  Complete Purchase
+                </Button>
+              </Link>
             </div>
           )}
-
-          {/* Show seller decision interface for pending seller decision auctions */}
-          {showSellerDecision && (
-            <div className="mt-4 p-4 border rounded-md bg-amber-50">
-              <h3 className="font-semibold text-amber-800">Seller Decision Required</h3>
-              <p className="text-sm mb-3">
-                The winning bid of {formatPrice(auction.currentPrice)} did not meet your reserve price of {formatPrice(auction.reservePrice)}.
-              </p>
-
-              <div className="flex gap-3 mt-2">
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="default"
-                      className="flex-1"
-                      onClick={() => sellerDecisionMutation.mutate("accept")}
-                    >
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Accept Bid
-                    </Button>
-                  </AlertDialogTrigger>
-                  {/* AlertDialogContent removed for brevity - it's already defined above */}
-                </AlertDialog>
-
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive"
-                      className="flex-1"
-                      onClick={() => sellerDecisionMutation.mutate("void")}
-                    >
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Void Auction
-                    </Button>
-                  </AlertDialogTrigger>
-                  {/* AlertDialogContent removed for brevity - it's already defined above */}
-                </AlertDialog>
-              </div>
-            </div>
-          )}
-
-          {/* Show buyer info when auction is pending seller decision */}
-          {isWinner && pendingSellerDecision && (
-            <div className="mt-4 p-4 border rounded-md bg-amber-50">
-              <h3 className="font-semibold text-amber-800">Awaiting Seller Decision</h3>
-              <p className="text-sm">
-                Your bid of {formatPrice(auction.currentPrice)} was the highest, but it did not meet the seller's reserve price of {formatPrice(auction.reservePrice)}. 
-                The seller is reviewing your bid and will decide whether to accept it or void the auction.
-              </p>
-            </div>
-          )}
-
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-lg">

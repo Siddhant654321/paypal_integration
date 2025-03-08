@@ -121,8 +121,7 @@ export class AuctionService {
             await storage.updateAuction(auction.id, {
               winningBidderId: winningBid.bidderId,
               status: metReserve ? "ended" : "pending_seller_decision",
-              paymentStatus: metReserve ? "pending" : "failed",
-              reserveMet: metReserve  // Explicitly set reserveMet flag
+              paymentStatus: metReserve ? "pending" : "failed"
             });
 
             // Notify seller if below reserve
