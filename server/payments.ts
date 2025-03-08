@@ -13,16 +13,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
-const BASE_URL = process.env.REPL_SLUG 
-  ? `https://${process.env.REPL_SLUG}.replit.dev`
-  : 'http://localhost:5000';
-
 export class PaymentService {
-  static async createCheckoutSession(
+  static async createPaymentIntent(
     auctionId: number,
     buyerId: number,
-    includeInsurance: boolean = false,
-    baseUrl: string = BASE_URL
+    includeInsurance: boolean = false
   ) {
     try {
       // Get auction details
@@ -48,69 +43,32 @@ export class PaymentService {
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
 
-      console.log("[PAYMENTS] Creating checkout session:", {
-        auctionId,
+      console.log("[PAYMENTS] Creating payment intent:", {
         baseAmount,
         platformFee,
         insuranceFee,
         totalAmount,
-        sellerAccountId: sellerProfile.stripeAccountId
+        sellerId: auction.sellerId,
+        sellerStripeAccount: sellerProfile.stripeAccountId
       });
 
-      // Create Stripe checkout session with destination charge
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/auction/${auction.id}?payment_canceled=true`,
-        payment_intent_data: {
-          // Configure transfer to connected account
-          transfer_data: {
-            destination: sellerProfile.stripeAccountId,
-          },
-          // Set platform fee
-          application_fee_amount: platformFee + insuranceFee,
+      // Create PaymentIntent with destination charge
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: totalAmount,
+        currency: 'usd',
+        application_fee_amount: platformFee + insuranceFee,
+        transfer_data: {
+          destination: sellerProfile.stripeAccountId,
         },
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: auction.title,
-                description: `Auction #${auction.id}`,
-                images: auction.imageUrl ? [auction.imageUrl] : undefined,
-              },
-              unit_amount: baseAmount,
-            },
-            quantity: 1,
-          },
-          {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: "Platform Fee",
-                description: "10% platform fee",
-              },
-              unit_amount: platformFee,
-            },
-            quantity: 1,
-          },
-          ...(includeInsurance ? [{
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: "Insurance Fee",
-                description: "Shipping insurance coverage",
-              },
-              unit_amount: insuranceFee,
-            },
-            quantity: 1,
-          }] : []),
-        ],
+        automatic_payment_methods: {
+          enabled: true,
+        },
+        metadata: {
+          auctionId: auction.id.toString(),
+          buyerId: buyerId.toString(),
+          sellerId: auction.sellerId.toString(),
+        }
       });
-
-      if (!session.url) {
-        throw new Error("Failed to generate checkout URL");
-      }
 
       // Create payment record
       const payment = await storage.insertPayment({
@@ -121,25 +79,22 @@ export class PaymentService {
         platformFee,
         sellerPayout: baseAmount - platformFee,
         insuranceFee,
-        status: 'pending',
-        stripeSessionId: session.id,
-        stripePaymentIntentId: session.payment_intent as string,
+        stripePaymentIntentId: paymentIntent.id,
+        status: 'pending'
       });
 
       // Update auction status
       await storage.updateAuction(auctionId, {
-        status: "pending_payment",
         paymentStatus: "pending"
       });
 
       return {
-        sessionId: session.id,
-        url: session.url,
-        payment,
+        clientSecret: paymentIntent.client_secret,
+        payment
       };
 
     } catch (error) {
-      console.error("[PAYMENTS] Error creating checkout session:", error);
+      console.error("[PAYMENTS] Error creating payment intent:", error);
       if (error instanceof Stripe.errors.StripeError) {
         throw new Error(`Stripe error: ${error.message}`);
       }
@@ -154,8 +109,15 @@ export class PaymentService {
         throw new Error("Payment not found");
       }
 
-      // Update payment status
-      await storage.updatePaymentStatus(payment.id, "completed");
+      // Retrieve PaymentIntent to get charge ID
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      const chargeId = paymentIntent.latest_charge as string;
+
+      // Update payment status and charge ID
+      await storage.updatePayment(payment.id, {
+        status: "completed",
+        stripeChargeId: chargeId
+      });
 
       // Update auction status
       await storage.updateAuction(payment.auctionId, {
@@ -163,7 +125,7 @@ export class PaymentService {
         paymentStatus: "completed"
       });
 
-      // Notify seller
+      // Send single notification
       await NotificationService.notifyPayment(
         payment.sellerId,
         payment.amount,
@@ -190,21 +152,24 @@ export class PaymentService {
       }
 
       // Update payment status
-      await storage.updatePaymentStatus(payment.id, "failed");
+      await storage.updatePayment(payment.id, {
+        status: "failed"
+      });
 
-      // Update auction status
+      // Update auction status based on reserve price
       await storage.updateAuction(payment.auctionId, {
         status: auction.currentPrice < auction.reservePrice ? 
           "pending_seller_decision" : "ended",
         paymentStatus: "failed"
       });
 
-      // Notify seller
+      // Send single notification
       await NotificationService.notifyPayment(
         payment.sellerId,
         payment.amount,
         "failed"
       );
+
     } catch (error) {
       console.error("[PAYMENTS] Error handling payment failure:", error);
       throw error;

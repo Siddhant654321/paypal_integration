@@ -8,9 +8,15 @@ import path from "path";
 import multer from 'multer';
 import { upload, handleFileUpload } from "./uploads";
 import { PaymentService } from "./payments";
-import { buffer } from "micro";
 import Stripe from "stripe";
 import { SellerPaymentService } from "./seller-payments";
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2023-10-16",
+});
 import { EmailService } from "./email-service"; 
 import { AuctionService } from "./auction-service";
 import { AIPricingService } from "./ai-service";
@@ -93,6 +99,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Basic middleware setup
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
+    
+    // Add Stripe webhook endpoint before the JSON body parser
+    app.post("/api/webhooks/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
+      const sig = req.headers['stripe-signature'];
+      
+      if (!process.env.STRIPE_WEBHOOK_SECRET) {
+        console.error("[STRIPE WEBHOOK] Missing webhook secret");
+        return res.status(400).send("Webhook secret not configured");
+      }
+
+      try {
+        const event = stripe.webhooks.constructEvent(
+          req.body,
+          sig as string,
+          process.env.STRIPE_WEBHOOK_SECRET
+        );
+
+        console.log("[STRIPE WEBHOOK] Received event:", event.type);
+
+        switch (event.type) {
+          case 'payment_intent.succeeded':
+            await PaymentService.handlePaymentSuccess(event.data.object.id);
+            break;
+          case 'payment_intent.payment_failed':
+            await PaymentService.handlePaymentFailure(event.data.object.id);
+            break;
+        }
+
+        res.json({ received: true });
+      } catch (err) {
+        console.error("[STRIPE WEBHOOK] Error:", err);
+        res.status(400).send("Webhook Error");
+      }
+    });
+
     app.use(router);
 
 
@@ -473,6 +514,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Error fetching bids:", error);
         res.status(500).json({ message: "Failed to fetch bids" });
+      }
+    });
+
+    // Add payment endpoint for auction winners
+    router.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        const { includeInsurance } = req.body;
+
+        console.log("[PAYMENT] Payment request authentication:", {
+          isAuthenticated: req.isAuthenticated(),
+          userId: req.user?.id,
+          timestamp: new Date().toISOString()
+        });
+
+        if (!req.user) {
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        if (auction.winningBidderId !== req.user.id) {
+          return res.status(403).json({ message: "Only the winning bidder can pay for this auction" });
+        }
+
+        const { clientSecret, payment } = await PaymentService.createPaymentIntent(
+          auctionId,
+          req.user.id,
+          includeInsurance
+        );
+
+        res.json({ clientSecret, payment });
+      } catch (error) {
+        console.error("[PAYMENT] Error:", error);
+        res.status(500).json({
+          message: error instanceof Error ? error.message : "Payment initialization failed"
+        });
       }
     });
 
