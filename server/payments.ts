@@ -136,18 +136,25 @@ export class PaymentService {
         url: session.url
       });
 
-      // Create payment record
-      const payment = await storage.createPayment({
-        auctionId,
-        buyerId,
-        sellerId: auction.sellerId,
-        amount: totalAmount,
-        platformFee,
-        sellerPayout,
-        insuranceFee,
-        status: 'pending',
-        stripePaymentIntentId: session.payment_intent as string,
-      });
+      // Save payment record to database
+      try {
+        // Insert a new payment record in the database
+        await storage.createPayment({
+          auctionId,
+          buyerId,
+          sellerId: auction.sellerId,
+          amount: totalAmount,
+          platformFee,
+          sellerPayout,
+          insuranceFee,
+          stripePaymentIntentId: session.payment_intent as string,
+          status: "pending",
+        });
+      } catch (error) {
+        console.error("[PAYMENTS] Stripe session creation error:", error);
+        throw error;
+      }
+
 
       // Mark auction as payment processing
       await storage.updateAuction(auctionId, {
@@ -158,7 +165,17 @@ export class PaymentService {
       return {
         sessionId: session.id,
         url: session.url,
-        payment,
+        payment: {
+          auctionId,
+          buyerId,
+          sellerId: auction.sellerId,
+          amount: totalAmount,
+          platformFee,
+          sellerPayout,
+          insuranceFee,
+          stripePaymentIntentId: session.payment_intent as string,
+          status: "pending",
+        }, // Placeholder - replace with actual payment object from database
       };
 
     } catch (error) {

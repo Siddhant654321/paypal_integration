@@ -51,6 +51,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>; // Added getUserByEmail
   deleteBid(bidId: number): Promise<void>;
   deleteBidsForAuction(auctionId: number): Promise<void>;
+  createPayment(paymentData: InsertPayment): Promise<Payment>; // Added createPayment
 }
 
 export class DatabaseStorage implements IStorage {
@@ -941,17 +942,28 @@ export class DatabaseStorage implements IStorage {
 
   async getPaymentsByAuctionId(auctionId: number): Promise<Payment[]> {
     try {
-      log(`Getting payments for auction ${auctionId}`, "payments");
-      const result = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.auctionId, auctionId))
-        .orderBy(desc(payments.createdAt));
-
-      log(`Found ${result.length} payments for auction ${auctionId}`, "payments");
+      const result = await db.select().from(payments).where(eq(payments.auctionId, auctionId));
       return result;
     } catch (error) {
-      log(`Error getting payments for auction ${auctionId}: ${error}`, "payments");
+      console.error("[STORAGE] Error getting payments by auction ID:", error);
+      throw error;
+    }
+  }
+
+  async createPayment(paymentData: InsertPayment): Promise<Payment> {
+    try {
+      console.log("[STORAGE] Creating payment for auction:", paymentData.auctionId);
+
+      const newPayment = await db.insert(payments).values({
+        ...paymentData,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        payoutProcessed: false,
+      }).returning();
+
+      return newPayment[0];
+    } catch (error) {
+      console.error("[STORAGE] Error creating payment:", error);
       throw error;
     }
   }
