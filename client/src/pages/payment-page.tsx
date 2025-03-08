@@ -42,7 +42,7 @@ export default function PaymentPage() {
     setError(null);
 
     try {
-      console.log(`[Payment] Initiating payment for auction ${auction.id}`);
+      console.log(`[Payment] Creating checkout session for auction ${auction.id}`);
 
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
@@ -51,11 +51,12 @@ export default function PaymentPage() {
         body: JSON.stringify({ includeInsurance })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to create payment session');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create payment session');
       }
+
+      const data = await response.json();
 
       if (!data.url) {
         throw new Error('No checkout URL received from server');
@@ -63,7 +64,7 @@ export default function PaymentPage() {
 
       console.log(`[Payment] Opening Stripe checkout URL in new tab`);
 
-      // Open Stripe checkout in new tab
+      // Open the checkout URL in a new tab
       const checkoutWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
 
       if (checkoutWindow) {
