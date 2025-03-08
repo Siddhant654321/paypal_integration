@@ -1,7 +1,6 @@
 import Stripe from "stripe";
 import { storage } from "./storage";
-import { insertPaymentSchema, type InsertPayment } from "@shared/schema";
-import { SellerPaymentService } from "./seller-payments";
+import { insertPaymentSchema } from "@shared/schema";
 import { NotificationService } from "./notification-service";
 
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -9,7 +8,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-02-24.acacia",
+  apiVersion: "2023-10-16",
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
@@ -28,11 +27,7 @@ export class PaymentService {
     buyerId: number,
     includeInsurance: boolean = false,
     baseUrl: string = BASE_URL
-  ): Promise<{
-    sessionId: string;
-    url: string;
-    payment: InsertPayment;
-  }> {
+  ) {
     try {
       console.log(`[PAYMENTS] Creating checkout session for auction ${auctionId}, buyer ${buyerId}`);
 
@@ -42,21 +37,21 @@ export class PaymentService {
         throw new Error("Auction not found");
       }
 
+      console.log(`[PAYMENTS] Validating auction ${auctionId}:`, {
+        status: auction.status,
+        winningBidderId: auction.winningBidderId,
+        currentPrice: auction.currentPrice,
+        reservePrice: auction.reservePrice
+      });
+
       // Verify if the buyer is the winning bidder
       if (auction.winningBidderId !== buyerId) {
         throw new Error("Only the winning bidder can make payment");
       }
 
       // Check auction status for payment eligibility
-      const validPaymentStatuses = ["ended", "pending_payment"];
-      if (!validPaymentStatuses.includes(auction.status)) {
+      if (auction.status !== "ended" && auction.status !== "pending_payment") {
         throw new Error("Auction is not ready for payment");
-      }
-
-      // If auction ended below reserve and seller hasn't accepted
-      if (auction.currentPrice < auction.reservePrice && 
-          auction.status !== "pending_payment") {
-        throw new Error("Waiting for seller decision on below-reserve bid");
       }
 
       // Get seller's Stripe account ID
@@ -72,8 +67,9 @@ export class PaymentService {
       const platformFee = Math.floor(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const sellerPayout = baseAmount - platformFee;
 
-      console.log(`[PAYMENTS] Creating Stripe checkout session with data:`, {
-        auctionId,
+      console.log(`[PAYMENTS] Payment details:`, {
+        baseAmount,
+        insuranceFee,
         totalAmount,
         platformFee,
         sellerPayout
@@ -132,13 +128,8 @@ export class PaymentService {
         throw new Error("Failed to generate Stripe checkout URL");
       }
 
-      console.log(`[PAYMENTS] Created checkout session:`, {
-        sessionId: session.id,
-        url: session.url
-      });
-
-      // Create payment record
-      const payment = await storage.createPayment({
+      // Insert payment record
+      const paymentData = {
         auctionId,
         buyerId,
         sellerId: auction.sellerId,
@@ -148,9 +139,13 @@ export class PaymentService {
         insuranceFee,
         status: 'pending',
         stripePaymentIntentId: session.payment_intent as string,
-      });
+      };
 
-      // Mark auction as payment processing
+      // Insert the payment record
+      const validatedPayment = insertPaymentSchema.parse(paymentData);
+      const payment = await storage.insertPayment(validatedPayment);
+
+      // Update auction status
       await storage.updateAuction(auctionId, {
         status: "pending_payment",
         paymentStatus: "pending"
@@ -163,19 +158,12 @@ export class PaymentService {
       };
 
     } catch (error) {
-      console.error("[PAYMENTS] Stripe session creation error:", error);
-      if (error instanceof Stripe.errors.StripeError) {
-        console.error("[PAYMENTS] Stripe API Error:", {
-          type: error.type,
-          code: error.code,
-          message: error.message
-        });
-      }
+      console.error("[PAYMENTS] Error creating checkout session:", error);
       throw error;
     }
   }
 
-  static async handlePaymentSuccess(paymentIntentId: string): Promise<void> {
+  static async handlePaymentSuccess(paymentIntentId: string) {
     try {
       const payment = await storage.findPaymentByStripeId(paymentIntentId);
       if (!payment) {
@@ -199,27 +187,28 @@ export class PaymentService {
       );
 
     } catch (error) {
-      console.error("Error handling payment success:", error);
+      console.error("[PAYMENTS] Error handling payment success:", error);
       throw error;
     }
   }
 
-  static async handlePaymentFailure(paymentIntentId: string): Promise<void> {
+  static async handlePaymentFailure(paymentIntentId: string) {
     try {
       const payment = await storage.findPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
       }
 
+      // Update payment status
+      await storage.updatePaymentStatus(payment.id, "failed");
+
+      // Get auction to check reserve price
       const auction = await storage.getAuction(payment.auctionId);
       if (!auction) {
         throw new Error("Auction not found");
       }
 
-      // Update payment status
-      await storage.updatePaymentStatus(payment.id, "failed");
-
-      // Update auction status - if below reserve, return to pending seller decision
+      // Update auction status based on reserve price
       await storage.updateAuction(payment.auctionId, {
         status: auction.currentPrice < auction.reservePrice ? 
           "pending_seller_decision" : "ended",
@@ -233,7 +222,7 @@ export class PaymentService {
         "failed"
       );
     } catch (error) {
-      console.error("Error handling payment failure:", error);
+      console.error("[PAYMENTS] Error handling payment failure:", error);
       throw error;
     }
   }
