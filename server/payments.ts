@@ -139,6 +139,7 @@ export class PaymentService {
         insuranceFee,
         status: 'pending',
         stripePaymentIntentId: session.payment_intent as string,
+        payoutProcessed: false,
       };
 
       // Insert the payment record

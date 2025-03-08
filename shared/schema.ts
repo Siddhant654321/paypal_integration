@@ -242,7 +242,9 @@ export const insertPaymentSchema = createInsertSchema(payments)
     status: true,
     createdAt: true,
     updatedAt: true,
-    payoutProcessed:true
+  })
+  .extend({
+    payoutProcessed: z.boolean().default(false)
   });
 
 // Create insert schema for payouts
