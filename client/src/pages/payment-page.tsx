@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { formatPrice } from "../utils/formatters"; // Added import for the formatter
+import { formatPrice } from "../utils/formatters";
 
 // Verify Stripe key is available and in test mode
 if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
@@ -38,23 +38,6 @@ export default function PaymentPage() {
     queryKey: [`/api/auctions/${params?.id}`],
   });
 
-  useEffect(() => {
-    // Check if Stripe is properly loaded and available
-    const checkStripe = async () => {
-      try {
-        const stripe = await stripePromise;
-        if (!stripe) {
-          setError("Stripe could not be initialized. Please refresh the page.");
-        }
-      } catch (err) {
-        console.error("Stripe initialization error:", err);
-        setError("Error initializing payment system.");
-      }
-    };
-
-    checkStripe();
-  }, []);
-
   const handlePayment = async () => {
     if (isProcessing || !auction?.id) return;
 
@@ -74,10 +57,6 @@ export default function PaymentPage() {
     setIsProcessing(true);
 
     try {
-      setError(null);
-      console.log("Creating checkout session...");
-      
-      // Create checkout session
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -85,77 +64,31 @@ export default function PaymentPage() {
         body: JSON.stringify({ includeInsurance })
       });
 
-      const responseData = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        if (responseData.code === "AUTH_REQUIRED") {
-          toast({
-            variant: "destructive",
-            title: "Authentication Required",
-            description: "Please log in to proceed with payment."
-          });
-          setLocation('/auth');
-          return;
-        }
-        throw new Error(responseData.message || 'Failed to create payment session');
+        throw new Error(data.message || 'Failed to create payment session');
       }
 
-      const { sessionId, url } = responseData;
-      console.log("Got session ID:", sessionId);
-      
-      if (url) {
-        // If we got a URL directly from the server, use it
-        console.log("Redirecting to checkout URL from server:", url);
-        window.location.href = url;
-      } else if (sessionId) {
-        // Otherwise, try to initialize Stripe and redirect
-        console.log("Initializing Stripe with session ID");
-        const stripe = await stripePromise;
-        
-        if (!stripe) {
-          throw new Error("Could not initialize Stripe");
-        }
-        
-        // Redirect to the specific checkout session
-        const { error } = await stripe.redirectToCheckout({
-          sessionId: sessionId
+      // Get the Stripe checkout URL from the response
+      const { url } = data;
+
+      if (!url) {
+        throw new Error("No checkout URL received");
+      }
+
+      // Open Stripe checkout in a new tab
+      const checkoutWindow = window.open(url, '_blank');
+
+      if (checkoutWindow) {
+        toast({
+          title: "Checkout Opened",
+          description: "Complete your payment in the new tab."
         });
-        
-        if (error) {
-          console.error("Stripe redirect error:", error);
-          throw new Error(error.message);
-        }
       } else {
-        // Fallback to getting the URL from a separate endpoint
-        console.log("No URL or valid session ID, falling back to checkout session endpoint");
-        
-        const checkoutSession = await fetch(`/api/checkout-session/${sessionId}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include'
-        });
-        
-        if (!checkoutSession.ok) {
-          throw new Error("Failed to get checkout session URL");
-        }
-        
-        const { url } = await checkoutSession.json();
-        
-        if (!url) {
-          throw new Error("No checkout URL returned from server");
-        }
-        
-        // Redirect directly to the Stripe checkout URL
-        window.location.href = url;
+        throw new Error("Pop-up was blocked. Please allow pop-ups and try again.");
       }
 
-      // Show success message
-      toast({
-        title: "Checkout opened in new tab",
-        description: "Complete your payment in the new tab. You'll be redirected back after payment."
-      });
-
-      setIsProcessing(false);
     } catch (err) {
       console.error('Payment error:', err);
       const errorMessage = err instanceof Error ? err.message : "Could not process your payment. Please try again.";
@@ -165,6 +98,7 @@ export default function PaymentPage() {
         title: "Payment Error",
         description: errorMessage,
       });
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -177,13 +111,13 @@ export default function PaymentPage() {
     );
   }
 
-  const baseAmountDollars = formatPrice(auction.currentPrice); // Use the formatter
-  const insuranceAmountDollars = formatPrice(INSURANCE_FEE); // Use the formatter
-  const totalAmountDollars = formatPrice(auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)); // Use the formatter
+  const baseAmountDollars = auction ? formatPrice(auction.currentPrice) : '-';
+  const insuranceAmountDollars = formatPrice(INSURANCE_FEE);
+  const totalAmountDollars = auction ? formatPrice(auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)) : '-';
 
   return (
     <div className="container mx-auto py-8">
-      <Link href={`/auction/${auction.id}`}>
+      <Link href={`/auction/${auction?.id}`}>
         <Button variant="ghost" className="mb-6">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Auction
@@ -196,7 +130,7 @@ export default function PaymentPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="text-lg font-medium">
-            {auction.title}
+            {auction?.title}
           </div>
 
           <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
@@ -225,7 +159,7 @@ export default function PaymentPage() {
           </div>
 
           {error && (
-            <Alert variant="destructive" className="mb-4">
+            <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
@@ -236,7 +170,7 @@ export default function PaymentPage() {
             onClick={handlePayment}
             className="w-full" 
             size="lg"
-            disabled={isProcessing}
+            disabled={isProcessing || !auction}
           >
             {isProcessing ? (
               <Loader2 className="h-5 w-5 mr-2 animate-spin" />
