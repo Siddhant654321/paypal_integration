@@ -26,7 +26,7 @@ export class PaymentService {
     baseUrl: string = BASE_URL
   ) {
     try {
-      console.log(`[PAYMENTS] Creating checkout session for auction ${auctionId}, buyer ${buyerId}`);
+      console.log(`[PAYMENTS] Starting checkout session creation for auction ${auctionId}`);
 
       // Get auction details
       const auction = await storage.getAuction(auctionId);
@@ -34,20 +34,38 @@ export class PaymentService {
         throw new Error("Auction not found");
       }
 
-      // Calculate fees
-      const amount = auction.currentPrice;
-      const platformFee = Math.round(amount * PLATFORM_FEE_PERCENTAGE);
-      const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
-      const totalAmount = amount + platformFee + insuranceFee;
-      const sellerPayout = amount;
+      console.log(`[PAYMENTS] Retrieved auction:`, {
+        id: auction.id,
+        status: auction.status,
+        currentPrice: auction.currentPrice,
+        winningBidderId: auction.winningBidderId
+      });
 
-      // Get seller's Stripe account ID
+      // Verify buyer is winning bidder
+      if (auction.winningBidderId !== buyerId) {
+        throw new Error("Only the winning bidder can make payment");
+      }
+
+      // Get seller's Stripe account
       const sellerProfile = await storage.getProfile(auction.sellerId);
       if (!sellerProfile?.stripeAccountId) {
         throw new Error("Seller has not completed their Stripe account setup");
       }
 
-      // Prepare line items for checkout
+      // Calculate amounts
+      const amount = auction.currentPrice;
+      const platformFee = Math.round(amount * PLATFORM_FEE_PERCENTAGE);
+      const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
+      const totalAmount = amount + platformFee + insuranceFee;
+
+      console.log(`[PAYMENTS] Calculated payment amounts:`, {
+        baseAmount: amount,
+        platformFee,
+        insuranceFee,
+        totalAmount
+      });
+
+      // Create line items for Stripe
       const lineItems = [
         {
           price_data: {
@@ -74,7 +92,6 @@ export class PaymentService {
         }
       ];
 
-      // Add insurance if selected
       if (includeInsurance) {
         lineItems.push({
           price_data: {
@@ -89,7 +106,7 @@ export class PaymentService {
         });
       }
 
-      // Create Stripe Checkout Session
+      // Create Stripe session
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
         line_items: lineItems,
@@ -103,27 +120,29 @@ export class PaymentService {
         },
       });
 
+      console.log(`[PAYMENTS] Created Stripe session:`, {
+        sessionId: session.id,
+        paymentIntentId: session.payment_intent,
+        hasUrl: !!session.url
+      });
+
       if (!session.url) {
         throw new Error("Failed to generate Stripe checkout URL");
       }
 
-      // Create a payment record
-      const paymentData = {
+      // Create payment record
+      const payment = await storage.insertPayment({
         auctionId,
         buyerId,
         sellerId: auction.sellerId,
         amount: totalAmount,
         platformFee,
-        sellerPayout,
-        insuranceFee: insuranceFee || 0,
+        sellerPayout: amount - platformFee,
+        insuranceFee,
         status: 'pending',
         stripeSessionId: session.id,
         stripePaymentIntentId: session.payment_intent as string,
-      };
-
-      // Create payment record
-      console.log("[PAYMENTS] Creating payment record:", paymentData);
-      const payment = await storage.createPayment(paymentData);
+      });
 
       // Update auction status
       await storage.updateAuction(auctionId, {
@@ -136,8 +155,9 @@ export class PaymentService {
         url: session.url,
         payment,
       };
+
     } catch (error) {
-      console.error("[PAYMENTS] Error creating checkout session:", error);
+      console.error("[PAYMENTS] Error in createCheckoutSession:", error);
       throw error;
     }
   }
@@ -158,7 +178,7 @@ export class PaymentService {
         paymentStatus: "completed"
       });
 
-      // Notify the seller
+      // Notify seller
       await NotificationService.notifyPayment(
         payment.sellerId,
         payment.amount,
@@ -181,20 +201,20 @@ export class PaymentService {
       // Update payment status
       await storage.updatePaymentStatus(payment.id, "failed");
 
-      // Get auction to check reserve price
+      // Get auction for reserve price check
       const auction = await storage.getAuction(payment.auctionId);
       if (!auction) {
         throw new Error("Auction not found");
       }
 
-      // Update auction status based on reserve price
+      // Update auction status
       await storage.updateAuction(payment.auctionId, {
         status: auction.currentPrice < auction.reservePrice ? 
           "pending_seller_decision" : "ended",
         paymentStatus: "failed"
       });
 
-      // Notify the seller
+      // Notify seller
       await NotificationService.notifyPayment(
         payment.sellerId,
         payment.amount,

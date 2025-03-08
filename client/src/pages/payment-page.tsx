@@ -1,10 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRoute, Link, useLocation } from "wouter";
+import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Loader2, Shield, AlertCircle } from "lucide-react";
-import { useState, useEffect } from "react";
-import { loadStripe } from "@stripe/stripe-js";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -13,16 +12,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatPrice } from "../utils/formatters";
 
-// Verify Stripe key is available and in test mode
-if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
-  throw new Error('Stripe publishable key is missing');
-}
-
-if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY.startsWith('pk_test_')) {
-  throw new Error('Stripe publishable key must be a test mode key (starts with pk_test_)');
-}
-
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+const INSURANCE_FEE = 800; // $8.00 in cents
 
 export default function PaymentPage() {
   const [, params] = useRoute("/auction/:id/pay");
@@ -31,8 +21,6 @@ export default function PaymentPage() {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  const [, setLocation] = useLocation();
-  const INSURANCE_FEE = 800; // $8.00 in cents
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
     queryKey: [`/api/auctions/${params?.id}`],
@@ -41,22 +29,21 @@ export default function PaymentPage() {
   const handlePayment = async () => {
     if (isProcessing || !auction?.id) return;
 
-    // Clear any previous errors
-    setError(null);
-
     if (!user) {
       toast({
         variant: "destructive",
         title: "Authentication Required",
         description: "Please log in to proceed with payment.",
       });
-      setLocation('/auth');
       return;
     }
 
     setIsProcessing(true);
+    setError(null);
 
     try {
+      console.log(`[Payment] Initiating payment for auction ${auction.id}`);
+
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,27 +57,26 @@ export default function PaymentPage() {
         throw new Error(data.message || 'Failed to create payment session');
       }
 
-      // Get the Stripe checkout URL from the response
-      const { url } = data;
-
-      if (!url) {
-        throw new Error("No checkout URL received");
+      if (!data.url) {
+        throw new Error('No checkout URL received from server');
       }
 
-      // Open Stripe checkout in a new tab
-      const checkoutWindow = window.open(url, '_blank');
+      console.log(`[Payment] Opening Stripe checkout URL in new tab`);
+
+      // Open Stripe checkout in new tab
+      const checkoutWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
 
       if (checkoutWindow) {
         toast({
           title: "Checkout Opened",
-          description: "Complete your payment in the new tab."
+          description: "Complete your payment in the new tab. You can close this window."
         });
       } else {
-        throw new Error("Pop-up was blocked. Please allow pop-ups and try again.");
+        throw new Error("Pop-up blocked. Please allow pop-ups and try again.");
       }
 
     } catch (err) {
-      console.error('Payment error:', err);
+      console.error('[Payment] Error:', err);
       const errorMessage = err instanceof Error ? err.message : "Could not process your payment. Please try again.";
       setError(errorMessage);
       toast({
@@ -111,13 +97,13 @@ export default function PaymentPage() {
     );
   }
 
-  const baseAmountDollars = auction ? formatPrice(auction.currentPrice) : '-';
+  const baseAmountDollars = formatPrice(auction.currentPrice);
   const insuranceAmountDollars = formatPrice(INSURANCE_FEE);
-  const totalAmountDollars = auction ? formatPrice(auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)) : '-';
+  const totalAmountDollars = formatPrice(auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0));
 
   return (
     <div className="container mx-auto py-8">
-      <Link href={`/auction/${auction?.id}`}>
+      <Link href={`/auction/${auction.id}`}>
         <Button variant="ghost" className="mb-6">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Auction
@@ -130,7 +116,7 @@ export default function PaymentPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="text-lg font-medium">
-            {auction?.title}
+            {auction.title}
           </div>
 
           <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
@@ -170,7 +156,7 @@ export default function PaymentPage() {
             onClick={handlePayment}
             className="w-full" 
             size="lg"
-            disabled={isProcessing || !auction}
+            disabled={isProcessing}
           >
             {isProcessing ? (
               <Loader2 className="h-5 w-5 mr-2 animate-spin" />
