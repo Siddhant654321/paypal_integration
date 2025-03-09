@@ -13,6 +13,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
+// Get base URL from environment or use default
+const BASE_URL = process.env.CLIENT_ORIGIN || process.env.PUBLIC_URL || 'http://localhost:5000';
+
 export class PaymentService {
   static async createCheckoutSession(
     auctionId: number,
@@ -58,6 +61,19 @@ export class PaymentService {
         sellerPayout
       });
 
+      // Construct absolute URLs for success and cancel
+      const successUrl = new URL(`/payment-success`, BASE_URL);
+      successUrl.searchParams.append('session_id', '{CHECKOUT_SESSION_ID}');
+      successUrl.searchParams.append('auction_id', auctionId.toString());
+
+      const cancelUrl = new URL(`/auction/${auctionId}`, BASE_URL);
+      cancelUrl.searchParams.append('payment_canceled', 'true');
+
+      console.log("[PAYMENTS] Using URLs:", {
+        success: successUrl.toString(),
+        cancel: cancelUrl.toString()
+      });
+
       // Create Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
@@ -87,8 +103,8 @@ export class PaymentService {
           },
         },
         mode: 'payment',
-        success_url: `${process.env.PUBLIC_URL || ''}/payment-success?session_id={CHECKOUT_SESSION_ID}&auction_id=${auctionId}`,
-        cancel_url: `${process.env.PUBLIC_URL || ''}/auction/${auctionId}?payment_canceled=true`,
+        success_url: successUrl.toString(),
+        cancel_url: cancelUrl.toString(),
         allow_promotion_codes: true,
       });
 
@@ -110,12 +126,6 @@ export class PaymentService {
         status: "pending" as const,
         payoutProcessed: false
       };
-
-      // Log the payment data we're about to insert
-      console.log("[PAYMENTS] Creating payment record with data:", {
-        ...paymentData,
-        stripePaymentIntentId: paymentData.stripePaymentIntentId.substring(0, 10) + '...'
-      });
 
       const payment = await storage.insertPayment(paymentData);
 
