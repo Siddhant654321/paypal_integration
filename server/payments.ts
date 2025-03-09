@@ -83,8 +83,8 @@ export class PaymentService {
         clientSecret: paymentIntent.client_secret ? 'present' : 'missing'
       });
 
-      // Create payment record with new schema
-      const payment = await storage.insertPayment({
+      // Prepare payment record with all required fields
+      const paymentData = {
         auctionId,
         buyerId,
         sellerId: auction.sellerId,
@@ -92,8 +92,19 @@ export class PaymentService {
         platformFee,
         sellerPayout,
         insuranceFee,
-        stripePaymentIntentId: paymentIntent.id
+        stripePaymentIntentId: paymentIntent.id,
+        status: "pending" as const,
+        payoutProcessed: false
+      };
+
+      // Log the payment data we're about to insert
+      console.log("[PAYMENTS] Creating payment record with data:", {
+        ...paymentData,
+        stripePaymentIntentId: paymentData.stripePaymentIntentId.substring(0, 10) + '...'
       });
+
+      // Create payment record
+      const payment = await storage.insertPayment(paymentData);
 
       console.log("[PAYMENTS] Created payment record:", {
         paymentId: payment.id,
@@ -174,7 +185,7 @@ export class PaymentService {
       }
 
       await storage.updateAuction(payment.auctionId, {
-        status: auction.currentPrice < auction.reservePrice ? 
+        status: auction.currentPrice < auction.reservePrice ?
           "pending_seller_decision" : "ended",
         paymentStatus: "failed"
       });

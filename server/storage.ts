@@ -636,20 +636,41 @@ export class DatabaseStorage implements IStorage {
 
   async insertPayment(paymentData: InsertPayment): Promise<Payment> {
     try {
+      // Log the incoming payment data with sensitive info truncated
       log(`Creating payment record with data: ${JSON.stringify({
         ...paymentData,
         stripePaymentIntentId: paymentData.stripePaymentIntentId.substring(0, 10) + '...'
       })}`, "payments");
 
+      // Ensure all required fields are present
+      const paymentRecord = {
+        ...paymentData,
+        status: paymentData.status || 'pending',
+        payoutProcessed: paymentData.payoutProcessed ?? false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // Ensure all NOT NULL fields from schema are set
+        amount: paymentData.amount,
+        platformFee: paymentData.platformFee,
+        sellerPayout: paymentData.sellerPayout,
+        insuranceFee: paymentData.insuranceFee,
+        auctionId: paymentData.auctionId,
+        buyerId: paymentData.buyerId,
+        sellerId: paymentData.sellerId,
+        stripePaymentIntentId: paymentData.stripePaymentIntentId,
+      };
+
+      // Validate required fields
+      if (!paymentRecord.amount || !paymentRecord.platformFee || !paymentRecord.sellerPayout || 
+          !paymentRecord.auctionId || !paymentRecord.buyerId || !paymentRecord.sellerId || 
+          !paymentRecord.stripePaymentIntentId) {
+        throw new Error("Missing required payment fields");
+      }
+
+      // Insert the payment record
       const [payment] = await db
         .insert(payments)
-        .values({
-          ...paymentData,
-          status: 'pending',
-          payoutProcessed: false,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        })
+        .values(paymentRecord)
         .returning();
 
       if (!payment) {
@@ -706,283 +727,6 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async findPaymentByAuctionId(auctionId: number): Promise<any> {
-    try {
-      const [payment] = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.auctionId, auctionId))
-        .limit(1);
-
-      return payment;
-    } catch (error) {
-      console.error(`Error finding payment for auction ${auctionId}:`, error);
-      return undefined;
-    }
-  }
-
-  async markPaymentPayoutProcessed(paymentId: number): Promise<boolean> {
-    try {
-      await db
-        .update(payments)
-        .set({ payoutProcessed: true })
-        .where(eq(payments.id, paymentId));
-
-      return true;
-    } catch (error) {
-      console.error(`Error marking payment ${paymentId} as processed:`, error);
-      return false;
-    }
-  }
-
-  async getWinnerDetails(auctionId: number): Promise<any | undefined> {
-    return undefined;
-  }
-
-  async createFulfillment(fulfillmentData: any): Promise<any> {
-    return fulfillmentData;
-  }
-
-  async getFulfillment(auctionId: number): Promise<any | undefined> {
-    return undefined;
-  }
-
-  async createBuyerRequest(requestData: InsertBuyerRequest & { buyerId: number }): Promise<BuyerRequest> {
-    try {
-      log(`Creating buyer request for user ${requestData.buyerId}`);
-      const [request] = await db
-        .insert(buyerRequests)
-        .values({
-          ...requestData,
-          status: "open",
-          views: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning();
-
-      log(`Successfully created buyer request ${request.id}`);
-      return request;
-    } catch (error) {
-      log(`Error creating buyer request: ${error}`);
-      throw error;
-    }
-  }
-
-  async getBuyerRequests(filters?: { status?: string }): Promise<BuyerRequest[]> {
-    try {
-      log(`Getting buyer requests with filters: ${JSON.stringify(filters)}`);
-      let query = db.select().from(buyerRequests);
-
-      if (filters?.status) {
-        query = query.where(eq(buyerRequests.status, filters.status));
-      }
-
-      query = query.orderBy(desc(buyerRequests.createdAt));
-
-      const requests = await query;
-      log(`Found ${requests.length} buyer requests`);
-      return requests;
-    } catch (error) {
-      log(`Error getting buyer requests: ${error}`);
-      throw error;
-    }
-  }
-
-  async getBuyerRequest(id: number): Promise<BuyerRequest | undefined> {
-    try {
-      log(`[BUYER REQUEST] Getting buyer request ${id}`);
-      const [request] = await db
-        .select()
-        .from(buyerRequests)
-        .where(eq(buyerRequests.id, id))
-        .limit(1);
-
-      log(`[BUYER REQUEST] Found request: ${JSON.stringify(request)}`);
-      return request;
-    } catch (error) {
-      log(`[BUYER REQUEST] Error getting buyer request ${id}: ${error}`);
-      throw error;
-    }
-  }
-
-  async updateBuyerRequest(id: number, data: Partial<InsertBuyerRequest>): Promise<BuyerRequest> {
-    try {
-      const [request] = await db
-        .update(buyerRequests)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
-        .where(eq(buyerRequests.id, id))
-        .returning();
-      return request;
-    } catch (error) {
-      log(`Error updating buyer request ${id}: ${error}`);
-      throw error;
-    }
-  }
-
-  async deleteBuyerRequest(id: number): Promise<void> {
-    try {
-      await db
-        .delete(buyerRequests)
-        .where(eq(buyerRequests.id, id));
-    } catch (error) {
-      log(`Error deleting buyer request ${id}: ${error}`);
-      throw error;
-    }
-  }
-
-  async incrementBuyerRequestViews(id: number): Promise<void> {
-    try {
-      await db
-        .update(buyerRequests)
-        .set({
-          views: db.raw('views + 1'),
-          updatedAt: new Date(),
-        })
-        .where(eq(buyerRequests.id, id));
-    } catch (error) {
-      log(`Error incrementing views for buyer request ${id}: ${error}`);
-      throw error;
-    }
-  }
-
-  async getPayoutsBySeller(sellerId: number): Promise<any[]> {
-    return [];
-  }
-
-  async approveUser(userId: number): Promise<User> {
-    try {
-      const [user] = await db
-        .update(users)
-        .set({ approved: true })
-        .where(eq(users.id, userId))
-        .returning();
-      return user;
-    } catch (error) {
-      log(`Error approving user ${userId}: ${error}`);
-      throw error;
-    }
-  }
-
-  async deleteProfile(userId: number): Promise<void> {
-    try {
-      await db
-        .delete(profiles)
-        .where(eq(profiles.userId, userId));
-    } catch (error) {
-      log(`Error deleting profile for user ${userId}: ${error}`);
-      throw error;
-    }
-  }
-
-  async deleteUser(userId: number): Promise<void> {
-    try {
-      log(`Deleting user ${userId}`);
-
-      // Delete in a transaction to ensure both operations succeed or fail together
-      await db.transaction(async (tx) => {
-        // First delete the profile if it exists
-        await tx
-          .delete(profiles)
-          .where(eq(profiles.userId, userId));
-
-        // Then delete the user
-        await tx
-          .delete(users)
-          .where(eq(users.id, userId));
-      });
-
-      log(`Successfully deleted user ${userId} and associated profile`);
-    } catch (error) {
-      log(`Error deleting user ${userId}: ${error}`);
-      throw error;
-    }
-  }
-
-  async updateUser(userId: number, updates: Partial<User>): Promise<User> {
-    log(`Updating user ${userId}`, "users");
-    await db.update(users)
-      .set(updates)
-      .where(eq(users.id, userId));
-
-    const updatedUser = await this.getUser(userId);
-    if (!updatedUser) {
-      throw new Error(`User ${userId} not found after update`);
-    }
-    return updatedUser;
-  }
-  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
-    try {
-      log(`Creating notification`, insertNotification);
-      const [notification] = await db
-        .insert(notifications)
-        .values({
-          ...insertNotification,
-          read: false,
-          createdAt: new Date(),
-        })
-        .returning();
-
-      log(`Successfully created notification:`, notification);
-      return notification;
-    } catch (error) {
-      log(`Error creating notification: ${error}`);
-      throw error;
-    }
-  }
-
-  async authenticateUser(username: string, password: string): Promise<User | undefined> {
-    try {
-      log(`Attempting to authenticate user ${username}`, "auth");
-
-      const user = await this.getUserByUsername(username);
-      if (!user) {
-        log(`User ${username} not found in database`, "auth");
-        return undefined;
-      }
-
-      log(`Found user ${username}, validating stored password format`, "auth");
-      if (!user.password || !user.password.includes('.')) {
-        log(`Invalid password format for user ${username}:`, {
-          hasPassword: !!user.password,
-          format: user.password?.includes('.') ? 'hash.salt' : 'invalid'
-        }, "auth");
-        return undefined;
-      }
-
-      log(`Comparing passwords for user ${username}`, "auth");
-      const isValid = await comparePasswords(password, user.password);
-
-      if (!isValid) {
-        log(`Invalid password for user ${username}`, "auth");
-        return undefined;
-      }
-
-      log(`Authentication successful for user ${username}`, "auth");
-      return user;
-    } catch (error) {
-      log(`Error during authentication for user ${username}: ${error}`, "auth");
-      throw error;
-    }
-  }
-
-  async findPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
-    try {
-      log(`Finding payment by Stripe payment intent ID: ${stripePaymentIntentId}`, "payments");
-      const [payment] = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.stripePaymentIntentId, stripePaymentIntentId));
-      return payment;
-    } catch (error) {
-      log(`Error finding payment by Stripe payment intent ID ${stripePaymentIntentId}: ${error}`, "payments");
-      throw error;
-    }
-  }
-
   async updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment> {
     try {
       log(`Updating payment ${paymentId} status to ${status}`, "payments");
@@ -1002,28 +746,7 @@ export class DatabaseStorage implements IStorage {
       log(`Payment ${paymentId} status updated to ${status}`, "payments");
       return payment;
     } catch (error) {
-      log(`Error updating payment status: ${error}`, "payments");
-      throw error;
-    }
-  }
-
-  async createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout> {
-    try {
-      log(`Creating seller payout for seller ${sellerId}`, "payouts");
-      const [payout] = await db
-        .insert(sellerPayouts)
-        .values({
-          ...data,
-          sellerId,
-          status: "pending",
-          createdAt: new Date(),
-          updatedAt: new Date()
-        })
-        .returning();
-
-      log(`Seller payout created: ${payout.id}`, "payouts");      return payout;
-    } catch (error) {
-      log(`Error creating seller payout: ${error}`, "payouts");
+      log(`Error updating payment ${paymentId} status: ${error}`, "payments");
       throw error;
     }
   }
@@ -1031,95 +754,19 @@ export class DatabaseStorage implements IStorage {
   async getPaymentsByAuctionId(auctionId: number): Promise<Payment[]> {
     try {
       log(`Getting payments for auction ${auctionId}`, "payments");
-      const result = await db
+      const results = await db
         .select()
         .from(payments)
         .where(eq(payments.auctionId, auctionId))
         .orderBy(desc(payments.createdAt));
 
-      log(`Found ${result.length} payments for auction ${auctionId}`, "payments");
-      return result;
+      log(`Found ${results.length} payments for auction ${auctionId}`, "payments");
+      return results;
     } catch (error) {
       log(`Error getting payments for auction ${auctionId}: ${error}`, "payments");
       throw error;
     }
   }
-
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    try {
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email));
-      return user;
-    } catch (error) {
-      log(`Error getting user by email ${email}: ${error}`);
-      throw error;
-    }
-  }
-
-  async deleteBidsForAuction(auctionId: number): Promise<void> {
-    console.log(`[STORAGE] Deleting all bids for auction: ${auctionId}`);
-    await db.delete(bids).where(eq(bids.auctionId, auctionId)).execute();
-  }
-  async updatePayment(paymentId: number, data: Partial<Payment>): Promise<Payment> {
-    try {
-      log(`Updating payment ${paymentId} with data: ${JSON.stringify({
-        ...data,
-        stripePaymentIntentId: data.stripePaymentIntentId?.substring(0, 10) + '...'
-      })}`, "payments");
-
-      const [payment] = await db
-        .update(payments)
-        .set({
-          ...data,
-          updatedAt: new Date()
-        })
-        .where(eq(payments.id, paymentId))
-        .returning();
-
-      if (!payment) {
-        throw new Error(`Payment ${paymentId} not found`);
-      }
-
-      log(`Payment ${paymentId} updated successfully`, "payments");
-      return payment;
-    } catch (error) {
-      log(`Error updating payment ${paymentId}: ${error}`, "payments");
-      throw error;
-    }
-  }
-
-  async getPaymentsByAuctionId(auctionId: number): Promise<Payment[]> {
-    try {
-      log(`Getting payments for auction ${auctionId}`, "payments");
-      const result = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.auctionId, auctionId))
-        .orderBy(desc(payments.createdAt));
-
-      log(`Found ${result.length} payments for auction ${auctionId}`, "payments");
-      return result;
-    } catch (error) {
-      log(`Error getting payments for auction ${auctionId}: ${error}`, "payments");
-      throw error;
-    }
-  }
-
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    try {
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email));
-      return user;
-    } catch (error) {
-      log(`Error getting user by email ${email}: ${error}`);
-      throw error;
-    }
-  }
-
   async deleteBidsForAuction(auctionId: number): Promise<void> {
     console.log(`[STORAGE] Deleting all bids for auction: ${auctionId}`);
     await db.delete(bids).where(eq(bids.auctionId, auctionId)).execute();

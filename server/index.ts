@@ -90,18 +90,18 @@ async function startServer(port: number = 5000): Promise<void> {
       // Continue server startup even if frontend setup fails
     }
 
-    // Start server with error handling
+    // Start server - always bind to port 5000
     await new Promise<void>((resolve, reject) => {
       server.listen({
-        port,
+        port: 5000, // Force port 5000
         host: "0.0.0.0",
       }, () => {
-        log(`Server started on port ${port}`, "startup");
+        log(`Server started on port 5000`, "startup");
         resolve();
       }).on('error', (error: any) => {
         if (error.code === 'EADDRINUSE') {
-          log(`Port ${port} is already in use`, "startup");
-          reject(error);
+          log(`Port 5000 is already in use. Please ensure no other process is using this port.`, "startup");
+          process.exit(1); // Exit if port 5000 is unavailable
         } else {
           log(`Server error: ${error}`, "startup");
           reject(error);
@@ -121,14 +121,9 @@ async function startServer(port: number = 5000): Promise<void> {
       process.on('SIGINT', shutdown);
     });
 
-  } catch (error: any) {
-    if (error.code === 'EADDRINUSE') {
-      log(`Retrying with port ${port + 1}`, "startup");
-      await startServer(port + 1);
-    } else {
-      log(`Fatal error during startup: ${error}`, "startup");
-      process.exit(1);
-    }
+  } catch (error) {
+    log(`Fatal error during startup: ${error}`, "startup");
+    process.exit(1);
   }
 }
 
