@@ -557,47 +557,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Add payment verification endpoint 
-    router.get("/api/payments/:paymentIntentId/verify", requireAuth, async (req, res) => {
-      try {
-        const { paymentIntentId } = req.params;
-        
-        console.log("[PAYMENT VERIFY] Verifying payment:", paymentIntentId);
-        
-        // Find payment by Stripe payment intent ID
-        const payment = await storage.findPaymentByStripeId(paymentIntentId);
-        if (!payment) {
-          console.log("[PAYMENT VERIFY] Payment not found for intent:", paymentIntentId);
-          return res.status(404).json({ message: "Payment not found" });
-        }
-
-        // Get associated auction
-        const auction = await storage.getAuction(payment.auctionId);
-        if (!auction) {
-          console.log("[PAYMENT VERIFY] Auction not found for payment:", payment.id);
-          return res.status(404).json({ message: "Associated auction not found" });
-        }
-
-        console.log("[PAYMENT VERIFY] Payment verification successful:", {
-          paymentId: payment.id,
-          auctionId: auction.id,
-          status: payment.status
-        });
-
-        res.json({
-          status: payment.status,
-          auctionId: auction.id,
-          amount: payment.amount
-        });
-
-      } catch (error) {
-        console.error("[PAYMENT VERIFY] Error:", error);
-        res.status(500).json({ 
-          message: error instanceof Error ? error.message : "Payment verification failed" 
-        });
-      }
-    });
-
     // Get admin auctions (including pending)
     router.get("/api/admin/auctions", requireAdmin, async (req, res) => {
       try {
@@ -1456,81 +1415,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
       try {
         const { sessionId } = req.params;
-        console.log('[PAYMENT RETRIEVE] Getting session URL for:', sessionId);
-        
         // Initialize Stripe with the secret key
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
           apiVersion: "2023-10-16",
         });
-        
         // Retrieve the checkout session from Stripe
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        
         // Return the URL for client-side redirect
         res.json({ url: session.url });
       } catch (error) {
-        console.error("[PAYMENT RETRIEVE] Error retrieving checkout session:", error);
+        console.error("Error retrieving checkout session:", error);
         res.status(500).json({ message: "Failed to retrieve checkout session" });
-      }
-    });
-    
-    // Endpoint to verify a payment session
-    router.get("/api/checkout-sessions/:sessionId/verify", async (req, res) => {
-      try {
-        const { sessionId } = req.params;
-        console.log('[PAYMENT VERIFY] Verifying session:', sessionId);
-        
-        if (!sessionId || sessionId === 'undefined' || sessionId === 'null') {
-          console.error('[PAYMENT VERIFY] Invalid session ID:', sessionId);
-          return res.status(400).json({
-            success: false,
-            message: "Invalid payment session ID"
-          });
-        }
-        
-        // Initialize Stripe
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-          apiVersion: "2023-10-16",
-        });
-        
-        // Retrieve the checkout session from Stripe
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
-        
-        // Get the payment status
-        const payment = await storage.getPaymentBySessionId(sessionId);
-        
-        if (!payment) {
-          console.log('[PAYMENT VERIFY] No payment record found for session:', sessionId);
-          return res.status(404).json({ 
-            success: false,
-            message: "Payment record not found" 
-          });
-        }
-        
-        // Get the auction
-        const auction = await storage.getAuction(payment.auctionId);
-        
-        console.log('[PAYMENT VERIFY] Payment status:', {
-          paymentId: payment.id,
-          status: payment.status,
-          auctionId: payment.auctionId,
-          auctionStatus: auction?.paymentStatus
-        });
-        
-        // Return payment verification result
-        res.json({
-          success: true,
-          paymentStatus: payment.status,
-          auctionStatus: auction?.paymentStatus,
-          auctionId: payment.auctionId,
-          sessionStatus: session.status
-        });
-      } catch (error) {
-        console.error("[PAYMENT VERIFY] Error verifying payment session:", error);
-        res.status(500).json({ 
-          success: false,
-          message: "Failed to verify payment session" 
-        });
       }
     });
 

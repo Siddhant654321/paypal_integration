@@ -20,7 +20,6 @@ import SellerProfilePage from "@/pages/seller-profile";
 import BuyerRequestPage from "@/pages/buyer-request-page";
 import EditBuyerRequestPage from "@/pages/edit-buyer-request";
 import FAQPage from "@/pages/faq-page";
-import PaymentSuccessPage from "@/pages/payment-success"; // Added import
 
 function Router() {
   return (
@@ -32,7 +31,6 @@ function Router() {
         <Route path="/profile" component={ProfilePage} />
         <Route path="/auction/:id" component={AuctionPage} />
         <Route path="/auction/:id/pay" component={PaymentPage} />
-        <Route path="/payment-success" component={PaymentSuccessPage} /> {/* Added route */}
         <Route path="/seller/dashboard" component={SellerDashboard} />
         <Route path="/seller/auction/new" component={NewAuction} />
         <Route path="/seller/fulfill/:id" component={FulfillmentPage} />

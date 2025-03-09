@@ -20,12 +20,6 @@ export class PaymentService {
     includeInsurance: boolean = false
   ) {
     try {
-      console.log("[PAYMENTS] Starting payment intent creation:", {
-        auctionId,
-        buyerId,
-        includeInsurance
-      });
-
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
@@ -49,7 +43,7 @@ export class PaymentService {
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
 
-      console.log("[PAYMENTS] Creating payment intent with amounts:", {
+      console.log("[PAYMENTS] Creating payment intent:", {
         baseAmount,
         platformFee,
         insuranceFee,
@@ -76,12 +70,6 @@ export class PaymentService {
         }
       });
 
-      console.log("[PAYMENTS] Created payment intent:", {
-        id: paymentIntent.id,
-        clientSecret: paymentIntent.client_secret ? "present" : "missing",
-        status: paymentIntent.status
-      });
-
       // Create payment record
       const payment = await storage.insertPayment({
         auctionId,
@@ -93,12 +81,6 @@ export class PaymentService {
         insuranceFee,
         stripePaymentIntentId: paymentIntent.id,
         status: 'pending'
-      });
-
-      console.log("[PAYMENTS] Created payment record:", {
-        id: payment.id,
-        stripePaymentIntentId: payment.stripePaymentIntentId,
-        status: payment.status
       });
 
       // Update auction status
@@ -122,8 +104,6 @@ export class PaymentService {
 
   static async handlePaymentSuccess(paymentIntentId: string) {
     try {
-      console.log("[PAYMENTS] Processing successful payment:", paymentIntentId);
-
       const payment = await storage.findPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
@@ -132,12 +112,6 @@ export class PaymentService {
       // Retrieve PaymentIntent to get charge ID
       const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
       const chargeId = paymentIntent.latest_charge as string;
-
-      console.log("[PAYMENTS] Retrieved payment intent details:", {
-        paymentId: payment.id,
-        chargeId,
-        status: paymentIntent.status
-      });
 
       // Update payment status and charge ID
       await storage.updatePayment(payment.id, {
@@ -166,8 +140,6 @@ export class PaymentService {
 
   static async handlePaymentFailure(paymentIntentId: string) {
     try {
-      console.log("[PAYMENTS] Processing failed payment:", paymentIntentId);
-
       const payment = await storage.findPaymentByStripeId(paymentIntentId);
       if (!payment) {
         throw new Error("Payment not found");
