@@ -1,6 +1,5 @@
 
 import React, { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,10 +7,11 @@ import { Loader2, Check, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function PaymentSuccessPage() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [auctionId, setAuctionId] = useState<number | null>(null);
 
   // Get the session ID from URL query params
   const searchParams = new URLSearchParams(window.location.search);
@@ -20,12 +20,15 @@ export default function PaymentSuccessPage() {
   useEffect(() => {
     const verifyPayment = async () => {
       if (!sessionId) {
+        console.error('[PAYMENT SUCCESS] No session ID found in URL');
         setError('No payment session ID found');
         setLoading(false);
         return;
       }
 
       try {
+        console.log('[PAYMENT SUCCESS] Verifying session:', sessionId);
+        
         // Check payment status
         const response = await fetch(`/api/checkout-sessions/${sessionId}/verify`);
         
@@ -36,6 +39,10 @@ export default function PaymentSuccessPage() {
         
         const data = await response.json();
         console.log('[PAYMENT SUCCESS] Payment verification:', data);
+        
+        if (data.auctionId) {
+          setAuctionId(data.auctionId);
+        }
         
         setSuccess(true);
         setLoading(false);
@@ -49,50 +56,77 @@ export default function PaymentSuccessPage() {
     verifyPayment();
   }, [sessionId]);
 
-  return (
-    <div className="container max-w-md mx-auto py-10">
-      <Card>
-        <CardHeader className="text-center">
-          <CardTitle>Payment Confirmation</CardTitle>
-          <CardDescription>
-            {loading ? 'Verifying your payment...' : 
-             success ? 'Your payment has been processed' : 
-             'Payment status'}
-          </CardDescription>
-        </CardHeader>
-        
-        <CardContent className="flex flex-col items-center space-y-4">
-          {loading ? (
-            <div className="flex flex-col items-center py-4">
-              <Loader2 className="h-16 w-16 animate-spin text-primary" />
-              <p className="mt-4 text-center text-muted-foreground">
-                Please wait while we verify your payment...
-              </p>
-            </div>
-          ) : success ? (
-            <div className="flex flex-col items-center py-4">
-              <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
-                <Check className="h-10 w-10 text-green-500" />
-              </div>
-              <p className="mt-4 text-center">
-                Thank you for your payment! Your transaction has been completed successfully.
-              </p>
-            </div>
-          ) : (
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Verifying Payment</CardTitle>
+            <CardDescription>
+              Please wait while we verify your payment...
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center p-6">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-destructive">Payment Verification Failed</CardTitle>
+          </CardHeader>
+          <CardContent>
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
-          )}
-        </CardContent>
-        
-        <CardFooter className="flex justify-center">
-          <Link href="/my-auctions">
-            <Button>
-              Back to My Auctions
+          </CardContent>
+          <CardFooter className="flex justify-between">
+            <Button variant="outline" onClick={() => window.history.back()}>
+              Go Back
             </Button>
-          </Link>
+            <Button onClick={() => window.location.reload()}>
+              Try Again
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[70vh] p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-green-600 flex items-center">
+            <Check className="mr-2 h-6 w-6" />
+            Payment Successful
+          </CardTitle>
+          <CardDescription>
+            Thank you for your payment. Your transaction has been completed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground mb-4">
+            A confirmation has been sent to the seller, and they will prepare your items for shipping.
+          </p>
+        </CardContent>
+        <CardFooter className="flex justify-between">
+          <Button variant="outline" asChild>
+            <Link href="/">Return Home</Link>
+          </Button>
+          {auctionId && (
+            <Button asChild>
+              <Link href={`/auctions/${auctionId}`}>View Auction</Link>
+            </Button>
+          )}
         </CardFooter>
       </Card>
     </div>

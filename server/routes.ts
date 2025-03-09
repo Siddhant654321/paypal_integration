@@ -1415,16 +1415,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
       try {
         const { sessionId } = req.params;
+        console.log('[PAYMENT RETRIEVE] Getting session URL for:', sessionId);
+        
         // Initialize Stripe with the secret key
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
           apiVersion: "2023-10-16",
         });
+        
         // Retrieve the checkout session from Stripe
         const session = await stripe.checkout.sessions.retrieve(sessionId);
+        
         // Return the URL for client-side redirect
         res.json({ url: session.url });
       } catch (error) {
-        console.error("Error retrieving checkout session:", error);
+        console.error("[PAYMENT RETRIEVE] Error retrieving checkout session:", error);
         res.status(500).json({ message: "Failed to retrieve checkout session" });
       }
     });
@@ -1434,6 +1438,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { sessionId } = req.params;
         console.log('[PAYMENT VERIFY] Verifying session:', sessionId);
+        
+        if (!sessionId || sessionId === 'undefined' || sessionId === 'null') {
+          console.error('[PAYMENT VERIFY] Invalid session ID:', sessionId);
+          return res.status(400).json({
+            success: false,
+            message: "Invalid payment session ID"
+          });
+        }
         
         // Initialize Stripe
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {

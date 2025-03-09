@@ -82,7 +82,15 @@ export class PaymentService {
           auctionId: auction.id.toString(),
           buyerId: buyerId.toString(),
           sellerId: auction.sellerId.toString(),
-        }
+        },
+        client_reference_id: `auction_${auctionId}`
+      });
+
+      console.log('[PAYMENTS] Created checkout session:', {
+        sessionId: session.id,
+        url: session.url,
+        hasPaymentIntent: !!session.payment_intent,
+        successUrl: session.success_url
       });
 
       // Create payment record
