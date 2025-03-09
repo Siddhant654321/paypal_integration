@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CreditCard, Loader2, Shield, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Shield, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -11,103 +11,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatPrice } from "../utils/formatters";
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
   throw new Error('Missing required env var: VITE_STRIPE_PUBLISHABLE_KEY');
 }
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
-
 const INSURANCE_FEE = 800; // $8.00 in cents
-
-function CheckoutForm({ clientSecret, auctionId }: { clientSecret: string; auctionId: number }) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!stripe || !elements) {
-      console.error("Stripe not initialized");
-      return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-
-    try {
-      const { error: submitError } = await elements.submit();
-      if (submitError) {
-        throw new Error(submitError.message);
-      }
-
-      const { error: confirmError } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/payment-success`,
-        },
-      });
-
-      if (confirmError) {
-        throw new Error(confirmError.message);
-      }
-
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Payment failed";
-      setError(message);
-      toast({
-        variant: "destructive",
-        title: "Payment Error",
-        description: message,
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <PaymentElement />
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      <Button 
-        type="submit"
-        className="w-full" 
-        size="lg"
-        disabled={isProcessing || !stripe}
-      >
-        {isProcessing ? (
-          <>
-            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          <>
-            <CreditCard className="h-5 w-5 mr-2" />
-            Pay Now
-          </>
-        )}
-      </Button>
-    </form>
-  );
-}
 
 export default function PaymentPage() {
   const [, params] = useRoute("/auction/:id/pay");
   const [includeInsurance, setIncludeInsurance] = useState(false);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -115,14 +28,14 @@ export default function PaymentPage() {
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
     queryKey: [`/api/auctions/${params?.id}`],
-    staleTime: Infinity, // Prevent unnecessary refetches
+    staleTime: Infinity,
   });
 
   useEffect(() => {
     if (!auction?.id || !user) return;
 
-    const createPaymentIntent = async () => {
-      if (clientSecret) return; // Don't create new intent if we already have one
+    const initiatePayment = async () => {
+      if (isLoading) return;
 
       setIsLoading(true);
       setError(null);
@@ -142,18 +55,15 @@ export default function PaymentPage() {
 
         const data = await response.json();
 
-        // Check if we got a redirect URL or a session ID
-        if (data.url) {
-          console.log("Redirecting to Stripe Checkout:", data.url);
-          // Use direct assignment instead of window.open
-          window.location.href = data.url;
-          return;
-        } else if (data.clientSecret) {
-          // Fall back to client-side handling if we got a client secret instead
-          setClientSecret(data.clientSecret);
-        } else {
-          throw new Error("No payment URL or client secret received");
+        if (!data.url) {
+          throw new Error("No payment URL received");
         }
+
+        // Open Stripe checkout in a new tab
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+
+        // Optionally close current window or redirect to a waiting page
+        window.location.href = `/auction/${auction.id}?payment_initiated=true`;
 
       } catch (err) {
         const message = err instanceof Error ? err.message : "Could not initialize payment";
@@ -168,8 +78,8 @@ export default function PaymentPage() {
       }
     };
 
-    createPaymentIntent();
-  }, [auction?.id, includeInsurance, user, toast, clientSecret]);
+    initiatePayment();
+  }, [auction?.id, includeInsurance, user, toast]);
 
   if (isLoadingAuction || !auction) {
     return (
@@ -218,7 +128,7 @@ export default function PaymentPage() {
               id="insurance"
               checked={includeInsurance}
               onCheckedChange={setIncludeInsurance}
-              disabled={!!clientSecret} // Prevent changes after intent creation
+              disabled={isLoading}
             />
           </div>
 
@@ -227,24 +137,19 @@ export default function PaymentPage() {
             <span>{totalAmountDollars}</span>
           </div>
 
-          {clientSecret ? (
-            <Elements stripe={stripePromise} options={{ 
-              clientSecret,
-              appearance: { theme: 'stripe' }
-            }}>
-              <CheckoutForm clientSecret={clientSecret} auctionId={auction.id} />
-            </Elements>
-          ) : isLoading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : error ? (
+          {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
-          ) : null}
+          )}
+
+          {isLoading && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          )}
         </CardContent>
         <CardFooter className="text-sm text-muted-foreground">
           Payments are processed securely by Stripe
