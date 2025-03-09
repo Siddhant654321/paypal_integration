@@ -137,11 +137,23 @@ export default function PaymentPage() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to create payment intent');
+          throw new Error(errorData.message || 'Failed to create payment session');
         }
 
         const data = await response.json();
-        setClientSecret(data.clientSecret);
+        
+        // Check if we got a redirect URL
+        if (data.url) {
+          console.log("Redirecting to Stripe Checkout:", data.url);
+          // Use window.location.href for the redirect
+          window.location.href = data.url;
+          return;
+        } else if (data.clientSecret) {
+          // Fall back to client-side handling if we got a client secret instead
+          setClientSecret(data.clientSecret);
+        } else {
+          throw new Error("No payment URL or client secret received");
+        }
 
       } catch (err) {
         const message = err instanceof Error ? err.message : "Could not initialize payment";
