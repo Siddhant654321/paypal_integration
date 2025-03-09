@@ -141,12 +141,17 @@ export default function PaymentPage() {
         }
 
         const data = await response.json();
-        
+
         // Check if we got a redirect URL
         if (data.url) {
           console.log("Redirecting to Stripe Checkout:", data.url);
-          // Use window.location.href for the redirect
-          window.location = data.url;
+          // Use window.top to break out of iframe
+          if (window.top) {
+            window.top.location.href = data.url;
+          } else {
+            // Fallback to regular redirect
+            window.location.href = data.url;
+          }
           return;
         } else if (data.clientSecret) {
           // Fall back to client-side handling if we got a client secret instead
