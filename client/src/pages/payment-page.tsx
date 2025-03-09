@@ -146,7 +146,7 @@ export default function PaymentPage() {
         if (data.url) {
           console.log("Redirecting to Stripe Checkout:", data.url);
           // Use window.location.href for the redirect
-          window.location.href = data.url;
+          window.location = data.url;
           return;
         } else if (data.clientSecret) {
           // Fall back to client-side handling if we got a client secret instead

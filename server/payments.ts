@@ -277,7 +277,7 @@ export class PaymentService {
           },
         },
         mode: 'payment',
-        success_url: `${baseUrl}/auction/${auctionId}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&auction_id=${auctionId}`,
         cancel_url: `${baseUrl}/auction/${auctionId}?payment_canceled=true`,
         metadata: {
           auctionId: auction.id.toString(),

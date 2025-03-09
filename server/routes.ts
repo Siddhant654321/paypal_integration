@@ -1339,6 +1339,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           timestamp: new Date().toISOString()
         });
         
+        // Clear any previous response headers to avoid conflicts
+        res.setHeader('Content-Type', 'application/json');
+        
         if (!req.user) {
           console.log('[PAYMENT] Unauthorized payment attempt - no user in session');
           return res.status(401).json({
