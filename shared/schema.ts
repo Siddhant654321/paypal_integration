@@ -112,6 +112,7 @@ export const bids = pgTable("bids", {
   timestamp: timestamp("timestamp").notNull(),
 });
 
+// Update payment schema - remove stripe_session_id
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   auctionId: integer("auction_id").notNull().references(() => auctions.id),
@@ -238,11 +239,12 @@ export const insertBidSchema = createInsertSchema(bids).omit({
   timestamp: true,
 });
 
-// Update the payment schema to include insuranceFee
+// Update the payment schema
 export const insertPaymentSchema = createInsertSchema(payments)
   .omit({
     id: true,
-    stripePaymentIntentId: true,
+    stripeChargeId: true,
+    stripeTransferId: true,
     status: true,
     createdAt: true,
     updatedAt: true,

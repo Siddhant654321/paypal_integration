@@ -20,6 +20,12 @@ export class PaymentService {
     includeInsurance: boolean = false
   ) {
     try {
+      console.log("[PAYMENTS] Starting payment intent creation:", {
+        auctionId,
+        buyerId,
+        includeInsurance
+      });
+
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
@@ -42,12 +48,14 @@ export class PaymentService {
       const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
+      const sellerPayout = baseAmount - platformFee;
 
-      console.log("[PAYMENTS] Creating payment intent:", {
+      console.log("[PAYMENTS] Calculated payment amounts:", {
         baseAmount,
         platformFee,
         insuranceFee,
         totalAmount,
+        sellerPayout,
         sellerId: auction.sellerId,
         sellerStripeAccount: sellerProfile.stripeAccountId
       });
@@ -70,17 +78,26 @@ export class PaymentService {
         }
       });
 
-      // Create payment record
+      console.log("[PAYMENTS] Created Stripe PaymentIntent:", {
+        paymentIntentId: paymentIntent.id,
+        clientSecret: paymentIntent.client_secret ? 'present' : 'missing'
+      });
+
+      // Create payment record - using new schema
       const payment = await storage.insertPayment({
         auctionId,
         buyerId,
         sellerId: auction.sellerId,
         amount: totalAmount,
         platformFee,
-        sellerPayout: baseAmount - platformFee,
+        sellerPayout,
         insuranceFee,
-        stripePaymentIntentId: paymentIntent.id,
-        status: 'pending'
+        stripePaymentIntentId: paymentIntent.id
+      });
+
+      console.log("[PAYMENTS] Created payment record:", {
+        paymentId: payment.id,
+        status: payment.status
       });
 
       // Update auction status
@@ -125,7 +142,7 @@ export class PaymentService {
         paymentStatus: "completed"
       });
 
-      // Send single notification
+      // Send notification
       await NotificationService.notifyPayment(
         payment.sellerId,
         payment.amount,
@@ -145,25 +162,24 @@ export class PaymentService {
         throw new Error("Payment not found");
       }
 
-      // Get auction for reserve price check
-      const auction = await storage.getAuction(payment.auctionId);
-      if (!auction) {
-        throw new Error("Auction not found");
-      }
-
       // Update payment status
       await storage.updatePayment(payment.id, {
         status: "failed"
       });
 
       // Update auction status based on reserve price
+      const auction = await storage.getAuction(payment.auctionId);
+      if (!auction) {
+        throw new Error("Auction not found");
+      }
+
       await storage.updateAuction(payment.auctionId, {
         status: auction.currentPrice < auction.reservePrice ? 
           "pending_seller_decision" : "ended",
         paymentStatus: "failed"
       });
 
-      // Send single notification
+      // Send notification
       await NotificationService.notifyPayment(
         payment.sellerId,
         payment.amount,
