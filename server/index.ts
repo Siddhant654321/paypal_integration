@@ -3,10 +3,13 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import cors from 'cors';
 
 async function initializeServer() {
   const app = express();
   const DEFAULT_PORT = 5000;
+  const clientOrigin = process.env.CLIENT_ORIGIN;
+
 
   try {
     log("Starting server initialization", "startup");
@@ -41,6 +44,22 @@ async function initializeServer() {
     log("Setting up middleware", "startup");
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
+
+    // Set up CORS for client and Stripe
+    app.use(cors({
+      origin: [clientOrigin, 'http://localhost:5173', 'https://checkout.stripe.com', 'https://js.stripe.com'],
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    }));
+
+    // Allow iframe embedding from Stripe
+    app.use((req, res, next) => {
+      res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://checkout.stripe.com https://js.stripe.com");
+      next();
+    });
+
 
     // Request logging middleware
     app.use((req, res, next) => {

@@ -142,11 +142,11 @@ export default function PaymentPage() {
 
         const data = await response.json();
 
-        // Check if we got a redirect URL
+        // Check if we got a redirect URL or a session ID
         if (data.url) {
           console.log("Redirecting to Stripe Checkout:", data.url);
-          // Open Stripe checkout in a new tab/window instead of redirecting the current one
-          window.open(data.url, '_blank')?.focus();
+          // Use direct assignment instead of window.open
+          window.location.href = data.url;
           return;
         } else if (data.clientSecret) {
           // Fall back to client-side handling if we got a client secret instead

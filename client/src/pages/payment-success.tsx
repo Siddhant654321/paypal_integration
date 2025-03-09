@@ -29,8 +29,23 @@ export default function PaymentSuccessPage() {
       redirectStatus 
     });
     
+    // Try to determine auction ID from various sources
     if (auctionParam) {
       setAuctionId(auctionParam);
+    } else if (sessionId) {
+      // If we only have session ID, try to fetch auction ID from API
+      fetch(`/api/checkout-session/${sessionId}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.auctionId) {
+            setAuctionId(data.auctionId);
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching session details:', error);
+          setError('Could not retrieve auction details. Please contact support.');
+        });
+    }
     }
     
     // Slight delay to let the system process the payment

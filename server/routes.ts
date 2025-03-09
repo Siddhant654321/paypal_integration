@@ -1424,8 +1424,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         // Retrieve the checkout session from Stripe
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        // Return the URL for client-side redirect
-        res.json({ url: session.url });
+        
+        // Extract auction ID from metadata if available
+        let auctionId = null;
+        if (session.metadata && session.metadata.auctionId) {
+          auctionId = session.metadata.auctionId;
+        }
+        
+        // Return the URL and auction ID
+        res.json({ 
+          url: session.url,
+          auctionId,
+          status: session.status
+        });
       } catch (error) {
         console.error("Error retrieving checkout session:", error);
         res.status(500).json({ message: "Failed to retrieve checkout session" });
