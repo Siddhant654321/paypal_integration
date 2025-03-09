@@ -113,7 +113,7 @@ export class PaymentService {
         url: session.url
       });
 
-      // Create payment record
+      // Create payment record with all required fields
       const paymentData = {
         auctionId,
         buyerId,
@@ -122,12 +122,15 @@ export class PaymentService {
         platformFee,
         sellerPayout,
         insuranceFee,
-        stripePaymentIntentId: '', // Will be updated when payment is completed
+        stripePaymentIntentId: '',
+        stripeChargeId: null,
         status: "pending" as const,
-        payoutProcessed: false
+        payoutProcessed: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
 
-      console.log("[PAYMENTS] Creating initial payment record");
+      console.log("[PAYMENTS] Creating payment record:", paymentData);
       const payment = await storage.insertPayment(paymentData);
 
       // Update auction status
@@ -168,7 +171,9 @@ export class PaymentService {
       // Update payment status and charge ID
       await storage.updatePayment(payment.id, {
         status: "completed",
-        stripeChargeId: chargeId
+        stripeChargeId: chargeId,
+        stripePaymentIntentId: paymentIntentId,
+        updatedAt: new Date()
       });
 
       // Update auction status
@@ -203,7 +208,8 @@ export class PaymentService {
 
       // Update payment status
       await storage.updatePayment(payment.id, {
-        status: "failed"
+        status: "failed",
+        updatedAt: new Date()
       });
 
       // Get auction details for reserve price check
