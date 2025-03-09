@@ -87,7 +87,7 @@ export class PaymentService {
           },
         },
         mode: 'payment',
-        success_url: `${process.env.PUBLIC_URL || ''}/payment-success?payment_intent={PAYMENT_INTENT}&auction_id=${auctionId}`,
+        success_url: `${process.env.PUBLIC_URL || ''}/payment-success?session_id={CHECKOUT_SESSION_ID}&auction_id=${auctionId}`,
         cancel_url: `${process.env.PUBLIC_URL || ''}/auction/${auctionId}?payment_canceled=true`,
         allow_promotion_codes: true,
       });
@@ -145,14 +145,14 @@ export class PaymentService {
         throw new Error("Payment not found");
       }
 
+      console.log("[PAYMENTS] Handling successful payment:", {
+        paymentId: payment.id,
+        paymentIntentId
+      });
+
       // Retrieve PaymentIntent to get charge ID
       const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
       const chargeId = paymentIntent.latest_charge as string;
-
-      console.log("[PAYMENTS] Handling successful payment:", {
-        paymentId: payment.id,
-        chargeId: chargeId
-      });
 
       // Update payment status and charge ID
       await storage.updatePayment(payment.id, {
@@ -195,12 +195,13 @@ export class PaymentService {
         status: "failed"
       });
 
-      // Update auction status based on reserve price
+      // Get auction details for reserve price check
       const auction = await storage.getAuction(payment.auctionId);
       if (!auction) {
         throw new Error("Auction not found");
       }
 
+      // Update auction status based on reserve price
       await storage.updateAuction(payment.auctionId, {
         status: auction.currentPrice < auction.reservePrice ?
           "pending_seller_decision" : "ended",

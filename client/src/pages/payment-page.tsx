@@ -67,9 +67,9 @@ export default function PaymentPage() {
         const message = err instanceof Error ? err.message : "Could not initialize payment";
         setError(message);
         toast({
-          variant: "destructive",
           title: "Payment Error",
           description: message,
+          variant: "destructive",
         });
       } finally {
         setIsLoading(false);
