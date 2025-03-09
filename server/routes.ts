@@ -1428,6 +1428,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(500).json({ message: "Failed to retrieve checkout session" });
       }
     });
+    
+    // Endpoint to verify a payment session
+    router.get("/api/checkout-sessions/:sessionId/verify", async (req, res) => {
+      try {
+        const { sessionId } = req.params;
+        console.log('[PAYMENT VERIFY] Verifying session:', sessionId);
+        
+        // Initialize Stripe
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+          apiVersion: "2023-10-16",
+        });
+        
+        // Retrieve the checkout session from Stripe
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        
+        // Get the payment status
+        const payment = await storage.getPaymentBySessionId(sessionId);
+        
+        if (!payment) {
+          console.log('[PAYMENT VERIFY] No payment record found for session:', sessionId);
+          return res.status(404).json({ 
+            success: false,
+            message: "Payment record not found" 
+          });
+        }
+        
+        // Get the auction
+        const auction = await storage.getAuction(payment.auctionId);
+        
+        console.log('[PAYMENT VERIFY] Payment status:', {
+          paymentId: payment.id,
+          status: payment.status,
+          auctionId: payment.auctionId,
+          auctionStatus: auction?.paymentStatus
+        });
+        
+        // Return payment verification result
+        res.json({
+          success: true,
+          paymentStatus: payment.status,
+          auctionStatus: auction?.paymentStatus,
+          auctionId: payment.auctionId,
+          sessionStatus: session.status
+        });
+      } catch (error) {
+        console.error("[PAYMENT VERIFY] Error verifying payment session:", error);
+        res.status(500).json({ 
+          success: false,
+          message: "Failed to verify payment session" 
+        });
+      }
+    });
 
     // Update the webhook handling section
     router.post("/api/webhooks/stripe", async (req, res) => {
