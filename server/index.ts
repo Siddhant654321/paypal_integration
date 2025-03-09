@@ -19,28 +19,16 @@ dotenv.config();
 // Run database migrations first
 async function initDatabase() {
   try {
-    console.log("Initializing database and running migrations...");
-    await runMigrations();
+    console.log("Initializing database connection...");
+    // Temporarily skip migrations for debugging
+    // await runMigrations();
 
-    // Additional check for stripe_charge_id column
-    try {
-      await db.execute(sql`
-        DO $$ 
-        BEGIN 
-          IF NOT EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_name = 'payments' AND column_name = 'stripe_charge_id'
-          ) THEN
-            ALTER TABLE "payments" ADD COLUMN "stripe_charge_id" varchar;
-          END IF;
-        END $$;
-      `);
-      console.log("Database initialization complete");
-    } catch (columnError) {
-      console.error("Error checking/adding stripe_charge_id column:", columnError);
-    }
+    // Test basic database connectivity
+    await db.execute(sql`SELECT 1`);
+    console.log("Database connection successful");
   } catch (error) {
     console.error("Database initialization error:", error);
+    throw error;
   }
 }
 
@@ -68,7 +56,6 @@ initDatabase().catch(err => {
 
 async function initializeServer() {
   const app = express();
-  const DEFAULT_PORT = 5000;
 
   try {
     log("Starting server initialization", "startup");
@@ -76,27 +63,6 @@ async function initializeServer() {
     // Check critical environment variables
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL environment variable is not set");
-    }
-    if (!process.env.SESSION_SECRET) {
-      log("Warning: SESSION_SECRET not set, using default value", "startup");
-    }
-
-    // Test database connection with retry logic
-    let retries = 5;
-    while (retries > 0) {
-      try {
-        log("Testing database connection...", "startup");
-        await db.execute(sql`SELECT 1`);
-        log("Database connection successful", "startup");
-        break;
-      } catch (error) {
-        retries--;
-        if (retries === 0) {
-          throw new Error(`Failed to connect to database after 5 attempts: ${error}`);
-        }
-        log(`Database connection failed, retrying... (${retries} attempts remaining)`, "startup");
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
     }
 
     // Basic middleware setup
@@ -138,8 +104,11 @@ async function initializeServer() {
   }
 }
 
-async function startServer(port: number = 5000): Promise<void> {
+async function startServer(): Promise<void> {
+  const PORT = 5000; // Always use port 5000
+
   try {
+    log("Beginning server startup sequence...", "startup");
     const app = await initializeServer();
 
     // Setup routes
@@ -149,13 +118,9 @@ async function startServer(port: number = 5000): Promise<void> {
 
     // Setup frontend
     try {
-      if (process.env.NODE_ENV === "production") {
-        log("Setting up static file serving...", "startup");
-        serveStatic(app);
-      } else {
-        log("Setting up Vite development server...", "startup");
-        await setupVite(app, server);
-      }
+      log("Setting up frontend...", "startup");
+      // Always use static file serving for development
+      serveStatic(app);
       log("Frontend setup complete", "startup");
     } catch (frontendError) {
       log(`Frontend setup error: ${frontendError}`, "startup");
@@ -164,20 +129,14 @@ async function startServer(port: number = 5000): Promise<void> {
 
     // Start server with error handling
     await new Promise<void>((resolve, reject) => {
-      server.listen({
-        port,
-        host: "0.0.0.0",
-      }, () => {
-        log(`Server started on port ${port}`, "startup");
+      log(`Starting server on port ${PORT}...`, "startup");
+
+      server.listen(PORT, "0.0.0.0", () => {
+        log(`Server successfully started on port ${PORT}`, "startup");
         resolve();
       }).on('error', (error: any) => {
-        if (error.code === 'EADDRINUSE') {
-          log(`Port ${port} is already in use`, "startup");
-          reject(error);
-        } else {
-          log(`Server error: ${error}`, "startup");
-          reject(error);
-        }
+        log(`Server startup error: ${error}`, "startup");
+        reject(error);
       });
 
       // Handle graceful shutdown
@@ -193,14 +152,9 @@ async function startServer(port: number = 5000): Promise<void> {
       process.on('SIGINT', shutdown);
     });
 
-  } catch (error: any) {
-    if (error.code === 'EADDRINUSE') {
-      log(`Retrying with port ${port + 1}`, "startup");
-      await startServer(port + 1);
-    } else {
-      log(`Fatal error during startup: ${error}`, "startup");
-      process.exit(1);
-    }
+  } catch (error) {
+    log(`Fatal error during server startup: ${error}`, "startup");
+    process.exit(1);
   }
 }
 
