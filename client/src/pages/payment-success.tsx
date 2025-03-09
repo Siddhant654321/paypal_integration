@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,43 +6,45 @@ import { Loader2, Check, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function PaymentSuccessPage() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [auctionId, setAuctionId] = useState<number | null>(null);
 
-  // Get the session ID from URL query params
+  // Get the payment_intent from URL query params
   const searchParams = new URLSearchParams(window.location.search);
-  const sessionId = searchParams.get('session_id');
+  const paymentIntentId = searchParams.get('payment_intent');
 
   useEffect(() => {
     const verifyPayment = async () => {
-      if (!sessionId) {
-        console.error('[PAYMENT SUCCESS] No session ID found in URL');
-        setError('No payment session ID found');
+      if (!paymentIntentId) {
+        console.error('[PAYMENT SUCCESS] No payment intent ID found in URL');
+        setError('Payment verification failed. Please contact support if you believe this is an error.');
         setLoading(false);
         return;
       }
 
       try {
-        console.log('[PAYMENT SUCCESS] Verifying session:', sessionId);
-        
-        // Check payment status
-        const response = await fetch(`/api/checkout-sessions/${sessionId}/verify`);
-        
+        console.log('[PAYMENT SUCCESS] Verifying payment:', paymentIntentId);
+
+        // Check payment status using our verification endpoint
+        const response = await fetch(`/api/payments/${paymentIntentId}/verify`, {
+          credentials: 'include' // Include session cookie
+        });
+
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Payment verification failed');
         }
-        
+
         const data = await response.json();
-        console.log('[PAYMENT SUCCESS] Payment verification:', data);
-        
+        console.log('[PAYMENT SUCCESS] Payment verification response:', data);
+
         if (data.auctionId) {
           setAuctionId(data.auctionId);
         }
-        
+
         setSuccess(true);
         setLoading(false);
       } catch (err) {
@@ -54,7 +55,7 @@ export default function PaymentSuccessPage() {
     };
 
     verifyPayment();
-  }, [sessionId]);
+  }, [paymentIntentId]);
 
   if (loading) {
     return (

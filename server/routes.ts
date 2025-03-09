@@ -557,6 +557,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Add payment verification endpoint 
+    router.get("/api/payments/:paymentIntentId/verify", requireAuth, async (req, res) => {
+      try {
+        const { paymentIntentId } = req.params;
+        
+        console.log("[PAYMENT VERIFY] Verifying payment:", paymentIntentId);
+        
+        // Find payment by Stripe payment intent ID
+        const payment = await storage.findPaymentByStripeId(paymentIntentId);
+        if (!payment) {
+          console.log("[PAYMENT VERIFY] Payment not found for intent:", paymentIntentId);
+          return res.status(404).json({ message: "Payment not found" });
+        }
+
+        // Get associated auction
+        const auction = await storage.getAuction(payment.auctionId);
+        if (!auction) {
+          console.log("[PAYMENT VERIFY] Auction not found for payment:", payment.id);
+          return res.status(404).json({ message: "Associated auction not found" });
+        }
+
+        console.log("[PAYMENT VERIFY] Payment verification successful:", {
+          paymentId: payment.id,
+          auctionId: auction.id,
+          status: payment.status
+        });
+
+        res.json({
+          status: payment.status,
+          auctionId: auction.id,
+          amount: payment.amount
+        });
+
+      } catch (error) {
+        console.error("[PAYMENT VERIFY] Error:", error);
+        res.status(500).json({ 
+          message: error instanceof Error ? error.message : "Payment verification failed" 
+        });
+      }
+    });
+
     // Get admin auctions (including pending)
     router.get("/api/admin/auctions", requireAdmin, async (req, res) => {
       try {

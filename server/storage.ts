@@ -44,13 +44,14 @@ export interface IStorage {
   updateUser(userId: number, updates: Partial<User>): Promise<User>;
   authenticateUser(username: string, password: string): Promise<User | undefined>;
   insertPayment(paymentData: InsertPayment): Promise<Payment>;
-  findPaymentByStripeId(stripeSessionId: string): Promise<Payment | undefined>;
+  findPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined>;
   updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment>;
   createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout>;
   getPaymentsByAuctionId(auctionId: number): Promise<Payment[]>;
-  getUserByEmail(email: string): Promise<User | undefined>; // Added getUserByEmail
+  getUserByEmail(email: string): Promise<User | undefined>; 
   deleteBid(bidId: number): Promise<void>;
   deleteBidsForAuction(auctionId: number): Promise<void>;
+  updatePayment(paymentId: number, updates: Partial<Payment>): Promise<Payment>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -662,16 +663,34 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async insertPayment(paymentData: any): Promise<any> {
+  async insertPayment(paymentData: InsertPayment): Promise<Payment> {
     try {
+      console.log(`[STORAGE] Inserting payment:`, paymentData);
+
+      // Ensure we have the required stripe_payment_intent_id
+      if (!paymentData.stripePaymentIntentId) {
+        throw new Error('stripe_payment_intent_id is required');
+      }
+
       const [payment] = await db
         .insert(payments)
-        .values(paymentData)
+        .values({
+          ...paymentData,
+          status: paymentData.status || 'pending',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
         .returning();
-      
+
+      console.log(`[STORAGE] Successfully inserted payment:`, {
+        id: payment.id,
+        stripePaymentIntentId: payment.stripePaymentIntentId,
+        status: payment.status
+      });
+
       return payment;
     } catch (error) {
-      console.error("Error inserting payment:", error);
+      console.error(`[STORAGE] Error inserting payment:`, error);
       throw error;
     }
   }
@@ -955,16 +974,18 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async findPaymentByStripeId(stripeSessionId: string): Promise<Payment | undefined> {
+  async findPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
     try {
-      log(`Finding payment by Stripe session ID: ${stripeSessionId}`, "payments");
+      console.log(`[STORAGE] Finding payment by payment intent ID: ${stripePaymentIntentId}`);
       const [payment] = await db
         .select()
         .from(payments)
-        .where(eq(payments.stripePaymentIntentId, stripeSessionId));
+        .where(eq(payments.stripePaymentIntentId, stripePaymentIntentId));
+
+      console.log(`[STORAGE] Payment lookup result:`, payment);
       return payment;
     } catch (error) {
-      log(`Error finding payment by Stripe session ID ${stripeSessionId}: ${error}`, "payments");
+      console.error(`[STORAGE] Error finding payment by payment intent ID ${stripePaymentIntentId}:`, error);
       throw error;
     }
   }
@@ -999,8 +1020,7 @@ export class DatabaseStorage implements IStorage {
       const [payout] = await db
         .insert(sellerPayouts)
         .values({
-          ...data,
-          sellerId,
+          ...data,          sellerId,
           status: "pending",
           createdAt: new Date(),
           updatedAt: new Date()
@@ -1048,6 +1068,30 @@ export class DatabaseStorage implements IStorage {
   async deleteBidsForAuction(auctionId: number): Promise<void> {
     console.log(`[STORAGE] Deleting all bids for auction: ${auctionId}`);
     await db.delete(bids).where(eq(bids.auctionId, auctionId)).execute();
+  }
+  async updatePayment(paymentId: number, updates: Partial<Payment>): Promise<Payment> {
+    try {
+      console.log(`[STORAGE] Updating payment ${paymentId}:`, updates);
+
+      const [payment] = await db
+        .update(payments)
+        .set({
+          ...updates,
+          updatedAt: new Date()
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+
+      console.log(`[STORAGE] Successfully updated payment:`, {
+        id: payment.id,
+        status: payment.status
+      });
+
+      return payment;
+    } catch (error) {
+      console.error(`[STORAGE] Error updating payment ${paymentId}:`, error);
+      throw error;
+    }
   }
 }
 
