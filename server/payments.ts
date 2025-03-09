@@ -122,10 +122,17 @@ export class PaymentService {
         platformFee,
         sellerPayout,
         insuranceFee,
-        stripeSessionId: session.id,
+        stripePaymentIntentId: session.payment_intent as string,
         status: "pending" as const,
         payoutProcessed: false
       };
+
+      console.log("[PAYMENTS] Creating payment record:", {
+        ...paymentData,
+        stripePaymentIntentId: session.payment_intent ? 
+          (session.payment_intent as string).substring(0, 10) + '...' : 
+          'Not available yet'
+      });
 
       const payment = await storage.insertPayment(paymentData);
 
