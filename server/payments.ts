@@ -83,7 +83,7 @@ export class PaymentService {
         clientSecret: paymentIntent.client_secret ? 'present' : 'missing'
       });
 
-      // Create payment record - using new schema
+      // Create payment record with new schema
       const payment = await storage.insertPayment({
         auctionId,
         buyerId,

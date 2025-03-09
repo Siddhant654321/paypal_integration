@@ -618,35 +618,6 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getPaymentBySessionId(sessionId: string): Promise<any | undefined> {
-    try {
-      const [payment] = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.stripeSessionId, sessionId))
-        .limit(1);
-
-      return payment;
-    } catch (error) {
-      console.error(`Error getting payment by session ID ${sessionId}:`, error);
-      return undefined;
-    }
-  }
-
-  async updatePaymentBySessionId(sessionId: string, data: any): Promise<any> {
-    try {
-      const [updatedPayment] = await db
-        .update(payments)
-        .set(data)
-        .where(eq(payments.stripeSessionId, sessionId))
-        .returning();
-
-      return updatedPayment;
-    } catch (error) {
-      console.error(`Error updating payment by session ID ${sessionId}:`, error);
-      return { id: 1, sessionId, ...data };
-    }
-  }
 
   async updatePaymentByIntentId(intentId: string, data: any): Promise<any> {
     try {
@@ -665,16 +636,72 @@ export class DatabaseStorage implements IStorage {
 
   async insertPayment(paymentData: InsertPayment): Promise<Payment> {
     try {
-      log(`Creating payment record for auction ${paymentData.auctionId}`, "payments");
+      log(`Creating payment record with data: ${JSON.stringify({
+        ...paymentData,
+        stripePaymentIntentId: paymentData.stripePaymentIntentId.substring(0, 10) + '...'
+      })}`, "payments");
+
       const [payment] = await db
         .insert(payments)
-        .values(paymentData)
+        .values({
+          ...paymentData,
+          status: 'pending',
+          payoutProcessed: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
         .returning();
 
-      log(`Payment record created: ${payment.id}`, "payments");
+      if (!payment) {
+        throw new Error("Failed to create payment record");
+      }
+
+      log(`Successfully created payment record: ${payment.id}`, "payments");
       return payment;
     } catch (error) {
       log(`Error creating payment: ${error}`, "payments");
+      throw error;
+    }
+  }
+
+  async findPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
+    try {
+      log(`Finding payment by Stripe payment intent ID: ${stripePaymentIntentId}`, "payments");
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.stripePaymentIntentId, stripePaymentIntentId));
+      return payment;
+    } catch (error) {
+      log(`Error finding payment by Stripe payment intent ID ${stripePaymentIntentId}: ${error}`, "payments");
+      throw error;
+    }
+  }
+
+  async updatePayment(paymentId: number, data: Partial<Payment>): Promise<Payment> {
+    try {
+      log(`Updating payment ${paymentId} with data: ${JSON.stringify({
+        ...data,
+        stripePaymentIntentId: data.stripePaymentIntentId?.substring(0, 10) + '...'
+      })}`, "payments");
+
+      const [payment] = await db
+        .update(payments)
+        .set({
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+
+      if (!payment) {
+        throw new Error(`Payment ${paymentId} not found`);
+      }
+
+      log(`Payment ${paymentId} updated successfully`, "payments");
+      return payment;
+    } catch (error) {
+      log(`Error updating payment ${paymentId}: ${error}`, "payments");
       throw error;
     }
   }
@@ -994,8 +1021,7 @@ export class DatabaseStorage implements IStorage {
         })
         .returning();
 
-      log(`Seller payout created: ${payout.id}`, "payouts");
-      return payout;
+      log(`Seller payout created: ${payout.id}`, "payouts");      return payout;
     } catch (error) {
       log(`Error creating seller payout: ${error}`, "payouts");
       throw error;
@@ -1038,7 +1064,11 @@ export class DatabaseStorage implements IStorage {
   }
   async updatePayment(paymentId: number, data: Partial<Payment>): Promise<Payment> {
     try {
-      log(`Updating payment ${paymentId} with data: ${JSON.stringify(data)}`, "payments");
+      log(`Updating payment ${paymentId} with data: ${JSON.stringify({
+        ...data,
+        stripePaymentIntentId: data.stripePaymentIntentId?.substring(0, 10) + '...'
+      })}`, "payments");
+
       const [payment] = await db
         .update(payments)
         .set({
@@ -1060,24 +1090,39 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async insertPayment(paymentData: InsertPayment): Promise<Payment> {
+  async getPaymentsByAuctionId(auctionId: number): Promise<Payment[]> {
     try {
-      log(`Creating payment record with data: ${JSON.stringify(paymentData)}`, "payments");
-      const [payment] = await db
-        .insert(payments)
-        .values(paymentData)
-        .returning();
+      log(`Getting payments for auction ${auctionId}`, "payments");
+      const result = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.auctionId, auctionId))
+        .orderBy(desc(payments.createdAt));
 
-      if (!payment) {
-        throw new Error("Failed to create payment record");
-      }
-
-      log(`Created payment record: ${payment.id}`, "payments");
-      return payment;
+      log(`Found ${result.length} payments for auction ${auctionId}`, "payments");
+      return result;
     } catch (error) {
-      log(`Error creating payment: ${error}`, "payments");
+      log(`Error getting payments for auction ${auctionId}: ${error}`, "payments");
       throw error;
     }
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    try {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email));
+      return user;
+    } catch (error) {
+      log(`Error getting user by email ${email}: ${error}`);
+      throw error;
+    }
+  }
+
+  async deleteBidsForAuction(auctionId: number): Promise<void> {
+    console.log(`[STORAGE] Deleting all bids for auction: ${auctionId}`);
+    await db.delete(bids).where(eq(bids.auctionId, auctionId)).execute();
   }
 }
 
