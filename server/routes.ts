@@ -518,14 +518,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     // Add payment endpoint for auction winners
-    router.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
+    router.post("/api/auctions/:id/checkout", requireAuth, requireProfile, async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
         const { includeInsurance } = req.body;
 
-        console.log("[PAYMENT] Payment request authentication:", {
-          isAuthenticated: req.isAuthenticated(),
-          userId: req.user?.id,
+        console.log("[PAYMENT] Payment request received:", {
+          auctionId,
+          buyerId: req.user?.id,
+          includeInsurance,
           timestamp: new Date().toISOString()
         });
 
@@ -542,13 +543,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "Only the winning bidder can pay for this auction" });
         }
 
-        const { clientSecret, payment } = await PaymentService.createPaymentIntent(
+        const result = await PaymentService.createCheckoutSession(
           auctionId,
           req.user.id,
           includeInsurance
         );
 
-        res.json({ clientSecret, payment });
+        res.json(result);
       } catch (error) {
         console.error("[PAYMENT] Error:", error);
         res.status(500).json({

@@ -31,12 +31,7 @@ async function initializeServer() {
       throw error;
     }
 
-    // Basic middleware setup
-    log("Setting up middleware", "startup");
-    app.use(express.json());
-    app.use(express.urlencoded({ extended: false }));
-
-    // Set up CORS with proper configuration
+    // Set up CORS with proper configuration - must be first
     app.use(cors({
       origin: [
         clientOrigin,
@@ -46,8 +41,17 @@ async function initializeServer() {
       ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature'],
     }));
+
+    // Basic middleware setup
+    app.use(express.urlencoded({ extended: false }));
+
+    // Special handling for Stripe webhooks - must be before general JSON parsing
+    app.use("/api/webhooks/stripe", express.raw({ type: 'application/json' }));
+
+    // General JSON parsing for all other routes
+    app.use(express.json());
 
     // Set security headers
     app.use((req, res, next) => {
@@ -61,34 +65,12 @@ async function initializeServer() {
       next();
     });
 
-    // Basic error handling
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-      console.error("[ERROR]", err);
-      res.status(500).json({ message: "Internal server error" });
-    });
-
-    // Health check endpoint
-    app.get("/api/status", (_req, res) => {
-      res.json({ status: "ok", timestamp: new Date().toISOString() });
-    });
-
-    return app;
-  } catch (error) {
-    log(`Fatal error during server initialization: ${error}`, "startup");
-    throw error;
-  }
-}
-
-async function startServer(): Promise<void> {
-  try {
-    const app = await initializeServer();
-
-    // Setup routes
+    // Register API routes before static file serving
     log("Setting up routes...", "startup");
     const server = await registerRoutes(app);
     log("Routes setup complete", "startup");
 
-    // Setup frontend
+    // Setup frontend - after API routes
     try {
       if (process.env.NODE_ENV === "production") {
         log("Setting up static file serving...", "startup");
@@ -103,8 +85,33 @@ async function startServer(): Promise<void> {
       // Continue server startup even if frontend setup fails
     }
 
-    // Start server - always use port 5000
-    server.listen({
+    // Error handling middleware - must be last
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      console.error("[ERROR]", err);
+      res.status(500).json({ 
+        message: "Internal server error",
+        error: err.message
+      });
+    });
+
+    // Health check endpoint
+    app.get("/api/status", (_req, res) => {
+      res.json({ status: "ok", timestamp: new Date().toISOString() });
+    });
+
+    return server;
+  } catch (error) {
+    log(`Fatal error during server initialization: ${error}`, "startup");
+    throw error;
+  }
+}
+
+async function startServer(): Promise<void> {
+  try {
+    const app = await initializeServer();
+
+    // Start server - always bind to port 5000
+    app.listen({
       port: 5000,
       host: "0.0.0.0",
     }, () => {
@@ -122,10 +129,7 @@ async function startServer(): Promise<void> {
     // Handle graceful shutdown
     const shutdown = () => {
       log('Shutting down gracefully...', "startup");
-      server.close(() => {
-        log('Server closed', "startup");
-        process.exit(0);
-      });
+      process.exit(0);
     };
 
     process.on('SIGTERM', shutdown);
