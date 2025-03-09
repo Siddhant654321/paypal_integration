@@ -87,7 +87,7 @@ export class PaymentService {
           },
         },
         mode: 'payment',
-        success_url: `${process.env.PUBLIC_URL || ''}/payment-success?session_id={CHECKOUT_SESSION_ID}&auction_id=${auctionId}`,
+        success_url: `${process.env.PUBLIC_URL || ''}/payment-success?payment_intent={PAYMENT_INTENT}&auction_id=${auctionId}`,
         cancel_url: `${process.env.PUBLIC_URL || ''}/auction/${auctionId}?payment_canceled=true`,
         allow_promotion_codes: true,
       });
@@ -149,6 +149,11 @@ export class PaymentService {
       const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
       const chargeId = paymentIntent.latest_charge as string;
 
+      console.log("[PAYMENTS] Handling successful payment:", {
+        paymentId: payment.id,
+        chargeId: chargeId
+      });
+
       // Update payment status and charge ID
       await storage.updatePayment(payment.id, {
         status: "completed",
@@ -180,6 +185,10 @@ export class PaymentService {
       if (!payment) {
         throw new Error("Payment not found");
       }
+
+      console.log("[PAYMENTS] Handling failed payment:", {
+        paymentId: payment.id
+      });
 
       // Update payment status
       await storage.updatePayment(payment.id, {
