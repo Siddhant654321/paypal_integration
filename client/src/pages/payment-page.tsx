@@ -37,7 +37,8 @@ export default function PaymentPage() {
       setError(null);
 
       try {
-        const response = await fetch(`/api/auctions/${auction.id}/pay`, {
+        console.log("Initiating payment for auction:", auction.id);
+        const response = await fetch(`/api/auctions/${auction.id}/checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -50,6 +51,7 @@ export default function PaymentPage() {
         }
 
         const data = await response.json();
+        console.log("Payment session created:", { hasUrl: !!data.url });
 
         if (!data.url) {
           throw new Error("No payment URL received");
