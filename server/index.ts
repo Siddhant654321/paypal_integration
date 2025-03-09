@@ -8,6 +8,7 @@ import * as dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { randomBytes } from "crypto";
 
 // Fix for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -52,12 +53,12 @@ try {
     sessionSecret = fs.readFileSync(SESSION_SECRET_FILE, "utf8").trim();
   } else {
     // Generate a new secret
-    sessionSecret = require("crypto").randomBytes(64).toString("hex");
+    sessionSecret = randomBytes(64).toString("hex");
     fs.writeFileSync(SESSION_SECRET_FILE, sessionSecret);
   }
 } catch (error) {
   console.error("Error managing session secret:", error);
-  sessionSecret = process.env.SESSION_SECRET || require("crypto").randomBytes(64).toString("hex");
+  sessionSecret = process.env.SESSION_SECRET || randomBytes(64).toString("hex");
 }
 
 // Run database initialization
@@ -102,7 +103,16 @@ async function initializeServer() {
     log("Setting up middleware", "startup");
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
-    app.use(session({ secret: sessionSecret, resave: false, saveUninitialized: false }));
+    app.use(session({ 
+      secret: sessionSecret, 
+      resave: false, 
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === "production",
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      }
+    }));
 
     // Request logging middleware
     app.use((req, res, next) => {
