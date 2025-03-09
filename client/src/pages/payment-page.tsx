@@ -12,10 +12,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatPrice } from "../utils/formatters";
 
-if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
-  throw new Error('Missing required env var: VITE_STRIPE_PUBLISHABLE_KEY');
-}
-
 const INSURANCE_FEE = 800; // $8.00 in cents
 
 export default function PaymentPage() {
@@ -62,7 +58,7 @@ export default function PaymentPage() {
         // Open Stripe checkout in a new tab
         window.open(data.url, '_blank', 'noopener,noreferrer');
 
-        // Optionally close current window or redirect to a waiting page
+        // Redirect to auction page with payment initiated flag
         window.location.href = `/auction/${auction.id}?payment_initiated=true`;
 
       } catch (err) {

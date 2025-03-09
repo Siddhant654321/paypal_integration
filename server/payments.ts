@@ -14,7 +14,7 @@ const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
 export class PaymentService {
-  static async createPaymentIntent(
+  static async createCheckoutSession(
     auctionId: number,
     buyerId: number,
     includeInsurance: boolean = false
@@ -58,7 +58,7 @@ export class PaymentService {
         sellerPayout
       });
 
-      // Create checkout session
+      // Create Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [
