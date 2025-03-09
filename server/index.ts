@@ -1,8 +1,64 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { db } from "./db";
+import { db, runMigrations } from "./db";
 import { sql } from "drizzle-orm";
+import session from "express-session";
+import * as dotenv from "dotenv";
+import path from "path";
+import fs from "fs";
+
+dotenv.config();
+
+// Run database migrations first
+async function initDatabase() {
+  try {
+    console.log("Initializing database and running migrations...");
+    await runMigrations();
+
+    // Additional check for stripe_charge_id column
+    try {
+      await db.execute(sql`
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'payments' AND column_name = 'stripe_charge_id'
+          ) THEN
+            ALTER TABLE "payments" ADD COLUMN "stripe_charge_id" varchar;
+          END IF;
+        END $$;
+      `);
+      console.log("Database initialization complete");
+    } catch (columnError) {
+      console.error("Error checking/adding stripe_charge_id column:", columnError);
+    }
+  } catch (error) {
+    console.error("Database initialization error:", error);
+  }
+}
+
+// Load or generate secure session secret
+const SESSION_SECRET_FILE = path.join(__dirname, "..", "session-secret.txt");
+let sessionSecret: string;
+
+try {
+  if (fs.existsSync(SESSION_SECRET_FILE)) {
+    sessionSecret = fs.readFileSync(SESSION_SECRET_FILE, "utf8").trim();
+  } else {
+    // Generate a new secret
+    sessionSecret = require("crypto").randomBytes(64).toString("hex");
+    fs.writeFileSync(SESSION_SECRET_FILE, sessionSecret);
+  }
+} catch (error) {
+  console.error("Error managing session secret:", error);
+  sessionSecret = process.env.SESSION_SECRET || require("crypto").randomBytes(64).toString("hex");
+}
+
+// Run database initialization
+initDatabase().catch(err => {
+  console.error("Failed to initialize database:", err);
+});
 
 async function initializeServer() {
   const app = express();
@@ -41,6 +97,7 @@ async function initializeServer() {
     log("Setting up middleware", "startup");
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
+    app.use(session({ secret: sessionSecret, resave: false, saveUninitialized: false }));
 
     // Request logging middleware
     app.use((req, res, next) => {
