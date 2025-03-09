@@ -145,13 +145,8 @@ export default function PaymentPage() {
         // Check if we got a redirect URL
         if (data.url) {
           console.log("Redirecting to Stripe Checkout:", data.url);
-          // Use window.top to break out of iframe
-          if (window.top) {
-            window.top.location.href = data.url;
-          } else {
-            // Fallback to regular redirect
-            window.location.href = data.url;
-          }
+          // Open Stripe checkout in a new tab/window instead of redirecting the current one
+          window.open(data.url, '_blank')?.focus();
           return;
         } else if (data.clientSecret) {
           // Fall back to client-side handling if we got a client secret instead

@@ -19,8 +19,15 @@ export default function PaymentSuccessPage() {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('session_id');
     const auctionParam = params.get('auction_id');
+    const paymentIntent = params.get('payment_intent');
+    const redirectStatus = params.get('redirect_status');
     
-    console.log('Payment success params:', { sessionId, auctionId: auctionParam });
+    console.log('Payment success params:', { 
+      sessionId, 
+      auctionId: auctionParam,
+      paymentIntent,
+      redirectStatus 
+    });
     
     if (auctionParam) {
       setAuctionId(auctionParam);

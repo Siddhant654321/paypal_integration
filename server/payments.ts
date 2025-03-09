@@ -277,7 +277,7 @@ export class PaymentService {
           },
         },
         mode: 'payment',
-        success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&auction_id=${auctionId}`,
+        success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&auction_id=${auctionId}&stripe_redirect=true`,
         cancel_url: `${baseUrl}/auction/${auctionId}?payment_canceled=true`,
         // Add allow_promotion_codes to give buyers discount options
         allow_promotion_codes: true,
