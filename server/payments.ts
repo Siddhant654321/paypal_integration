@@ -122,7 +122,7 @@ export class PaymentService {
         platformFee,
         sellerPayout,
         insuranceFee,
-        stripePaymentIntentId: session.payment_intent as string,
+        stripeSessionId: session.id,
         status: "pending" as const,
         payoutProcessed: false
       };
