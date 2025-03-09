@@ -122,18 +122,12 @@ export class PaymentService {
         platformFee,
         sellerPayout,
         insuranceFee,
-        stripePaymentIntentId: session.payment_intent as string,
+        stripePaymentIntentId: '', // Will be updated when payment is completed
         status: "pending" as const,
         payoutProcessed: false
       };
 
-      console.log("[PAYMENTS] Creating payment record:", {
-        ...paymentData,
-        stripePaymentIntentId: session.payment_intent ? 
-          (session.payment_intent as string).substring(0, 10) + '...' : 
-          'Not available yet'
-      });
-
+      console.log("[PAYMENTS] Creating initial payment record");
       const payment = await storage.insertPayment(paymentData);
 
       // Update auction status
