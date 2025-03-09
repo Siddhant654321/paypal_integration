@@ -90,36 +90,48 @@ async function startServer(port: number = 5000): Promise<void> {
       // Continue server startup even if frontend setup fails
     }
 
-    // Start server - always bind to port 5000
-    await new Promise<void>((resolve, reject) => {
+    // Start server with port fallback logic
+    let PORT = process.env.PORT || 5000;
+    const MAX_PORT_ATTEMPTS = 10;
+    let portAttempts = 0;
+
+    const startServerWithFallback = (port: number) => {
       server.listen({
-        port: 5000, // Force port 5000
+        port: port,
         host: "0.0.0.0",
       }, () => {
-        log(`Server started on port 5000`, "startup");
-        resolve();
+        log(`Server started on port ${port}`, "startup");
       }).on('error', (error: any) => {
         if (error.code === 'EADDRINUSE') {
-          log(`Port 5000 is already in use. Please ensure no other process is using this port.`, "startup");
-          process.exit(1); // Exit if port 5000 is unavailable
+          console.log(`Port ${port} is already in use, trying another port...`);
+          if (portAttempts < MAX_PORT_ATTEMPTS) {
+            portAttempts++;
+            startServerWithFallback(port + 1);
+          } else {
+            console.error(`Could not find an available port after ${MAX_PORT_ATTEMPTS} attempts.`);
+            process.exit(1);
+          }
         } else {
           log(`Server error: ${error}`, "startup");
-          reject(error);
+          process.exit(1);
         }
       });
+    };
 
-      // Handle graceful shutdown
-      const shutdown = () => {
-        log('Shutting down gracefully...', "startup");
-        server.close(() => {
-          log('Server closed', "startup");
-          process.exit(0);
-        });
-      };
+    startServerWithFallback(PORT);
 
-      process.on('SIGTERM', shutdown);
-      process.on('SIGINT', shutdown);
-    });
+
+    // Handle graceful shutdown
+    const shutdown = () => {
+      log('Shutting down gracefully...', "startup");
+      server.close(() => {
+        log('Server closed', "startup");
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
 
   } catch (error) {
     log(`Fatal error during startup: ${error}`, "startup");
