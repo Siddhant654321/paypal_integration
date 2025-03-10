@@ -2,8 +2,17 @@ import { storage } from "./storage";
 import { Profile } from "@shared/schema";
 import axios from 'axios';
 
-if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET || !process.env.PAYPAL_PARTNER_MERCHANT_ID || !process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID) {
-  throw new Error("Missing PayPal environment variables");
+// Check for required PayPal environment variables
+if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+  throw new Error("Missing required PayPal credentials (CLIENT_ID or CLIENT_SECRET)");
+}
+
+// Log warning if partner merchant IDs are missing
+if (!process.env.PAYPAL_PARTNER_MERCHANT_ID) {
+  console.warn("Warning: PAYPAL_PARTNER_MERCHANT_ID is missing for production mode");
+}
+if (!process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID) {
+  console.warn("Warning: PAYPAL_SANDBOX_PARTNER_MERCHANT_ID is missing for sandbox/development mode");
 }
 
 const PRODUCTION_URL = 'https://api-m.paypal.com';
@@ -12,7 +21,11 @@ const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 // Use sandbox URL if we're in development, otherwise use production URL
 const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
 const BASE_URL = IS_PRODUCTION ? PRODUCTION_URL : SANDBOX_URL;
-const PARTNER_MERCHANT_ID = IS_PRODUCTION ? process.env.PAYPAL_PARTNER_MERCHANT_ID : process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID;
+const PARTNER_MERCHANT_ID = IS_PRODUCTION 
+  ? (process.env.PAYPAL_PARTNER_MERCHANT_ID || 'PRODUCTION_MERCHANT_ID_MISSING') 
+  : (process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID || 'TEST_MERCHANT_ID');
+
+console.log(`[PAYPAL] Using partner merchant ID: ${PARTNER_MERCHANT_ID}`);
 
 console.log(`[PAYPAL] Using base URL: ${BASE_URL}`);
 
