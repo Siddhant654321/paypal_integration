@@ -298,6 +298,33 @@ export const insertBuyerRequestSchema = createInsertSchema(buyerRequests)
 export type BuyerRequest = typeof buyerRequests.$inferSelect;
 export type InsertBuyerRequest = z.infer<typeof insertBuyerRequestSchema>;
 
+export const insertUserSchema = createInsertSchema(users)
+  .pick({
+    username: true,
+    password: true,
+    role: true,
+    email: true,
+  })
+  .extend({
+    email: z.string().email("Invalid email format"),
+    role: z.enum(["buyer", "seller"]), // Restrict roles to only buyer and seller for registration
+  });
+
+export const insertFulfillmentSchema = createInsertSchema(fulfillments)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    shippingCarrier: z.string().min(2, "Shipping carrier is required"),
+    trackingNumber: z.string().min(5, "Valid tracking number is required"),
+    shippingDate: z.string().transform(str => new Date(str)),
+    estimatedDeliveryDate: z.string().optional().transform(str => str ? new Date(str) : undefined),
+    additionalNotes: z.string().optional(),
+  });
+
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Auction = typeof auctions.$inferSelect;

@@ -4,6 +4,23 @@ import { setupVite, serveStatic, log } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
+async function checkRequiredEnvVars() {
+  const requiredVars = [
+    'DATABASE_URL',
+    'SESSION_SECRET',
+    'PAYPAL_CLIENT_ID',
+    'PAYPAL_CLIENT_SECRET',
+    'PAYPAL_PARTNER_MERCHANT_ID',
+    'PAYPAL_SANDBOX_PARTNER_MERCHANT_ID'
+  ];
+
+  const missingVars = requiredVars.filter(varName => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+  }
+}
+
 async function initializeServer() {
   const app = express();
   const DEFAULT_PORT = 5000;
@@ -11,13 +28,10 @@ async function initializeServer() {
   try {
     log("Starting server initialization", "startup");
 
-    // Check critical environment variables
-    if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL environment variable is not set");
-    }
-    if (!process.env.SESSION_SECRET) {
-      log("Warning: SESSION_SECRET not set, using default value", "startup");
-    }
+    // Check environment variables first
+    log("Checking environment variables...", "startup");
+    await checkRequiredEnvVars();
+    log("Environment variables verified", "startup");
 
     // Test database connection with retry logic
     let retries = 5;
@@ -48,10 +62,21 @@ async function initializeServer() {
       next();
     });
 
-    // Basic error handling
+    // Error handling middleware
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       console.error("[ERROR]", err);
       res.status(500).json({ message: "Internal server error" });
+    });
+
+    // Global error handler for uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      console.error('[FATAL] Uncaught Exception:', error);
+      process.exit(1);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+      process.exit(1);
     });
 
     // Health check endpoint
@@ -87,6 +112,7 @@ async function startServer(port: number = 5000): Promise<void> {
       log("Frontend setup complete", "startup");
     } catch (frontendError) {
       log(`Frontend setup error: ${frontendError}`, "startup");
+      console.error('[FRONTEND] Setup error:', frontendError);
       // Continue server startup even if frontend setup fails
     }
 
@@ -127,6 +153,7 @@ async function startServer(port: number = 5000): Promise<void> {
       await startServer(port + 1);
     } else {
       log(`Fatal error during startup: ${error}`, "startup");
+      console.error('[FATAL] Server startup error:', error);
       process.exit(1);
     }
   }
@@ -135,5 +162,6 @@ async function startServer(port: number = 5000): Promise<void> {
 // Start the server
 startServer().catch((error) => {
   log(`Unhandled error during server startup: ${error}`, "startup");
+  console.error('[FATAL] Unhandled server startup error:', error);
   process.exit(1);
 });
