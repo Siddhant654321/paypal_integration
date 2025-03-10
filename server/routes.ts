@@ -2,73 +2,10 @@ import express, { type Express, type Request, type Response } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { 
-  insertAuctionSchema, 
-  insertUserSchema, 
-  insertProfileSchema,
-  type InsertUser 
-} from "@shared/schema";
-import { ZodError } from "zod";
 import path from "path";
-import multer from 'multer';
-import { upload, handleFileUpload } from "./uploads";
-import passport from 'passport';
-import { hashPassword } from './auth';
-import { PaymentService } from "./payments";
-import Stripe from "stripe";
-
-// Initialize Stripe webhook handler
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
-  throw new Error("Missing STRIPE_WEBHOOK_SECRET environment variable");
-}
-
 
 // Create an Express router instance
 const router = express.Router();
-
-// Update the requireProfile middleware
-const requireProfile = async (req: any, res: any, next: any) => {
-  if (!req.isAuthenticated()) {
-    console.log("[PROFILE CHECK] User not authenticated");
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  console.log("[PROFILE CHECK] Checking profile completeness for user:", {
-    userId: req.user?.id,
-    role: req.user?.role,
-    username: req.user?.username
-  });
-
-  try {
-    const profile = await storage.getProfile(req.user.id);
-
-    if (!profile) {
-      console.log("[PROFILE CHECK] No profile found");
-      return res.status(403).json({ 
-        message: "Please complete your profile before bidding",
-        requiredFields: ["fullName", "email", "address", "city", "state", "zipCode"]
-      });
-    }
-
-    // Check required fields
-    const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
-    const missingFields = requiredFields.filter(field => !profile[field]);
-
-    if (missingFields.length > 0) {
-      console.log("[PROFILE CHECK] Missing required fields:", missingFields);
-      return res.status(403).json({
-        message: "Please complete your profile before bidding",
-        missingFields: missingFields
-      });
-    }
-
-    console.log("[PROFILE CHECK] Profile verification successful");
-    next();
-  } catch (error) {
-    console.error("[PROFILE CHECK] Error verifying profile:", error);
-    res.status(500).json({ message: "Failed to verify profile" });
-  }
-};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log("[ROUTES] Starting route registration");
@@ -90,6 +27,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Configure and register all routes before creating HTTP server
     console.log("[ROUTES] Configuring API routes");
     app.use('/api', router);
+
+    // Health check endpoint
+    router.get("/status", (_req: Request, res: Response) => {
+      console.log("[ROUTES] Health check requested");
+      res.json({ 
+        status: "ok",
+        timestamp: new Date().toISOString()
+      });
+    });
 
     // Create HTTP server
     console.log("[ROUTES] Creating HTTP server");
@@ -499,7 +445,7 @@ router.post("/api/login", (req, res, next) => {
           return res.status(401).json({ message: "Unauthorized" });
         }
 
-        const result = await PaymentService.createCheckoutSession(
+        const result = await PayPalService.createOrder(
           auctionId,
           req.user.id,
           includeInsurance
@@ -514,34 +460,24 @@ router.post("/api/login", (req, res, next) => {
       }
     });
 
-    // Add Stripe webhook endpoint
-    router.post("/api/webhooks/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
+    // Add PayPal payment capture endpoint
+    router.post("/api/payments/:orderId/capture", requireAuth, async (req, res) => {
       try {
-        const sig = req.headers['stripe-signature'];
-        
-        if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
-          console.error("[WEBHOOK] Missing signature or secret");
-          return res.status(400).send("Webhook signature/secret not configured");
-        }
+        const { orderId } = req.params;
 
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-          apiVersion: "2025-02-24.acacia"
+        console.log("[PAYMENT] Capturing PayPal payment:", { orderId });
+
+        const payment = await PayPalService.capturePayment(orderId);
+        
+        res.json({ 
+          status: "success",
+          payment 
         });
-
-        const event = stripe.webhooks.constructEvent(
-          req.body,
-          sig,
-          process.env.STRIPE_WEBHOOK_SECRET
-        );
-
-        console.log("[WEBHOOK] Received event:", event.type);
-        
-        await PaymentService.handleWebhookEvent(event);
-        
-        res.json({ received: true });
       } catch (error) {
-        console.error("[WEBHOOK] Error:", error);
-        res.status(400).send("Webhook Error");
+        console.error("[PAYMENT] Error capturing payment:", error);
+        res.status(500).json({
+          message: error instanceof Error ? error.message : "Payment capture failed"
+        });
       }
     });
 
