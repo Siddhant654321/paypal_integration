@@ -44,15 +44,17 @@ export interface IStorage {
   updateUser(userId: number, updates: Partial<User>): Promise<User>;
   authenticateUser(username: string, password: string): Promise<User | undefined>;
   insertPayment(paymentData: InsertPayment): Promise<Payment>;
-  findPaymentByStripeId(stripeSessionId: string): Promise<Payment | undefined>;
+  findPaymentByPayPalId(orderId: string): Promise<Payment | undefined>;
   updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment>;
   createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout>;
   getPaymentsByAuctionId(auctionId: number): Promise<Payment[]>;
-  getUserByEmail(email: string): Promise<User | undefined>; // Added getUserByEmail
+  getUserByEmail(email: string): Promise<User | undefined>;
   deleteBid(bidId: number): Promise<void>;
   deleteBidsForAuction(auctionId: number): Promise<void>;
+  updateSellerPayPalAccount(userId: number, data: { merchantId: string; status: string }): Promise<Profile>;
 }
 
+// Implementation of the storage interface
 export class DatabaseStorage implements IStorage {
   sessionStore: Store;
 
@@ -71,6 +73,7 @@ export class DatabaseStorage implements IStorage {
 
     log("Session store initialized");
   }
+
 
   async getUser(id: number): Promise<User | undefined> {
     try {
@@ -158,40 +161,6 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       log(`Error updating profile: ${error}`);
       throw error;
-    }
-  }
-
-  async updateSellerStripeAccount(userId: number, data: { accountId: string; status: string }): Promise<Profile> {
-    try {
-      log(`Updating Stripe account for user ${userId} with account ID ${data.accountId}`);
-      const [updatedProfile] = await db
-        .update(profiles)
-        .set({
-          stripeAccountId: data.accountId,
-          stripeAccountStatus: data.status
-        })
-        .where(eq(profiles.userId, userId))
-        .returning();
-
-      log(`Successfully updated Stripe account. New status: ${data.status}`);
-      return updatedProfile;
-    } catch (error) {
-      log(`Error updating seller Stripe account: ${error}`);
-      throw error;
-    }
-  }
-
-  async findProfileByStripeAccountId(stripeAccountId: string): Promise<Profile | undefined> {
-    try {
-      log(`Finding profile by Stripe account ID: ${stripeAccountId}`, "stripe");
-      const [profile] = await db
-        .select()
-        .from(profiles)
-        .where(eq(profiles.stripeAccountId, stripeAccountId));
-      return profile;
-    } catch (error) {
-      log(`Error finding profile by Stripe account ID ${stripeAccountId}: ${error}`, "stripe");
-      return undefined;
     }
   }
 
@@ -624,7 +593,6 @@ export class DatabaseStorage implements IStorage {
         .from(payments)
         .where(eq(payments.stripeSessionId, sessionId))
         .limit(1);
-      
       return payment;
     } catch (error) {
       console.error(`Error getting payment by session ID ${sessionId}:`, error);
@@ -639,7 +607,6 @@ export class DatabaseStorage implements IStorage {
         .set(data)
         .where(eq(payments.stripeSessionId, sessionId))
         .returning();
-      
       return updatedPayment;
     } catch (error) {
       console.error(`Error updating payment by session ID ${sessionId}:`, error);
@@ -654,7 +621,6 @@ export class DatabaseStorage implements IStorage {
         .set(data)
         .where(eq(payments.stripePaymentIntentId, intentId))
         .returning();
-      
       return updatedPayment;
     } catch (error) {
       console.error(`Error updating payment by intent ID ${intentId}:`, error);
@@ -668,7 +634,6 @@ export class DatabaseStorage implements IStorage {
         .insert(payments)
         .values(paymentData)
         .returning();
-      
       return payment;
     } catch (error) {
       console.error("Error inserting payment:", error);
@@ -683,7 +648,6 @@ export class DatabaseStorage implements IStorage {
         .from(payments)
         .where(eq(payments.auctionId, auctionId))
         .limit(1);
-      
       return payment;
     } catch (error) {
       console.error(`Error finding payment for auction ${auctionId}:`, error);
@@ -697,7 +661,6 @@ export class DatabaseStorage implements IStorage {
         .update(payments)
         .set({ payoutProcessed: true })
         .where(eq(payments.id, paymentId));
-      
       return true;
     } catch (error) {
       console.error(`Error marking payment ${paymentId} as processed:`, error);
@@ -939,6 +902,40 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async updateSellerPayPalAccount(userId: number, data: { merchantId: string; status: string }): Promise<Profile> {
+    try {
+      log(`Updating PayPal account for user ${userId} with merchant ID ${data.merchantId}`);
+      const [updatedProfile] = await db
+        .update(profiles)
+        .set({
+          paypalMerchantId: data.merchantId,
+          paypalAccountStatus: data.status as "pending" | "verified" | "not_started"
+        })
+        .where(eq(profiles.userId, userId))
+        .returning();
+
+      log(`Successfully updated PayPal account. New status: ${data.status}`);
+      return updatedProfile;
+    } catch (error) {
+      log(`Error updating seller PayPal account: ${error}`);
+      throw error;
+    }
+  }
+
+  async findPaymentByPayPalId(orderId: string): Promise<Payment | undefined> {
+    try {
+      log(`Finding payment by PayPal order ID: ${orderId}`, "payments");
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.paypalOrderId, orderId));
+      return payment;
+    } catch (error) {
+      log(`Error finding payment by PayPal order ID ${orderId}: ${error}`, "payments");
+      throw error;
+    }
+  }
+
   async insertPayment(paymentData: InsertPayment): Promise<Payment> {
     try {
       log(`Creating payment record for auction ${paymentData.auctionId}`, "payments");
@@ -999,18 +996,17 @@ export class DatabaseStorage implements IStorage {
       const [payout] = await db
         .insert(sellerPayouts)
         .values({
-          ...data,
           sellerId,
-          status: "pending",
+          ...data,
           createdAt: new Date(),
           updatedAt: new Date()
         })
         .returning();
 
-      log(`Seller payout created: ${payout.id}`, "payouts");
+      log(`Successfully created payout for seller ${sellerId}`, "payouts");
       return payout;
     } catch (error) {
-      log(`Error creating seller payout: ${error}`, "payouts");
+      log(`Error creating seller payout: ${error}`, "payouts);
       throw error;
     }
   }
@@ -1048,6 +1044,39 @@ export class DatabaseStorage implements IStorage {
   async deleteBidsForAuction(auctionId: number): Promise<void> {
     console.log(`[STORAGE] Deleting all bids for auction: ${auctionId}`);
     await db.delete(bids).where(eq(bids.auctionId, auctionId)).execute();
+  }
+  async updateSellerStripeAccount(userId: number, data: { accountId: string; status: string }): Promise<Profile> {
+    try {
+      log(`Updating Stripe account for user ${userId} with account ID ${data.accountId}`);
+      const [updatedProfile] = await db
+        .update(profiles)
+        .set({
+          stripeAccountId: data.accountId,
+          stripeAccountStatus: data.status
+        })
+        .where(eq(profiles.userId, userId))
+        .returning();
+
+      log(`Successfully updated Stripe account. New status: ${data.status}`);
+      return updatedProfile;
+    } catch (error) {
+      log(`Error updating seller Stripe account: ${error}`);
+      throw error;
+    }
+  }
+
+  async findProfileByStripeAccountId(stripeAccountId: string): Promise<Profile | undefined> {
+    try {
+      log(`Finding profile by Stripe account ID: ${stripeAccountId}`, "stripe");
+      const [profile] = await db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.stripeAccountId, stripeAccountId));
+      return profile;
+    } catch (error) {
+      log(`Error finding profile by Stripe account ID ${stripeAccountId}: ${error}`, "stripe");
+      return undefined;
+    }
   }
 }
 

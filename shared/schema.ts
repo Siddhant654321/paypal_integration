@@ -35,9 +35,9 @@ export const profiles = pgTable("profiles", {
   businessName: text("business_name"),
   breedSpecialty: text("breed_specialty"),
   npipNumber: text("npip_number"),
-  // Stripe Connect fields
-  stripeAccountId: text("stripe_account_id"),
-  stripeAccountStatus: text("stripe_account_status", {
+  // PayPal fields
+  paypalMerchantId: text("paypal_merchant_id"),
+  paypalAccountStatus: text("paypal_account_status", {
     enum: ["pending", "verified", "not_started"]
   }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -121,8 +121,7 @@ export const payments = pgTable("payments", {
   platformFee: integer("platform_fee").notNull(), // in cents
   sellerPayout: integer("seller_payout").notNull(), // in cents
   insuranceFee: integer("insurance_fee").notNull(), // in cents
-  stripeSessionId: varchar("stripe_session_id", { length: 256 }),
-  stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 256 }).notNull(),
+  paypalOrderId: varchar("paypal_order_id", { length: 256 }),
   status: varchar("status", { enum: ["pending", "completed", "failed"] }).notNull(),
   payoutProcessed: boolean("payout_processed").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -159,8 +158,6 @@ export const insertProfileSchema = createInsertSchema(profiles)
   .omit({
     id: true,
     userId: true,
-    stripeAccountId: true,
-    stripeAccountStatus: true,
     createdAt: true,
     updatedAt: true,
   })
@@ -235,11 +232,11 @@ export const insertBidSchema = createInsertSchema(bids).omit({
   timestamp: true,
 });
 
-// Update the payment schema to include insuranceFee
+// Update the payment schema to include PayPal Order ID
 export const insertPaymentSchema = createInsertSchema(payments)
   .omit({
     id: true,
-    stripePaymentIntentId: true,
+    paypalOrderId: true,
     status: true,
     createdAt: true,
     updatedAt: true,
@@ -345,13 +342,13 @@ export type InsertFulfillment = z.infer<typeof insertFulfillmentSchema>;
 // Update the payment status type
 export type PaymentStatus = "pending" | "processing" | "completed" | "failed";
 
-// Add seller payouts table
+// Update seller payouts table
 export const sellerPayouts = pgTable("seller_payouts", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").notNull().references(() => users.id),
   paymentId: integer("payment_id").notNull().references(() => payments.id),
   amount: integer("amount").notNull(),
-  stripeTransferId: text("stripe_transfer_id"),
+  paypalPayoutId: text("paypal_payout_id"),
   status: text("status", {
     enum: ["pending", "processing", "completed", "failed"]
   }).notNull().default("pending"),
@@ -363,7 +360,7 @@ export const sellerPayouts = pgTable("seller_payouts", {
 export const insertSellerPayoutSchema = createInsertSchema(sellerPayouts)
   .omit({
     id: true,
-    stripeTransferId: true,
+    paypalPayoutId: true,
     status: true,
     createdAt: true,
     updatedAt: true,
