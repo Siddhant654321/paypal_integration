@@ -1,227 +1,316 @@
-import { useQuery } from "@tanstack/react-query";
-import { useRoute, Link } from "wouter";
-import { Auction } from "@shared/schema";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, CreditCard, Loader2, Shield, AlertCircle } from "lucide-react";
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { formatPrice } from "../utils/formatters";
-import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 
-const INSURANCE_FEE = 800; // $8.00 in cents
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
+import { AlertCircle, ArrowLeft, CheckCircle, ShieldCheck } from "lucide-react";
+import { Button } from "../components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/ui/card";
+import { Switch } from "../components/ui/switch";
+import { Label } from "../components/ui/label";
+import { Separator } from "../components/ui/separator";
+import { Checkbox } from "../components/ui/checkbox";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { LoadingSpinner } from "../components/loading-spinner";
+import { formatCurrency } from "../lib/utils";
+import { api } from "../lib/api";
 
 export default function PaymentPage() {
-  const [, params] = useRoute("/auction/:id/pay");
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [includeInsurance, setIncludeInsurance] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sdkReady, setSdkReady] = useState(false);
-  const { toast } = useToast();
-  const { user } = useAuth();
+  const [paypalOrderId, setPaypalOrderId] = useState<string | null>(null);
 
-  const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
-    queryKey: [`/api/auctions/${params?.id}`],
+  // Fetch auction details
+  const { data: auction, isLoading: auctionLoading, error: auctionError } = useQuery({
+    queryKey: ["auction", id],
+    queryFn: () => api.get(`/auctions/${id}`).then(res => res.data),
+    enabled: !!id
   });
 
   // Initial PayPal script check
   useEffect(() => {
     const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
-    console.log("[PayPal] Checking configuration with Client ID:", paypalClientId);
-    
-    if (!paypalClientId || paypalClientId === '${PAYPAL_CLIENT_ID}') {
-      console.error("[PayPal] Client ID is missing or not properly resolved");
+    if (!paypalClientId || paypalClientId === '${process.env.PAYPAL_CLIENT_ID}') {
+      console.error("PayPal Client ID is missing or not properly resolved");
       setError("PayPal configuration is missing. Please contact support.");
       return;
     }
-    
     console.log("[PayPal] SDK configuration ready with Client ID:", paypalClientId.substring(0, 5) + '...');
     setSdkReady(true);
   }, []);
 
-  const createOrder = async () => {
-    if (isProcessing || !auction?.id) return;
+  // Create PayPal order mutation
+  const createPaymentMutation = useMutation({
+    mutationFn: () => {
+      console.log("[PAYMENT] Creating payment session for auction", id);
+      return api.post(`/auctions/${id}/pay`, { includeInsurance });
+    },
+    onSuccess: (data) => {
+      console.log("[PAYMENT] Payment session created successfully:", data.data);
+      if (data.data.url) {
+        // Redirect to PayPal checkout
+        window.location.href = data.data.url;
+      } else if (data.data.orderId) {
+        setPaypalOrderId(data.data.orderId);
+      }
+    },
+    onError: (error: any) => {
+      console.error("[PAYMENT] Error creating payment session:", error);
+      const errorMessage = error.response?.data?.message || "Failed to create payment session";
+      setError(errorMessage);
+    }
+  });
 
-    if (!user) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Required",
-        description: "Please log in to proceed with payment.",
-      });
+  const capturePaymentMutation = useMutation({
+    mutationFn: (orderId: string) => {
+      console.log("[PAYMENT] Capturing payment for order", orderId);
+      return api.post(`/payments/${orderId}/capture`);
+    },
+    onSuccess: () => {
+      console.log("[PAYMENT] Payment captured successfully");
+      navigate(`/payment-success?auction=${id}`);
+    },
+    onError: (error: any) => {
+      console.error("[PAYMENT] Error capturing payment:", error);
+      const errorMessage = error.response?.data?.message || "Failed to complete payment";
+      setError(errorMessage);
+    }
+  });
+
+  // Handle payment initiation
+  const handleInitiatePayment = () => {
+    if (!acceptedTerms) {
+      setError("Please accept the terms and conditions before proceeding.");
       return;
     }
-
-    setIsProcessing(true);
-    setError(null);
-
-    try {
-      console.log("[PayPal] Creating order for auction:", auction.id);
-
-      const response = await fetch(`/api/auctions/${auction.id}/pay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ includeInsurance })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create payment session');
-      }
-
-      const data = await response.json();
-      console.log("[PayPal] Order created successfully:", data.orderId);
-      return data.orderId;
-    } catch (err) {
-      console.error('[Payment] Error:', err);
-      const errorMessage = err instanceof Error ? err.message : "Could not process your payment. Please try again.";
-      setError(errorMessage);
-      toast({
-        variant: "destructive",
-        title: "Payment Error",
-        description: errorMessage,
-      });
-      throw err;
-    } finally {
-      setIsProcessing(false);
-    }
+    createPaymentMutation.mutate();
   };
 
-  const onApprove = async (data: { orderID: string }) => {
-    try {
-      console.log("[PayPal] Payment approved, capturing payment:", data.orderID);
+  // Calculate totals
+  const calculateTotals = () => {
+    if (!auction) return { subtotal: 0, platformFee: 0, insurance: 0, total: 0 };
 
-      const response = await fetch(`/api/payments/${data.orderID}/capture`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      });
+    const subtotal = auction.currentPrice;
+    const platformFee = Math.round(subtotal * 0.10); // 10% platform fee
+    const insurance = includeInsurance ? 800 : 0; // $8.00 insurance fee
+    const total = subtotal + platformFee + insurance;
 
-      if (!response.ok) {
-        throw new Error('Failed to capture payment');
-      }
-
-      toast({
-        title: "Payment Successful",
-        description: "Your payment has been processed successfully.",
-      });
-
-      // Redirect to success page
-      window.location.href = `/payment-success?order=${data.orderID}`;
-    } catch (err) {
-      console.error('[Payment] Capture error:', err);
-      toast({
-        variant: "destructive",
-        title: "Payment Error",
-        description: "Failed to complete payment. Please contact support.",
-      });
-    }
+    return { subtotal, platformFee, insurance, total };
   };
 
-  if (isLoadingAuction || !auction) {
+  const { subtotal, platformFee, insurance, total } = calculateTotals();
+
+  // Render loading state
+  if (auctionLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="container max-w-4xl mx-auto py-8 flex flex-col items-center justify-center min-h-[50vh]">
+        <LoadingSpinner size="lg" />
+        <p className="mt-4 text-muted-foreground">Loading payment details...</p>
       </div>
     );
   }
 
-  const baseAmountDollars = formatPrice(auction.currentPrice);
-  const insuranceAmountDollars = formatPrice(INSURANCE_FEE);
-  const totalAmountDollars = formatPrice(auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0));
+  // Render error state
+  if (auctionError || !auction) {
+    return (
+      <div className="container max-w-4xl mx-auto py-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            Failed to load auction details. Please try again later.
+          </AlertDescription>
+        </Alert>
+        <Button variant="outline" onClick={() => navigate(-1)} className="mt-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Go Back
+        </Button>
+      </div>
+    );
+  }
 
-  return (
-    <div className="container mx-auto py-8">
-      <Link href={`/auction/${auction.id}`}>
-        <Button variant="ghost" className="mb-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
+  // Check if user is the winning bidder
+  if (auction?.winningBidderId !== (window as any).USER_ID) {
+    return (
+      <div className="container max-w-4xl mx-auto py-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Unauthorized</AlertTitle>
+          <AlertDescription>
+            Only the winning bidder can access the payment page.
+          </AlertDescription>
+        </Alert>
+        <Button variant="outline" onClick={() => navigate(`/auction/${id}`)} className="mt-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Auction
         </Button>
-      </Link>
+      </div>
+    );
+  }
 
-      <Card className="max-w-lg mx-auto">
-        <CardHeader>
-          <CardTitle>Complete Payment</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="text-lg font-medium">
-            {auction.title}
-          </div>
+  return (
+    <div className="container max-w-4xl mx-auto py-8 px-4">
+      <Button variant="outline" onClick={() => navigate(-1)} className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back
+      </Button>
 
-          <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
-            <span>Winning bid amount</span>
-            <span className="font-medium">{baseAmountDollars}</span>
-          </div>
+      <div className="grid gap-8 md:grid-cols-3">
+        {/* Left Column - Auction Summary */}
+        <div className="md:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Complete Your Purchase</CardTitle>
+              <CardDescription>
+                You're about to complete your winning bid for the following auction.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="rounded-lg border p-4">
+                <div className="flex gap-4 items-start">
+                  <div className="h-24 w-24 rounded-md overflow-hidden flex-shrink-0">
+                    <img 
+                      src={auction.imageUrl} 
+                      alt={auction.title}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-lg">{auction.title}</h3>
+                    <p className="text-muted-foreground text-sm">Auction #{auction.id}</p>
+                    <div className="mt-2">
+                      <span className="font-medium">Winning Bid: </span>
+                      <span className="text-lg">{formatCurrency(auction.currentPrice)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-          <div className="flex items-center space-x-4 p-4 border rounded-lg">
-            <Shield className="h-5 w-5 text-primary" />
-            <div className="flex-1">
-              <Label htmlFor="insurance">Shipping Insurance</Label>
-              <p className="text-sm text-muted-foreground">
-                Add {insuranceAmountDollars} insurance to protect against shipping issues
-              </p>
-            </div>
-            <Switch
-              id="insurance"
-              checked={includeInsurance}
-              onCheckedChange={setIncludeInsurance}
-            />
-          </div>
+              <div className="space-y-1.5">
+                <div className="flex justify-between">
+                  <span>Item Total</span>
+                  <span>{formatCurrency(subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Platform Fee (10%)</span>
+                  <span>{formatCurrency(platformFee)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Insurance {includeInsurance ? "" : "(not selected)"}</span>
+                  <span>{formatCurrency(insurance)}</span>
+                </div>
+                <Separator className="my-2" />
+                <div className="flex justify-between font-medium">
+                  <span>Total</span>
+                  <span>{formatCurrency(total)}</span>
+                </div>
+              </div>
 
-          <div className="text-2xl font-bold flex justify-between items-center">
-            <span>Total Amount:</span>
-            <span>{totalAmountDollars}</span>
-          </div>
+              <div className="bg-blue-50 p-4 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <ShieldCheck className="h-5 w-5 text-blue-600" />
+                    <Label htmlFor="insurance" className="font-medium">Add Shipping Insurance</Label>
+                  </div>
+                  <Switch
+                    id="insurance"
+                    checked={includeInsurance}
+                    onCheckedChange={setIncludeInsurance}
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  For just $8.00, protect your purchase against damage, loss, or theft during shipping.
+                </p>
+              </div>
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+              <div className="flex items-start space-x-2">
+                <Checkbox 
+                  id="terms" 
+                  checked={acceptedTerms}
+                  onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <label
+                    htmlFor="terms"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Accept Terms and Conditions
+                  </label>
+                  <p className="text-sm text-muted-foreground">
+                    I agree to the <a href="/terms" className="text-primary underline">terms of service</a> and payment conditions.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col">
+              {error && (
+                <Alert variant="destructive" className="mb-4 w-full">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Payment Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              
+              {sdkReady && (
+                <div className="w-full space-y-4">
+                  <Button 
+                    className="w-full"
+                    disabled={!acceptedTerms || createPaymentMutation.isPending}
+                    onClick={handleInitiatePayment}
+                  >
+                    {createPaymentMutation.isPending ? (
+                      <>
+                        <LoadingSpinner className="mr-2 h-4 w-4" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        Pay {formatCurrency(total)}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </CardFooter>
+          </Card>
+        </div>
 
-          {sdkReady ? (
-            <PayPalScriptProvider options={{ 
-              clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || '',
-              currency: "USD",
-              intent: "capture",
-              components: "buttons",
-              'enable-funding': "paypal",
-              'disable-funding': "card,paylater",
-              'data-sdk-integration-source': "button_js"
-            }}>
-              <PayPalButtons
-                disabled={isProcessing}
-                createOrder={createOrder}
-                onApprove={onApprove}
-                onError={(err) => {
-                  console.error('[PayPal] Error:', err);
-                  setError("Payment failed. Please try again or contact support.");
-                }}
-                style={{ 
-                  layout: "vertical",
-                  color: "gold",
-                  shape: "rect",
-                  label: "pay"
-                }}
-              />
-            </PayPalScriptProvider>
-          ) : (
-            <div className="text-center py-4">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-              <p>Loading payment options...</p>
-            </div>
-          )}
-        </CardContent>
-        <CardFooter className="text-sm text-muted-foreground">
-          Your payment will be processed securely through PayPal.
-        </CardFooter>
-      </Card>
+        {/* Right Column - Payment Safety */}
+        <div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Safety</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                <div>
+                  <h4 className="font-medium">Secure Transaction</h4>
+                  <p className="text-sm text-muted-foreground">Your payment information is processed securely.</p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                <div>
+                  <h4 className="font-medium">Buyer Protection</h4>
+                  <p className="text-sm text-muted-foreground">We hold payment until you confirm receipt of your item in good condition.</p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                <div>
+                  <h4 className="font-medium">Verified Seller</h4>
+                  <p className="text-sm text-muted-foreground">All sellers are verified before listing on our platform.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
