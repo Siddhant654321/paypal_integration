@@ -31,11 +31,24 @@ export default function PaymentPage() {
   // Initial PayPal script check
   useEffect(() => {
     if (!import.meta.env.VITE_PAYPAL_CLIENT_ID || import.meta.env.VITE_PAYPAL_CLIENT_ID === '${process.env.PAYPAL_CLIENT_ID}') {
-      console.error("PayPal Client ID is missing or not properly resolved");
+      console.error("[PayPal] Client ID is missing or not properly resolved");
       setError("PayPal configuration is missing. Please contact support.");
       return;
     }
-    console.log("[PayPal] SDK configuration ready with ID:", import.meta.env.VITE_PAYPAL_CLIENT_ID.substring(0, 5) + '...');
+
+    // Validate PayPal Client ID format
+    if (!import.meta.env.VITE_PAYPAL_CLIENT_ID.startsWith('AQ')) {
+      console.error("[PayPal] Invalid Client ID format");
+      setError("Invalid PayPal configuration. Please contact support.");
+      return;
+    }
+
+    const environment = import.meta.env.VITE_PAYPAL_ENV || 'sandbox';
+    console.log("[PayPal] Initializing SDK with:", {
+      environment,
+      clientIdPrefix: import.meta.env.VITE_PAYPAL_CLIENT_ID.substring(0, 8) + '...'
+    });
+
     setSdkReady(true);
   }, []);
 
@@ -183,9 +196,14 @@ export default function PaymentPage() {
 
           {sdkReady ? (
             <PayPalScriptProvider options={{ 
-              clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || '',
+              clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
               currency: "USD",
-              intent: "capture"
+              intent: "capture",
+              components: "buttons",
+              'enable-funding': "paypal",
+              'disable-funding': "card,paylater",
+              'data-client-token': "abc123xyz==",
+              'data-sdk-integration-source': "button_js"
             }}>
               <PayPalButtons
                 disabled={isProcessing}
