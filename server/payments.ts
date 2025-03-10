@@ -125,7 +125,7 @@ export class PaymentService {
         insuranceFee,
         stripePaymentIntentId: '',
         stripeChargeId: null,
-        stripe_session_id: session.id,  // Store the session ID
+        stripeSessionId: session.id,  // Store the session ID with the correct field name
         status: "pending" as const,
         payoutProcessed: false,
         createdAt: new Date(),

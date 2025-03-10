@@ -634,43 +634,45 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async insertPayment(paymentData: InsertPayment): Promise<Payment> {
+  async insertPayment(data: any): Promise<Payment> {
     try {
       // Log the incoming payment data with sensitive info truncated
       log(`Creating payment record with data: ${JSON.stringify({
-        ...paymentData,
-        stripePaymentIntentId: paymentData.stripePaymentIntentId.substring(0, 10) + '...'
+        ...data,
+        stripePaymentIntentId: data.stripePaymentIntentId.substring(0, 10) + '...'
       })}`, "payments");
 
       // Ensure all required fields are present
-      const paymentRecord = {
-        ...paymentData,
-        status: paymentData.status || 'pending',
-        payoutProcessed: paymentData.payoutProcessed ?? false,
+      const paymentData = {
+        ...data,
+        // Make sure we have the session ID field correctly named if it exists
+        ...(data.stripeSessionId && { stripeSessionId: data.stripeSessionId }),
+        status: data.status || 'pending',
+        payoutProcessed: data.payoutProcessed ?? false,
         createdAt: new Date(),
         updatedAt: new Date(),
         // Ensure all NOT NULL fields from schema are set
-        amount: paymentData.amount,
-        platformFee: paymentData.platformFee,
-        sellerPayout: paymentData.sellerPayout,
-        insuranceFee: paymentData.insuranceFee,
-        auctionId: paymentData.auctionId,
-        buyerId: paymentData.buyerId,
-        sellerId: paymentData.sellerId,
-        stripePaymentIntentId: paymentData.stripePaymentIntentId,
+        amount: data.amount,
+        platformFee: data.platformFee,
+        sellerPayout: data.sellerPayout,
+        insuranceFee: data.insuranceFee,
+        auctionId: data.auctionId,
+        buyerId: data.buyerId,
+        sellerId: data.sellerId,
+        stripePaymentIntentId: data.stripePaymentIntentId,
       };
 
       // Validate required fields
-      if (!paymentRecord.amount || !paymentRecord.platformFee || !paymentRecord.sellerPayout || 
-          !paymentRecord.auctionId || !paymentRecord.buyerId || !paymentRecord.sellerId || 
-          !paymentRecord.stripePaymentIntentId) {
+      if (!paymentData.amount || !paymentData.platformFee || !paymentData.sellerPayout || 
+          !paymentData.auctionId || !paymentData.buyerId || !paymentData.sellerId || 
+          !paymentData.stripePaymentIntentId) {
         throw new Error("Missing required payment fields");
       }
 
       // Insert the payment record
       const [payment] = await db
         .insert(payments)
-        .values(paymentRecord)
+        .values(paymentData)
         .returning();
 
       if (!payment) {
