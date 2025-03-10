@@ -166,6 +166,25 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
   }
 });
 
+// Add the payment capture endpoint to handle successful PayPal payments
+router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+    
+    if (!orderId) {
+      return res.status(400).json({ message: "Order ID is required" });
+    }
+
+    await PaymentService.handlePaymentSuccess(orderId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[PAYMENT] Capture error:', error);
+    res.status(500).json({ 
+      message: error instanceof Error ? error.message : "Failed to capture payment" 
+    });
+  }
+});
+
 // Middleware to check if user is an approved seller or seller_admin
 const requireApprovedSeller = (req: any, res: any, next: any) => {
   try {

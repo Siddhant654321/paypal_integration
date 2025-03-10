@@ -27,7 +27,7 @@ export default function PaymentPage() {
     queryKey: [`/api/auctions/${params?.id}`],
   });
 
-  const handlePayment = async () => {
+  const createOrder = async () => {
     if (isProcessing || !auction?.id) return;
 
     if (!user) {
@@ -56,14 +56,7 @@ export default function PaymentPage() {
       }
 
       const data = await response.json();
-
-      if (!data.url) {
-        throw new Error('No checkout URL received from server');
-      }
-
-      // Open PayPal checkout in a new window
-      window.location.href = data.url;
-
+      return data.orderId;
     } catch (err) {
       console.error('[Payment] Error:', err);
       const errorMessage = err instanceof Error ? err.message : "Could not process your payment. Please try again.";
@@ -73,8 +66,38 @@ export default function PaymentPage() {
         title: "Payment Error",
         description: errorMessage,
       });
+      throw err;
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const onApprove = async (data: { orderID: string }) => {
+    try {
+      const response = await fetch(`/api/payments/${data.orderID}/capture`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to capture payment');
+      }
+
+      toast({
+        title: "Payment Successful",
+        description: "Your payment has been processed successfully.",
+      });
+
+      // Redirect to success page
+      window.location.href = `/payment-success?order=${data.orderID}`;
+    } catch (err) {
+      console.error('[Payment] Capture error:', err);
+      toast({
+        variant: "destructive",
+        title: "Payment Error",
+        description: "Failed to complete payment. Please contact support.",
+      });
     }
   };
 
@@ -142,12 +165,18 @@ export default function PaymentPage() {
           )}
 
           <PayPalScriptProvider options={{ 
-            "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID,
+            clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
             currency: "USD",
+            intent: "capture"
           }}>
             <PayPalButtons
               disabled={isProcessing}
-              createOrder={handlePayment}
+              createOrder={createOrder}
+              onApprove={onApprove}
+              onError={(err) => {
+                console.error('[PayPal] Error:', err);
+                setError("Payment failed. Please try again or contact support.");
+              }}
               style={{ layout: "vertical" }}
             />
           </PayPalScriptProvider>
