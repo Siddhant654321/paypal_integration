@@ -1,96 +1,57 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { serveStatic } from "./vite";
+import { setupVite, serveStatic, log } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
-import cors from 'cors';
-
-// Simple logging utility for server startup
-const log = (message: string) => {
-  console.log(`[SERVER] ${message}`);
-};
 
 async function initializeServer() {
   const app = express();
-  const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5000';
+  const DEFAULT_PORT = 5000;
 
   try {
-    log("Starting server initialization");
+    log("Starting server initialization", "startup");
 
     // Check critical environment variables
-    log("Checking environment variables...");
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL environment variable is not set");
     }
     if (!process.env.SESSION_SECRET) {
-      log("Warning: SESSION_SECRET not set, using default value");
+      log("Warning: SESSION_SECRET not set, using default value", "startup");
     }
-    if (!process.env.STRIPE_SECRET_KEY) {
-      log("Warning: STRIPE_SECRET_KEY not set");
+
+    // Test database connection with retry logic
+    let retries = 5;
+    while (retries > 0) {
+      try {
+        log("Testing database connection...", "startup");
+        await db.execute(sql`SELECT 1`);
+        log("Database connection successful", "startup");
+        break;
+      } catch (error) {
+        retries--;
+        if (retries === 0) {
+          throw new Error(`Failed to connect to database after 5 attempts: ${error}`);
+        }
+        log(`Database connection failed, retrying... (${retries} attempts remaining)`, "startup");
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
-    log("Environment variables checked");
-
-    // Temporarily bypass database connection test
-    log("Database connection test bypassed for debugging");
-
-    // Set up CORS
-    log("Setting up CORS...");
-    app.use(cors({
-      origin: [
-        clientOrigin,
-        'http://localhost:5000',
-        'https://checkout.stripe.com',
-        'https://js.stripe.com'
-      ],
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature'],
-    }));
-    log("CORS setup complete");
 
     // Basic middleware setup
-    log("Setting up middleware...");
-    app.use(express.urlencoded({ extended: false }));
-    app.use("/api/webhooks/stripe", express.raw({ type: 'application/json' }));
+    log("Setting up middleware", "startup");
     app.use(express.json());
-    log("Middleware setup complete");
-
-    // Set security headers
-    log("Setting up security headers...");
-    app.use((req, res, next) => {
-      res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.replit.com https://*.replit.dev https://checkout.stripe.com https://js.stripe.com");
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      next();
-    });
-    log("Security headers setup complete");
+    app.use(express.urlencoded({ extended: false }));
 
     // Request logging middleware
     app.use((req, res, next) => {
-      log(`${req.method} ${req.path}`);
+      log(`${req.method} ${req.path}`, "request");
       next();
     });
 
-    // Register API routes before static file serving
-    log("Setting up routes...");
-    const server = await registerRoutes(app);
-    log("Routes setup complete");
-
-    // Temporarily disable Vite setup for debugging
-    if (process.env.NODE_ENV === "production") {
-      log("Setting up static file serving...");
-      serveStatic(app);
-      log("Static file serving setup complete");
-    } else {
-      log("Vite development server setup bypassed for debugging");
-    }
-
-    // Error handling middleware - must be last
+    // Basic error handling
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       console.error("[ERROR]", err);
-      res.status(500).json({ 
-        message: "Internal server error",
-        error: err.message
-      });
+      res.status(500).json({ message: "Internal server error" });
     });
 
     // Health check endpoint
@@ -98,51 +59,81 @@ async function initializeServer() {
       res.json({ status: "ok", timestamp: new Date().toISOString() });
     });
 
-    return server;
+    return app;
   } catch (error) {
-    log(`Fatal error during server initialization: ${error}`);
+    log(`Fatal error during server initialization: ${error}`, "startup");
     throw error;
   }
 }
 
-async function startServer(): Promise<void> {
+async function startServer(port: number = 5000): Promise<void> {
   try {
-    log("Starting server initialization...");
-    const server = await initializeServer();
-    log("Server initialization complete, attempting to listen on port 5000");
+    const app = await initializeServer();
 
-    server.listen({
-      port: 5000,
-      host: "0.0.0.0",
-    }, () => {
-      log("Server started successfully on port 5000");
-    }).on('error', (error: any) => {
-      if (error.code === 'EADDRINUSE') {
-        log("Error: Port 5000 is already in use. This port is required for the application.");
-        process.exit(1);
+    // Setup routes
+    log("Setting up routes...", "startup");
+    const server = await registerRoutes(app);
+    log("Routes setup complete", "startup");
+
+    // Setup frontend
+    try {
+      if (process.env.NODE_ENV === "production") {
+        log("Setting up static file serving...", "startup");
+        serveStatic(app);
       } else {
-        log(`Server error: ${error}`);
-        process.exit(1);
+        log("Setting up Vite development server...", "startup");
+        await setupVite(app, server);
       }
+      log("Frontend setup complete", "startup");
+    } catch (frontendError) {
+      log(`Frontend setup error: ${frontendError}`, "startup");
+      // Continue server startup even if frontend setup fails
+    }
+
+    // Start server with error handling
+    await new Promise<void>((resolve, reject) => {
+      server.listen({
+        port,
+        host: "0.0.0.0",
+      }, () => {
+        log(`Server started on port ${port}`, "startup");
+        resolve();
+      }).on('error', (error: any) => {
+        if (error.code === 'EADDRINUSE') {
+          log(`Port ${port} is already in use`, "startup");
+          reject(error);
+        } else {
+          log(`Server error: ${error}`, "startup");
+          reject(error);
+        }
+      });
+
+      // Handle graceful shutdown
+      const shutdown = () => {
+        log('Shutting down gracefully...', "startup");
+        server.close(() => {
+          log('Server closed', "startup");
+          process.exit(0);
+        });
+      };
+
+      process.on('SIGTERM', shutdown);
+      process.on('SIGINT', shutdown);
     });
 
-    // Handle graceful shutdown
-    const shutdown = () => {
-      log('Shutting down gracefully...');
-      process.exit(0);
-    };
-
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
-
-  } catch (error) {
-    log(`Fatal error during startup: ${error}`);
-    process.exit(1);
+  } catch (error: any) {
+    if (error.code === 'EADDRINUSE') {
+      log(`Retrying with port ${port + 1}`, "startup");
+      await startServer(port + 1);
+    } else {
+      log(`Fatal error during startup: ${error}`, "startup");
+      process.exit(1);
+    }
   }
 }
 
 // Start the server
 startServer().catch((error) => {
-  log(`Unhandled error during server startup: ${error}`);
+  log(`Unhandled error during server startup: ${error}`, "startup");
   process.exit(1);
 });

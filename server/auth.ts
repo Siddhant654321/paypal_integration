@@ -5,10 +5,6 @@ import session from "express-session";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import { comparePasswords, hashPassword } from "./utils/password";
-import createMemoryStore from "memorystore";
-
-// Create MemoryStore constructor
-const MemoryStore = createMemoryStore(session);
 
 declare global {
   namespace Express {
@@ -28,9 +24,7 @@ export function setupAuth(app: Express) {
     secret: process.env.SESSION_SECRET || 'defaultsecret123',
     resave: false,
     saveUninitialized: false,
-    store: new MemoryStore({
-      checkPeriod: 86400000 // prune expired entries every 24h
-    }),
+    store: storage.sessionStore,
     cookie: {
       secure: isProduction,
       httpOnly: true,
@@ -45,14 +39,9 @@ export function setupAuth(app: Express) {
     app.set("trust proxy", 1);
   }
 
-  console.log("[AUTH] Setting up session middleware");
   app.use(session(sessionSettings));
-  console.log("[AUTH] Session middleware initialized");
-
-  console.log("[AUTH] Initializing Passport");
   app.use(passport.initialize());
   app.use(passport.session());
-  console.log("[AUTH] Passport middleware initialized");
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {

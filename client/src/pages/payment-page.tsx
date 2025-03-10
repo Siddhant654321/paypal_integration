@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Shield, AlertCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import { ArrowLeft, CreditCard, Loader2, Shield, AlertCircle } from "lucide-react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -17,80 +17,78 @@ const INSURANCE_FEE = 800; // $8.00 in cents
 export default function PaymentPage() {
   const [, params] = useRoute("/auction/:id/pay");
   const [includeInsurance, setIncludeInsurance] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
     queryKey: [`/api/auctions/${params?.id}`],
-    staleTime: Infinity,
   });
 
-  useEffect(() => {
-    if (!auction?.id || !user) return;
+  const handlePayment = async () => {
+    if (isProcessing || !auction?.id) return;
 
-    const initiatePayment = async () => {
-      if (isLoading) return;
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "Please log in to proceed with payment.",
+      });
+      return;
+    }
 
-      setIsLoading(true);
-      setError(null);
+    setIsProcessing(true);
+    setError(null);
 
-      try {
-        console.log("Initiating payment for auction:", auction.id);
-        const response = await fetch(`/api/auctions/${auction.id}/checkout`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ includeInsurance })
-        });
+    try {
+      console.log(`[Payment] Creating checkout session for auction ${auction.id}`);
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to create payment session');
-        }
+      const response = await fetch(`/api/auctions/${auction.id}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ includeInsurance })
+      });
 
-        const data = await response.json();
-        console.log("Payment session created:", { hasUrl: !!data.url });
-
-        // Open Stripe checkout in a new window
-        if (data.url) {
-          console.log("Redirecting to Stripe Checkout:", data.url);
-          const checkoutWindow = window.open(data.url, '_blank');
-
-          // Handle popup blocker scenario
-          if (!checkoutWindow) {
-            setError("Popup blocked! Please allow popups for this site and try again.");
-            toast({
-              title: "Popup Blocked",
-              description: "Please allow popups for this site to complete your payment",
-              variant: "destructive",
-            });
-          } else {
-            checkoutWindow.focus();
-          }
-          return;
-        } else if (data.clientSecret) {
-          // Handle client secret if needed
-        } else {
-          throw new Error("No payment URL or client secret received");
-        }
-
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Could not initialize payment";
-        setError(message);
-        toast({
-          title: "Payment Error",
-          description: message,
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create payment session');
       }
-    };
 
-    initiatePayment();
-  }, [auction?.id, includeInsurance, user, toast]);
+      const data = await response.json();
+
+      if (!data.url) {
+        throw new Error('No checkout URL received from server');
+      }
+
+      console.log(`[Payment] Opening Stripe checkout URL in new tab`);
+
+      // Open the checkout URL in a new tab
+      const checkoutWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
+
+      if (checkoutWindow) {
+        toast({
+          title: "Checkout Opened",
+          description: "Complete your payment in the new tab. You can close this window."
+        });
+      } else {
+        throw new Error("Pop-up blocked. Please allow pop-ups and try again.");
+      }
+
+    } catch (err) {
+      console.error('[Payment] Error:', err);
+      const errorMessage = err instanceof Error ? err.message : "Could not process your payment. Please try again.";
+      setError(errorMessage);
+      toast({
+        variant: "destructive",
+        title: "Payment Error",
+        description: errorMessage,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   if (isLoadingAuction || !auction) {
     return (
@@ -139,7 +137,6 @@ export default function PaymentPage() {
               id="insurance"
               checked={includeInsurance}
               onCheckedChange={setIncludeInsurance}
-              disabled={isLoading}
             />
           </div>
 
@@ -156,14 +153,22 @@ export default function PaymentPage() {
             </Alert>
           )}
 
-          {isLoading && (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          )}
+          <Button 
+            onClick={handlePayment}
+            className="w-full" 
+            size="lg"
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+            ) : (
+              <CreditCard className="h-5 w-5 mr-2" />
+            )}
+            {isProcessing ? "Processing..." : "Proceed to Payment"}
+          </Button>
         </CardContent>
         <CardFooter className="text-sm text-muted-foreground">
-          Payments are processed securely by Stripe
+          You will be redirected to Stripe to complete your payment securely.
         </CardFooter>
       </Card>
     </div>

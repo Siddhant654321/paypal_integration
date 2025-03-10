@@ -1,6 +1,3 @@
 
 -- Add the missing stripe_session_id column to the payments table
-ALTER TABLE "payments" ADD COLUMN IF NOT EXISTS "stripe_session_id" varchar;
-
--- Add the missing stripe_charge_id column to the payments table
-ALTER TABLE "payments" ADD COLUMN IF NOT EXISTS "stripe_charge_id" varchar;
+ALTER TABLE "payments" ADD COLUMN "stripe_session_id" varchar;

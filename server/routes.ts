@@ -1,11 +1,73 @@
-import express, { type Express, type Request, type Response } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
+import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema, insertFulfillmentSchema } from "@shared/schema";
+import { ZodError } from "zod";
 import path from "path";
+import multer from 'multer';
+import { upload, handleFileUpload } from "./uploads";
+import { PaymentService } from "./payments";
+import { buffer } from "micro";
+import Stripe from "stripe";
+import { SellerPaymentService } from "./seller-payments";
+import { EmailService } from "./email-service"; 
+import { AuctionService } from "./auction-service";
+import { AIPricingService } from "./ai-service";
+import type { User, InsertUser } from "@shared/schema"; 
+import { db } from "./db";
+import { sql } from "drizzle-orm";
+import { NotificationService } from "./notification-service";
+import passport from 'passport'; //Import passport
+import { hashPassword } from './auth';
+
 
 // Create an Express router instance
 const router = express.Router();
+
+// Update the requireProfile middleware
+const requireProfile = async (req: any, res: any, next: any) => {
+  if (!req.isAuthenticated()) {
+    console.log("[PROFILE CHECK] User not authenticated");
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  console.log("[PROFILE CHECK] Checking profile completeness for user:", {
+    userId: req.user?.id,
+    role: req.user?.role,
+    username: req.user?.username
+  });
+
+  try {
+    const profile = await storage.getProfile(req.user.id);
+
+    if (!profile) {
+      console.log("[PROFILE CHECK] No profile found");
+      return res.status(403).json({ 
+        message: "Please complete your profile before bidding",
+        requiredFields: ["fullName", "email", "address", "city", "state", "zipCode"]
+      });
+    }
+
+    // Check required fields
+    const requiredFields = ["fullName", "email", "address", "city", "state", "zipCode"];
+    const missingFields = requiredFields.filter(field => !profile[field]);
+
+    if (missingFields.length > 0) {
+      console.log("[PROFILE CHECK] Missing required fields:", missingFields);
+      return res.status(403).json({
+        message: "Please complete your profile before bidding",
+        missingFields: missingFields
+      });
+    }
+
+    console.log("[PROFILE CHECK] Profile verification successful");
+    next();
+  } catch (error) {
+    console.error("[PROFILE CHECK] Error verifying profile:", error);
+    res.status(500).json({ message: "Failed to verify profile" });
+  }
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log("[ROUTES] Starting route registration");
@@ -17,41 +79,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Serve static files from uploads directory
     const uploadsPath = path.join(process.cwd(), 'uploads');
-    app.use('/uploads', express.static(uploadsPath));
+    app.use('/uploads', express.static(uploadsPath, {
+      maxAge: '1d',
+      etag: true,
+      lastModified: true,
+      setHeaders: (res, path) => {
+        if (path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png')) {
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
+      }
+    }));
 
-    // Basic middleware setup with logging
-    console.log("[ROUTES] Setting up core middleware");
+    // Basic middleware setup
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
-    
-    // Configure and register all routes before creating HTTP server
-    console.log("[ROUTES] Configuring API routes");
-    app.use('/api', router);
+    app.use(router);
 
-    // Health check endpoint
-    router.get("/status", (_req: Request, res: Response) => {
-      console.log("[ROUTES] Health check requested");
-      res.json({ 
-        status: "ok",
-        timestamp: new Date().toISOString()
-      });
-    });
 
-    // Create HTTP server
-    console.log("[ROUTES] Creating HTTP server");
-    const httpServer = createServer(app);
-
-    console.log("[ROUTES] Route registration completed successfully");
-    return httpServer;
-  } catch (error) {
-    console.error("[ROUTES] Error during route registration:", error);
-    throw error;
-  }
-}
-
-// Add authentication endpoints with enhanced logging and response handling
-router.post("/api/login", (req, res, next) => {
-  if (!req.body.username || !req.body.password) {
+    // Add authentication endpoints with enhanced logging and response handling
+    router.post("/api/login", (req, res, next) => {
+      if (!req.body.username || !req.body.password) {
         console.log("[AUTH] Login failed: Missing credentials");
         return res.status(400).json({ 
           message: "Username and password are required" 
@@ -426,58 +473,6 @@ router.post("/api/login", (req, res, next) => {
       } catch (error) {
         console.error("Error fetching bids:", error);
         res.status(500).json({ message: "Failed to fetch bids" });
-      }
-    });
-
-    // Add payment endpoint for auction winners
-    router.post("/api/auctions/:id/checkout", requireAuth, requireProfile, async (req, res) => {
-      try {
-        const auctionId = parseInt(req.params.id);
-        const { includeInsurance } = req.body;
-
-        console.log("[PAYMENT] Payment request received:", {
-          auctionId,
-          buyerId: req.user?.id,
-          includeInsurance
-        });
-
-        if (!req.user) {
-          return res.status(401).json({ message: "Unauthorized" });
-        }
-
-        const result = await PayPalService.createOrder(
-          auctionId,
-          req.user.id,
-          includeInsurance
-        );
-
-        res.json(result);
-      } catch (error) {
-        console.error("[PAYMENT] Error:", error);
-        res.status(500).json({
-          message: error instanceof Error ? error.message : "Payment initialization failed"
-        });
-      }
-    });
-
-    // Add PayPal payment capture endpoint
-    router.post("/api/payments/:orderId/capture", requireAuth, async (req, res) => {
-      try {
-        const { orderId } = req.params;
-
-        console.log("[PAYMENT] Capturing PayPal payment:", { orderId });
-
-        const payment = await PayPalService.capturePayment(orderId);
-        
-        res.json({ 
-          status: "success",
-          payment 
-        });
-      } catch (error) {
-        console.error("[PAYMENT] Error capturing payment:", error);
-        res.status(500).json({
-          message: error instanceof Error ? error.message : "Payment capture failed"
-        });
       }
     });
 
@@ -1263,9 +1258,6 @@ router.post("/api/login", (req, res, next) => {
           timestamp: new Date().toISOString()
         });
         
-        // Clear any previous response headers to avoid conflicts
-        res.setHeader('Content-Type', 'application/json');
-        
         if (!req.user) {
           console.log('[PAYMENT] Unauthorized payment attempt - no user in session');
           return res.status(401).json({
@@ -1348,19 +1340,8 @@ router.post("/api/login", (req, res, next) => {
         });
         // Retrieve the checkout session from Stripe
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        
-        // Extract auction ID from metadata if available
-        let auctionId = null;
-        if (session.metadata && session.metadata.auctionId) {
-          auctionId = session.metadata.auctionId;
-        }
-        
-        // Return the URL and auction ID
-        res.json({ 
-          url: session.url,
-          auctionId,
-          status: session.status
-        });
+        // Return the URL for client-side redirect
+        res.json({ url: session.url });
       } catch (error) {
         console.error("Error retrieving checkout session:", error);
         res.status(500).json({ message: "Failed to retrieve checkout session" });
@@ -2206,9 +2187,6 @@ router.post("/api/login", (req, res, next) => {
     throw error;
   }
 }
-
-// Import required dependencies from @shared/schema
-import { ZodError, insertUserSchema } from "@shared/schema";
 
 // Helper function for consistent logging
 const log = (message: string, context: string = 'general') => {
