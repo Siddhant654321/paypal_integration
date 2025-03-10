@@ -1,28 +1,47 @@
-import Stripe from "stripe";
 import { storage } from "./storage";
 import { NotificationService } from "./notification-service";
+import axios from 'axios';
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("Missing STRIPE_SECRET_KEY environment variable");
+if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+  throw new Error("Missing PayPal environment variables");
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16"
-});
+const PRODUCTION_URL = 'https://api-m.paypal.com';
+const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
+const BASE_URL = IS_PRODUCTION ? PRODUCTION_URL : SANDBOX_URL;
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
-const BASE_URL = process.env.REPL_SLUG 
-  ? `https://${process.env.REPL_SLUG}.replit.dev`
-  : 'http://localhost:5000';
-
 export class PaymentService {
+  private static async getAccessToken(): Promise<string> {
+    try {
+      const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+      const response = await axios.post(`${BASE_URL}/v1/oauth2/token`, 
+        'grant_type=client_credentials',
+        {
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
+      return response.data.access_token;
+    } catch (error) {
+      console.error("[PAYPAL] Error getting access token:", error);
+      throw new Error("Failed to authenticate with PayPal");
+    }
+  }
+
   static async createCheckoutSession(
     auctionId: number,
     buyerId: number,
     includeInsurance: boolean = false,
-    baseUrl: string = BASE_URL
+    baseUrl: string = process.env.REPL_SLUG ? 
+      `https://${process.env.REPL_SLUG}.replit.dev` : 
+      'http://localhost:5000'
   ) {
     try {
       // Get auction details
@@ -36,10 +55,10 @@ export class PaymentService {
         throw new Error("Only the winning bidder can make payment");
       }
 
-      // Get seller's Stripe account
+      // Get seller's PayPal account
       const sellerProfile = await storage.getProfile(auction.sellerId);
-      if (!sellerProfile?.stripeAccountId) {
-        throw new Error("Seller has not completed their Stripe account setup");
+      if (!sellerProfile?.paypalMerchantId) {
+        throw new Error("Seller has not completed their PayPal account setup");
       }
 
       // Calculate amounts
@@ -48,65 +67,87 @@ export class PaymentService {
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
 
-      console.log("[PAYMENTS] Creating checkout session:", {
+      console.log("[PAYPAL] Creating checkout order:", {
         auctionId,
         baseAmount,
         platformFee,
         insuranceFee,
         totalAmount,
-        sellerAccountId: sellerProfile.stripeAccountId
+        merchantId: sellerProfile.paypalMerchantId
       });
 
-      // Create Stripe session
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/auction/${auction.id}?payment_canceled=true`,
-        line_items: [
+      const accessToken = await this.getAccessToken();
+
+      // Create PayPal order
+      const orderRequest = {
+        intent: "CAPTURE",
+        purchase_units: [
           {
-            price_data: {
-              currency: "usd",
-              product_data: {
+            amount: {
+              currency_code: "USD",
+              value: (totalAmount / 100).toFixed(2),
+              breakdown: {
+                item_total: {
+                  currency_code: "USD",
+                  value: (baseAmount / 100).toFixed(2)
+                },
+                handling: {
+                  currency_code: "USD",
+                  value: (platformFee / 100).toFixed(2)
+                },
+                insurance: {
+                  currency_code: "USD",
+                  value: (insuranceFee / 100).toFixed(2)
+                }
+              }
+            },
+            description: `Payment for auction #${auction.id}`,
+            custom_id: `auction_${auction.id}`,
+            payee: {
+              merchant_id: sellerProfile.paypalMerchantId
+            },
+            items: [
+              {
                 name: auction.title,
                 description: `Auction #${auction.id}`,
-                images: auction.imageUrl ? [auction.imageUrl] : undefined,
-              },
-              unit_amount: baseAmount,
-            },
-            quantity: 1,
-          },
-          {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: "Platform Fee",
-                description: "10% platform fee",
-              },
-              unit_amount: platformFee,
-            },
-            quantity: 1,
-          },
-          ...(includeInsurance ? [{
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: "Insurance Fee",
-                description: "Shipping insurance coverage",
-              },
-              unit_amount: insuranceFee,
-            },
-            quantity: 1,
-          }] : []),
+                unit_amount: {
+                  currency_code: "USD",
+                  value: (baseAmount / 100).toFixed(2)
+                },
+                quantity: "1"
+              }
+            ],
+            payment_instruction: {
+              platform_fees: [{
+                amount: {
+                  currency_code: "USD",
+                  value: (platformFee / 100).toFixed(2)
+                }
+              }]
+            }
+          }
         ],
-        payment_intent_data: {
-          application_fee_amount: platformFee + insuranceFee,
-          transfer_data: {
-            destination: sellerProfile.stripeAccountId,
-          },
-        },
-      });
+        application_context: {
+          return_url: `${baseUrl}/payment-success`,
+          cancel_url: `${baseUrl}/auction/${auction.id}?payment_canceled=true`
+        }
+      };
 
-      if (!session.url) {
+      const response = await axios.post(
+        `${BASE_URL}/v2/checkout/orders`,
+        orderRequest,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const orderId = response.data.id;
+      const approveUrl = response.data.links.find((link: any) => link.rel === "approve")?.href;
+
+      if (!approveUrl) {
         throw new Error("Failed to generate checkout URL");
       }
 
@@ -120,8 +161,7 @@ export class PaymentService {
         sellerPayout: baseAmount - platformFee,
         insuranceFee,
         status: 'pending',
-        stripeSessionId: session.id,
-        stripePaymentIntentId: session.payment_intent as string,
+        paypalOrderId: orderId
       });
 
       // Update auction status
@@ -131,26 +171,36 @@ export class PaymentService {
       });
 
       return {
-        sessionId: session.id,
-        url: session.url,
+        orderId,
+        url: approveUrl,
         payment,
       };
-
     } catch (error) {
-      console.error("[PAYMENTS] Error creating checkout session:", error);
-      if (error instanceof Stripe.errors.StripeError) {
-        throw new Error(`Stripe error: ${error.message}`);
-      }
+      console.error("[PAYPAL] Error creating checkout session:", error);
       throw error;
     }
   }
 
-  static async handlePaymentSuccess(paymentIntentId: string) {
+  static async handlePaymentSuccess(orderId: string) {
     try {
-      const payment = await storage.findPaymentByStripeId(paymentIntentId);
+      const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
         throw new Error("Payment not found");
       }
+
+      const accessToken = await this.getAccessToken();
+
+      // Capture the payment
+      await axios.post(
+        `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
 
       // Update payment status
       await storage.updatePaymentStatus(payment.id, "completed");
@@ -169,14 +219,14 @@ export class PaymentService {
       );
 
     } catch (error) {
-      console.error("[PAYMENTS] Error handling payment success:", error);
+      console.error("[PAYPAL] Error handling payment success:", error);
       throw error;
     }
   }
 
-  static async handlePaymentFailure(paymentIntentId: string) {
+  static async handlePaymentFailure(orderId: string) {
     try {
-      const payment = await storage.findPaymentByStripeId(paymentIntentId);
+      const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
         throw new Error("Payment not found");
       }
@@ -204,7 +254,7 @@ export class PaymentService {
         "failed"
       );
     } catch (error) {
-      console.error("[PAYMENTS] Error handling payment failure:", error);
+      console.error("[PAYPAL] Error handling payment failure:", error);
       throw error;
     }
   }
