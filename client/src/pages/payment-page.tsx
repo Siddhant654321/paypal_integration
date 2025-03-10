@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useParams } from 'wouter';
-import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
+import { PayPalButtons } from "@paypal/react-paypal-js";
 import { useAuction } from '../hooks/use-auction';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertCircle, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
-import { LoadingSpinner } from '../components/loading-spinner';
+import { LoadingSpinner } from '../components/ui/loading-spinner';
 import { Shield } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 
@@ -106,19 +106,6 @@ export default function PaymentPage() {
     return <div className="p-4">Auction not found</div>;
   }
 
-  // Check PayPal configuration
-  if (!import.meta.env.VITE_PAYPAL_CLIENT_ID) {
-    return (
-      <div className="container max-w-3xl mx-auto p-4">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>PayPal configuration is missing</AlertTitle>
-          <AlertDescription>Please contact support.</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
   return (
     <div className="container max-w-3xl mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6">Complete Your Purchase</h1>
@@ -173,26 +160,20 @@ export default function PaymentPage() {
           </CardContent>
 
           <CardFooter>
-            <PayPalScriptProvider options={{
-              clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
-              currency: "USD",
-              intent: "capture"
-            }}>
-              <PayPalButtons
-                style={{
-                  layout: "vertical",
-                  shape: "rect",
-                }}
-                disabled={isProcessing}
-                createOrder={createOrder}
-                onApprove={onApprove}
-                onError={(err) => {
-                  console.error("[PayPal] Button error:", err);
-                  setPaymentError("Payment failed. Please try again.");
-                  setIsProcessing(false);
-                }}
-              />
-            </PayPalScriptProvider>
+            <PayPalButtons
+              style={{
+                layout: "vertical",
+                shape: "rect",
+              }}
+              disabled={isProcessing}
+              createOrder={createOrder}
+              onApprove={onApprove}
+              onError={(err) => {
+                console.error("[PayPal] Button error:", err);
+                setPaymentError("Payment failed. Please try again.");
+                setIsProcessing(false);
+              }}
+            />
           </CardFooter>
         </Card>
       </div>

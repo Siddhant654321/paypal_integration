@@ -28,6 +28,8 @@ if (!initialOptions.clientId) {
   throw new Error('Missing required environment variable: VITE_PAYPAL_CLIENT_ID');
 }
 
+console.log("[PayPal] Initializing SDK with client ID:", initialOptions.clientId.substring(0, 8) + "...");
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
