@@ -18,15 +18,15 @@ if (!process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID) {
 const PRODUCTION_URL = 'https://api-m.paypal.com';
 const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 
-// Use sandbox URL if we're in development, otherwise use production URL
-const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
-const BASE_URL = IS_PRODUCTION ? PRODUCTION_URL : SANDBOX_URL;
-const PARTNER_MERCHANT_ID = IS_PRODUCTION 
-  ? (process.env.PAYPAL_PARTNER_MERCHANT_ID || 'PRODUCTION_MERCHANT_ID_MISSING') 
-  : (process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID || 'TEST_MERCHANT_ID');
+// Use sandbox URL in development
+const IS_SANDBOX = process.env.NODE_ENV !== 'production';
+const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
 
-console.log(`[PAYPAL] Using partner merchant ID: ${PARTNER_MERCHANT_ID}`);
-console.log(`[PAYPAL] Using base URL: ${BASE_URL}`);
+console.log("[PAYPAL] Initializing PayPal Payouts service:", {
+  mode: IS_SANDBOX ? 'sandbox' : 'production',
+  baseUrl: BASE_URL,
+  clientIdPrefix: process.env.PAYPAL_CLIENT_ID.substring(0, 8) + '...'
+});
 
 export class SellerPaymentService {
   private static async getAccessToken(): Promise<string> {
@@ -41,6 +41,8 @@ export class SellerPaymentService {
           }
         }
       );
+
+      console.log("[PAYPAL] Successfully obtained access token");
       return response.data.access_token;
     } catch (error) {
       console.error("[PAYPAL] Error getting access token:", error);
@@ -131,6 +133,8 @@ export class SellerPaymentService {
 
   static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
     try {
+      console.log("[PAYPAL] Creating payout for:", { paymentId, sellerId, amount });
+
       const profile = await storage.getProfile(sellerId);
       if (!profile?.paypalMerchantId) {
         throw new Error("Seller has no PayPal account");
@@ -138,11 +142,12 @@ export class SellerPaymentService {
 
       const accessToken = await this.getAccessToken();
 
-      // Create a payout to the seller using the Payouts API
+      // Create a payout using the Payouts API
       const payoutRequest = {
         sender_batch_header: {
-          sender_batch_id: `payment_${paymentId}`,
-          email_subject: "You have a payment from your auction sale"
+          sender_batch_id: `payout_${paymentId}_${Date.now()}`,
+          email_subject: "You have a payout from your auction sale",
+          email_message: "Your auction sale payment has been processed and the funds have been sent to your PayPal account."
         },
         items: [{
           recipient_type: "PAYPAL_ID",
@@ -151,10 +156,16 @@ export class SellerPaymentService {
             currency: "USD"
           },
           receiver: profile.paypalMerchantId,
-          note: `Payment for auction sale #${paymentId}`,
-          sender_item_id: `payment_${paymentId}`
+          note: `Payout for auction sale #${paymentId}`,
+          sender_item_id: `payout_item_${paymentId}`
         }]
       };
+
+      console.log("[PAYPAL] Sending payout request:", {
+        batchId: payoutRequest.sender_batch_header.sender_batch_id,
+        amount: payoutRequest.items[0].amount.value,
+        receiverId: profile.paypalMerchantId.substring(0, 8) + '...'
+      });
 
       const response = await axios.post(
         `${BASE_URL}/v1/payments/payouts`,
@@ -167,6 +178,11 @@ export class SellerPaymentService {
         }
       );
 
+      console.log("[PAYPAL] Payout created successfully:", {
+        payoutBatchId: response.data.batch_header.payout_batch_id,
+        status: response.data.batch_header.batch_status
+      });
+
       // Store the payout details
       await storage.createSellerPayout({
         paymentId,
@@ -178,10 +194,38 @@ export class SellerPaymentService {
 
     } catch (error) {
       console.error("[PAYPAL] Error creating payout:", error);
-      throw error;
+      throw new Error("Failed to process seller payout");
     }
   }
 
+  static async getPayoutStatus(payoutBatchId: string): Promise<{
+    batchStatus: string;
+    itemCount: number;
+    processingTime?: string;
+  }> {
+    try {
+      const accessToken = await this.getAccessToken();
+
+      const response = await axios.get(
+        `${BASE_URL}/v1/payments/payouts/${payoutBatchId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      return {
+        batchStatus: response.data.batch_header.batch_status,
+        itemCount: response.data.batch_header.item_count,
+        processingTime: response.data.batch_header.time_processed
+      };
+    } catch (error) {
+      console.error("[PAYPAL] Error checking payout status:", error);
+      throw new Error("Failed to check payout status");
+    }
+  }
   static async getAccountStatus(merchantId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
     try {
       if (!merchantId) {
