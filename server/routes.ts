@@ -1,31 +1,45 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema, insertFulfillmentSchema } from "@shared/schema";
+import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema } from "@shared/schema";
+import type { User, InsertUser, Profile } from "@shared/schema";
 import { ZodError } from "zod";
 import path from "path";
 import multer from 'multer';
 import { upload, handleFileUpload } from "./uploads";
 import { PaymentService } from "./payments";
 import { buffer } from "micro";
-import Stripe from "stripe";
 import { SellerPaymentService } from "./seller-payments";
 import { EmailService } from "./email-service"; 
 import { AuctionService } from "./auction-service";
 import { AIPricingService } from "./ai-service";
-import type { User, InsertUser } from "@shared/schema"; 
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { NotificationService } from "./notification-service";
-import passport from 'passport'; //Import passport
+import passport from 'passport';
 import { hashPassword } from './auth';
 
-
-// Create an Express router instance
+// Create an Express router instance 
 const router = express.Router();
 
-// Update the requireProfile middleware
+// Middleware to check if user is authenticated
+const requireAuth = (req: any, res: any, next: any) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  next();
+};
+
+// Middleware to check if user is an admin
+const requireAdmin = (req: any, res: any, next: any) => {
+  if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "seller_admin")) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  next();
+};
+
+// Middleware to check if user has a complete profile
 const requireProfile = async (req: any, res: any, next: any) => {
   if (!req.isAuthenticated()) {
     console.log("[PROFILE CHECK] User not authenticated");
@@ -68,6 +82,132 @@ const requireProfile = async (req: any, res: any, next: any) => {
     res.status(500).json({ message: "Failed to verify profile" });
   }
 };
+
+
+
+// PayPal webhook handler 
+router.post('/webhook/paypal', async (req, res) => {
+  try {
+    const event = req.body;
+    console.log('[WEBHOOK] Received PayPal webhook:', event.event_type);
+
+    switch (event.event_type) {
+      case 'CHECKOUT.ORDER.COMPLETED':
+        await PaymentService.handlePaymentSuccess(event.resource.id);
+        break;
+      case 'CHECKOUT.ORDER.FAILED':
+        await PaymentService.handlePaymentFailure(event.resource.id);
+        break;
+      default:
+        console.log(`[WEBHOOK] Unhandled event type: ${event.event_type}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('[WEBHOOK] Error handling webhook:', error);
+    res.status(500).json({ error: 'Webhook handler failed' });
+  }
+});
+
+// PayPal seller onboarding route
+router.post('/api/seller/paypal/onboard', requireAuth, async (req, res) => {
+  try {
+    const profile = await storage.getProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    const { merchantId, url } = await SellerPaymentService.createSellerAccount(profile);
+    res.json({ merchantId, url });
+  } catch (error) {
+    console.error('[PAYPAL] Onboarding error:', error);
+    res.status(500).json({ message: "Failed to start PayPal onboarding" });
+  }
+});
+
+// PayPal seller account status check
+router.get('/api/seller/paypal/status', requireAuth, async (req, res) => {
+  try {
+    const profile = await storage.getProfile(req.user!.id);
+    if (!profile?.paypalMerchantId) {
+      return res.json({ status: "not_started" });
+    }
+
+    const status = await SellerPaymentService.getAccountStatus(profile.paypalMerchantId);
+    res.json({ status });
+  } catch (error) {
+    console.error('[PAYPAL] Status check error:', error);
+    res.status(500).json({ message: "Failed to check PayPal account status" });
+  }
+});
+
+// Payment initiation route
+router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, res) => {
+  try {
+    const auctionId = parseInt(req.params.id);
+    const { includeInsurance } = req.body;
+
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const result = await PaymentService.createCheckoutSession(
+      auctionId,
+      req.user.id,
+      includeInsurance
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error('[PAYMENT] Payment initiation error:', error);
+    res.status(500).json({ 
+      message: error instanceof Error ? error.message : "Failed to initiate payment" 
+    });
+  }
+});
+
+// Middleware to check if user is an approved seller or seller_admin
+const requireApprovedSeller = (req: any, res: any, next: any) => {
+  try {
+    console.log("[SELLER CHECK] Checking seller authorization:", {
+      isAuthenticated: req.isAuthenticated(),
+      user: req.user ? {
+        id: req.user.id,
+        role: req.user.role,
+        approved: req.user.approved
+      } : null
+    });
+
+    if (!req.isAuthenticated()) {
+      console.log("[SELLER CHECK] User not authenticated");
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Allow seller_admin without approval check
+    if (req.user.role === "seller_admin") {
+      console.log("[SELLER CHECK] User is seller_admin, access granted");
+      return next();
+    }
+
+    if (req.user.role !== "seller") {
+      console.log("[SELLER CHECK] User is not a seller", { role: req.user.role });
+      return res.status(403).json({ message: "Only sellers can perform this action" });
+    }
+
+    // Check approval for regular sellers
+    if (!req.user.approved) {
+      console.log("[SELLER CHECK] Seller not approved");
+      return res.status(403).json({ message: "Only approved sellers can perform this action" });
+    }
+
+    console.log("[SELLER CHECK] Access granted to approved seller");
+    next();
+  } catch (error) {
+    console.error("[SELLER CHECK] Error in seller authorization:", error);
+    res.status(500).json({ message: "Authorization check failed" });
+  }
+};
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log("[ROUTES] Starting route registration");
@@ -173,63 +313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     });
 
-    // Middleware to check if user is authenticated
-    const requireAuth = (req: any, res: any, next: any) => {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      next();
-    };
 
-    // Middleware to check if user is an admin
-    const requireAdmin = (req: any, res: any, next: any) => {
-      if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "seller_admin")) {
-        return res.status(403).json({ message: "Forbidden" });
-      }
-      next();
-    };
-
-    // Middleware to check if user is an approved seller or seller_admin
-    const requireApprovedSeller = (req: any, res: any, next: any) => {
-      try {
-        console.log("[SELLER CHECK] Checking seller authorization:", {
-          isAuthenticated: req.isAuthenticated(),
-          user: req.user ? {
-            id: req.user.id,
-            role: req.user.role,
-            approved: req.user.approved
-          } : null
-        });
-
-        if (!req.isAuthenticated()) {
-          console.log("[SELLER CHECK] User not authenticated");
-          return res.status(401).json({ message: "Unauthorized" });
-        }
-
-        // Allow seller_admin without approval check
-        if (req.user.role === "seller_admin") {
-          console.log("[SELLER CHECK] User is seller_admin, access granted");
-          return next();
-        }
-
-        if (req.user.role !== "seller") {
-          console.log("[SELLER CHECK] User is not a seller", { role: req.user.role });
-          return res.status(403).json({ message: "Only sellers can perform this action" });
-        }
-
-        // Check approval for regular sellers
-        if (!req.user.approved) {
-          console.log("[SELLER CHECK] Seller not approved");
-          return res.status(403).json({ message: "Only approved sellers can perform this action" });
-        }
-
-        console.log("[SELLER CHECK] Access granted to approved seller");
-        next();
-      } catch (error) {
-        console.error("[SELLER CHECK] Error in seller authorization:", error);
-        res.status(500).json({ message: "Authorization check failed" });
-      }
-    };
 
     // Update the getAuctions endpoint to include seller profiles
     router.get("/api/auctions", async (req, res) => {
@@ -1316,9 +1400,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (error.message.includes("Stripe account")) {
             errorMessage = "Seller has not completed their payment setup";
             errorCode = "SELLER_SETUP_INCOMPLETE";
-          } else if (error.message.includes("API key")) {
+          } else if (error.message.includes("PayPal setup")) {
             errorMessage = "Payment system configuration error";
-            errorCode = "STRIPE_CONFIG_ERROR";
+            errorCode = "PAYPAL_CONFIG_ERROR";
           }
         }
         
@@ -1330,41 +1414,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Endpoint to retrieve a checkout session URL
-    router.get("/api/checkout-session/:sessionId", requireAuth, async (req, res) => {
+    // Endpoint to retrieve a PayPal order status
+    router.get("/api/payment/:orderId", requireAuth, async (req, res) => {
       try {
-        const { sessionId } = req.params;
-        // Initialize Stripe with the secret key
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-          apiVersion: "2023-10-16",
-        });
-        // Retrieve the checkout session from Stripe
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
-        // Return the URL for client-side redirect
-        res.json({ url: session.url });
+        const { orderId } = req.params;
+        // Get order status from PaymentService
+        const order = await PaymentService.getOrderStatus(orderId);
+        // Return order info to client
+        res.json(order);
       } catch (error) {
-        console.error("Error retrieving checkout session:", error);
-        res.status(500).json({ message: "Failed to retrieve checkout session" });
+        console.error("Error retrieving payment order:", error);
+        res.status(500).json({ message: "Failed to retrieve payment status" });
       }
     });
 
-    // Update the webhook handling section
-    router.post("/api/webhooks/stripe", async (req, res) => {
-      const sig = req.headers["stripe-signature"];
-      const rawBody = await buffer(req);
+    // PayPal webhook handler
+    router.post("/api/webhooks/paypal", async (req, res) => {
       try {
-        console.log("Received Stripe webhook event");
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-          apiVersion: "2023-10-16",
-        });
-        const event = stripe.webhooks.constructEvent(
-          rawBody,
-          sig as string,
-          process.env.STRIPE_WEBHOOK_SECRET!
-        );
-        console.log("Webhook event type:", event.type);
-        switch (event.type) {
-          case "checkout.session.completed": {
+        console.log("[WEBHOOK] Received PayPal webhook event");
+        const event = req.body;
+        
+        console.log("[WEBHOOK] Event type:", event.event_type);
+        switch (event.event_type) {
+          case "CHECKOUT.ORDER.COMPLETED": {
             const session = event.data.object;
             console.log("Processing completed checkout session:", session.id);
             // Update payment and auction status

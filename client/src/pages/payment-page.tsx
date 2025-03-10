@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatPrice } from "../utils/formatters";
+import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 
 const INSURANCE_FEE = 800; // $8.00 in cents
 
@@ -42,8 +43,6 @@ export default function PaymentPage() {
     setError(null);
 
     try {
-      console.log(`[Payment] Creating checkout session for auction ${auction.id}`);
-
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,19 +61,8 @@ export default function PaymentPage() {
         throw new Error('No checkout URL received from server');
       }
 
-      console.log(`[Payment] Opening Stripe checkout URL in new tab`);
-
-      // Open the checkout URL in a new tab
-      const checkoutWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
-
-      if (checkoutWindow) {
-        toast({
-          title: "Checkout Opened",
-          description: "Complete your payment in the new tab. You can close this window."
-        });
-      } else {
-        throw new Error("Pop-up blocked. Please allow pop-ups and try again.");
-      }
+      // Open PayPal checkout in a new window
+      window.location.href = data.url;
 
     } catch (err) {
       console.error('[Payment] Error:', err);
@@ -153,22 +141,19 @@ export default function PaymentPage() {
             </Alert>
           )}
 
-          <Button 
-            onClick={handlePayment}
-            className="w-full" 
-            size="lg"
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-            ) : (
-              <CreditCard className="h-5 w-5 mr-2" />
-            )}
-            {isProcessing ? "Processing..." : "Proceed to Payment"}
-          </Button>
+          <PayPalScriptProvider options={{ 
+            "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID,
+            currency: "USD",
+          }}>
+            <PayPalButtons
+              disabled={isProcessing}
+              createOrder={handlePayment}
+              style={{ layout: "vertical" }}
+            />
+          </PayPalScriptProvider>
         </CardContent>
         <CardFooter className="text-sm text-muted-foreground">
-          You will be redirected to Stripe to complete your payment securely.
+          Your payment will be processed securely through PayPal.
         </CardFooter>
       </Card>
     </div>

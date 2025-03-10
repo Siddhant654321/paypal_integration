@@ -112,6 +112,7 @@ export const bids = pgTable("bids", {
   timestamp: timestamp("timestamp").notNull(),
 });
 
+// Payment related schemas
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   auctionId: integer("auction_id").notNull().references(() => auctions.id),
@@ -128,12 +129,13 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const payouts = pgTable("payouts", {
+// Seller payouts schema
+export const sellerPayouts = pgTable("seller_payouts", {
   id: serial("id").primaryKey(),
-  sellerId: integer("seller_id").notNull(),
-  paymentId: integer("payment_id").notNull(),
+  sellerId: integer("seller_id").notNull().references(() => users.id),
+  paymentId: integer("payment_id").notNull().references(() => payments.id),
   amount: integer("amount").notNull(),
-  stripeTransferId: text("stripe_transfer_id"),
+  paypalPayoutId: text("paypal_payout_id"),
   status: text("status", {
     enum: ["pending", "processing", "completed", "failed"]
   }).notNull().default("pending"),
@@ -141,7 +143,6 @@ export const payouts = pgTable("payouts", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Add new fulfillment table
 export const fulfillments = pgTable("fulfillments", {
   id: serial("id").primaryKey(),
   auctionId: integer("auction_id").notNull().unique(),
@@ -232,7 +233,7 @@ export const insertBidSchema = createInsertSchema(bids).omit({
   timestamp: true,
 });
 
-// Update the payment schema to include PayPal Order ID
+// Update the payment schema
 export const insertPaymentSchema = createInsertSchema(payments)
   .omit({
     id: true,
@@ -245,42 +246,15 @@ export const insertPaymentSchema = createInsertSchema(payments)
     payoutProcessed: z.boolean().default(false).optional()
   });
 
-// Create insert schema for payouts
-export const insertPayoutSchema = createInsertSchema(payouts).omit({
-  id: true,
-  stripeTransferId: true,
-  status: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertUserSchema = createInsertSchema(users)
-  .pick({
-    username: true,
-    password: true,
-    role: true,
-    email: true,
-  })
-  .extend({
-    email: z.string().email("Invalid email format"),
-    role: z.enum(["buyer", "seller"]), // Restrict roles to only buyer and seller for registration
-  });
-
-// Add fulfillment schema
-export const insertFulfillmentSchema = createInsertSchema(fulfillments)
+// Add seller payout schemas
+export const insertSellerPayoutSchema = createInsertSchema(sellerPayouts)
   .omit({
     id: true,
+    paypalPayoutId: true,
+    status: true,
     createdAt: true,
     updatedAt: true,
-  })
-  .extend({
-    shippingCarrier: z.string().min(2, "Shipping carrier is required"),
-    trackingNumber: z.string().min(5, "Valid tracking number is required"),
-    shippingDate: z.string().transform(str => new Date(str)),
-    estimatedDeliveryDate: z.string().optional().transform(str => str ? new Date(str) : undefined),
-    additionalNotes: z.string().optional(),
   });
-
 
 export const buyerRequests = pgTable("buyer_requests", {
   id: serial("id").primaryKey(),
@@ -334,37 +308,10 @@ export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
-export type Payout = typeof payouts.$inferSelect;
-export type InsertPayout = z.infer<typeof insertPayoutSchema>;
+export type SellerPayout = typeof sellerPayouts.$inferSelect;
+export type InsertSellerPayout = z.infer<typeof insertSellerPayoutSchema>;
 export type Fulfillment = typeof fulfillments.$inferSelect;
 export type InsertFulfillment = z.infer<typeof insertFulfillmentSchema>;
 
 // Update the payment status type
 export type PaymentStatus = "pending" | "processing" | "completed" | "failed";
-
-// Update seller payouts table
-export const sellerPayouts = pgTable("seller_payouts", {
-  id: serial("id").primaryKey(),
-  sellerId: integer("seller_id").notNull().references(() => users.id),
-  paymentId: integer("payment_id").notNull().references(() => payments.id),
-  amount: integer("amount").notNull(),
-  paypalPayoutId: text("paypal_payout_id"),
-  status: text("status", {
-    enum: ["pending", "processing", "completed", "failed"]
-  }).notNull().default("pending"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-// Add seller payout schemas
-export const insertSellerPayoutSchema = createInsertSchema(sellerPayouts)
-  .omit({
-    id: true,
-    paypalPayoutId: true,
-    status: true,
-    createdAt: true,
-    updatedAt: true,
-  });
-
-export type SellerPayout = typeof sellerPayouts.$inferSelect;
-export type InsertSellerPayout = z.infer<typeof insertSellerPayoutSchema>;

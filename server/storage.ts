@@ -591,7 +591,7 @@ export class DatabaseStorage implements IStorage {
       const [payment] = await db
         .select()
         .from(payments)
-        .where(eq(payments.stripeSessionId, sessionId))
+        .where(eq(payments.paypalOrderId, sessionId))
         .limit(1);
       return payment;
     } catch (error) {
@@ -605,7 +605,7 @@ export class DatabaseStorage implements IStorage {
       const [updatedPayment] = await db
         .update(payments)
         .set(data)
-        .where(eq(payments.stripeSessionId, sessionId))
+        .where(eq(payments.paypalOrderId, sessionId))
         .returning();
       return updatedPayment;
     } catch (error) {
@@ -619,7 +619,7 @@ export class DatabaseStorage implements IStorage {
       const [updatedPayment] = await db
         .update(payments)
         .set(data)
-        .where(eq(payments.stripePaymentIntentId, intentId))
+        .where(eq(payments.paypalOrderId, intentId))
         .returning();
       return updatedPayment;
     } catch (error) {
@@ -952,19 +952,6 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async findPaymentByStripeId(stripeSessionId: string): Promise<Payment | undefined> {
-    try {
-      log(`Finding payment by Stripe session ID: ${stripeSessionId}`, "payments");
-      const [payment] = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.stripePaymentIntentId, stripeSessionId));
-      return payment;
-    } catch (error) {
-      log(`Error finding payment by Stripe session ID ${stripeSessionId}: ${error}`, "payments");
-      throw error;
-    }
-  }
 
   async updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment> {
     try {
@@ -1006,7 +993,7 @@ export class DatabaseStorage implements IStorage {
       log(`Successfully created payout for seller ${sellerId}`, "payouts");
       return payout;
     } catch (error) {
-      log(`Error creating seller payout: ${error}`, "payouts);
+      log(`Error creating seller payout: ${error}`, "payouts");
       throw error;
     }
   }
@@ -1045,22 +1032,36 @@ export class DatabaseStorage implements IStorage {
     console.log(`[STORAGE] Deleting all bids for auction: ${auctionId}`);
     await db.delete(bids).where(eq(bids.auctionId, auctionId)).execute();
   }
-  async updateSellerStripeAccount(userId: number, data: { accountId: string; status: string }): Promise<Profile> {
+  async updateSellerPayPalAccount(userId: number, data: { merchantId: string; status: string }): Promise<Profile> {
     try {
-      log(`Updating Stripe account for user ${userId} with account ID ${data.accountId}`);
+      log(`Updating PayPal account for user ${userId} with merchant ID ${data.merchantId}`);
       const [updatedProfile] = await db
         .update(profiles)
         .set({
-          stripeAccountId: data.accountId,
-          stripeAccountStatus: data.status
+          paypalMerchantId: data.merchantId,
+          paypalAccountStatus: data.status as "pending" | "verified" | "not_started"
         })
         .where(eq(profiles.userId, userId))
         .returning();
 
-      log(`Successfully updated Stripe account. New status: ${data.status}`);
+      log(`Successfully updated PayPal account. New status: ${data.status}`);
       return updatedProfile;
     } catch (error) {
-      log(`Error updating seller Stripe account: ${error}`);
+      log(`Error updating seller PayPal account: ${error}`);
+      throw error;
+    }
+  }
+
+  async findPaymentByPayPalId(orderId: string): Promise<Payment | undefined> {
+    try {
+      log(`Finding payment by PayPal order ID: ${orderId}`, "payments");
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.paypalOrderId, orderId));
+      return payment;
+    } catch (error) {
+      log(`Error finding payment by PayPal order ID ${orderId}: ${error}`, "payments");
       throw error;
     }
   }
