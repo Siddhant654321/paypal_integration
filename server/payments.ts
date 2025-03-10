@@ -21,7 +21,7 @@ console.log("[PAYPAL] Initializing PayPal service:", {
   clientIdPrefix: process.env.PAYPAL_CLIENT_ID.substring(0, 8) + '...',
 });
 
-const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
+const PLATFORM_FEE_PERCENTAGE = 0.05; // 5% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
 export class PaymentService {
@@ -49,12 +49,15 @@ export class PaymentService {
   static async createCheckoutSession(
     auctionId: number,
     buyerId: number,
-    includeInsurance: boolean = false,
-    baseUrl: string = process.env.REPL_SLUG ? 
-      `https://${process.env.REPL_SLUG}.replit.dev` : 
-      'http://localhost:5000'
+    includeInsurance: boolean = false
   ) {
     try {
+      console.log("[PAYPAL] Creating checkout session:", {
+        auctionId,
+        buyerId,
+        includeInsurance
+      });
+
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
@@ -66,35 +69,22 @@ export class PaymentService {
         throw new Error("Only the winning bidder can make payment");
       }
 
-      // Get seller's PayPal account
-      const sellerProfile = await storage.getProfile(auction.sellerId);
-      if (!sellerProfile?.paypalMerchantId) {
-        throw new Error("Seller has not completed their PayPal account setup");
-      }
-
       // Calculate amounts
       const baseAmount = auction.currentPrice;
       const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
 
-      console.log("[PAYPAL] Creating checkout order:", {
-        auctionId,
-        baseAmount,
-        platformFee,
-        insuranceFee,
-        totalAmount,
-        merchantId: sellerProfile.paypalMerchantId
-      });
-
       const accessToken = await this.getAccessToken();
 
-      // Create PayPal order with detailed breakdown
+      // Create PayPal order
       const orderRequest = {
         intent: "CAPTURE",
         purchase_units: [
           {
             reference_id: `auction_${auctionId}`,
+            description: `Payment for auction #${auctionId}`,
+            custom_id: `auction_${auctionId}`,
             amount: {
               currency_code: "USD",
               value: (totalAmount / 100).toFixed(2),
@@ -109,41 +99,22 @@ export class PaymentService {
                 }
               }
             },
-            description: `Payment for auction #${auction.id}`,
-            custom_id: `auction_${auction.id}`,
-            payee: {
-              merchant_id: sellerProfile.paypalMerchantId
-            },
             items: [
               {
                 name: auction.title,
                 description: `Auction #${auction.id}`,
+                quantity: "1",
                 unit_amount: {
                   currency_code: "USD",
                   value: (baseAmount / 100).toFixed(2)
-                },
-                quantity: "1"
-              }
-            ],
-            payment_instruction: {
-              disbursement_mode: "INSTANT",
-              platform_fees: [{
-                amount: {
-                  currency_code: "USD",
-                  value: (platformFee / 100).toFixed(2)
                 }
-              }]
-            }
+              }
+            ]
           }
-        ],
-        application_context: {
-          return_url: `${baseUrl}/payment-success`,
-          cancel_url: `${baseUrl}/auction/${auction.id}?payment_canceled=true`,
-          shipping_preference: "NO_SHIPPING"
-        }
+        ]
       };
 
-      console.log("[PAYPAL] Sending order request to PayPal");
+      console.log("[PAYPAL] Creating order with request:", orderRequest);
 
       const response = await axios.post(
         `${BASE_URL}/v2/checkout/orders`,
@@ -158,8 +129,7 @@ export class PaymentService {
       );
 
       const orderId = response.data.id;
-
-      console.log("[PAYPAL] Successfully created order:", {
+      console.log("[PAYPAL] Order created successfully:", {
         orderId,
         status: response.data.status
       });
@@ -168,10 +138,8 @@ export class PaymentService {
       const payment = await storage.insertPayment({
         auctionId,
         buyerId,
-        sellerId: auction.sellerId,
         amount: totalAmount,
         platformFee,
-        sellerPayout: baseAmount - platformFee,
         insuranceFee,
         status: 'pending',
         paypalOrderId: orderId
@@ -188,22 +156,20 @@ export class PaymentService {
         payment
       };
     } catch (error) {
-      console.error("[PAYPAL] Error creating checkout session:", error);
-
+      console.error("[PAYPAL] Error creating order:", error);
       if (axios.isAxiosError(error) && error.response) {
-        console.error("[PAYPAL] PayPal API error response:", {
+        console.error("PayPal API error:", {
           status: error.response.status,
           data: error.response.data
         });
       }
-
-      throw new Error(error instanceof Error ? error.message : "Failed to create payment session");
+      throw new Error(error instanceof Error ? error.message : "Failed to create payment");
     }
   }
 
   static async handlePaymentSuccess(orderId: string) {
     try {
-      console.log("[PAYPAL] Processing successful payment for order:", orderId);
+      console.log("[PAYPAL] Processing payment capture for order:", orderId);
 
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
@@ -212,7 +178,7 @@ export class PaymentService {
 
       const accessToken = await this.getAccessToken();
 
-      // Verify order status before capture
+      // Verify order status
       const orderResponse = await axios.get(
         `${BASE_URL}/v2/checkout/orders/${orderId}`,
         {
@@ -252,7 +218,7 @@ export class PaymentService {
 
       // Update auction status
       await storage.updateAuction(payment.auctionId, {
-        status: "pending_fulfillment",
+        status: "fulfilled",
         paymentStatus: "completed"
       });
 
@@ -263,20 +229,18 @@ export class PaymentService {
         "completed"
       );
 
+      return { success: true };
     } catch (error) {
-      console.error("[PAYPAL] Error handling payment success:", error);
-
+      console.error("[PAYPAL] Error capturing payment:", error);
       if (axios.isAxiosError(error) && error.response) {
-        console.error("[PAYPAL] PayPal API error response:", {
+        console.error("PayPal API error:", {
           status: error.response.status,
           data: error.response.data
         });
       }
-
-      throw new Error("Failed to process payment capture");
+      throw new Error("Failed to capture payment");
     }
   }
-
   static async handlePaymentFailure(orderId: string) {
     try {
       console.log("[PAYPAL] Processing failed payment for order:", orderId);

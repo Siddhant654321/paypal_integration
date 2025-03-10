@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useParams } from 'wouter';
-import { useMutation } from '@tanstack/react-query';
-import { PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
+import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { useAuction } from '../hooks/use-auction';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Alert, AlertCircle, AlertDescription, AlertTitle } from '../components/ui/alert';
@@ -17,12 +16,12 @@ const INSURANCE_FEE = 800; // $8.00 in cents
 
 export default function PaymentPage() {
   const { id } = useParams<{ id: string }>();
-  const location = useLocation(); // Added useLocation from wouter
+  const location = useLocation();
   const auctionId = parseInt(id || "0");
   const { data: auction, isLoading: isAuctionLoading } = useAuction(auctionId);
   const [includeInsurance, setIncludeInsurance] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Calculate payment amounts
   const baseAmount = auction?.currentPrice || 0;
@@ -36,45 +35,68 @@ export default function PaymentPage() {
   const insuranceAmountDollars = formatCurrency(INSURANCE_FEE);
   const totalAmountDollars = formatCurrency(totalAmount);
 
-  const initiatePaymentMutation = useMutation({
-    mutationFn: async () => {
+  const createOrder = async () => {
+    setPaymentError(null);
+    setIsProcessing(true);
+
+    try {
+      console.log("[PayPal] Initiating payment for auction:", {
+        auctionId,
+        includeInsurance,
+        totalAmount
+      });
+
       const response = await fetch(`/api/auctions/${auctionId}/pay`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           includeInsurance
-        }),
+        })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to initiate payment");
+        throw new Error(errorData.message || "Failed to create payment");
       }
 
-      return response.json();
-    },
-    onSuccess: (data) => {
-      if (data.url) {
-        // PayPal checkout - redirect to PayPal
-        window.location.href = data.url;
-      }
-    },
-    onError: (error: Error) => {
-      setPaymentError(error.message);
+      const data = await response.json();
+      console.log("[PayPal] Order created:", data.orderId);
+      return data.orderId;
+    } catch (error) {
+      console.error("[PayPal] Order creation error:", error);
+      setPaymentError(error instanceof Error ? error.message : "Payment initialization failed");
+      setIsProcessing(false);
+      throw error;
     }
-  });
+  };
 
-  // PayPal configuration
-  const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || "ASZElLfpU3DpC6dyDJDstkUZ_aQ_YXxvMfVHWO3z9QnIOUQkKiLLLmB77lRXF30LLTz4_LG9PW8v05MI";
+  const onApprove = async (data: { orderID: string }) => {
+    try {
+      console.log("[PayPal] Payment approved, capturing payment:", data.orderID);
 
-  useEffect(() => {
-    console.log("[PayPal] Initializing SDK:", {
-      clientIdPresent: !!paypalClientId,
-      clientIdPrefix: paypalClientId ? paypalClientId.substring(0, 8) + "..." : "missing"
-    });
-  }, [paypalClientId]);
+      const response = await fetch(`/api/payments/${data.orderID}/capture`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to capture payment");
+      }
+
+      // Redirect to success page
+      window.location.href = `/payment-success?order=${data.orderID}`;
+    } catch (error) {
+      console.error("[PayPal] Payment capture error:", error);
+      setPaymentError(error instanceof Error ? error.message : "Payment capture failed");
+      setIsProcessing(false);
+    }
+  };
 
   if (isAuctionLoading) {
     return <div className="flex justify-center items-center min-h-[60vh]"><LoadingSpinner /></div>;
@@ -85,7 +107,7 @@ export default function PaymentPage() {
   }
 
   // Check PayPal configuration
-  if (!paypalClientId) {
+  if (!import.meta.env.VITE_PAYPAL_CLIENT_ID) {
     return (
       <div className="container max-w-3xl mx-auto p-4">
         <Alert variant="destructive">
@@ -96,13 +118,6 @@ export default function PaymentPage() {
       </div>
     );
   }
-
-  const error = paymentError;
-  const isLoading = initiatePaymentMutation.isPending;
-
-  const handlePayNowClick = () => {
-    initiatePaymentMutation.mutate();
-  };
 
   return (
     <div className="container max-w-3xl mx-auto p-4">
@@ -148,24 +163,36 @@ export default function PaymentPage() {
               <span>{totalAmountDollars}</span>
             </div>
 
-            {error && (
+            {paymentError && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
+                <AlertTitle>Payment Error</AlertTitle>
+                <AlertDescription>{paymentError}</AlertDescription>
               </Alert>
             )}
           </CardContent>
 
           <CardFooter>
-            <Button 
-              className="w-full" 
-              onClick={handlePayNowClick}
-              disabled={isLoading}
-            >
-              {isLoading ? <LoadingSpinner className="mr-2" /> : null}
-              Pay Now with PayPal
-            </Button>
+            <PayPalScriptProvider options={{
+              clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
+              currency: "USD",
+              intent: "capture"
+            }}>
+              <PayPalButtons
+                style={{
+                  layout: "vertical",
+                  shape: "rect",
+                }}
+                disabled={isProcessing}
+                createOrder={createOrder}
+                onApprove={onApprove}
+                onError={(err) => {
+                  console.error("[PayPal] Button error:", err);
+                  setPaymentError("Payment failed. Please try again.");
+                  setIsProcessing(false);
+                }}
+              />
+            </PayPalScriptProvider>
           </CardFooter>
         </Card>
       </div>

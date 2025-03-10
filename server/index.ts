@@ -1,4 +1,5 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { db } from "./db";
@@ -53,6 +54,16 @@ async function initializeServer() {
       }
     }
 
+    // Configure CORS
+    app.use(cors({
+      origin: process.env.NODE_ENV === 'production' 
+        ? [process.env.PUBLIC_URL || ''].filter(Boolean)
+        : ['http://localhost:5173', 'http://localhost:5000'],
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization']
+    }));
+
     // Basic middleware setup
     log("Setting up middleware", "startup");
     app.use(express.json());
@@ -65,12 +76,22 @@ async function initializeServer() {
     });
 
     // Error handling middleware
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    app.use((err: any, req: Request, res: Response, next: NextFunction) => {
       console.error("[ERROR]", err);
       if (err.stack) {
         console.error("[ERROR STACK]", err.stack);
       }
-      res.status(500).json({ message: "Internal server error" });
+
+      // Send detailed error in development
+      if (process.env.NODE_ENV !== 'production') {
+        res.status(500).json({
+          message: "Internal server error",
+          error: err.message,
+          stack: err.stack
+        });
+      } else {
+        res.status(500).json({ message: "Internal server error" });
+      }
     });
 
     // Global error handler for uncaught exceptions
@@ -124,7 +145,6 @@ async function startServer(port: number = 5000): Promise<void> {
     } catch (frontendError) {
       log(`Frontend setup error: ${frontendError}`, "startup");
       console.error('[FRONTEND] Setup error:', frontendError);
-      // Continue server startup even if frontend setup fails
     }
 
     // Start server with error handling

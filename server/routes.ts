@@ -89,7 +89,11 @@ const requireProfile = async (req: any, res: any, next: any) => {
 router.post('/webhook/paypal', async (req, res) => {
   try {
     const event = req.body;
-    console.log('[WEBHOOK] Received PayPal webhook:', event.event_type);
+    console.log('[WEBHOOK] Received PayPal webhook:', {
+      eventType: event.event_type,
+      resourceId: event.resource?.id,
+      timestamp: new Date().toISOString()
+    });
 
     switch (event.event_type) {
       case 'CHECKOUT.ORDER.COMPLETED':
@@ -171,11 +175,18 @@ router.get('/api/seller/status', requireAuth, async (req, res) => {
   }
 });
 
-// Payment initiation route
+// Payment initiation route with enhanced logging
 router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, res) => {
   try {
     const auctionId = parseInt(req.params.id);
     const { includeInsurance } = req.body;
+
+    console.log('[PAYMENT] Initiating payment for auction:', {
+      auctionId,
+      buyerId: req.user?.id,
+      includeInsurance,
+      timestamp: new Date().toISOString()
+    });
 
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -187,28 +198,76 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
       includeInsurance
     );
 
+    console.log('[PAYMENT] Payment session created:', {
+      orderId: result.orderId,
+      auctionId,
+      status: 'pending'
+    });
+
     res.json(result);
   } catch (error) {
     console.error('[PAYMENT] Payment initiation error:', error);
+    
+    // Handle specific PayPal API errors
+    if (error instanceof Error) {
+      if (error.message.includes('INVALID_REQUEST')) {
+        return res.status(400).json({ 
+          message: "Invalid payment request. Please check your details and try again." 
+        });
+      }
+      if (error.message.includes('PERMISSION_DENIED')) {
+        return res.status(403).json({ 
+          message: "Payment authorization failed. Please try again or contact support." 
+        });
+      }
+    }
+    
     res.status(500).json({ 
       message: error instanceof Error ? error.message : "Failed to initiate payment" 
     });
   }
 });
 
-// Add the payment capture endpoint to handle successful PayPal payments
+// Payment capture endpoint with enhanced logging and error handling
 router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
   try {
     const orderId = req.params.orderId;
+    
+    console.log('[PAYMENT] Capturing payment for order:', {
+      orderId,
+      userId: req.user?.id,
+      timestamp: new Date().toISOString()
+    });
 
     if (!orderId) {
       return res.status(400).json({ message: "Order ID is required" });
     }
 
     await PaymentService.handlePaymentSuccess(orderId);
+    
+    console.log('[PAYMENT] Payment captured successfully:', {
+      orderId,
+      status: 'completed' 
+    });
+    
     res.json({ success: true });
   } catch (error) {
     console.error('[PAYMENT] Capture error:', error);
+    
+    // Handle specific PayPal capture errors
+    if (error instanceof Error) {
+      if (error.message.includes('ORDER_NOT_APPROVED')) {
+        return res.status(400).json({ 
+          message: "Payment not approved. Please complete the PayPal checkout first." 
+        });
+      }
+      if (error.message.includes('ORDER_ALREADY_CAPTURED')) {
+        return res.status(409).json({ 
+          message: "Payment was already processed." 
+        });
+      }
+    }
+    
     res.status(500).json({ 
       message: error instanceof Error ? error.message : "Failed to capture payment" 
     });
