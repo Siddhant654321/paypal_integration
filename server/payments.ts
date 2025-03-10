@@ -123,7 +123,7 @@ export class PaymentService {
         platformFee,
         sellerPayout,
         insuranceFee,
-        stripePaymentIntentId: '',
+        stripePaymentIntentId: session.payment_intent?.toString() || '',
         stripeChargeId: null,
         stripeSessionId: session.id,  // Store the session ID with the correct field name
         status: "pending" as const,
@@ -237,6 +237,96 @@ export class PaymentService {
 
     } catch (error) {
       console.error("[PAYMENTS] Error handling payment failure:", error);
+      throw error;
+    }
+  }
+
+  //Added createStripeSession function here based on the changes provided.
+  async createStripeSession(auctionId: number, userId: number, clientUrl: string) {
+    try {
+      // Fetch auction details first
+      const auction = await storage.getAuctionById(auctionId);
+      if (!auction) {
+        throw new Error(`Auction ${auctionId} not found`);
+      }
+
+      if (auction.status !== 'ended' || auction.winningBidderId !== userId) {
+        throw new Error('You are not authorized to make this payment');
+      }
+
+      // Calculate fees and amounts
+      const finalPrice = auction.currentPrice;
+      const platformFee = Math.round(finalPrice * 0.05); // 5% platform fee
+      const insuranceFee = Math.round(finalPrice * 0.01); // 1% insurance fee
+      const sellerPayout = finalPrice - platformFee - insuranceFee;
+
+      // Create Stripe session
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Payment for "${auction.title}"`,
+                description: `Auction #${auction.id}`,
+                images: auction.images || [],
+              },
+              unit_amount: finalPrice,
+            },
+            quantity: 1,
+          },
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'Platform Fee (5%)',
+                description: 'Service fee for the platform',
+              },
+              unit_amount: platformFee,
+            },
+            quantity: 1,
+          },
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'Insurance Fee (1%)',
+                description: 'Insurance coverage for shipping',
+              },
+              unit_amount: insuranceFee,
+            },
+            quantity: 1,
+          }
+        ],
+        mode: 'payment',
+        success_url: `${clientUrl}/payment-success?payment_intent={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${clientUrl}/auctions/${auctionId}?payment_cancelled=true`,
+      });
+
+      // Store payment record in database with correct field names
+      const payment = await storage.insertPayment({
+        auctionId,
+        buyerId: userId,
+        sellerId: auction.sellerId,
+        amount: finalPrice + platformFee + insuranceFee,
+        platformFee,
+        sellerPayout,
+        insuranceFee,
+        stripePaymentIntentId: session.payment_intent?.toString() || '', // Use the payment intent from session if available
+        stripeChargeId: null,
+        stripeSessionId: session.id,  // Store the session ID with the correct field name
+        status: "pending" as const,
+        payoutProcessed: false,
+        createdAt: new Date(),
+      });
+
+      return { 
+        sessionId: session.id,
+        sessionUrl: session.url 
+      };
+    } catch (error) {
+      console.error("Error creating Stripe session:", error);
       throw error;
     }
   }

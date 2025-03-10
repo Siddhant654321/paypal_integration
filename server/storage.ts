@@ -662,10 +662,12 @@ export class DatabaseStorage implements IStorage {
         stripePaymentIntentId: data.stripePaymentIntentId,
       };
 
-      // Validate required fields
+      // Print the full payment record for debugging
+      console.log("Payment record:", JSON.stringify(paymentData, null, 2));
+
+      // Validate required fields but don't require stripePaymentIntentId as it may be empty initially
       if (!paymentData.amount || !paymentData.platformFee || !paymentData.sellerPayout || 
-          !paymentData.auctionId || !paymentData.buyerId || !paymentData.sellerId || 
-          !paymentData.stripePaymentIntentId) {
+          !paymentData.auctionId || !paymentData.buyerId || !paymentData.sellerId) {
         throw new Error("Missing required payment fields");
       }
 

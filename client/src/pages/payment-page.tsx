@@ -53,15 +53,19 @@ export default function PaymentPage() {
         const data = await response.json();
         console.log("Payment session created:", { hasUrl: !!data.url });
 
-        // Check if we got a redirect URL
+        // Open Stripe checkout in a new window
         if (data.url) {
           console.log("Redirecting to Stripe Checkout:", data.url);
-          // Open Stripe checkout in a new tab/window and store reference
           const checkoutWindow = window.open(data.url, '_blank');
 
-          // Make sure the window was opened successfully
+          // Handle popup blocker scenario
           if (!checkoutWindow) {
             setError("Popup blocked! Please allow popups for this site and try again.");
+            toast({
+              title: "Popup Blocked",
+              description: "Please allow popups for this site to complete your payment",
+              variant: "destructive",
+            });
           } else {
             checkoutWindow.focus();
           }
@@ -71,10 +75,6 @@ export default function PaymentPage() {
         } else {
           throw new Error("No payment URL or client secret received");
         }
-
-
-        // Redirect to auction page with payment initiated flag
-        // window.location.href = `/auction/${auction.id}?payment_initiated=true`;
 
       } catch (err) {
         const message = err instanceof Error ? err.message : "Could not initialize payment";
