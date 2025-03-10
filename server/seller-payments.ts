@@ -26,7 +26,6 @@ const PARTNER_MERCHANT_ID = IS_PRODUCTION
   : (process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID || 'TEST_MERCHANT_ID');
 
 console.log(`[PAYPAL] Using partner merchant ID: ${PARTNER_MERCHANT_ID}`);
-
 console.log(`[PAYPAL] Using base URL: ${BASE_URL}`);
 
 export class SellerPaymentService {
@@ -75,12 +74,12 @@ export class SellerPaymentService {
               integration_method: "PAYPAL",
               integration_type: "THIRD_PARTY",
               third_party_details: {
-                features: ["PAYMENT", "REFUND", "PARTNER_FEE"]
+                features: ["PAYMENT", "REFUND", "PARTNER_FEE", "PAYOUT"]
               }
             }
           }
         }],
-        products: ["EXPRESS_CHECKOUT"],
+        products: ["EXPRESS_CHECKOUT", "PPCP"],
         legal_consents: [{
           type: "SHARE_DATA_CONSENT",
           granted: true
@@ -130,6 +129,59 @@ export class SellerPaymentService {
     }
   }
 
+  static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
+    try {
+      const profile = await storage.getProfile(sellerId);
+      if (!profile?.paypalMerchantId) {
+        throw new Error("Seller has no PayPal account");
+      }
+
+      const accessToken = await this.getAccessToken();
+
+      // Create a payout to the seller using the Payouts API
+      const payoutRequest = {
+        sender_batch_header: {
+          sender_batch_id: `payment_${paymentId}`,
+          email_subject: "You have a payment from your auction sale"
+        },
+        items: [{
+          recipient_type: "PAYPAL_ID",
+          amount: {
+            value: (amount / 100).toFixed(2),
+            currency: "USD"
+          },
+          receiver: profile.paypalMerchantId,
+          note: `Payment for auction sale #${paymentId}`,
+          sender_item_id: `payment_${paymentId}`
+        }]
+      };
+
+      const response = await axios.post(
+        `${BASE_URL}/v1/payments/payouts`,
+        payoutRequest,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Store the payout details
+      await storage.createSellerPayout({
+        paymentId,
+        sellerId,
+        amount,
+        paypalPayoutId: response.data.batch_header.payout_batch_id,
+        status: 'pending'
+      });
+
+    } catch (error) {
+      console.error("[PAYPAL] Error creating payout:", error);
+      throw error;
+    }
+  }
+
   static async getAccountStatus(merchantId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
     try {
       if (!merchantId) {
@@ -172,42 +224,6 @@ export class SellerPaymentService {
     }
   }
 
-  static async refreshOnboardingLink(merchantId: string): Promise<string> {
-    try {
-      const accessToken = await this.getAccessToken();
-
-      // Create a new referral link for the existing merchant
-      const referralRequest = {
-        tracking_id: `seller_refresh_${merchantId}`,
-        partner_config_override: {
-          return_url: `${process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.replit.dev` : 'http://localhost:5000'}/seller/dashboard?success=true`
-        }
-      };
-
-      const response = await axios.post(
-        `${BASE_URL}/v2/customer/partner-referrals`,
-        referralRequest,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      const actionUrl = response.data.links.find((link: any) => link.rel === "action_url")?.href;
-
-      if (!actionUrl) {
-        throw new Error("Failed to generate PayPal onboarding URL");
-      }
-
-      return actionUrl;
-    } catch (error) {
-      console.error("[PAYPAL] Error refreshing onboarding link:", error);
-      throw error;
-    }
-  }
-
   static async getBalance(merchantId: string) {
     try {
       const accessToken = await this.getAccessToken();
@@ -235,57 +251,6 @@ export class SellerPaymentService {
       };
     } catch (error) {
       console.error("[PAYPAL] Error getting balance:", error);
-      throw error;
-    }
-  }
-
-  static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
-    try {
-      const profile = await storage.getProfile(sellerId);
-      if (!profile?.paypalMerchantId) {
-        throw new Error("Seller has no PayPal account");
-      }
-
-      const accessToken = await this.getAccessToken();
-
-      // Create a payout to the seller
-      const payoutRequest = {
-        sender_batch_header: {
-          sender_batch_id: `payment_${paymentId}`,
-          email_subject: "You have a payment from your auction sale"
-        },
-        items: [{
-          recipient_type: "PAYPAL_ID",
-          amount: {
-            value: (amount / 100).toFixed(2),
-            currency: "USD"
-          },
-          receiver: profile.paypalMerchantId,
-          note: `Payment for auction sale #${paymentId}`,
-          sender_item_id: `payment_${paymentId}`
-        }]
-      };
-
-      const response = await axios.post(
-        `${BASE_URL}/v1/payments/payouts`,
-        payoutRequest,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      await storage.createSellerPayout({
-        sellerId,
-        paymentId,
-        amount,
-        paypalPayoutId: response.data.batch_header.payout_batch_id,
-        status: 'pending'
-      });
-    } catch (error) {
-      console.error("[PAYPAL] Error creating payout:", error);
       throw error;
     }
   }
