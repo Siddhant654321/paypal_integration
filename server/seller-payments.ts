@@ -191,38 +191,32 @@ export class SellerPaymentService {
       const accessToken = await this.getAccessToken();
 
       // Get merchant integration status
-      try {
-        const response = await axios.get(
-          `${BASE_URL}/v1/customer/partners/${PARTNER_MERCHANT_ID}/merchant-integrations/${merchantId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
+      const response = await axios.get(
+        `${BASE_URL}/v1/customer/partners/${PARTNER_MERCHANT_ID}/merchant-integrations/${merchantId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
           }
-        );
-
-        const status = response.data.merchant_integration_status;
-
-        console.log("[PAYPAL] Account status check:", {
-          merchantId,
-          status,
-        });
-
-        switch (status) {
-          case "ACTIVE":
-            return "verified";
-          case "INACTIVE":
-            return "rejected";
-          case "PENDING":
-            return "pending";
-          default:
-            return "not_started";
         }
-      } catch (statusError) {
-        console.error("[PAYPAL] Error checking merchant status:", statusError);
-        // If we can't get the status, assume it's active for testing purposes
-        return "verified";
+      );
+
+      const status = response.data.merchant_integration_status;
+
+      console.log("[PAYPAL] Account status check:", {
+        merchantId,
+        status,
+      });
+
+      switch (status) {
+        case "ACTIVE":
+          return "verified";
+        case "INACTIVE":
+          return "rejected";
+        case "PENDING":
+          return "pending";
+        default:
+          return "not_started";
       }
     } catch (error) {
       console.error("[PAYPAL] Error checking account status:", error);
