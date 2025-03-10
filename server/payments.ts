@@ -2,21 +2,22 @@ import Stripe from "stripe";
 import { storage } from "./storage";
 import { NotificationService } from "./notification-service";
 
+// Environment validation
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("Missing STRIPE_SECRET_KEY environment variable");
 }
 
-let stripe: Stripe | null = null;
+// Stripe client singleton with lazy initialization
+let stripeClient: Stripe | null = null;
 
-// Defer Stripe initialization to avoid blocking server startup
-const getStripe = () => {
-  if (!stripe) {
-    console.log("[PAYMENTS] Initializing Stripe client");
-    stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const getStripe = (): Stripe => {
+  if (!stripeClient) {
+    console.log("[STRIPE] Initializing Stripe client");
+    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
       apiVersion: "2025-02-24.acacia"
     });
   }
-  return stripe;
+  return stripeClient;
 };
 
 const BASE_URL = process.env.CLIENT_ORIGIN || 'http://localhost:5000';
@@ -30,7 +31,7 @@ export class PaymentService {
     includeInsurance: boolean = false
   ) {
     try {
-      console.log("[PAYMENTS] Starting checkout session creation", {
+      console.log("[PAYMENT] Creating checkout session", {
         auctionId,
         buyerId,
         includeInsurance
@@ -59,7 +60,7 @@ export class PaymentService {
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
 
-      console.log("[PAYMENTS] Creating Stripe checkout session", {
+      console.log("[PAYMENT] Fee calculation", {
         baseAmount,
         platformFee,
         insuranceFee,
@@ -97,7 +98,7 @@ export class PaymentService {
         cancel_url: `${BASE_URL}/auction/${auctionId}?payment_canceled=true`,
       });
 
-      console.log("[PAYMENTS] Checkout session created successfully", {
+      console.log("[PAYMENT] Checkout session created", {
         sessionId: session.id,
         paymentIntentId: session.payment_intent
       });
@@ -105,14 +106,14 @@ export class PaymentService {
       return { url: session.url };
 
     } catch (error) {
-      console.error("[PAYMENTS] Error creating checkout session:", error);
+      console.error("[PAYMENT] Error creating checkout session:", error);
       throw error;
     }
   }
 
   static async handleWebhookEvent(event: Stripe.Event) {
     try {
-      console.log("[PAYMENTS] Processing webhook event:", event.type);
+      console.log("[WEBHOOK] Processing event:", event.type);
 
       switch (event.type) {
         case 'payment_intent.succeeded':
@@ -126,14 +127,14 @@ export class PaymentService {
           break;
       }
     } catch (error) {
-      console.error("[PAYMENTS] Error handling webhook event:", error);
+      console.error("[WEBHOOK] Error handling event:", error);
       throw error;
     }
   }
 
   private static async handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
     try {
-      console.log("[PAYMENTS] Processing successful payment", {
+      console.log("[PAYMENT] Processing successful payment", {
         paymentIntentId: paymentIntent.id
       });
 
@@ -156,7 +157,7 @@ export class PaymentService {
         payoutProcessed: false
       });
 
-      console.log("[PAYMENTS] Payment record created", { paymentId: payment.id });
+      console.log("[PAYMENT] Payment record created", { paymentId: payment.id });
 
       // Update auction status
       await storage.updateAuction(parseInt(auctionId), {
@@ -172,14 +173,14 @@ export class PaymentService {
       );
 
     } catch (error) {
-      console.error("[PAYMENTS] Error handling payment success:", error);
+      console.error("[PAYMENT] Error handling payment success:", error);
       throw error;
     }
   }
 
   private static async handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
     try {
-      console.log("[PAYMENTS] Processing failed payment", {
+      console.log("[PAYMENT] Processing failed payment", {
         paymentIntentId: paymentIntent.id
       });
 
@@ -201,7 +202,7 @@ export class PaymentService {
       );
 
     } catch (error) {
-      console.error("[PAYMENTS] Error handling payment failure:", error);
+      console.error("[PAYMENT] Error handling payment failure:", error);
       throw error;
     }
   }

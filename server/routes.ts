@@ -2,13 +2,25 @@ import express, { type Express, type Request, type Response } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertAuctionSchema, insertUserSchema, type InsertUser } from "@shared/schema";
-import { type ZodError } from "zod";
+import { 
+  insertAuctionSchema, 
+  insertUserSchema, 
+  insertProfileSchema,
+  type InsertUser 
+} from "@shared/schema";
+import { ZodError } from "zod";
 import path from "path";
 import multer from 'multer';
 import { upload, handleFileUpload } from "./uploads";
 import passport from 'passport';
 import { hashPassword } from './auth';
+import { PaymentService } from "./payments";
+import Stripe from "stripe";
+
+// Initialize Stripe webhook handler
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  throw new Error("Missing STRIPE_WEBHOOK_SECRET environment variable");
+}
 
 
 // Create an Express router instance
@@ -471,12 +483,66 @@ router.post("/api/login", (req, res, next) => {
       }
     });
 
-    // Payment endpoint temporarily disabled
-    router.post("/api/auctions/:id/checkout", (req, res) => {
-      res.status(503).json({ 
-        message: "Payment service temporarily unavailable",
-        maintenance: true
-      });
+    // Add payment endpoint for auction winners
+    router.post("/api/auctions/:id/checkout", requireAuth, requireProfile, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        const { includeInsurance } = req.body;
+
+        console.log("[PAYMENT] Payment request received:", {
+          auctionId,
+          buyerId: req.user?.id,
+          includeInsurance
+        });
+
+        if (!req.user) {
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        const result = await PaymentService.createCheckoutSession(
+          auctionId,
+          req.user.id,
+          includeInsurance
+        );
+
+        res.json(result);
+      } catch (error) {
+        console.error("[PAYMENT] Error:", error);
+        res.status(500).json({
+          message: error instanceof Error ? error.message : "Payment initialization failed"
+        });
+      }
+    });
+
+    // Add Stripe webhook endpoint
+    router.post("/api/webhooks/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
+      try {
+        const sig = req.headers['stripe-signature'];
+        
+        if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+          console.error("[WEBHOOK] Missing signature or secret");
+          return res.status(400).send("Webhook signature/secret not configured");
+        }
+
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+          apiVersion: "2025-02-24.acacia"
+        });
+
+        const event = stripe.webhooks.constructEvent(
+          req.body,
+          sig,
+          process.env.STRIPE_WEBHOOK_SECRET
+        );
+
+        console.log("[WEBHOOK] Received event:", event.type);
+        
+        await PaymentService.handleWebhookEvent(event);
+        
+        res.json({ received: true });
+      } catch (error) {
+        console.error("[WEBHOOK] Error:", error);
+        res.status(400).send("Webhook Error");
+      }
     });
 
     // Get admin auctions (including pending)
