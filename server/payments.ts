@@ -44,43 +44,35 @@ export class PaymentService {
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
 
-      // Create simple checkout session
+      // Create checkout session
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
-        metadata: {
-          auctionId: auction.id.toString(),
-          buyerId: buyerId.toString(),
-          sellerId: auction.sellerId.toString(),
-          platformFee: platformFee.toString(),
-          insuranceFee: insuranceFee.toString(),
-        },
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              unit_amount: totalAmount,
-              product_data: {
-                name: `Payment for "${auction.title}"`,
-                description: `Auction ID: ${auction.id}`,
-                images: auction.images && auction.images.length > 0 ? [auction.images[0]] : undefined,
-              },
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            unit_amount: totalAmount,
+            product_data: {
+              name: `Payment for "${auction.title}"`,
+              description: `Auction ID: ${auction.id}`,
             },
-            quantity: 1,
-          }
-        ],
-        success_url: `${BASE_URL}/payment-success`,
-        cancel_url: `${BASE_URL}/auction/${auctionId}?payment_canceled=true`,
+          },
+          quantity: 1,
+        }],
         payment_intent_data: {
+          metadata: {
+            auctionId: auction.id.toString(),
+            buyerId: buyerId.toString(),
+            sellerId: auction.sellerId.toString(),
+            platformFee: platformFee.toString(),
+            insuranceFee: insuranceFee.toString()
+          },
           application_fee_amount: platformFee + insuranceFee,
           transfer_data: {
             destination: sellerProfile.stripeAccountId,
           },
         },
-      });
-
-      // Update auction status only
-      await storage.updateAuction(auctionId, {
-        paymentStatus: "pending"
+        success_url: `${BASE_URL}/payment-success`,
+        cancel_url: `${BASE_URL}/auction/${auctionId}?payment_canceled=true`,
       });
 
       return { url: session.url };
@@ -114,7 +106,6 @@ export class PaymentService {
 
   private static async handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
     try {
-      // Extract metadata
       const { auctionId, buyerId, sellerId, platformFee, insuranceFee } = paymentIntent.metadata;
       if (!auctionId || !buyerId || !sellerId) {
         throw new Error("Missing required metadata in payment intent");
@@ -160,7 +151,7 @@ export class PaymentService {
         throw new Error("Missing required metadata in payment intent");
       }
 
-      // Update auction status only
+      // Update auction status
       await storage.updateAuction(parseInt(auctionId), {
         paymentStatus: "failed"
       });
