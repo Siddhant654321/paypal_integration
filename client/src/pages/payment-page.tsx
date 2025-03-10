@@ -3,7 +3,7 @@ import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CreditCard, Loader2, Shield, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -20,12 +20,22 @@ export default function PaymentPage() {
   const [includeInsurance, setIncludeInsurance] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sdkReady, setSdkReady] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
   const { data: auction, isLoading: isLoadingAuction } = useQuery<Auction>({
     queryKey: [`/api/auctions/${params?.id}`],
   });
+
+  // Initial PayPal script check
+  useEffect(() => {
+    if (!import.meta.env.VITE_PAYPAL_CLIENT_ID) {
+      setError("PayPal configuration is missing. Please contact support.");
+      return;
+    }
+    setSdkReady(true);
+  }, []);
 
   const createOrder = async () => {
     if (isProcessing || !auction?.id) return;
@@ -164,22 +174,34 @@ export default function PaymentPage() {
             </Alert>
           )}
 
-          <PayPalScriptProvider options={{ 
-            clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
-            currency: "USD",
-            intent: "capture"
-          }}>
-            <PayPalButtons
-              disabled={isProcessing}
-              createOrder={createOrder}
-              onApprove={onApprove}
-              onError={(err) => {
-                console.error('[PayPal] Error:', err);
-                setError("Payment failed. Please try again or contact support.");
-              }}
-              style={{ layout: "vertical" }}
-            />
-          </PayPalScriptProvider>
+          {sdkReady ? (
+            <PayPalScriptProvider options={{ 
+              clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || '',
+              currency: "USD",
+              intent: "capture"
+            }}>
+              <PayPalButtons
+                disabled={isProcessing}
+                createOrder={createOrder}
+                onApprove={onApprove}
+                onError={(err) => {
+                  console.error('[PayPal] Error:', err);
+                  setError("Payment failed. Please try again or contact support.");
+                }}
+                style={{ 
+                  layout: "vertical",
+                  color: "gold",
+                  shape: "rect",
+                  label: "pay"
+                }}
+              />
+            </PayPalScriptProvider>
+          ) : (
+            <div className="text-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              <p>Loading payment options...</p>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="text-sm text-muted-foreground">
           Your payment will be processed securely through PayPal.
