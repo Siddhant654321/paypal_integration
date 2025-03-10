@@ -1,4 +1,4 @@
-import express, { type Request, Response, NextFunction } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { db } from "./db";
@@ -19,6 +19,8 @@ async function checkRequiredEnvVars() {
   if (missingVars.length > 0) {
     throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
   }
+
+  log("All required environment variables are present", "startup");
 }
 
 async function initializeServer() {
@@ -65,12 +67,18 @@ async function initializeServer() {
     // Error handling middleware
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       console.error("[ERROR]", err);
+      if (err.stack) {
+        console.error("[ERROR STACK]", err.stack);
+      }
       res.status(500).json({ message: "Internal server error" });
     });
 
     // Global error handler for uncaught exceptions
     process.on('uncaughtException', (error) => {
       console.error('[FATAL] Uncaught Exception:', error);
+      if (error.stack) {
+        console.error('[FATAL] Stack trace:', error.stack);
+      }
       process.exit(1);
     });
 
@@ -87,6 +95,9 @@ async function initializeServer() {
     return app;
   } catch (error) {
     log(`Fatal error during server initialization: ${error}`, "startup");
+    if (error instanceof Error && error.stack) {
+      log(`Stack trace: ${error.stack}`, "startup");
+    }
     throw error;
   }
 }
