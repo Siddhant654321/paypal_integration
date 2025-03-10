@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useParams } from 'wouter';
 import { useMutation } from '@tanstack/react-query';
 import { PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { useAuction } from '../hooks/use-auction';
@@ -17,7 +17,7 @@ const INSURANCE_FEE = 800; // $8.00 in cents
 
 export default function PaymentPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const location = useLocation(); // Added useLocation from wouter
   const auctionId = parseInt(id || "0");
   const { data: auction, isLoading: isAuctionLoading } = useAuction(auctionId);
   const [includeInsurance, setIncludeInsurance] = useState(false);
