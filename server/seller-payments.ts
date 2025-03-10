@@ -86,7 +86,7 @@ export class SellerPaymentService {
               integration_method: "PAYPAL",
               integration_type: "THIRD_PARTY",
               third_party_details: {
-                features: ["PAYMENT", "REFUND", "PARTNER_FEE", "PAYOUT"]
+                features: ["PAYMENT", "REFUND"]
               }
             }
           }
@@ -100,6 +100,8 @@ export class SellerPaymentService {
           return_url: `${baseUrl}/seller/dashboard?success=true`
         }
       };
+
+      console.log("[PAYPAL] Sending partner referral request:", JSON.stringify(referralRequest, null, 2));
 
       const response = await axios.post(
         `${BASE_URL}/v2/customer/partner-referrals`,
@@ -136,8 +138,13 @@ export class SellerPaymentService {
         url: actionUrl,
       };
     } catch (error) {
-      console.error("[PAYPAL] Error creating seller account:", error);
-      throw error;
+      console.error("[PAYPAL] Error creating seller account:", error.response?.data || error.message);
+      if (error.response?.data) {
+        // Extract specific PayPal error message
+        const errorMessage = error.response.data.details?.[0]?.issue || error.response.data.message || "Failed to connect to PayPal";
+        throw new Error(`PayPal error: ${errorMessage}`);
+      }
+      throw new Error("Failed to connect with PayPal. Please try again later.");
     }
   }
 

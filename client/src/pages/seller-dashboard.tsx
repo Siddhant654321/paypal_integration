@@ -166,9 +166,10 @@ const SellerDashboard = () => {
       });
     },
     onError: (error: Error) => {
+      console.error("PayPal connection error:", error);
       toast({
         title: "Error connecting to PayPal",
-        description: error.message,
+        description: error.message || "Failed to connect with PayPal. Please try again later.",
         variant: "destructive",
       });
     }
