@@ -10,11 +10,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-02-24.acacia"
 });
 
+const BASE_URL = process.env.CLIENT_ORIGIN || 'http://localhost:5000';
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
-
-// Get base URL from environment or use default
-const BASE_URL = process.env.CLIENT_ORIGIN || process.env.PUBLIC_URL || 'http://localhost:5000';
 
 export class PaymentService {
   static async createCheckoutSession(
@@ -23,12 +21,6 @@ export class PaymentService {
     includeInsurance: boolean = false
   ) {
     try {
-      console.log("[PAYMENTS] Starting checkout session creation:", {
-        auctionId,
-        buyerId,
-        includeInsurance
-      });
-
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
@@ -46,99 +38,52 @@ export class PaymentService {
         throw new Error("Seller has not completed their Stripe account setup");
       }
 
-      // Calculate amounts
+      // Calculate fees
       const baseAmount = auction.currentPrice;
       const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
-      const sellerPayout = baseAmount - platformFee;
 
-      console.log("[PAYMENTS] Calculated payment amounts:", {
-        baseAmount,
-        platformFee,
-        insuranceFee,
-        totalAmount,
-        sellerPayout
-      });
-
-      // Create checkout session with all required data
+      // Create simple checkout session
       const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        metadata: {
+          auctionId: auction.id.toString(),
+          buyerId: buyerId.toString(),
+          sellerId: auction.sellerId.toString(),
+          platformFee: platformFee.toString(),
+          insuranceFee: insuranceFee.toString(),
+        },
         line_items: [
           {
             price_data: {
               currency: 'usd',
+              unit_amount: totalAmount,
               product_data: {
                 name: `Payment for "${auction.title}"`,
                 description: `Auction ID: ${auction.id}`,
                 images: auction.images && auction.images.length > 0 ? [auction.images[0]] : undefined,
               },
-              unit_amount: totalAmount,
             },
             quantity: 1,
-          },
+          }
         ],
-        mode: 'payment',
+        success_url: `${BASE_URL}/payment-success`,
+        cancel_url: `${BASE_URL}/auction/${auctionId}?payment_canceled=true`,
         payment_intent_data: {
           application_fee_amount: platformFee + insuranceFee,
           transfer_data: {
             destination: sellerProfile.stripeAccountId,
           },
-          metadata: {
-            auctionId: auction.id.toString(),
-            buyerId: buyerId.toString(),
-            sellerId: auction.sellerId.toString(),
-          },
         },
-        success_url: `${BASE_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}&auction_id=${auctionId}`,
-        cancel_url: `${BASE_URL}/auction/${auctionId}?payment_canceled=true`,
       });
 
-      // Extract payment intent ID
-      if (!session.payment_intent) {
-        throw new Error("Failed to create checkout session: No payment intent generated");
-      }
-
-      const paymentIntentId = typeof session.payment_intent === 'string' 
-        ? session.payment_intent 
-        : session.payment_intent.id;
-
-      console.log("[PAYMENTS] Created checkout session:", {
-        sessionId: session.id,
-        paymentIntentId
+      // Update auction status only
+      await storage.updateAuction(auctionId, {
+        paymentStatus: "pending"
       });
 
-      try {
-        // Create payment record with minimal required fields
-        const payment = await storage.insertPayment({
-          auctionId,
-          buyerId,
-          sellerId: auction.sellerId,
-          amount: totalAmount,
-          platformFee,
-          sellerPayout,
-          insuranceFee,
-          stripePaymentIntentId: paymentIntentId,
-          status: "pending",
-          payoutProcessed: false
-        });
-
-        console.log("[PAYMENTS] Payment record created:", payment.id);
-
-        // Update auction status
-        await storage.updateAuction(auctionId, {
-          paymentStatus: "pending"
-        });
-
-        return {
-          url: session.url,
-          sessionId: session.id,
-          payment
-        };
-
-      } catch (dbError) {
-        console.error("[PAYMENTS] Database error creating payment record:", dbError);
-        throw dbError;
-      }
+      return { url: session.url };
 
     } catch (error) {
       console.error("[PAYMENTS] Error creating checkout session:", error);
@@ -146,39 +91,59 @@ export class PaymentService {
     }
   }
 
-  static async handlePaymentSuccess(paymentIntentId: string) {
+  static async handleWebhookEvent(event: Stripe.Event) {
     try {
-      const payment = await storage.findPaymentByStripeId(paymentIntentId);
-      if (!payment) {
-        throw new Error("Payment not found");
+      console.log("[PAYMENTS] Processing webhook event:", event.type);
+
+      switch (event.type) {
+        case 'payment_intent.succeeded':
+          const paymentIntent = event.data.object as Stripe.PaymentIntent;
+          await PaymentService.handlePaymentSuccess(paymentIntent);
+          break;
+
+        case 'payment_intent.payment_failed':
+          const failedPaymentIntent = event.data.object as Stripe.PaymentIntent;
+          await PaymentService.handlePaymentFailure(failedPaymentIntent);
+          break;
+      }
+    } catch (error) {
+      console.error("[PAYMENTS] Error handling webhook event:", error);
+      throw error;
+    }
+  }
+
+  private static async handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
+    try {
+      // Extract metadata
+      const { auctionId, buyerId, sellerId, platformFee, insuranceFee } = paymentIntent.metadata;
+      if (!auctionId || !buyerId || !sellerId) {
+        throw new Error("Missing required metadata in payment intent");
       }
 
-      console.log("[PAYMENTS] Handling successful payment:", {
-        paymentId: payment.id,
-        paymentIntentId
-      });
-
-      // Retrieve PaymentIntent to get charge ID
-      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-      const chargeId = paymentIntent.latest_charge as string;
-
-      // Update payment status and charge ID
-      await storage.updatePayment(payment.id, {
+      // Create payment record
+      await storage.insertPayment({
+        auctionId: parseInt(auctionId),
+        buyerId: parseInt(buyerId),
+        sellerId: parseInt(sellerId),
+        amount: paymentIntent.amount,
+        platformFee: parseInt(platformFee || '0'),
+        insuranceFee: parseInt(insuranceFee || '0'),
+        sellerPayout: paymentIntent.transfer_data?.amount || 0,
+        stripePaymentIntentId: paymentIntent.id,
         status: "completed",
-        stripeChargeId: chargeId,
-        updatedAt: new Date()
+        payoutProcessed: false
       });
 
       // Update auction status
-      await storage.updateAuction(payment.auctionId, {
+      await storage.updateAuction(parseInt(auctionId), {
         status: "pending_fulfillment",
         paymentStatus: "completed"
       });
 
       // Send notification
       await NotificationService.notifyPayment(
-        payment.sellerId,
-        payment.amount,
+        parseInt(sellerId),
+        paymentIntent.amount,
         "completed"
       );
 
@@ -188,41 +153,22 @@ export class PaymentService {
     }
   }
 
-  static async handlePaymentFailure(paymentIntentId: string) {
+  private static async handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
     try {
-      const payment = await storage.findPaymentByStripeId(paymentIntentId);
-      if (!payment) {
-        throw new Error("Payment not found");
+      const { auctionId, sellerId } = paymentIntent.metadata;
+      if (!auctionId || !sellerId) {
+        throw new Error("Missing required metadata in payment intent");
       }
 
-      console.log("[PAYMENTS] Handling failed payment:", {
-        paymentId: payment.id,
-        paymentIntentId
-      });
-
-      // Update payment status
-      await storage.updatePayment(payment.id, {
-        status: "failed",
-        updatedAt: new Date()
-      });
-
-      // Get auction details for reserve price check
-      const auction = await storage.getAuction(payment.auctionId);
-      if (!auction) {
-        throw new Error("Auction not found");
-      }
-
-      // Update auction status based on reserve price
-      await storage.updateAuction(payment.auctionId, {
-        status: auction.currentPrice < auction.reservePrice ?
-          "pending_seller_decision" : "ended",
+      // Update auction status only
+      await storage.updateAuction(parseInt(auctionId), {
         paymentStatus: "failed"
       });
 
       // Send notification
       await NotificationService.notifyPayment(
-        payment.sellerId,
-        payment.amount,
+        parseInt(sellerId),
+        paymentIntent.amount,
         "failed"
       );
 

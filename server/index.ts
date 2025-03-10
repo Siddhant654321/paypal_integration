@@ -7,7 +7,6 @@ import cors from 'cors';
 
 async function initializeServer() {
   const app = express();
-  const PORT = 5000; // Always use port 5000
   const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5000';
 
   try {
@@ -31,7 +30,7 @@ async function initializeServer() {
       throw error;
     }
 
-    // Set up CORS with proper configuration - must be first
+    // Set up CORS
     app.use(cors({
       origin: [
         clientOrigin,
@@ -109,17 +108,17 @@ async function initializeServer() {
 
 async function startServer(): Promise<void> {
   try {
-    const app = await initializeServer();
+    const server = await initializeServer();
 
-    // Start server - always bind to port 5000
-    app.listen({
+    // Always use port 5000 as required
+    server.listen({
       port: 5000,
       host: "0.0.0.0",
     }, () => {
       log("Server started on port 5000", "startup");
     }).on('error', (error: any) => {
       if (error.code === 'EADDRINUSE') {
-        log("Port 5000 is already in use. Please ensure no other process is using this port.", "startup");
+        log("Error: Port 5000 is already in use. This port is required for the application.", "startup");
         process.exit(1);
       } else {
         log(`Server error: ${error}`, "startup");
