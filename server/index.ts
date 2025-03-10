@@ -55,7 +55,8 @@ async function initializeServer() {
 
     // Set security headers
     app.use((req, res, next) => {
-      res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://checkout.stripe.com https://js.stripe.com");
+      res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.replit.com https://*.replit.dev https://checkout.stripe.com https://js.stripe.com");
+      res.setHeader('Access-Control-Allow-Origin', '*');
       next();
     });
 

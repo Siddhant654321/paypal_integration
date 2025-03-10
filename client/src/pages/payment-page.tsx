@@ -53,15 +53,28 @@ export default function PaymentPage() {
         const data = await response.json();
         console.log("Payment session created:", { hasUrl: !!data.url });
 
-        if (!data.url) {
-          throw new Error("No payment URL received");
+        // Check if we got a redirect URL
+        if (data.url) {
+          console.log("Redirecting to Stripe Checkout:", data.url);
+          // Open Stripe checkout in a new tab/window and store reference
+          const checkoutWindow = window.open(data.url, '_blank');
+
+          // Make sure the window was opened successfully
+          if (!checkoutWindow) {
+            setError("Popup blocked! Please allow popups for this site and try again.");
+          } else {
+            checkoutWindow.focus();
+          }
+          return;
+        } else if (data.clientSecret) {
+          // Handle client secret if needed
+        } else {
+          throw new Error("No payment URL or client secret received");
         }
 
-        // Open Stripe checkout in a new tab
-        window.open(data.url, '_blank', 'noopener,noreferrer');
 
         // Redirect to auction page with payment initiated flag
-        window.location.href = `/auction/${auction.id}?payment_initiated=true`;
+        // window.location.href = `/auction/${auction.id}?payment_initiated=true`;
 
       } catch (err) {
         const message = err instanceof Error ? err.message : "Could not initialize payment";
