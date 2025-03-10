@@ -110,34 +110,64 @@ router.post('/webhook/paypal', async (req, res) => {
 });
 
 // PayPal seller onboarding route
-router.post('/api/seller/paypal/onboard', requireAuth, async (req, res) => {
+router.post('/api/seller/connect', requireAuth, async (req, res) => {
   try {
+    console.log("[PAYPAL] Starting seller onboarding for user:", req.user?.id);
+
     const profile = await storage.getProfile(req.user!.id);
     if (!profile) {
+      console.log("[PAYPAL] Profile not found for user:", req.user?.id);
       return res.status(404).json({ message: "Profile not found" });
     }
 
+    console.log("[PAYPAL] Creating seller account with profile:", {
+      userId: profile.userId,
+      email: profile.email
+    });
+
     const { merchantId, url } = await SellerPaymentService.createSellerAccount(profile);
+    
+    console.log("[PAYPAL] Seller account created successfully:", {
+      merchantId: merchantId.substring(0, 8) + '...',
+      urlPrefix: url.substring(0, 30) + '...'
+    });
+
     res.json({ merchantId, url });
   } catch (error) {
     console.error('[PAYPAL] Onboarding error:', error);
-    res.status(500).json({ message: "Failed to start PayPal onboarding" });
+    res.status(500).json({ 
+      message: "Failed to start PayPal onboarding",
+      error: error instanceof Error ? error.message : "Unknown error"
+    });
   }
 });
 
 // PayPal seller account status check
-router.get('/api/seller/paypal/status', requireAuth, async (req, res) => {
+router.get('/api/seller/status', requireAuth, async (req, res) => {
   try {
+    console.log("[PAYPAL] Checking seller status for user:", req.user?.id);
+
     const profile = await storage.getProfile(req.user!.id);
     if (!profile?.paypalMerchantId) {
+      console.log("[PAYPAL] No PayPal account found for user:", req.user?.id);
       return res.json({ status: "not_started" });
     }
 
     const status = await SellerPaymentService.getAccountStatus(profile.paypalMerchantId);
+    
+    console.log("[PAYPAL] Seller status checked:", {
+      userId: req.user?.id,
+      merchantId: profile.paypalMerchantId.substring(0, 8) + '...',
+      status
+    });
+
     res.json({ status });
   } catch (error) {
     console.error('[PAYPAL] Status check error:', error);
-    res.status(500).json({ message: "Failed to check PayPal account status" });
+    res.status(500).json({ 
+      message: "Failed to check PayPal account status",
+      error: error instanceof Error ? error.message : "Unknown error"
+    });
   }
 });
 

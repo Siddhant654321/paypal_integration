@@ -21,6 +21,9 @@ const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 // Use sandbox URL in development
 const IS_SANDBOX = process.env.NODE_ENV !== 'production';
 const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
+const PARTNER_MERCHANT_ID = IS_SANDBOX 
+  ? process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID 
+  : process.env.PAYPAL_PARTNER_MERCHANT_ID;
 
 console.log("[PAYPAL] Initializing PayPal Payouts service:", {
   mode: IS_SANDBOX ? 'sandbox' : 'production',
@@ -198,34 +201,6 @@ export class SellerPaymentService {
     }
   }
 
-  static async getPayoutStatus(payoutBatchId: string): Promise<{
-    batchStatus: string;
-    itemCount: number;
-    processingTime?: string;
-  }> {
-    try {
-      const accessToken = await this.getAccessToken();
-
-      const response = await axios.get(
-        `${BASE_URL}/v1/payments/payouts/${payoutBatchId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      return {
-        batchStatus: response.data.batch_header.batch_status,
-        itemCount: response.data.batch_header.item_count,
-        processingTime: response.data.batch_header.time_processed
-      };
-    } catch (error) {
-      console.error("[PAYPAL] Error checking payout status:", error);
-      throw new Error("Failed to check payout status");
-    }
-  }
   static async getAccountStatus(merchantId: string): Promise<"not_started" | "pending" | "verified" | "rejected"> {
     try {
       if (!merchantId) {
@@ -233,6 +208,7 @@ export class SellerPaymentService {
       }
 
       const accessToken = await this.getAccessToken();
+      console.log("[PAYPAL] Checking account status for merchant:", merchantId);
 
       // Get merchant integration status
       const response = await axios.get(
@@ -248,7 +224,7 @@ export class SellerPaymentService {
       const status = response.data.merchant_integration_status;
 
       console.log("[PAYPAL] Account status check:", {
-        merchantId,
+        merchantId: merchantId.substring(0, 8) + '...',
         status,
       });
 
