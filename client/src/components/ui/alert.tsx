@@ -56,4 +56,12 @@ const AlertDescription = React.forwardRef<
 ))
 AlertDescription.displayName = "AlertDescription"
 
-export { Alert, AlertTitle, AlertDescription }
+// Import the AlertCircle from Lucide React
+import { AlertCircle } from "lucide-react"
+
+export {
+  Alert,
+  AlertTitle,
+  AlertDescription,
+  AlertCircle
+}
