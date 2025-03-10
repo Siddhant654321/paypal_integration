@@ -20,7 +20,8 @@ export class PaymentService {
   static async createCheckoutSession(
     auctionId: number,
     buyerId: number,
-    includeInsurance: boolean = false
+    includeInsurance: boolean = false,
+    baseUrl: string = ''
   ) {
     try {
       console.log("[PAYMENTS] Starting checkout session creation:", {
@@ -124,6 +125,7 @@ export class PaymentService {
         insuranceFee,
         stripePaymentIntentId: '',
         stripeChargeId: null,
+        stripe_session_id: session.id,  // Store the session ID
         status: "pending" as const,
         payoutProcessed: false,
         createdAt: new Date(),
@@ -140,6 +142,7 @@ export class PaymentService {
 
       return {
         url: session.url,
+        sessionId: session.id,
         payment
       };
 

@@ -543,10 +543,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "Only the winning bidder can pay for this auction" });
         }
 
+        // Get the base URL from the request
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        console.log(`[PAYMENT] Using base URL: ${baseUrl}`);
+        
         const result = await PaymentService.createCheckoutSession(
           auctionId,
           req.user.id,
-          includeInsurance
+          includeInsurance,
+          baseUrl
         );
 
         res.json(result);
