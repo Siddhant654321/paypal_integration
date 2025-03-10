@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CreditCard, Loader2, Shield, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Shield, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -28,42 +28,34 @@ export default function PaymentPage() {
     queryKey: [`/api/auctions/${params?.id}`],
   });
 
-  // Initial PayPal script check
   useEffect(() => {
     const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
+    console.log("[PayPal] Initializing SDK:", {
+      clientIdPresent: !!paypalClientId,
+      clientIdPrefix: paypalClientId ? paypalClientId.substring(0, 8) + '...' : 'missing'
+    });
+
     if (!paypalClientId) {
-      console.error("PayPal Client ID is missing");
+      console.error("[PayPal] Client ID is missing");
       setError("PayPal configuration is missing. Please contact support.");
       return;
     }
 
-    if (paypalClientId.includes('${') || paypalClientId.includes('process.env')) {
-      console.error("PayPal Client ID not properly injected:", paypalClientId);
-      setError("PayPal configuration is missing. Please contact support.");
-      return;
-    }
-
-    console.log("[PayPal] SDK configuration ready with Client ID:", paypalClientId.substring(0, 5) + '...');
     setSdkReady(true);
   }, []);
 
   const createOrder = async () => {
     if (isProcessing || !auction?.id) return;
 
-    if (!user) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Required",
-        description: "Please log in to proceed with payment.",
-      });
-      return;
-    }
-
     setIsProcessing(true);
     setError(null);
 
     try {
-      console.log("[PayPal] Creating order for auction:", auction.id);
+      console.log("[PayPal] Creating order for auction:", {
+        auctionId: auction.id,
+        includeInsurance,
+        amount: auction.currentPrice + (includeInsurance ? INSURANCE_FEE : 0)
+      });
 
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
@@ -78,10 +70,12 @@ export default function PaymentPage() {
       }
 
       const data = await response.json();
-      console.log("[PayPal] Order created successfully:", data.orderId);
+      console.log("[PayPal] Order created successfully:", {
+        orderId: data.orderId
+      });
       return data.orderId;
     } catch (err) {
-      console.error('[Payment] Error:', err);
+      console.error('[PayPal] Order creation error:', err);
       const errorMessage = err instanceof Error ? err.message : "Could not process your payment. Please try again.";
       setError(errorMessage);
       toast({
@@ -117,7 +111,7 @@ export default function PaymentPage() {
       // Redirect to success page
       window.location.href = `/payment-success?order=${data.orderID}`;
     } catch (err) {
-      console.error('[Payment] Capture error:', err);
+      console.error('[PayPal] Payment capture error:', err);
       toast({
         variant: "destructive",
         title: "Payment Error",
@@ -194,6 +188,7 @@ export default function PaymentPage() {
               clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
               currency: "USD",
               intent: "capture",
+              components: "buttons",
               'enable-funding': "paypal",
               'disable-funding': "card,paylater"
             }}>
@@ -202,7 +197,7 @@ export default function PaymentPage() {
                 createOrder={createOrder}
                 onApprove={onApprove}
                 onError={(err) => {
-                  console.error('[PayPal] Error:', err);
+                  console.error('[PayPal] Button error:', err);
                   setError("Payment failed. Please try again or contact support.");
                 }}
                 style={{ 

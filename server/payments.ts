@@ -89,11 +89,12 @@ export class PaymentService {
 
       const accessToken = await this.getAccessToken();
 
-      // Create PayPal order
+      // Create PayPal order with detailed breakdown
       const orderRequest = {
         intent: "CAPTURE",
         purchase_units: [
           {
+            reference_id: `auction_${auctionId}`,
             amount: {
               currency_code: "USD",
               value: (totalAmount / 100).toFixed(2),
@@ -104,11 +105,7 @@ export class PaymentService {
                 },
                 handling: {
                   currency_code: "USD",
-                  value: (platformFee / 100).toFixed(2)
-                },
-                insurance: {
-                  currency_code: "USD",
-                  value: (insuranceFee / 100).toFixed(2)
+                  value: ((platformFee + insuranceFee) / 100).toFixed(2)
                 }
               }
             },
@@ -129,6 +126,7 @@ export class PaymentService {
               }
             ],
             payment_instruction: {
+              disbursement_mode: "INSTANT",
               platform_fees: [{
                 amount: {
                   currency_code: "USD",
@@ -140,7 +138,8 @@ export class PaymentService {
         ],
         application_context: {
           return_url: `${baseUrl}/payment-success`,
-          cancel_url: `${baseUrl}/auction/${auction.id}?payment_canceled=true`
+          cancel_url: `${baseUrl}/auction/${auction.id}?payment_canceled=true`,
+          shipping_preference: "NO_SHIPPING"
         }
       };
 
@@ -152,21 +151,17 @@ export class PaymentService {
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'PayPal-Request-Id': `order_${auctionId}_${Date.now()}`
           }
         }
       );
 
       const orderId = response.data.id;
-      const approveUrl = response.data.links.find((link: any) => link.rel === "approve")?.href;
-
-      if (!approveUrl) {
-        throw new Error("Failed to generate checkout URL");
-      }
 
       console.log("[PAYPAL] Successfully created order:", {
         orderId,
-        approveUrl: approveUrl.substring(0, 50) + '...'
+        status: response.data.status
       });
 
       // Create payment record
@@ -190,27 +185,36 @@ export class PaymentService {
 
       return {
         orderId,
-        url: approveUrl,
-        payment,
+        payment
       };
     } catch (error) {
       console.error("[PAYPAL] Error creating checkout session:", error);
-      throw error;
+
+      if (axios.isAxiosError(error) && error.response) {
+        console.error("[PAYPAL] PayPal API error response:", {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+
+      throw new Error(error instanceof Error ? error.message : "Failed to create payment session");
     }
   }
+
   static async handlePaymentSuccess(orderId: string) {
     try {
+      console.log("[PAYPAL] Processing successful payment for order:", orderId);
+
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
-        throw new Error("Payment not found");
+        throw new Error("Payment record not found");
       }
 
       const accessToken = await this.getAccessToken();
 
-      // Capture the payment
-      await axios.post(
-        `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
-        {},
+      // Verify order status before capture
+      const orderResponse = await axios.get(
+        `${BASE_URL}/v2/checkout/orders/${orderId}`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -218,6 +222,30 @@ export class PaymentService {
           }
         }
       );
+
+      console.log("[PAYPAL] Order status before capture:", {
+        orderId,
+        status: orderResponse.data.status
+      });
+
+      // Capture the payment
+      const captureResponse = await axios.post(
+        `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+          }
+        }
+      );
+
+      console.log("[PAYPAL] Payment captured successfully:", {
+        orderId,
+        status: captureResponse.data.status,
+        captureId: captureResponse.data.purchase_units[0]?.payments?.captures[0]?.id
+      });
 
       // Update payment status
       await storage.updatePaymentStatus(payment.id, "completed");
@@ -237,15 +265,25 @@ export class PaymentService {
 
     } catch (error) {
       console.error("[PAYPAL] Error handling payment success:", error);
-      throw error;
+
+      if (axios.isAxiosError(error) && error.response) {
+        console.error("[PAYPAL] PayPal API error response:", {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+
+      throw new Error("Failed to process payment capture");
     }
   }
 
   static async handlePaymentFailure(orderId: string) {
     try {
+      console.log("[PAYPAL] Processing failed payment for order:", orderId);
+
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
-        throw new Error("Payment not found");
+        throw new Error("Payment record not found");
       }
 
       // Get auction for reserve price check
@@ -257,7 +295,7 @@ export class PaymentService {
       // Update payment status
       await storage.updatePaymentStatus(payment.id, "failed");
 
-      // Update auction status
+      // Update auction status based on reserve price
       await storage.updateAuction(payment.auctionId, {
         status: auction.currentPrice < auction.reservePrice ? 
           "pending_seller_decision" : "ended",
@@ -270,12 +308,17 @@ export class PaymentService {
         payment.amount,
         "failed"
       );
+
+      console.log("[PAYPAL] Payment failure processed:", {
+        orderId,
+        paymentId: payment.id,
+        auctionId: payment.auctionId
+      });
     } catch (error) {
       console.error("[PAYPAL] Error handling payment failure:", error);
-      throw error;
+      throw new Error("Failed to process payment failure");
     }
   }
-  
   static async getOrderStatus(orderId: string) {
     try {
       console.log("[PAYPAL] Getting order status for:", orderId);
