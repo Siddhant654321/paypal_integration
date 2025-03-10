@@ -1456,31 +1456,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("[WEBHOOK] Event type:", event.event_type);
         switch (event.event_type) {
           case "CHECKOUT.ORDER.COMPLETED": {
-            const session = event.data.object;
-            console.log("Processing completed checkout session:", session.id);
-            // Update payment and auction status
-            await storage.updatePaymentBySessionId(session.id, {
-              status: "completed",
-              stripePaymentIntentId: session.payment_intent as string,
-            });
-            // Find and update the associated auction
-            const payment = await storage.getPaymentBySessionId(session.id);
-            if (payment) {
-              console.log("Updating auction status for payment:", payment.id);
-              await storage.updateAuction(payment.auctionId, {
-                paymentStatus: "completed",
-              });
-            }
+            console.log("Processing completed checkout:", event.resource.id);
+            await PaymentService.handlePaymentSuccess(event.resource.id);
             break;
           }
-          case "payment_intent.payment_failed": {
-            const failedIntent = event.data.object;
-            console.log("Processing failed payment:", failedIntent.id);
-            await storage.updatePaymentByIntentId(failedIntent.id, {
-              status: "failed",
-            });
+          case "CHECKOUT.ORDER.FAILED": {
+            console.log("Processing failed checkout:", event.resource.id);
+            await PaymentService.handlePaymentFailure(event.resource.id);
             break;
           }
+          default:
+            console.log(`[WEBHOOK] Unhandled event type: ${event.event_type}`);
         }
         res.json({ received: true });
       } catch (error) {
