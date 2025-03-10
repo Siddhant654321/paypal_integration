@@ -7,7 +7,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16"
+  apiVersion: "2025-02-24.acacia"
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
@@ -61,94 +61,68 @@ export class PaymentService {
         sellerPayout
       });
 
-      // Create PaymentIntent first
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: totalAmount,
-        currency: 'usd',
-        application_fee_amount: platformFee + insuranceFee,
-        transfer_data: {
-          destination: sellerProfile.stripeAccountId,
+      // Create checkout session with all required data
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Payment for "${auction.title}"`,
+                description: `Auction ID: ${auction.id}`,
+                images: auction.images && auction.images.length > 0 ? [auction.images[0]] : undefined,
+              },
+              unit_amount: totalAmount,
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        payment_intent_data: {
+          application_fee_amount: platformFee + insuranceFee,
+          transfer_data: {
+            destination: sellerProfile.stripeAccountId,
+          },
+          metadata: {
+            auctionId: auction.id.toString(),
+            buyerId: buyerId.toString(),
+            sellerId: auction.sellerId.toString(),
+          },
         },
-        metadata: {
-          auctionId: auction.id.toString(),
-          buyerId: buyerId.toString(),
-          sellerId: auction.sellerId.toString(),
-        },
+        success_url: `${BASE_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}&auction_id=${auctionId}`,
+        cancel_url: `${BASE_URL}/auction/${auctionId}?payment_canceled=true`,
       });
 
-      if (!paymentIntent || !paymentIntent.id) {
-        throw new Error("Failed to create payment intent");
+      // Extract payment intent ID
+      if (!session.payment_intent) {
+        throw new Error("Failed to create checkout session: No payment intent generated");
       }
 
-      console.log("[PAYMENTS] Created PaymentIntent:", {
-        id: paymentIntent.id,
-        status: paymentIntent.status
+      const paymentIntentId = typeof session.payment_intent === 'string' 
+        ? session.payment_intent 
+        : session.payment_intent.id;
+
+      console.log("[PAYMENTS] Created checkout session:", {
+        sessionId: session.id,
+        paymentIntentId
       });
 
       try {
-        // Create payment record with all required fields
-        const paymentData = {
-          auctionId: auction.id,
+        // Create payment record with minimal required fields
+        const payment = await storage.insertPayment({
+          auctionId,
           buyerId,
           sellerId: auction.sellerId,
           amount: totalAmount,
           platformFee,
           sellerPayout,
           insuranceFee,
-          stripePaymentIntentId: paymentIntent.id,
+          stripePaymentIntentId: paymentIntentId,
           status: "pending",
-          payoutProcessed: false,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
+          payoutProcessed: false
+        });
 
-        console.log("[PAYMENTS] Creating payment record with data:", 
-          JSON.stringify({
-            ...paymentData,
-            stripePaymentIntentId: `${paymentData.stripePaymentIntentId.substring(0, 10)}...`
-          }, null, 2)
-        );
-
-        const payment = await storage.insertPayment(paymentData);
         console.log("[PAYMENTS] Payment record created:", payment.id);
-
-        // Construct absolute URLs for success and cancel
-        const successUrl = new URL(`/payment-success`, BASE_URL);
-        successUrl.searchParams.append('payment_intent', paymentIntent.id);
-        successUrl.searchParams.append('auction_id', auctionId.toString());
-
-        const cancelUrl = new URL(`/auction/${auctionId}`, BASE_URL);
-        cancelUrl.searchParams.append('payment_canceled', 'true');
-
-        // Create Stripe Checkout session with the PaymentIntent
-        const session = await stripe.checkout.sessions.create({
-          line_items: [
-            {
-              price_data: {
-                currency: 'usd',
-                product_data: {
-                  name: `Payment for "${auction.title}"`,
-                  description: `Auction ID: ${auction.id}`,
-                  images: auction.images && auction.images.length > 0 ? [auction.images[0]] : undefined,
-                },
-                unit_amount: totalAmount,
-              },
-              quantity: 1,
-            },
-          ],
-          mode: 'payment',
-          client_reference_id: payment.id.toString(),
-          payment_intent: paymentIntent.id,
-          success_url: successUrl.toString(),
-          cancel_url: cancelUrl.toString(),
-          allow_promotion_codes: true,
-        });
-
-        console.log("[PAYMENTS] Created checkout session:", {
-          sessionId: session.id,
-          paymentIntentId: paymentIntent.id,
-          url: session.url
-        });
 
         // Update auction status
         await storage.updateAuction(auctionId, {
@@ -163,16 +137,11 @@ export class PaymentService {
 
       } catch (dbError) {
         console.error("[PAYMENTS] Database error creating payment record:", dbError);
-        // Cancel the payment intent if payment record creation fails
-        await stripe.paymentIntents.cancel(paymentIntent.id);
         throw dbError;
       }
 
     } catch (error) {
       console.error("[PAYMENTS] Error creating checkout session:", error);
-      if (error instanceof Stripe.errors.StripeError) {
-        throw new Error(`Stripe error: ${error.message}`);
-      }
       throw error;
     }
   }
