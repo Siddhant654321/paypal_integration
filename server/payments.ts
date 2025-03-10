@@ -275,4 +275,32 @@ export class PaymentService {
       throw error;
     }
   }
+  
+  static async getOrderStatus(orderId: string) {
+    try {
+      console.log("[PAYPAL] Getting order status for:", orderId);
+      const accessToken = await this.getAccessToken();
+      
+      const response = await axios.get(
+        `${BASE_URL}/v2/checkout/orders/${orderId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      console.log("[PAYPAL] Order status response:", response.data.status);
+      return {
+        id: response.data.id,
+        status: response.data.status,
+        payer: response.data.payer,
+        amount: response.data.purchase_units[0]?.amount
+      };
+    } catch (error) {
+      console.error("[PAYPAL] Error getting order status:", error);
+      throw new Error("Failed to get order status from PayPal");
+    }
+  }
 }

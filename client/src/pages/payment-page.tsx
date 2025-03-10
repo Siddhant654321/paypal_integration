@@ -30,25 +30,13 @@ export default function PaymentPage() {
 
   // Initial PayPal script check
   useEffect(() => {
-    if (!import.meta.env.VITE_PAYPAL_CLIENT_ID || import.meta.env.VITE_PAYPAL_CLIENT_ID === '${process.env.PAYPAL_CLIENT_ID}') {
-      console.error("[PayPal] Client ID is missing or not properly resolved");
+    const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
+    if (!paypalClientId || paypalClientId === '${process.env.PAYPAL_CLIENT_ID}') {
+      console.error("PayPal Client ID is missing or not properly resolved");
       setError("PayPal configuration is missing. Please contact support.");
       return;
     }
-
-    // Validate PayPal Client ID format
-    if (!import.meta.env.VITE_PAYPAL_CLIENT_ID.startsWith('AQ')) {
-      console.error("[PayPal] Invalid Client ID format");
-      setError("Invalid PayPal configuration. Please contact support.");
-      return;
-    }
-
-    const environment = import.meta.env.VITE_PAYPAL_ENV || 'sandbox';
-    console.log("[PayPal] Initializing SDK with:", {
-      environment,
-      clientIdPrefix: import.meta.env.VITE_PAYPAL_CLIENT_ID.substring(0, 8) + '...'
-    });
-
+    console.log("[PayPal] SDK configuration ready with Client ID:", paypalClientId.substring(0, 5) + '...');
     setSdkReady(true);
   }, []);
 
