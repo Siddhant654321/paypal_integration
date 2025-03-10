@@ -6,9 +6,18 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("Missing STRIPE_SECRET_KEY environment variable");
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-02-24.acacia"
-});
+let stripe: Stripe | null = null;
+
+// Defer Stripe initialization to avoid blocking server startup
+const getStripe = () => {
+  if (!stripe) {
+    console.log("[PAYMENTS] Initializing Stripe client");
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: "2025-02-24.acacia"
+    });
+  }
+  return stripe;
+};
 
 const BASE_URL = process.env.CLIENT_ORIGIN || 'http://localhost:5000';
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
@@ -21,6 +30,12 @@ export class PaymentService {
     includeInsurance: boolean = false
   ) {
     try {
+      console.log("[PAYMENTS] Starting checkout session creation", {
+        auctionId,
+        buyerId,
+        includeInsurance
+      });
+
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
@@ -44,8 +59,15 @@ export class PaymentService {
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
 
-      // Create checkout session
-      const session = await stripe.checkout.sessions.create({
+      console.log("[PAYMENTS] Creating Stripe checkout session", {
+        baseAmount,
+        platformFee,
+        insuranceFee,
+        totalAmount
+      });
+
+      // Create minimal checkout session
+      const session = await getStripe().checkout.sessions.create({
         mode: 'payment',
         line_items: [{
           price_data: {
@@ -73,6 +95,11 @@ export class PaymentService {
         },
         success_url: `${BASE_URL}/payment-success`,
         cancel_url: `${BASE_URL}/auction/${auctionId}?payment_canceled=true`,
+      });
+
+      console.log("[PAYMENTS] Checkout session created successfully", {
+        sessionId: session.id,
+        paymentIntentId: session.payment_intent
       });
 
       return { url: session.url };
@@ -106,13 +133,17 @@ export class PaymentService {
 
   private static async handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
     try {
+      console.log("[PAYMENTS] Processing successful payment", {
+        paymentIntentId: paymentIntent.id
+      });
+
       const { auctionId, buyerId, sellerId, platformFee, insuranceFee } = paymentIntent.metadata;
       if (!auctionId || !buyerId || !sellerId) {
         throw new Error("Missing required metadata in payment intent");
       }
 
       // Create payment record
-      await storage.insertPayment({
+      const payment = await storage.insertPayment({
         auctionId: parseInt(auctionId),
         buyerId: parseInt(buyerId),
         sellerId: parseInt(sellerId),
@@ -124,6 +155,8 @@ export class PaymentService {
         status: "completed",
         payoutProcessed: false
       });
+
+      console.log("[PAYMENTS] Payment record created", { paymentId: payment.id });
 
       // Update auction status
       await storage.updateAuction(parseInt(auctionId), {
@@ -146,6 +179,10 @@ export class PaymentService {
 
   private static async handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
     try {
+      console.log("[PAYMENTS] Processing failed payment", {
+        paymentIntentId: paymentIntent.id
+      });
+
       const { auctionId, sellerId } = paymentIntent.metadata;
       if (!auctionId || !sellerId) {
         throw new Error("Missing required metadata in payment intent");

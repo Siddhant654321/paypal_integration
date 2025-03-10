@@ -1,30 +1,13 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema, insertFulfillmentSchema } from "@shared/schema";
-import { ZodError } from "zod";
+import { insertAuctionSchema, insertUserSchema, type InsertUser } from "@shared/schema";
+import { type ZodError } from "zod";
 import path from "path";
 import multer from 'multer';
 import { upload, handleFileUpload } from "./uploads";
-import { PaymentService } from "./payments";
-import Stripe from "stripe";
-import { SellerPaymentService } from "./seller-payments";
-
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
-}
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2023-10-16",
-});
-import { EmailService } from "./email-service"; 
-import { AuctionService } from "./auction-service";
-import { AIPricingService } from "./ai-service";
-import type { User, InsertUser } from "@shared/schema"; 
-import { db } from "./db";
-import { sql } from "drizzle-orm";
-import { NotificationService } from "./notification-service";
-import passport from 'passport'; //Import passport
+import passport from 'passport';
 import { hashPassword } from './auth';
 
 
@@ -85,61 +68,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Serve static files from uploads directory
     const uploadsPath = path.join(process.cwd(), 'uploads');
-    app.use('/uploads', express.static(uploadsPath, {
-      maxAge: '1d',
-      etag: true,
-      lastModified: true,
-      setHeaders: (res, path) => {
-        if (path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png')) {
-          res.setHeader('Cache-Control', 'public, max-age=86400');
-        }
-      }
-    }));
+    app.use('/uploads', express.static(uploadsPath));
 
-    // Basic middleware setup
+    // Basic middleware setup with logging
+    console.log("[ROUTES] Setting up core middleware");
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
     
-    // Add Stripe webhook endpoint before the JSON body parser
-    app.post("/api/webhooks/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
-      const sig = req.headers['stripe-signature'];
-      
-      if (!process.env.STRIPE_WEBHOOK_SECRET) {
-        console.error("[STRIPE WEBHOOK] Missing webhook secret");
-        return res.status(400).send("Webhook secret not configured");
-      }
+    // Configure and register all routes before creating HTTP server
+    console.log("[ROUTES] Configuring API routes");
+    app.use('/api', router);
 
-      try {
-        const event = stripe.webhooks.constructEvent(
-          req.body,
-          sig as string,
-          process.env.STRIPE_WEBHOOK_SECRET
-        );
+    // Create HTTP server
+    console.log("[ROUTES] Creating HTTP server");
+    const httpServer = createServer(app);
 
-        console.log("[STRIPE WEBHOOK] Received event:", event.type);
+    console.log("[ROUTES] Route registration completed successfully");
+    return httpServer;
+  } catch (error) {
+    console.error("[ROUTES] Error during route registration:", error);
+    throw error;
+  }
+}
 
-        switch (event.type) {
-          case 'payment_intent.succeeded':
-            await PaymentService.handlePaymentSuccess(event.data.object.id);
-            break;
-          case 'payment_intent.payment_failed':
-            await PaymentService.handlePaymentFailure(event.data.object.id);
-            break;
-        }
-
-        res.json({ received: true });
-      } catch (err) {
-        console.error("[STRIPE WEBHOOK] Error:", err);
-        res.status(400).send("Webhook Error");
-      }
-    });
-
-    app.use(router);
-
-
-    // Add authentication endpoints with enhanced logging and response handling
-    router.post("/api/login", (req, res, next) => {
-      if (!req.body.username || !req.body.password) {
+// Add authentication endpoints with enhanced logging and response handling
+router.post("/api/login", (req, res, next) => {
+  if (!req.body.username || !req.body.password) {
         console.log("[AUTH] Login failed: Missing credentials");
         return res.status(400).json({ 
           message: "Username and password are required" 
@@ -517,50 +471,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Add payment endpoint for auction winners
-    router.post("/api/auctions/:id/checkout", requireAuth, requireProfile, async (req, res) => {
-      try {
-        const auctionId = parseInt(req.params.id);
-        const { includeInsurance } = req.body;
-
-        console.log("[PAYMENT] Payment request received:", {
-          auctionId,
-          buyerId: req.user?.id,
-          includeInsurance,
-          timestamp: new Date().toISOString()
-        });
-
-        if (!req.user) {
-          return res.status(401).json({ message: "Unauthorized" });
-        }
-
-        const auction = await storage.getAuction(auctionId);
-        if (!auction) {
-          return res.status(404).json({ message: "Auction not found" });
-        }
-
-        if (auction.winningBidderId !== req.user.id) {
-          return res.status(403).json({ message: "Only the winning bidder can pay for this auction" });
-        }
-
-        // Get the base URL from the request
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        console.log(`[PAYMENT] Using base URL: ${baseUrl}`);
-        
-        const result = await PaymentService.createCheckoutSession(
-          auctionId,
-          req.user.id,
-          includeInsurance,
-          baseUrl
-        );
-
-        res.json(result);
-      } catch (error) {
-        console.error("[PAYMENT] Error:", error);
-        res.status(500).json({
-          message: error instanceof Error ? error.message : "Payment initialization failed"
-        });
-      }
+    // Payment endpoint temporarily disabled
+    router.post("/api/auctions/:id/checkout", (req, res) => {
+      res.status(503).json({ 
+        message: "Payment service temporarily unavailable",
+        maintenance: true
+      });
     });
 
     // Get admin auctions (including pending)
@@ -2288,6 +2204,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     throw error;
   }
 }
+
+// Import required dependencies from @shared/schema
+import { ZodError, insertUserSchema } from "@shared/schema";
 
 // Helper function for consistent logging
 const log = (message: string, context: string = 'general') => {
