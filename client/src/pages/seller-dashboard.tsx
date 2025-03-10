@@ -6,7 +6,7 @@ import { Plus, Search, DollarSign, ExternalLink, AlertCircle, CheckCircle2 } fro
 import { Link, Redirect } from "wouter";
 import AuctionCard from "@/components/auction-card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatPrice } from '../utils/formatters';
 import { useToast } from "@/hooks/use-toast";
@@ -23,18 +23,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-interface StripeStatus {
+interface PayPalStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
 }
 
 interface Balance {
   available: { amount: number; currency: string }[];
   pending: { amount: number; currency: string }[];
-}
-
-interface PayoutSchedule {
-  delay_days: number;
-  interval: string;
 }
 
 const SellerDashboard = () => {
@@ -58,7 +53,7 @@ const SellerDashboard = () => {
     select: (data) => data || [],
   });
 
-  const { data: stripeStatus, isLoading: stripeStatusLoading, refetch: refetchStripeStatus } = useQuery<StripeStatus>({
+  const { data: paypalStatus, isLoading: paypalStatusLoading, refetch: refetchPayPalStatus } = useQuery<PayPalStatus>({
     queryKey: ["/api/seller/status"],
     retry: 3,
     retryDelay: 1000,
@@ -67,23 +62,18 @@ const SellerDashboard = () => {
 
   const { data: balance } = useQuery<Balance>({
     queryKey: ["/api/seller/balance"],
-    enabled: stripeStatus?.status === "verified",
+    enabled: paypalStatus?.status === "verified",
   });
 
-  const { data: payoutSchedule } = useQuery<PayoutSchedule>({
-    queryKey: ["/api/seller/payout-schedule"],
-    enabled: stripeStatus?.status === "verified",
-  });
-
-  // Enhanced check for Stripe success return
+  // Enhanced check for PayPal success return
   useEffect(() => {
-    const checkStripeStatus = async () => {
+    const checkPayPalStatus = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const success = urlParams.get('success');
       const refresh = urlParams.get('refresh');
 
       if (success === 'true' || refresh === 'true') {
-        console.log("[Seller Dashboard] Stripe redirect detected, checking account status...");
+        console.log("[Seller Dashboard] PayPal redirect detected, checking account status...");
 
         // Clear the query params first
         const newUrl = window.location.pathname;
@@ -91,13 +81,13 @@ const SellerDashboard = () => {
 
         try {
           // Force refetch the seller status
-          const result = await refetchStripeStatus();
+          const result = await refetchPayPalStatus();
           console.log("[Seller Dashboard] Refetched status:", result.data);
 
           if (result.data?.status === "verified") {
             toast({
               title: "Account Verified",
-              description: "Your Stripe account has been successfully verified!",
+              description: "Your PayPal account has been successfully verified!",
               variant: "default",
             });
           } else {
@@ -107,7 +97,7 @@ const SellerDashboard = () => {
             });
           }
         } catch (error) {
-          console.error("[Seller Dashboard] Error checking stripe status:", error);
+          console.error("[Seller Dashboard] Error checking PayPal status:", error);
           toast({
             title: "Error",
             description: "Failed to check account status. Please refresh the page.",
@@ -117,14 +107,14 @@ const SellerDashboard = () => {
       }
     };
 
-    checkStripeStatus();
+    checkPayPalStatus();
   }, []);
 
-  // Connect with Stripe mutation
-  const connectWithStripeMutation = useMutation({
+  // Connect with PayPal mutation
+  const connectWithPayPalMutation = useMutation({
     mutationFn: async () => {
       try {
-        console.log("Starting Stripe Connect process...");
+        console.log("Starting PayPal Connect process...");
         const response = await fetch("/api/seller/connect", {
           method: "POST",
           headers: {
@@ -137,11 +127,11 @@ const SellerDashboard = () => {
           if (contentType && contentType.indexOf("application/json") !== -1) {
             try {
               const errorData = await response.json();
-              console.error("Stripe Connect error:", errorData);
-              throw new Error(errorData.message || "Failed to connect with Stripe");
+              console.error("PayPal Connect error:", errorData);
+              throw new Error(errorData.message || "Failed to connect with PayPal");
             } catch (parseError) {
               console.error("Error parsing JSON response:", parseError);
-              throw new Error(`Failed to connect with Stripe. Status: ${response.status}`);
+              throw new Error(`Failed to connect with PayPal. Status: ${response.status}`);
             }
           } else {
             const text = await response.text();
@@ -151,39 +141,38 @@ const SellerDashboard = () => {
         }
 
         const data = await response.json();
-        console.log("Stripe Connect response:", data);
+        console.log("PayPal Connect response:", data);
 
         const url = data.url;
 
         if (!url) {
           console.error("No URL in response:", data);
-          throw new Error('No URL received from Stripe Connect');
+          throw new Error('No URL received from PayPal Connect');
         }
 
         return url;
       } catch (error) {
-        console.error("Stripe Connect error:", error);
+        console.error("PayPal Connect error:", error);
         throw error;
       }
     },
     onSuccess: (data) => {
-      console.log("Successfully got Stripe Connect URL:", data.substring(0, 30) + "...");
+      console.log("Successfully got PayPal Connect URL:", data.substring(0, 30) + "...");
       window.open(data, '_blank', 'noopener,noreferrer');
 
       toast({
-        title: "Stripe Connect",
-        description: "Stripe onboarding page opened in a new tab. Please complete the setup there.",
+        title: "PayPal Connect",
+        description: "PayPal onboarding page opened in a new tab. Please complete the setup there.",
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error connecting to Stripe",
+        title: "Error connecting to PayPal",
         description: error.message,
         variant: "destructive",
       });
     }
   });
-
 
   // Filter auctions
   const filteredAuctions = auctions ? auctions.filter(auction => {
@@ -193,33 +182,17 @@ const SellerDashboard = () => {
   }) : [];
 
   const now = new Date();
-  const activeAuctions = useMemo(() => {
-    if (!auctions) return [];
-    return auctions.filter(auction => 
-      (auction.status === "active" || auction.status === "pending_seller_decision") &&
-      new Date(auction.endDate) > now
-    );
-  }, [auctions, now]);
-
-  const completedAuctions = useMemo(() => {
-    if (!auctions) return [];
-    return auctions.filter(auction => 
-      auction.status === "ended" || 
-      auction.status === "voided" || 
-      auction.status === "fulfilled" ||
-      auction.status === "pending_fulfillment" ||
-      (auction.status === "active" && new Date(auction.endDate) <= now)
-    );
-  }, [auctions, now]);
-
-
+  const activeAuctions = filteredAuctions.filter(auction => 
+    auction.status === "active" && auction.approved && new Date(auction.endDate) > now
+  );
+  const completedAuctions = filteredAuctions.filter(auction =>
+    auction.status === "ended" || new Date(auction.endDate) <= now
+  );
   const pendingAuctions = filteredAuctions.filter(auction => !auction.approved);
-  const approvedAuctions = filteredAuctions.filter(auction => auction.approved && activeAuctions.some(a => a.id === auction.id));
-  const endedAuctions = filteredAuctions.filter(auction => completedAuctions.some(a => a.id === auction.id));
 
   // Render account status section
   const renderAccountStatus = () => {
-    if (stripeStatusLoading) {
+    if (paypalStatusLoading) {
       return (
         <Card className="mb-6">
           <CardHeader>
@@ -229,7 +202,7 @@ const SellerDashboard = () => {
       );
     }
 
-    switch (stripeStatus?.status) {
+    switch (paypalStatus?.status) {
       case "not_started":
       case "rejected":
         return (
@@ -237,29 +210,29 @@ const SellerDashboard = () => {
             <CardHeader>
               <CardTitle>Set Up Your Seller Account</CardTitle>
               <CardDescription>
-                Before you can receive payments, you need to set up your account.
-                This is a secure process that allows us to send your earnings directly to your bank account.
+                Before you can receive payments, you need to set up your PayPal account.
+                This process will allow you to receive payments directly to your bank account.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-lg border p-4 space-y-2">
                 <h4 className="font-medium">What you'll need:</h4>
                 <ul className="list-disc list-inside space-y-1 text-sm">
-                  <li>Personal identification (driver's license or passport)</li>
+                  <li>A PayPal Business account (or ability to create one)</li>
                   <li>Your bank account information</li>
                   <li>Your business information (if applicable)</li>
                 </ul>
               </div>
               <Button
                 className="w-full"
-                onClick={() => connectWithStripeMutation.mutate()}
-                disabled={connectWithStripeMutation.isPending}
+                onClick={() => connectWithPayPalMutation.mutate()}
+                disabled={connectWithPayPalMutation.isPending}
               >
-                {connectWithStripeMutation.isPending ? (
+                {connectWithPayPalMutation.isPending ? (
                   "Setting up..."
                 ) : (
                   <>
-                    Set Up Payments Account
+                    Set Up PayPal Account
                     <ExternalLink className="ml-2 h-4 w-4" />
                   </>
                 )}
@@ -277,13 +250,13 @@ const SellerDashboard = () => {
                 Complete Your Account Setup
               </CardTitle>
               <CardDescription>
-                Please complete all required information to finish setting up your account.
+                Please complete all required information to finish setting up your PayPal account.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button
                 className="w-full"
-                onClick={() => connectWithStripeMutation.mutate()}
+                onClick={() => connectWithPayPalMutation.mutate()}
               >
                 Continue Setup
                 <ExternalLink className="ml-2 h-4 w-4" />
@@ -299,7 +272,7 @@ const SellerDashboard = () => {
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <AlertTitle className="text-green-800">Account Connected</AlertTitle>
               <AlertDescription className="text-green-700">
-                Your account is verified and ready to receive payments.
+                Your PayPal account is verified and ready to receive payments.
               </AlertDescription>
             </Alert>
             {balance && (
@@ -326,26 +299,6 @@ const SellerDashboard = () => {
                 </CardContent>
               </Card>
             )}
-            {payoutSchedule && (
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle>Payout Schedule</CardTitle>
-                  <CardDescription>When you'll receive your money</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Frequency</span>
-                      <span className="font-medium capitalize">{payoutSchedule.interval}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Processing Time</span>
-                      <span className="font-medium">{payoutSchedule.delay_days} days</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </>
         );
 
@@ -355,15 +308,15 @@ const SellerDashboard = () => {
             <CardHeader>
               <CardTitle>Set Up Your Seller Account</CardTitle>
               <CardDescription>
-                Connect your account to receive payments for your auctions.
+                Connect your PayPal account to receive payments for your auctions.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button
                 className="w-full"
-                onClick={() => connectWithStripeMutation.mutate()}
+                onClick={() => connectWithPayPalMutation.mutate()}
               >
-                Set Up Payments Account
+                Set Up PayPal Account
                 <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
             </CardContent>
@@ -418,19 +371,19 @@ const SellerDashboard = () => {
           <Tabs defaultValue="active">
             <TabsList>
               <TabsTrigger value="active">
-                Active ({approvedAuctions.length})
+                Active ({activeAuctions.length})
               </TabsTrigger>
               <TabsTrigger value="pending">
                 Pending ({pendingAuctions.length})
               </TabsTrigger>
               <TabsTrigger value="ended">
-                Ended ({endedAuctions.length})
+                Ended ({completedAuctions.length})
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="active">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {approvedAuctions.map((auction) => (
+                {activeAuctions.map((auction) => (
                   <AuctionCard key={auction.id} auction={auction} />
                 ))}
               </div>
@@ -446,7 +399,7 @@ const SellerDashboard = () => {
 
             <TabsContent value="ended">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {endedAuctions.map((auction) => (
+                {completedAuctions.map((auction) => (
                   <AuctionCard key={auction.id} auction={auction} />
                 ))}
               </div>
@@ -455,7 +408,7 @@ const SellerDashboard = () => {
         </TabsContent>
 
         <TabsContent value="payments">
-          {stripeStatus?.status === "verified" ? (
+          {paypalStatus?.status === "verified" ? (
             <div className="space-y-6">
               <Card>
                 <CardHeader>
@@ -473,7 +426,7 @@ const SellerDashboard = () => {
             </div>
           ) : (
             <div className="text-center text-muted-foreground">
-              Complete your account setup to view payment information
+              Complete your PayPal account setup to view payment information
             </div>
           )}
         </TabsContent>
