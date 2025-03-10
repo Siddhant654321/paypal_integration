@@ -69,6 +69,13 @@ export class SellerPaymentService {
 
       const accessToken = await this.getAccessToken();
 
+      // Base URL determination
+      const baseUrl = process.env.REPL_SLUG 
+        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
+        : 'http://localhost:5000';
+      
+      console.log("[PAYPAL] Using base URL:", baseUrl);
+
       // Create a PayPal merchant integration
       const referralRequest = {
         tracking_id: `seller_${profile.userId}`,
@@ -84,13 +91,13 @@ export class SellerPaymentService {
             }
           }
         }],
-        products: ["EXPRESS_CHECKOUT", "PPCP"],
+        products: ["EXPRESS_CHECKOUT"],
         legal_consents: [{
           type: "SHARE_DATA_CONSENT",
           granted: true
         }],
         partner_config_override: {
-          return_url: `${process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.replit.dev` : 'http://localhost:5000'}/seller/dashboard?success=true`
+          return_url: `${baseUrl}/seller/dashboard?success=true`
         }
       };
 
