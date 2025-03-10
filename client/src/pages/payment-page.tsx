@@ -31,15 +31,17 @@ export default function PaymentPage() {
   // Initial PayPal script check
   useEffect(() => {
     const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
-    console.log("[PayPal] Checking configuration with Client ID:", paypalClientId);
-    
-    if (!paypalClientId || paypalClientId === '${PAYPAL_CLIENT_ID}') {
-      console.error("[PayPal] Client ID is missing or not properly resolved");
+    console.log("[PayPal] Checking configuration:", { 
+      clientIdPresent: !!paypalClientId,
+      clientIdPrefix: paypalClientId ? paypalClientId.substring(0, 8) + '...' : 'missing'
+    });
+
+    if (!paypalClientId) {
+      console.error("[PayPal] Client ID is missing");
       setError("PayPal configuration is missing. Please contact support.");
       return;
     }
-    
-    console.log("[PayPal] SDK configuration ready with Client ID:", paypalClientId.substring(0, 5) + '...');
+
     setSdkReady(true);
   }, []);
 
@@ -187,13 +189,11 @@ export default function PaymentPage() {
 
           {sdkReady ? (
             <PayPalScriptProvider options={{ 
-              clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || '',
+              clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
               currency: "USD",
               intent: "capture",
-              components: "buttons",
               'enable-funding': "paypal",
-              'disable-funding': "card,paylater",
-              'data-sdk-integration-source': "button_js"
+              'disable-funding': "card,paylater"
             }}>
               <PayPalButtons
                 disabled={isProcessing}
