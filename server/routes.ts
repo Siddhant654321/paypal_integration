@@ -126,7 +126,7 @@ router.post('/api/seller/connect', requireAuth, async (req, res) => {
     });
 
     const { merchantId, url } = await SellerPaymentService.createSellerAccount(profile);
-    
+
     console.log("[PAYPAL] Seller account created successfully:", {
       merchantId: merchantId.substring(0, 8) + '...',
       urlPrefix: url.substring(0, 30) + '...'
@@ -154,7 +154,7 @@ router.get('/api/seller/status', requireAuth, async (req, res) => {
     }
 
     const status = await SellerPaymentService.getAccountStatus(profile.paypalMerchantId);
-    
+
     console.log("[PAYPAL] Seller status checked:", {
       userId: req.user?.id,
       merchantId: profile.paypalMerchantId.substring(0, 8) + '...',
@@ -200,7 +200,7 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
 router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
   try {
     const orderId = req.params.orderId;
-    
+
     if (!orderId) {
       return res.status(400).json({ message: "Order ID is required" });
     }
@@ -1083,26 +1083,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
-        
+
         if (isNaN(auctionId)) {
           return res.status(400).json({ message: "Invalid auction ID" });
         }
-        
+
         console.log(`[ADMIN] Deleting auction with ID: ${auctionId}`);
-        
+
         // Get auction to check if it exists
         const auction = await storage.getAuction(auctionId);
         if (!auction) {
           console.log(`[ADMIN] Auction ${auctionId} not found for deletion`);
           return res.status(404).json({ message: "Auction not found" });
         }
-        
+
         // Delete associated bids first to avoid foreign key constraints
         await storage.deleteBidsForAuction(auctionId);
-        
+
         // Delete the auction
         await storage.deleteAuction(auctionId);
-        
+
         console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
         return res.status(200).json({ success: true, message: "Auction deleted successfully" });
       } catch (error) {
@@ -1390,7 +1390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: req.user?.id,
           timestamp: new Date().toISOString()
         });
-        
+
         if (!req.user) {
           console.log('[PAYMENT] Unauthorized payment attempt - no user in session');
           return res.status(401).json({
@@ -1398,18 +1398,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             code: "AUTH_REQUIRED"
           });
         }
-        
+
         const auctionId = parseInt(req.params.id);
         const { includeInsurance = false } = req.body;
-        
+
         console.log(`[PAYMENT] Creating payment session for auction ${auctionId}, buyer ${req.user.id}, insurance: ${includeInsurance}`);
-        
+
         const auction = await storage.getAuction(auctionId);
         if (!auction) {
           console.log(`[PAYMENT] Auction not found: ${auctionId}`);
           return res.status(404).json({ message: "Auction not found" });
         }
-        
+
         // Verify this user won the auction
         if (auction.winningBidderId !== req.user.id) {
           console.log(`[PAYMENT] Unauthorized payment - user ${req.user.id} is not the winner of auction ${auctionId}`);
@@ -1418,11 +1418,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             code: "NOT_WINNER"
           });
         }
-        
+
         // Get the base URL from the request
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         console.log(`[PAYMENT] Using base URL: ${baseUrl}`);
-        
+
         // Create Stripe Checkout session
         const { sessionId, url, payment } = await PaymentService.createCheckoutSession(
           auctionId,
@@ -1430,9 +1430,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           includeInsurance,
           baseUrl
         );
-        
+
         console.log(`[PAYMENT] Successfully created checkout session ${sessionId} with URL: ${url}`);
-        
+
         res.json({ 
           sessionId, 
           url, 
@@ -1443,7 +1443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("[PAYMENT] Payment creation error:", error);
         let errorMessage = "Failed to create payment session";
         let errorCode = "PAYMENT_CREATION_FAILED";
-        
+
         // Check for specific Stripe errors
         if (error instanceof Error) {
           if (error.message.includes("Stripe account")) {
@@ -1454,7 +1454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             errorCode = "PAYPAL_CONFIG_ERROR";
           }
         }
-        
+
         res.status(500).json({
           message: errorMessage,
           details: error instanceof Error ? error.message : "Unknown error",
@@ -1482,7 +1482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         console.log("[WEBHOOK] Received PayPal webhook event");
         const event = req.body;
-        
+
         console.log("[WEBHOOK] Event type:", event.event_type);
         switch (event.event_type) {
           case "CHECKOUT.ORDER.COMPLETED": {
@@ -2331,7 +2331,7 @@ router.get("/api/session/check", (req: Express.Request, res: Express.Response) =
   } else {
     // Check if there's a session cookie present but not valid
     const hasSessionCookie = req.headers.cookie?.includes('poultry.sid');
-    
+
     res.json({
       authenticated: false,
       message: hasSessionCookie ? 
@@ -2342,13 +2342,14 @@ router.get("/api/session/check", (req: Express.Request, res: Express.Response) =
   }
 });
 
-import { insertUserSchema } from "@shared/schema";
-
-// Add registration endpoint to the router (not directly on app)
+// Registration endpoint
 router.post("/api/register", async (req, res) => {
     try {
       const userData = req.body as InsertUser;
       console.log("[ROUTES] Registration attempt:", userData.username);
+
+      // Import the schema directly from shared
+      const { insertUserSchema } = await import("@shared/schema");
 
       // Validate the user data against the schema
       const validationResult = insertUserSchema.safeParse(userData);
@@ -2399,5 +2400,3 @@ router.post("/api/register", async (req, res) => {
       });
     }
 });
-
-// Remove the duplicate login endpoint as it's already defined earlier in the file
