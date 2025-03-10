@@ -55,6 +55,8 @@ export default function PaymentPage() {
     setError(null);
 
     try {
+      console.log("[PayPal] Creating order for auction:", auction.id);
+
       const response = await fetch(`/api/auctions/${auction.id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,6 +70,7 @@ export default function PaymentPage() {
       }
 
       const data = await response.json();
+      console.log("[PayPal] Order created successfully:", data.orderId);
       return data.orderId;
     } catch (err) {
       console.error('[Payment] Error:', err);
@@ -86,6 +89,8 @@ export default function PaymentPage() {
 
   const onApprove = async (data: { orderID: string }) => {
     try {
+      console.log("[PayPal] Payment approved, capturing payment:", data.orderID);
+
       const response = await fetch(`/api/payments/${data.orderID}/capture`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

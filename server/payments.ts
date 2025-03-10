@@ -2,15 +2,24 @@ import { storage } from "./storage";
 import { NotificationService } from "./notification-service";
 import axios from 'axios';
 
+// Check for required PayPal environment variables
 if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
   throw new Error("Missing PayPal environment variables");
 }
 
+// PayPal API Configuration
 const PRODUCTION_URL = 'https://api-m.paypal.com';
 const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 
-const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.REPL_SLUG !== undefined;
-const BASE_URL = IS_PRODUCTION ? PRODUCTION_URL : SANDBOX_URL;
+// Use sandbox in development or when explicitly configured
+const IS_SANDBOX = process.env.NODE_ENV !== 'production' || process.env.VITE_PAYPAL_ENV === 'sandbox';
+const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
+
+console.log("[PAYPAL] Initializing PayPal service:", {
+  mode: IS_SANDBOX ? 'sandbox' : 'production',
+  baseUrl: BASE_URL,
+  clientIdPrefix: process.env.PAYPAL_CLIENT_ID.substring(0, 8) + '...',
+});
 
 const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee
 const INSURANCE_FEE = 800; // $8.00 in cents
@@ -28,6 +37,8 @@ export class PaymentService {
           }
         }
       );
+
+      console.log("[PAYPAL] Successfully obtained access token");
       return response.data.access_token;
     } catch (error) {
       console.error("[PAYPAL] Error getting access token:", error);
@@ -133,6 +144,8 @@ export class PaymentService {
         }
       };
 
+      console.log("[PAYPAL] Sending order request to PayPal");
+
       const response = await axios.post(
         `${BASE_URL}/v2/checkout/orders`,
         orderRequest,
@@ -150,6 +163,11 @@ export class PaymentService {
       if (!approveUrl) {
         throw new Error("Failed to generate checkout URL");
       }
+
+      console.log("[PAYPAL] Successfully created order:", {
+        orderId,
+        approveUrl: approveUrl.substring(0, 50) + '...'
+      });
 
       // Create payment record
       const payment = await storage.insertPayment({
@@ -180,7 +198,6 @@ export class PaymentService {
       throw error;
     }
   }
-
   static async handlePaymentSuccess(orderId: string) {
     try {
       const payment = await storage.findPaymentByPayPalId(orderId);
