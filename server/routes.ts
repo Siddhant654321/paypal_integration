@@ -2342,6 +2342,8 @@ router.get("/api/session/check", (req: Express.Request, res: Express.Response) =
   }
 });
 
+import { insertUserSchema } from "@shared/schema";
+
 // Add registration endpoint to the router (not directly on app)
 router.post("/api/register", async (req, res) => {
     try {
