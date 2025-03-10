@@ -16,10 +16,15 @@ const queryClient = new QueryClient({
   },
 });
 
-// Configure PayPal SDK with proper sandbox credentials
-const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
+// PayPal configuration
+const initialOptions = {
+  clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
+  currency: "USD",
+  intent: "capture",
+  components: ["buttons"]
+};
 
-if (!paypalClientId) {
+if (!initialOptions.clientId) {
   throw new Error('Missing required environment variable: VITE_PAYPAL_CLIENT_ID');
 }
 
@@ -27,11 +32,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="ui-theme">
-        <PayPalScriptProvider options={{
-          "client-id": paypalClientId,
-          currency: "USD",
-          intent: "capture"
-        }}>
+        <PayPalScriptProvider options={initialOptions}>
           <App />
           <Toaster />
         </PayPalScriptProvider>
