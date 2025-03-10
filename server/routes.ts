@@ -2,7 +2,7 @@ import express, { type Express, type Request, type Response, type NextFunction }
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema } from "@shared/schema";
+import { insertAuctionSchema, insertBidSchema, insertProfileSchema, insertBuyerRequestSchema, insertUserSchema } from "@shared/schema";
 import type { User, InsertUser, Profile } from "@shared/schema";
 import { ZodError } from "zod";
 import path from "path";
@@ -284,6 +284,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     app.use(express.urlencoded({ extended: false }));
     app.use(router);
 
+    // Add registration endpoint with validation and error handling
+    router.post("/api/register", async (req, res) => {
+      try {
+        console.log("[AUTH] Registration attempt:", {
+          username: req.body.username,
+          email: req.body.email,
+          role: req.body.role
+        });
+
+        // Validate registration data
+        const validatedData = insertUserSchema.parse(req.body);
+
+        // Hash the password
+        const hashedPassword = await hashPassword(validatedData.password);
+
+        // Create the user
+        const user = await storage.createUser({
+          ...validatedData,
+          password: hashedPassword
+        });
+
+        console.log("[AUTH] Registration successful:", {
+          userId: user.id,
+          username: user.username,
+          role: user.role
+        });
+
+        res.status(201).json({
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          approved: user.approved,
+          hasProfile: user.hasProfile
+        });
+      } catch (error) {
+        console.error("[AUTH] Registration error:", error);
+        
+        if (error instanceof ZodError) {
+          return res.status(400).json({
+            message: "Invalid registration data",
+            errors: error.errors
+          });
+        }
+
+        // Handle unique constraint violations
+        if (error instanceof Error && 'code' in error && error.code === '23505') {
+          return res.status(400).json({
+            message: "Username or email already exists"
+          });
+        }
+
+        res.status(500).json({
+          message: "Registration failed",
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    });
 
     // Add authentication endpoints with enhanced logging and response handling
     router.post("/api/login", (req, res, next) => {
@@ -2348,10 +2405,7 @@ router.post("/api/register", async (req, res) => {
       const userData = req.body as InsertUser;
       console.log("[ROUTES] Registration attempt:", userData.username);
 
-      // Import the schema directly from shared
-      const { insertUserSchema } = await import("@shared/schema");
-
-      // Validate the user data against the schema
+      // Use the schema directly from the imported types at the top of the file
       const validationResult = insertUserSchema.safeParse(userData);
       if (!validationResult.success) {
         console.error("[ROUTES] Registration validation error:", validationResult.error);
