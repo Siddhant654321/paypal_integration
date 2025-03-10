@@ -30,12 +30,12 @@ export default function PaymentPage() {
 
   // Initial PayPal script check
   useEffect(() => {
-    if (!import.meta.env.VITE_PAYPAL_CLIENT_ID) {
-      console.error("PayPal Client ID is missing in environment");
+    if (!import.meta.env.VITE_PAYPAL_CLIENT_ID || import.meta.env.VITE_PAYPAL_CLIENT_ID === '${process.env.PAYPAL_CLIENT_ID}') {
+      console.error("PayPal Client ID is missing or not properly resolved");
       setError("PayPal configuration is missing. Please contact support.");
       return;
     }
-    console.log("[PayPal] SDK configuration ready");
+    console.log("[PayPal] SDK configuration ready with ID:", import.meta.env.VITE_PAYPAL_CLIENT_ID.substring(0, 5) + '...');
     setSdkReady(true);
   }, []);
 
