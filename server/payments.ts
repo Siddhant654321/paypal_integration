@@ -77,7 +77,22 @@ export class PaymentService {
 
       const accessToken = await this.getAccessToken();
 
-      // Create PayPal order - convert from cents to dollars by dividing by 100
+      // Calculate dollar amounts from cents and ensure proper decimal precision
+      const totalAmountDollars = (totalAmount / 100).toFixed(2);
+      const baseAmountDollars = (baseAmount / 100).toFixed(2);
+      const feeAmountDollars = ((platformFee + insuranceFee) / 100).toFixed(2);
+      
+      console.log("[PAYPAL] Payment amounts:", {
+        baseAmount,
+        platformFee,
+        insuranceFee,
+        totalAmount,
+        baseAmountDollars,
+        feeAmountDollars,
+        totalAmountDollars
+      });
+      
+      // Create PayPal order - convert from cents to dollars
       const orderRequest = {
         intent: "CAPTURE",
         purchase_units: [
@@ -87,15 +102,15 @@ export class PaymentService {
             custom_id: `auction_${auctionId}`,
             amount: {
               currency_code: "USD",
-              value: (totalAmount / 100).toFixed(2),
+              value: totalAmountDollars,
               breakdown: {
                 item_total: {
                   currency_code: "USD",
-                  value: (baseAmount / 100).toFixed(2)
+                  value: baseAmountDollars
                 },
                 handling: {
                   currency_code: "USD",
-                  value: ((platformFee + insuranceFee) / 100).toFixed(2)
+                  value: feeAmountDollars
                 }
               }
             },
@@ -106,7 +121,7 @@ export class PaymentService {
                 quantity: "1",
                 unit_amount: {
                   currency_code: "USD",
-                  value: (baseAmount / 100).toFixed(2)
+                  value: baseAmountDollars
                 }
               }
             ]

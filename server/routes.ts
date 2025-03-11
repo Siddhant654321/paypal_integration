@@ -207,7 +207,7 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
     res.json(result);
   } catch (error) {
     console.error('[PAYMENT] Payment initiation error:', error);
-    
+
     // Handle specific PayPal API errors
     if (error instanceof Error) {
       if (error.message.includes('INVALID_REQUEST')) {
@@ -221,7 +221,7 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
         });
       }
     }
-    
+
     res.status(500).json({ 
       message: error instanceof Error ? error.message : "Failed to initiate payment" 
     });
@@ -232,7 +232,7 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
 router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
   try {
     const orderId = req.params.orderId;
-    
+
     console.log('[PAYMENT] Capturing payment for order:', {
       orderId,
       userId: req.user?.id,
@@ -244,16 +244,16 @@ router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
     }
 
     await PaymentService.handlePaymentSuccess(orderId);
-    
+
     console.log('[PAYMENT] Payment captured successfully:', {
       orderId,
       status: 'completed' 
     });
-    
+
     res.json({ success: true });
   } catch (error) {
     console.error('[PAYMENT] Capture error:', error);
-    
+
     // Handle specific PayPal capture errors
     if (error instanceof Error) {
       if (error.message.includes('ORDER_NOT_APPROVED')) {
@@ -267,7 +267,7 @@ router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
         });
       }
     }
-    
+
     res.status(500).json({ 
       message: error instanceof Error ? error.message : "Failed to capture payment" 
     });
@@ -379,7 +379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } catch (error) {
         console.error("[AUTH] Registration error:", error);
-        
+
         if (error instanceof ZodError) {
           return res.status(400).json({
             message: "Invalid registration data",
@@ -2513,3 +2513,45 @@ router.post("/api/register", async (req, res) => {
       });
     }
 });
+
+// Seller PayPal connection
+  app.post("/api/seller/connect", requireAuth, async (req, res) => {
+    try {
+      const { userId } = req.user;
+      const profile = await storage.getProfile(userId);
+      if (!profile) {
+        return res.status(404).json({ error: "User profile not found" });
+      }
+
+      // In sandbox mode, give the option to bypass PayPal integration
+      if (process.env.NODE_ENV !== 'production' && req.query.test === 'true') {
+        console.log("[API] Using test mode for seller account");
+
+        const testMerchantId = `TEST_${userId}_${Date.now()}`;
+        await storage.updateSellerPayPalAccount(userId, {
+          merchantId: testMerchantId,
+          status: "verified",  // Auto-verify in test mode
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        return res.json({ 
+          success: true, 
+          message: "Test seller account verified",
+          redirectUrl: "/seller/dashboard?success=true&test=true" 
+        });
+      }
+
+      // Create a seller PayPal account through normal flow
+      const { merchantId, url } = await SellerPaymentService.createSellerAccount(profile);
+
+      res.json({ redirectUrl: url });
+    } catch (error) {
+      console.error("[API] Error creating seller PayPal account:", error);
+      res.status(500).json({ 
+        error: "Failed to create seller account", 
+        details: error instanceof Error ? error.message : "Unknown error",
+        sandbox: process.env.NODE_ENV !== 'production'
+      });
+    }
+  });

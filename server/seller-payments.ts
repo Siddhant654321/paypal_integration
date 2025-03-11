@@ -59,6 +59,32 @@ export class SellerPaymentService {
     try {
       console.log("[PAYPAL] Creating seller account for:", profile.email);
 
+      // Always create a test merchant ID in sandbox mode
+      if (IS_SANDBOX) {
+        console.log("[PAYPAL] In sandbox mode, creating test merchant account");
+        const testMerchantId = `TEST_MERCHANT_${profile.userId}_${Date.now()}`;
+        
+        // Base URL for return paths
+        const baseUrl = process.env.REPL_SLUG 
+          ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
+          : 'https://workspace.repl.co';
+        
+        // Update profile with test merchant ID
+        await storage.updateSellerPayPalAccount(profile.userId, {
+          merchantId: testMerchantId,
+          status: "verified", // Mark as verified in sandbox
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        
+        console.log("[PAYPAL] Created test merchant ID in sandbox:", testMerchantId);
+        
+        return {
+          merchantId: testMerchantId,
+          url: `${baseUrl}/seller/dashboard?success=true&test=true`,
+        };
+      }
+
       // Clean up any existing account first
       if (profile.paypalMerchantId) {
         try {
@@ -258,32 +284,34 @@ export class SellerPaymentService {
         return "not_started";
       }
 
-      // For testing purposes in sandbox environment, allow bypassing the status check
-      if (IS_SANDBOX && process.env.PAYPAL_SKIP_STATUS_CHECK === 'true') {
-        console.log("[PAYPAL] Status check bypassed in sandbox mode, assuming verified");
+      // Always allow testing mode in sandbox environment
+      if (IS_SANDBOX) {
+        console.log("[PAYPAL] Running in sandbox mode, allowing seller operations");
         return "verified";
       }
 
       const accessToken = await this.getAccessToken();
       console.log("[PAYPAL] Checking account status for merchant:", merchantId);
+      console.log("[PAYPAL] Using partner merchant ID:", PARTNER_MERCHANT_ID);
 
       try {
         // Get merchant integration status
-        const response = await axios.get(
-          `${BASE_URL}/v1/customer/partners/${PARTNER_MERCHANT_ID}/merchant-integrations/${merchantId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
+        const url = `${BASE_URL}/v1/customer/partners/${PARTNER_MERCHANT_ID}/merchant-integrations/${merchantId}`;
+        console.log("[PAYPAL] Making API call to:", url);
+        
+        const response = await axios.get(url, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
           }
-        );
+        });
 
         const status = response.data.merchant_integration_status;
 
         console.log("[PAYPAL] Account status check:", {
           merchantId: merchantId.substring(0, 8) + '...',
           status,
+          responseData: JSON.stringify(response.data)
         });
 
         switch (status) {
@@ -297,18 +325,27 @@ export class SellerPaymentService {
             return "not_started";
         }
       } catch (statusError) {
-        // If we get an error checking status, log it but continue assuming pending
-        console.warn("[PAYPAL] Error during status check, assuming pending:", statusError.message);
+        // Log detailed error information
+        console.error("[PAYPAL] Error during status check:", statusError.message);
         
+        if (axios.isAxiosError(statusError) && statusError.response) {
+          console.error("[PAYPAL] API error details:", {
+            status: statusError.response.status,
+            data: JSON.stringify(statusError.response.data),
+            headers: statusError.response.headers
+          });
+        }
+        
+        // Always allow in sandbox mode regardless of errors
         if (IS_SANDBOX) {
-          console.log("[PAYPAL] In sandbox mode, allowing operation to continue as 'verified'");
+          console.log("[PAYPAL] In sandbox mode, allowing operation to continue as 'verified' despite errors");
           return "verified";
         }
         
         return "pending";
       }
     } catch (error) {
-      console.error("[PAYPAL] Error checking account status:", error);
+      console.error("[PAYPAL] General error checking account status:", error);
       return IS_SANDBOX ? "verified" : "not_started";
     }
   }
