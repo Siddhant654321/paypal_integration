@@ -32,7 +32,9 @@ function Router() {
         <Route path="/profile" component={ProfilePage} />
         <Route path="/auction/:id" component={AuctionPage} />
         <Route path="/auction/:id/pay" component={PaymentPage} />
-        <Route path="/payment-success" component={PaymentSuccessPage} />
+        <Route path="/payment-success">
+          <PaymentSuccessPage />
+        </Route>
         <Route path="/seller/dashboard" component={SellerDashboard} />
         <Route path="/seller/auction/new" component={NewAuction} />
         <Route path="/seller/fulfill/:id" component={FulfillmentPage} />
