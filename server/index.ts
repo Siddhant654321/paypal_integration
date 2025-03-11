@@ -96,7 +96,7 @@ async function initializeServer(): Promise<Express> {
   }
 }
 
-async function startServer(port: number = 5000): Promise<void> {
+async function startServer(port: number = 5000, maxRetries: number = 10): Promise<void> {
   try {
     const app = await initializeServer();
     const server = await registerRoutes(app);
@@ -108,29 +108,46 @@ async function startServer(port: number = 5000): Promise<void> {
       await setupVite(app, server);
     }
 
-    server.listen({
-      port,
-      host: "0.0.0.0",
-    }, () => {
-      log(`Server started on port ${port}`, "startup");
+    // Create a promise to handle server startup
+    const startupPromise = new Promise<void>((resolve, reject) => {
+      server.once('error', (err: any) => {
+        if (err.code === 'EADDRINUSE') {
+          log(`Port ${port} is in use, will try another port`, "startup");
+          server.close();
+          resolve(); // Resolve to allow retry logic to work
+        } else {
+          reject(err);
+        }
+      });
+
+      server.listen({
+        port,
+        host: "0.0.0.0",
+      }, () => {
+        log(`Server started on port ${port}`, "startup");
+        
+        // Handle graceful shutdown
+        const shutdown = () => {
+          log('Shutting down gracefully...', "startup");
+          server.close(() => {
+            log('Server closed', "startup");
+            process.exit(0);
+          });
+        };
+
+        process.on('SIGTERM', shutdown);
+        process.on('SIGINT', shutdown);
+        
+        resolve();
+      });
     });
 
-    // Handle graceful shutdown
-    const shutdown = () => {
-      log('Shutting down gracefully...', "startup");
-      server.close(() => {
-        log('Server closed', "startup");
-        process.exit(0);
-      });
-    };
-
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
+    await startupPromise;
 
   } catch (error: any) {
-    if (error.code === 'EADDRINUSE') {
+    if (error.code === 'EADDRINUSE' && maxRetries > 0) {
       log(`Port ${port} is in use, retrying with port ${port + 1}`, "startup");
-      await startServer(port + 1);
+      await startServer(port + 1, maxRetries - 1);
     } else {
       console.error('[FATAL] Server startup error:', error);
       process.exit(1);
