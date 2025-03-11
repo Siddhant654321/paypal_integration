@@ -246,6 +246,79 @@ export const insertFulfillmentSchema = createInsertSchema(fulfillments)
     additionalNotes: z.string().optional(),
   });
 
+// Add insert schema for auctions
+export const insertAuctionSchema = createInsertSchema(auctions)
+  .omit({
+    id: true,
+    approved: true,
+    currentPrice: true,
+    status: true,
+    paymentStatus: true,
+    paymentDueDate: true,
+    winningBidderId: true,
+    sellerDecision: true,
+    reserveMet: true,
+    fulfillmentRequired: true,
+  })
+  .extend({
+    startPrice: z.number().min(1, "Starting price must be at least $1"),
+    reservePrice: z.number().min(0, "Reserve price cannot be negative"),
+    species: z.string().refine(
+      (val) => ["bantam", "standard", "waterfowl", "quail", "other"].includes(val),
+      "Invalid species"
+    ),
+    category: z.string().refine(
+      (val) => ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(val),
+      "Invalid category"
+    ),
+    startDate: z.string().transform(str => new Date(str)),
+    endDate: z.string().transform(str => new Date(str)),
+    images: z.array(z.string()).optional(),
+  });
+
+// Add insert schema for bids
+export const insertBidSchema = createInsertSchema(bids)
+  .omit({
+    id: true,
+    timestamp: true,
+  })
+  .extend({
+    amount: z.number().min(1, "Bid amount must be positive"),
+  });
+
+// Add insert schema for profiles
+export const insertProfileSchema = createInsertSchema(profiles)
+  .omit({
+    id: true,
+    paypalMerchantId: true,
+    paypalAccountStatus: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    fullName: z.string().min(2, "Full name is required"),
+    email: z.string().email("Invalid email format"),
+    phoneNumber: z.string().min(10, "Valid phone number is required"),
+    address: z.string().min(5, "Valid address is required"),
+    city: z.string().min(2, "City is required"),
+    state: z.string().min(2, "State is required"),
+    zipCode: z.string().min(5, "Valid ZIP code is required"),
+    bio: z.string().optional(),
+    isPublicBio: z.boolean().default(true),
+    profilePicture: z.string().optional(),
+    businessName: z.string().optional(),
+    breedSpecialty: z.string().optional(),
+    npipNumber: z.string().optional(),
+  });
+
+export const insertSellerPayoutSchema = createInsertSchema(sellerPayouts)
+  .omit({
+    id: true,
+    paypalPayoutId: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+  });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -261,12 +334,3 @@ export type SellerPayout = typeof sellerPayouts.$inferSelect;
 export type InsertSellerPayout = z.infer<typeof insertSellerPayoutSchema>;
 export type Fulfillment = typeof fulfillments.$inferSelect;
 export type InsertFulfillment = z.infer<typeof insertFulfillmentSchema>;
-
-export const insertSellerPayoutSchema = createInsertSchema(sellerPayouts)
-  .omit({
-    id: true,
-    paypalPayoutId: true,
-    status: true,
-    createdAt: true,
-    updatedAt: true,
-  });
