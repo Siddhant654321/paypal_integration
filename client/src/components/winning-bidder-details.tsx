@@ -121,9 +121,12 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
 
             <div>
               <h3 className="font-medium">Payment Status</h3>
-              <p className="capitalize">
-                {auction.paymentStatus.replace(/_/g, ' ')}
-              </p>
+              <p className="capitalize">{auction.paymentStatus.replace(/_/g, ' ')}</p>
+              {auction.paymentStatus === 'completed_pending_shipment' && (
+                <p className="text-sm text-yellow-600 mt-1">
+                  Please submit shipping details below to receive your payout
+                </p>
+              )}
             </div>
           </div>
         </CardContent>
