@@ -27,20 +27,27 @@ export default function FulfillmentPage() {
   // Submit fulfillment mutation
   const fulfillMutation = useMutation({
     mutationFn: async (formData) => {
+      console.log("Submitting fulfillment with data:", {
+        ...formData,
+        auctionId: params?.id
+      });
+      
       const response = await fetch(`/api/auctions/${params?.id}/fulfill`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ...formData,
-          auctionId: parseInt(params?.id || '0'),
+          trackingNumber: formData.trackingNumber,
+          carrier: formData.carrier,
+          notes: formData.notes || "",
         }),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to submit fulfillment');
+        const errorData = await response.json();
+        console.error("Fulfillment error response:", errorData);
+        throw new Error(errorData.message || 'Failed to submit fulfillment');
       }
 
       return response.json();

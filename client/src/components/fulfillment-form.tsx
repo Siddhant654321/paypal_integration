@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+//import { ScrollArea } from "@/components/ui/scroll-area"; //Removed ScrollArea import
 
 interface FormData {
   shippingCarrier: string;
@@ -53,7 +53,6 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
 
   return (
     <Form {...form}>
-      <ScrollArea className="h-[400px] pr-4"> 
       <form
         onSubmit={form.handleSubmit(handleSubmit)}
         className="space-y-6"
@@ -111,7 +110,6 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
           Submit Shipping Details
         </Button>
       </form>
-      </ScrollArea>
     </Form>
   );
 }
