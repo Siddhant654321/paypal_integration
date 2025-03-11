@@ -13,6 +13,7 @@ export default function PaymentSuccessPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   // Get orderId from URL search params
   const orderId = new URLSearchParams(window.location.search).get("orderId");
@@ -31,32 +32,53 @@ export default function PaymentSuccessPage() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-      }
+      },
+      credentials: 'include' // Important for auth
     })
     .then(async response => {
-      if (response.ok) {
-        console.log("[Payment Success] Payment captured successfully");
-        setStatus("success");
-        // Refresh user data to update UI
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['/api/profile'] }),
-          queryClient.invalidateQueries({ queryKey: ['/api/auctions'] })
-        ]);
-
-        toast({
-          title: "Payment Successful",
-          description: "Your payment has been processed successfully.",
-        });
-      } else {
+      if (!response.ok) {
         // Try to get detailed error message
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to process payment");
+        throw new Error(data.message || "Failed to process payment", {
+          cause: { code: data.error, status: response.status }
+        });
       }
+      return response.json();
     })
-    .catch((error) => {
+    .then(async data => {
+      console.log("[Payment Success] Payment captured successfully");
+      setStatus("success");
+
+      // Refresh relevant data
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/profile'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/auctions'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/user/bids'] })
+      ]);
+
+      toast({
+        title: "Payment Successful",
+        description: "Your payment has been processed successfully. The seller will be notified to proceed with shipping.",
+      });
+    })
+    .catch((error: Error) => {
       console.error("[Payment Success] Error processing payment:", error);
       setStatus("error");
-      setError(error.message || "An error occurred processing your payment. Please contact support.");
+
+      // Handle specific error cases
+      const cause = (error as any).cause;
+      if (cause?.code === 'INSTRUMENT_DECLINED') {
+        setError("Your payment method was declined. Please try a different payment method.");
+        setErrorCode(cause.code);
+      } else if (cause?.code === 'ORDER_NOT_APPROVED') {
+        setError("Payment not yet approved. Please complete the PayPal checkout process first.");
+        setErrorCode(cause.code);
+      } else if (cause?.status === 404) {
+        setError("Payment record not found. Please contact support if funds were deducted.");
+        setErrorCode('PAYMENT_NOT_FOUND');
+      } else {
+        setError(error.message || "An error occurred processing your payment. Please contact support.");
+      }
 
       toast({
         title: "Payment Error",
@@ -131,12 +153,26 @@ export default function PaymentSuccessPage() {
           {status === "error" && (
             <div className="space-y-4">
               <p>
-                We encountered an issue processing your payment. If funds were deducted from your
-                account, they will be refunded automatically.
+                {errorCode === 'INSTRUMENT_DECLINED' ? (
+                  "Please try again with a different payment method. No charges have been made to your account."
+                ) : errorCode === 'ORDER_NOT_APPROVED' ? (
+                  "Please return to the checkout page and complete the PayPal payment process."
+                ) : (
+                  "We encountered an issue processing your payment. If funds were deducted from your account, they will be refunded automatically."
+                )}
               </p>
               <p className="text-sm">
-                Please contact our support team for assistance.
+                {errorCode ? (
+                  "If you continue to experience issues, please contact our support team."
+                ) : (
+                  "Please contact our support team for assistance."
+                )}
               </p>
+              {errorCode && (
+                <p className="text-xs text-muted-foreground">
+                  Error Code: {errorCode}
+                </p>
+              )}
             </div>
           )}
         </CardContent>

@@ -64,7 +64,8 @@ export class PaymentService {
       console.log("[PAYPAL] Creating checkout session:", {
         auctionId,
         buyerId,
-        includeInsurance
+        includeInsurance,
+        timestamp: new Date().toISOString()
       });
 
       // Get auction details
@@ -188,7 +189,7 @@ export class PaymentService {
     } catch (error) {
       console.error("[PAYPAL] Error creating order:", error);
       if (axios.isAxiosError(error) && error.response) {
-        console.error("PayPal API error:", {
+        console.error("[PAYPAL] API Error Response:", {
           status: error.response.status,
           data: error.response.data
         });
@@ -213,6 +214,11 @@ export class PaymentService {
         auctionId: payment.auctionId,
         status: payment.status
       });
+
+      if (payment.status !== 'pending') {
+        console.error("[PAYPAL] Invalid payment status for capture:", payment.status);
+        throw new Error(`Payment cannot be captured in status: ${payment.status}`);
+      }
 
       const accessToken = await this.getAccessToken();
 
@@ -293,10 +299,9 @@ export class PaymentService {
           data: error.response.data
         });
       }
-      throw new Error("Failed to capture payment");
+      throw error; // Propagate the error to be handled by the route handler
     }
   }
-
   static async releaseFundsToSeller(paymentId: number, trackingInfo: string) {
     try {
       console.log("[PAYPAL] Initiating fund release for payment:", paymentId);

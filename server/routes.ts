@@ -228,44 +228,71 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
   }
 });
 
-// Payment capture endpoint with enhanced logging and error handling
+// Add detailed logging for payment capture endpoint
 router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
   try {
     const orderId = req.params.orderId;
 
-    console.log('[PAYMENT] Capturing payment for order:', {
+    console.log('[PAYMENT CAPTURE] Starting payment capture:', {
       orderId,
       userId: req.user?.id,
       timestamp: new Date().toISOString()
     });
 
     if (!orderId) {
+      console.log('[PAYMENT CAPTURE] Missing orderId parameter');
       return res.status(400).json({ message: "Order ID is required" });
     }
 
-    await PaymentService.handlePaymentSuccess(orderId);
-
-    console.log('[PAYMENT] Payment captured successfully:', {
-      orderId,
-      status: 'completed' 
+    // Verify payment exists and is in correct state
+    const payment = await storage.getPaymentBySessionId(orderId);
+    console.log('[PAYMENT CAPTURE] Found payment record:', {
+      paymentId: payment?.id,
+      status: payment?.status,
+      auctionId: payment?.auctionId
     });
 
+    if (!payment) {
+      console.log('[PAYMENT CAPTURE] Payment record not found');
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    if (payment.status !== 'pending') {
+      console.log('[PAYMENT CAPTURE] Invalid payment status:', payment.status);
+      return res.status(400).json({ message: `Payment cannot be captured in status: ${payment.status}` });
+    }
+
+    // Attempt to capture the payment
+    console.log('[PAYMENT CAPTURE] Attempting to capture payment with PayPal');
+    await PaymentService.handlePaymentSuccess(orderId);
+
+    console.log('[PAYMENT CAPTURE] Payment captured successfully');
     res.json({ success: true });
   } catch (error) {
-    console.error('[PAYMENT] Capture error:', error);
-
-    // Handle specific PayPal capture errors
+    console.error('[PAYMENT CAPTURE] Error:', error);
+    
+    // Log the full error details
     if (error instanceof Error) {
-      if (error.message.includes('ORDER_NOT_APPROVED')) {
-        return res.status(400).json({ 
-          message: "Payment not approved. Please complete the PayPal checkout first." 
-        });
-      }
-      if (error.message.includes('ORDER_ALREADY_CAPTURED')) {
-        return res.status(409).json({ 
-          message: "Payment was already processed." 
-        });
-      }
+      console.error('[PAYMENT CAPTURE] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+    }
+
+    // Handle specific error cases
+    if (error instanceof Error && error.message.includes('INSTRUMENT_DECLINED')) {
+      return res.status(400).json({ 
+        message: "Payment method was declined. Please try a different payment method.",
+        error: 'INSTRUMENT_DECLINED'
+      });
+    }
+
+    if (error instanceof Error && error.message.includes('ORDER_NOT_APPROVED')) {
+      return res.status(400).json({ 
+        message: "Payment not yet approved. Please complete the PayPal checkout first.",
+        error: 'ORDER_NOT_APPROVED'
+      });
     }
 
     res.status(500).json({ 

@@ -1021,19 +1021,19 @@ export class DatabaseStorage implements IStorage {
       log(`Payment ${paymentId} status updated to ${status}`, "payments");
       return payment;
     } catch (error) {
-      log(`Error updating payment status: ${error}`, "payments);
+      log(`Error updating payment status: ${error}`, "payments");
       throw error;
     }
   }
 
-  async createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout> {
+  async createSellerPayOut(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout> {
     try {
       log(`Creating seller payout for seller ${sellerId}`, "payouts");
       const [payout] = await db
         .insert(sellerPayouts)
         .values({
-          sellerId,
           ...data,
+          sellerId,
           createdAt: new Date(),
           updatedAt: new Date()
         })
@@ -1050,14 +1050,14 @@ export class DatabaseStorage implements IStorage {
   async getPaymentsByAuctionId(auctionId: number): Promise<Payment[]> {
     try {
       log(`Getting payments for auction ${auctionId}`, "payments");
-      const result = await db
+      const results = await db
         .select()
         .from(payments)
         .where(eq(payments.auctionId, auctionId))
         .orderBy(desc(payments.createdAt));
 
-      log(`Found ${result.length} payments for auction ${auctionId}`, "payments");
-      return result;
+      log(`Found ${results.length} payments for auction ${auctionId}`, "payments");
+      return results;
     } catch (error) {
       log(`Error getting payments for auction ${auctionId}: ${error}`, "payments");
       throw error;
@@ -1066,68 +1066,31 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     try {
+      log(`Getting user by email ${email}`, "users");
       const [user] = await db
         .select()
         .from(users)
         .where(eq(users.email, email));
       return user;
     } catch (error) {
-      log(`Error getting user by email ${email}: ${error}`);
+      log(`Error getting user by email ${email}: ${error}`, "users");
       throw error;
     }
   }
 
   async deleteBidsForAuction(auctionId: number): Promise<void> {
-    console.log(`[STORAGE] Deleting all bids for auction: ${auctionId}`);
-    await db.delete(bids).where(eq(bids.auctionId, auctionId)).execute();
-  }
-  async updateSellerPayPalAccount(userId: number, data: { merchantId: string; status: string }): Promise<Profile> {
     try {
-      log(`Updating PayPal account for user ${userId} with merchant ID ${data.merchantId}`);
-      const [updatedProfile] = await db
-        .update(profiles)
-        .set({
-          paypalMerchantId: data.merchantId,
-          paypalAccountStatus: data.status as "pending" | "verified" | "not_started"
-        })
-        .where(eq(profiles.userId, userId))
-        .returning();
-
-      log(`Successfully updated PayPal account. New status: ${data.status}`);
-      return updatedProfile;
+      log(`Deleting all bids for auction ${auctionId}`, "bids");
+      await db
+        .delete(bids)
+        .where(eq(bids.auctionId, auctionId));
+      log(`Successfully deleted bids for auction ${auctionId}`, "bids");
     } catch (error) {
-      log(`Error updating seller PayPal account: ${error}`);
+      log(`Error deleting bids for auction ${auctionId}: ${error}`, "bids");
       throw error;
-    }
-  }
-
-  async findPaymentByPayPalId(orderId: string): Promise<Payment | undefined> {
-    try {
-      log(`Finding payment by PayPal order ID: ${orderId}`, "payments");
-      const [payment] = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.paypalOrderId, orderId));
-      return payment;
-    } catch (error) {
-      log(`Error finding payment by PayPal order ID ${orderId}: ${error}`, "payments");
-      throw error;
-    }
-  }
-
-  async findProfileByStripeAccountId(stripeAccountId: string): Promise<Profile | undefined> {
-    try {
-      log(`Finding profile by Stripe account ID: ${stripeAccountId}`, "stripe");
-      const [profile] = await db
-        .select()
-        .from(profiles)
-        .where(eq(profiles.stripeAccountId, stripeAccountId));
-      return profile;
-    } catch (error) {
-      log(`Error finding profile by Stripe account ID ${stripeAccountId}: ${error}`, "stripe");
-      return undefined;
     }
   }
 }
 
+// Export a single instance of the storage interface
 export const storage = new DatabaseStorage();
