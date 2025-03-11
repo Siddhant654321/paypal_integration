@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Auction } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, DollarSign, ExternalLink, AlertCircle, CheckCircle2 } from "lucide-react";
@@ -22,6 +22,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { WinningBidderDetails } from "@/components/winning-bidder-details";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 
 interface PayPalStatus {
   status: "not_started" | "pending" | "verified" | "rejected";
@@ -35,7 +38,9 @@ interface Balance {
 export const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
 
   // Redirect if not a seller
   if (!user || (user.role !== "seller" && user.role !== "seller_admin")) {
@@ -198,6 +203,11 @@ export const SellerDashboard = () => {
     auction.status === "ended" || new Date(auction.endDate) <= now
   );
   const pendingAuctions = filteredAuctions.filter(auction => !auction.approved);
+
+  // Add new handler for viewing winner details
+  const handleViewWinner = (auction: Auction) => {
+    setSelectedAuction(auction);
+  };
 
   // Render account status section
   const renderAccountStatus = () => {
@@ -409,9 +419,48 @@ export const SellerDashboard = () => {
             <TabsContent value="ended">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {completedAuctions.map((auction) => (
-                  <AuctionCard key={auction.id} auction={auction} />
+                  <div key={auction.id} className="space-y-4">
+                    <AuctionCard auction={auction} />
+                    {auction.winningBidderId && (
+                      <Button
+                        onClick={() => handleViewWinner(auction)}
+                        className="w-full"
+                        variant="outline"
+                      >
+                        View Winner Details & Submit Tracking
+                      </Button>
+                    )}
+                  </div>
                 ))}
               </div>
+
+              {/* Winner Details Dialog */}
+              <Dialog
+                open={!!selectedAuction}
+                onOpenChange={(open) => !open && setSelectedAuction(null)}
+              >
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Winner Details & Fulfillment</DialogTitle>
+                    <DialogDescription>
+                      View the winning bidder's details and submit tracking information to receive your payout.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {selectedAuction && (
+                    <WinningBidderDetails
+                      auctionId={selectedAuction.id}
+                      onSuccess={() => {
+                        setSelectedAuction(null);
+                        queryClient.invalidateQueries({ queryKey: ["/api/seller/auctions"] });
+                        toast({
+                          title: "Success",
+                          description: "Tracking information submitted successfully. Your payout will be processed shortly.",
+                        });
+                      }}
+                    />
+                  )}
+                </DialogContent>
+              </Dialog>
             </TabsContent>
           </Tabs>
         </TabsContent>

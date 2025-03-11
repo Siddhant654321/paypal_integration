@@ -14,13 +14,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-interface FormData extends Omit<InsertFulfillment, 'auctionId'> {
+interface FormData {
+  shippingCarrier: string;
+  trackingNumber: string;
   shippingDate: string;
   estimatedDeliveryDate?: string;
+  additionalNotes?: string;
 }
 
 interface FulfillmentFormProps {
-  onSubmit: (data: FormData) => void;
+  onSubmit: (data: { carrier: string; trackingNumber: string }) => void;
   isPending?: boolean;
 }
 
@@ -42,10 +45,17 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
     },
   });
 
+  const handleSubmit = (data: FormData) => {
+    onSubmit({
+      carrier: data.shippingCarrier,
+      trackingNumber: data.trackingNumber
+    });
+  };
+
   return (
     <Form {...form}>
       <form
-        onSubmit={form.handleSubmit(onSubmit)}
+        onSubmit={form.handleSubmit(handleSubmit)}
         className="space-y-6"
       >
         <div className="space-y-4">
