@@ -1,4 +1,3 @@
-
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -49,58 +48,60 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(handleSubmit)}
-        className="space-y-6 overflow-auto max-h-[70vh] px-1 pb-4"
+        className="space-y-6"
       >
-        <FormField
-          control={form.control}
-          name="carrier"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Shipping Carrier</FormLabel>
-              <FormControl>
-                <Input placeholder="USPS, FedEx, UPS, etc." {...field} />
-              </FormControl>
-              <FormDescription>
-                Enter the name of the shipping carrier you used
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="max-h-[70vh] overflow-y-auto px-1 py-4 space-y-6">
+          <FormField
+            control={form.control}
+            name="carrier"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Shipping Carrier</FormLabel>
+                <FormControl>
+                  <Input placeholder="USPS, FedEx, UPS, etc." {...field} />
+                </FormControl>
+                <FormDescription>
+                  Enter the name of the shipping carrier you used
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="trackingNumber"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tracking Number</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter tracking number" {...field} />
-              </FormControl>
-              <FormDescription>
-                Enter the tracking number provided by the carrier
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="trackingNumber"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tracking Number</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter tracking number" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Enter the tracking number provided by the carrier
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Additional Notes (Optional)</FormLabel>
-              <FormControl>
-                <Textarea 
-                  placeholder="Any additional shipping details or notes for the buyer" 
-                  {...field} 
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="notes"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Additional Notes (Optional)</FormLabel>
+                <FormControl>
+                  <Textarea 
+                    placeholder="Any additional shipping details or notes for the buyer" 
+                    {...field} 
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <Button type="submit" className="w-full" disabled={isPending}>
           {isPending ? (

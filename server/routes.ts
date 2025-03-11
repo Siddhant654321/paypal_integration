@@ -939,6 +939,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Check if auction has a winner
         if (!auction.winningBidderId) {
+
+        // Add fulfillment endpoint
+        router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
+          try {
+            const auctionId = parseInt(req.params.id);
+            console.log("[FULFILLMENT] Processing fulfillment request for auction:", {
+              auctionId,
+              userId: req.user?.id,
+              data: req.body
+            });
+
+            // Get auction details
+            const auction = await storage.getAuction(auctionId);
+            if (!auction) {
+              console.log("[FULFILLMENT] Auction not found:", auctionId);
+              return res.status(404).json({ message: "Auction not found" });
+            }
+
+            // Verify seller
+            if (auction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
+              console.log("[FULFILLMENT] Unauthorized fulfillment attempt:", {
+                auctionId,
+                sellerId: auction.sellerId,
+                requesterId: req.user!.id
+              });
+              return res.status(403).json({ message: "Only the seller can submit shipping details" });
+            }
+
+            // Verify payment status allows fulfillment  
+            const payment = await storage.getPaymentByAuctionId(auctionId);
+            if (!payment) {
+              console.log("[FULFILLMENT] No payment found for auction:", auctionId);
+              return res.status(400).json({ message: "No payment record found for this auction" });
+            }
+
+            if (payment.status !== "completed_pending_shipment") {
+              console.log("[FULFILLMENT] Invalid payment status for fulfillment:", {
+                auctionId,
+                status: payment.status
+              });
+              return res.status(400).json({ 
+                message: "Cannot submit shipping details at this time",
+                currentStatus: payment.status
+              });
+            }
+
+            // Validate tracking info
+            const { carrier, trackingNumber, notes } = req.body;
+            if (!carrier || !trackingNumber) {
+              return res.status(400).json({ message: "Carrier and tracking number are required" });
+            }
+
+            const trackingInfo = `${carrier}: ${trackingNumber}${notes ? ` (${notes})` : ''}`;
+
+            // Process fulfillment
+            console.log("[FULFILLMENT] Processing fulfillment with tracking info:", {
+              auctionId,
+              paymentId: payment.id,
+              trackingInfo
+            });
+
+            await PaymentService.releaseFundsToSeller(payment.id, trackingInfo);
+
+            console.log("[FULFILLMENT] Fulfillment completed successfully:", {
+              auctionId,
+              paymentId: payment.id
+            });
+
+            res.json({ success: true, message: "Shipping details submitted successfully" });
+          } catch (error) {
+            console.error("[FULFILLMENT] Error processing fulfillment:", error);
+            res.status(500).json({ 
+              message: error instanceof Error ? error.message : "Failed to process shipping details"
+            });
+          }
+        });
+
           console.log(`[WINNER] No winner found for auction ${auctionId}`);
           return res.status(404).json({ message: "No winning bidder for this auction" });
         }
@@ -1063,98 +1140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
-    // Add fulfillment endpoint
-    router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
-      try {
-        const auctionId = parseInt(req.params.id);
-        const { carrier, trackingNumber, notes } = req.body;
 
-        console.log(`[FULFILLMENT] Processing fulfillment for auction ${auctionId}`, {
-          carrier,
-          trackingNumber: trackingNumber ? trackingNumber.substring(0, 8) + "..." : "missing",
-          notes: notes ? "provided" : "not provided"
-        });
-
-        // Validate input
-        if (!carrier || !trackingNumber) {
-          return res.status(400).json({ message: "Carrier and tracking number are required" });
-        }
-
-        // Get auction
-        const auction = await storage.getAuction(auctionId);
-        if (!auction) {
-          return res.status(404).json({ message: "Auction not found" });
-        }
-
-        // Verify seller
-        if (auction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
-          return res.status(403).json({ message: "Only the seller can submit fulfillment details" });
-        }
-
-        try {
-          // Create fulfillment record
-          const fulfillment = await storage.createFulfillment({
-            auctionId,
-            sellerId: auction.sellerId,
-            buyerId: auction.winningBidderId!,
-            shippingCarrier: carrier,
-            trackingNumber,
-            additionalNotes: notes,
-            status: "shipped",
-            shippingDate: new Date(),
-          });
-          
-          // Update auction status
-          await storage.updateAuction(auctionId, {
-            status: "fulfilled",
-          });
-
-          // Find the payment for this auction
-          const payment = await storage.findPaymentByAuctionId(auctionId);
-          if (payment && payment.status === "completed" && !payment.payoutProcessed) {
-            try {
-              // Now that we have tracking info, create the payout to the seller
-              await SellerPaymentService.createPayout(
-                payment.id,
-                auction.sellerId,
-                payment.sellerPayout
-              );
-
-              // Mark that payout has been processed
-              await storage.markPaymentPayoutProcessed(payment.id);
-            } catch (payoutError) {
-              console.error("[FULFILLMENT] Error processing seller payout:", payoutError);
-              // We'll still mark the auction as fulfilled, but log the payout error
-            }
-          }
-
-          // Notify the buyer
-          if (auction.winningBidderId) {
-            await NotificationService.notifyFulfillment(
-              auction.winningBidderId,
-              auction.title,
-              trackingNumber,
-              carrier
-            );
-          }
-
-          console.log(`[FULFILLMENT] Successfully processed fulfillment for auction ${auctionId}`);
-          res.status(200).json({ success: true, fulfillment });
-        } catch (storageError) {
-          console.error("[FULFILLMENT] Error creating fulfillment record:", storageError);
-          return res.status(500).json({ 
-            message: "Failed to create fulfillment record", 
-            error: storageError instanceof Error ? storageError.message : "Unknown error" 
-          });
-        }
-      } catch (error) {
-        console.error("[FULFILLMENT] Error processing fulfillment:", error);
-        res.status(500).json({ 
-          message: "Failed to process fulfillment",
-          error: error instanceof Error ? error.message : "Unknown error"
-        });
-      }
-    });
 
     // Update the auction approval endpoint
     router.post("/api/admin/auctions/:id/approve", requireAdmin, async (req, res) => {
