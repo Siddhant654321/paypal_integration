@@ -1090,6 +1090,29 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+  async getPaymentByAuctionId(auctionId: number): Promise<Payment | undefined> {
+    try {
+      log(`Getting payment for auction ${auctionId}`, "payments");
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.auctionId, auctionId))
+        .orderBy(desc(payments.createdAt))
+        .limit(1);
+
+      if (payment) {
+        log(`Found payment record for auction ${auctionId}: status=${payment.status}`, "payments");
+      } else {
+        log(`No payment record found for auction ${auctionId}`, "payments");
+      }
+
+      return payment;
+    } catch (error) {
+      log(`Error getting payment for auction ${auctionId}: ${error}`, "payments");
+      throw error;
+    }
+  }
+
 }
 
 // Export a single instance of the storage interface

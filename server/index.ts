@@ -139,6 +139,18 @@ async function startServer(port: number = 5000, maxRetries: number = 10): Promis
         process.on('SIGINT', shutdown);
         
         resolve();
+      }).on('error', (err: any) => {
+        if (err.code === 'EADDRINUSE') {
+          log(`Port ${port} is in use, trying port ${port + 1}`, "startup");
+          server.close();
+          if (maxRetries > 0) {
+            startServer(port + 1, maxRetries - 1).then(resolve).catch(reject);
+          } else {
+            reject(new Error("Failed to find an available port after multiple attempts"));
+          }
+        } else {
+          reject(err);
+        }
       });
     });
 

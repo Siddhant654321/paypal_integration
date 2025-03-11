@@ -1,20 +1,29 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FulfillmentForm } from "@/components/fulfillment-form";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMutation } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
-interface WinnerDetails {
-  fullName: string;
-  email: string;
-  phoneNumber: string;
-  address: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  paymentStatus: "pending" | "completed_pending_shipment" | "completed" | "failed";
+interface WinnerResponse {
+  auction: {
+    id: number;
+    title: string;
+    currentPrice: number;
+    status: string;
+    paymentStatus: "pending" | "completed_pending_shipment" | "completed" | "failed";
+  };
+  profile: {
+    fullName: string;
+    email: string;
+    phoneNumber: string;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
 }
 
 interface Props {
@@ -24,7 +33,7 @@ interface Props {
 
 export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
   // Fetch winning bidder details including shipping address
-  const { data: bidderDetails, isLoading } = useQuery<WinnerDetails>({
+  const { data, isLoading, error } = useQuery<WinnerResponse>({
     queryKey: [`/api/auctions/${auctionId}/winner`],
     enabled: !!auctionId,
   });
@@ -57,12 +66,36 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
   });
 
   if (isLoading) {
-    return <Skeleton className="w-full h-48" />;
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-3/4" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
   }
 
-  if (!bidderDetails) {
-    return <div>No winning bidder information available</div>;
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          {error instanceof Error ? error.message : 'Failed to load winner details'}
+        </AlertDescription>
+      </Alert>
+    );
   }
+
+  if (!data) {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>No winning bidder information available</AlertDescription>
+      </Alert>
+    );
+  }
+
+  const { auction, profile } = data;
 
   return (
     <div className="space-y-6">
@@ -74,28 +107,28 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
           <div className="space-y-4">
             <div>
               <h3 className="font-medium">Contact Information</h3>
-              <p>{bidderDetails.fullName}</p>
-              <p>{bidderDetails.email}</p>
-              <p>{bidderDetails.phoneNumber}</p>
+              <p>{profile.fullName}</p>
+              <p>{profile.email}</p>
+              <p>{profile.phoneNumber}</p>
             </div>
 
             <div>
               <h3 className="font-medium">Shipping Address</h3>
-              <p>{bidderDetails.address}</p>
-              <p>{bidderDetails.city}, {bidderDetails.state} {bidderDetails.zipCode}</p>
+              <p>{profile.address}</p>
+              <p>{profile.city}, {profile.state} {profile.zipCode}</p>
             </div>
 
             <div>
               <h3 className="font-medium">Payment Status</h3>
               <p className="capitalize">
-                {bidderDetails.paymentStatus.replace(/_/g, ' ')}
+                {auction.paymentStatus.replace(/_/g, ' ')}
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {bidderDetails.paymentStatus === 'completed_pending_shipment' && (
+      {auction.paymentStatus === 'completed_pending_shipment' && (
         <Card>
           <CardHeader>
             <CardTitle>Submit Shipping Details</CardTitle>
