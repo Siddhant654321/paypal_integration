@@ -14,6 +14,8 @@ import NewAuction from "@/pages/new-auction";
 import AdminDashboard from "@/pages/admin-dashboard";
 import ProfilePage from "@/pages/profile-page";
 import PaymentPage from "@/pages/payment-page";
+import PaymentSuccessPage from "@/pages/payment-success";
+import PaymentFailurePage from "@/pages/payment-failure";
 import AnalyticsPage from "@/pages/analytics-page";
 import FulfillmentPage from "@/pages/fulfillment-page";
 import SellerProfilePage from "@/pages/seller-profile";
@@ -31,6 +33,8 @@ function Router() {
         <Route path="/profile" component={ProfilePage} />
         <Route path="/auction/:id" component={AuctionPage} />
         <Route path="/auction/:id/pay" component={PaymentPage} />
+        <Route path="/payment-success" component={PaymentSuccessPage} />
+        <Route path="/payment-failure" component={PaymentFailurePage} />
         <Route path="/seller/dashboard" component={SellerDashboard} />
         <Route path="/seller/auction/new" component={NewAuction} />
         <Route path="/seller/fulfill/:id" component={FulfillmentPage} />
