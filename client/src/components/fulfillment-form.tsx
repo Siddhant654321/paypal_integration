@@ -14,19 +14,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// List of common shipping carriers
-const SHIPPING_CARRIERS = [
-  { id: "usps", name: "USPS" },
-  { id: "ups", name: "UPS" },
-  { id: "fedex", name: "FedEx" },
-  { id: "dhl", name: "DHL" },
-] as const;
 
 // Simplified schema for fulfillment form
 const fulfillmentFormSchema = z.object({
-  carrier: z.string().min(1, "Please select a shipping carrier"),
+  carrier: z.string().min(2, "Carrier name is required"),
   trackingNumber: z.string().min(4, "Valid tracking number is required"),
   notes: z.string().optional()
 });
@@ -65,28 +56,11 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Shipping Carrier</FormLabel>
-              <Select 
-                onValueChange={field.onChange} 
-                defaultValue={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a shipping carrier" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {SHIPPING_CARRIERS.map((carrier) => (
-                    <SelectItem 
-                      key={carrier.id} 
-                      value={carrier.name}
-                    >
-                      {carrier.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <Input placeholder="USPS, FedEx, UPS, etc." {...field} />
+              </FormControl>
               <FormDescription>
-                Choose your shipping carrier from the list
+                Enter the name of the shipping carrier you used
               </FormDescription>
               <FormMessage />
             </FormItem>
