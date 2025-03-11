@@ -231,7 +231,7 @@ export class SellerPaymentService {
         items: [{
           recipient_type: "PAYPAL_ID",
           amount: {
-            value: (amount / 100).toFixed(2),
+            value: (amount / 100).toFixed(2), // Convert cents to dollars
             currency: "USD"
           },
           receiver: profile.paypalMerchantId,

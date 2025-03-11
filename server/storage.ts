@@ -52,6 +52,9 @@ export interface IStorage {
   deleteBid(bidId: number): Promise<void>;
   deleteBidsForAuction(auctionId: number): Promise<void>;
   updateSellerPayPalAccount(userId: number, data: { merchantId: string; status: string }): Promise<Profile>;
+  getPayment(id: number): Promise<Payment | undefined>;
+  updatePayment(id: number, updates: Partial<Payment>): Promise<Payment>;
+  getPaymentBySessionId(sessionId: string): Promise<Payment | undefined>;
 }
 
 // Implementation of the storage interface
@@ -586,17 +589,24 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getPaymentBySessionId(sessionId: string): Promise<any | undefined> {
+  async getPaymentBySessionId(sessionId: string): Promise<Payment | undefined> {
     try {
+      log(`Finding payment by session ID: ${sessionId}`, "payments");
       const [payment] = await db
         .select()
         .from(payments)
-        .where(eq(payments.paypalOrderId, sessionId))
-        .limit(1);
+        .where(eq(payments.paypalOrderId, sessionId));
+
+      if (payment) {
+        log(`Found payment ${payment.id} for session ${sessionId}`, "payments");
+      } else {
+        log(`No payment found for session ${sessionId}`, "payments");
+      }
+
       return payment;
     } catch (error) {
-      console.error(`Error getting payment by session ID ${sessionId}:`, error);
-      return undefined;
+      log(`Error finding payment by session ID ${sessionId}: ${error}`, "payments");
+      throw error;
     }
   }
 
@@ -952,6 +962,44 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getPayment(id: number): Promise<Payment | undefined> {
+    try {
+      log(`Getting payment ${id}`, "payments");
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.id, id));
+      return payment;
+    } catch (error) {
+      log(`Error getting payment ${id}: ${error}`, "payments");
+      throw error;
+    }
+  }
+
+  async updatePayment(id: number, updates: Partial<Payment>): Promise<Payment> {
+    try {
+      log(`Updating payment ${id} with:`, updates);
+      const [payment] = await db
+        .update(payments)
+        .set({
+          ...updates,
+          updatedAt: new Date()
+        })
+        .where(eq(payments.id, id))
+        .returning();
+
+      if (!payment) {
+        throw new Error(`Payment ${id} not found`);
+      }
+
+      log(`Successfully updated payment ${id}`, "payments");
+      return payment;
+    } catch (error) {
+      log(`Error updating payment ${id}: ${error}`, "payments");
+      throw error;
+    }
+  }
+
 
   async updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment> {
     try {
@@ -960,7 +1008,8 @@ export class DatabaseStorage implements IStorage {
         .update(payments)
         .set({ 
           status,
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          completedAt: status === "completed" ? new Date() : undefined
         })
         .where(eq(payments.id, paymentId))
         .returning();
@@ -972,7 +1021,7 @@ export class DatabaseStorage implements IStorage {
       log(`Payment ${paymentId} status updated to ${status}`, "payments");
       return payment;
     } catch (error) {
-      log(`Error updating payment status: ${error}`, "payments");
+      log(`Error updating payment status: ${error}`, "payments);
       throw error;
     }
   }

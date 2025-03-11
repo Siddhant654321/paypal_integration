@@ -93,7 +93,7 @@ export const auctions = pgTable("auctions", {
     enum: ["active", "ended", "pending_seller_decision", "voided", "pending_fulfillment", "fulfilled"],
   }).notNull().default("active"),
   paymentStatus: text("payment_status", {
-    enum: ["pending", "processing", "completed", "failed"],
+    enum: ["pending", "completed_pending_shipment", "completed", "failed"],
   }).notNull().default("pending"),
   paymentDueDate: timestamp("payment_due_date"),
   winningBidderId: integer("winning_bidder_id"),
@@ -123,13 +123,36 @@ export const payments = pgTable("payments", {
   sellerPayout: integer("seller_payout").notNull(), // in cents
   insuranceFee: integer("insurance_fee").notNull(), // in cents
   paypalOrderId: varchar("paypal_order_id", { length: 256 }),
-  status: varchar("status", { enum: ["pending", "completed", "failed"] }).notNull(),
+  status: varchar("status", {
+    enum: ["pending", "completed_pending_shipment", "completed", "failed"]
+  }).notNull(),
+  trackingInfo: text("tracking_info"),
   payoutProcessed: boolean("payout_processed").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
 });
 
-// Seller payouts schema
+// Update payment status type
+export type PaymentStatus = "pending" | "completed_pending_shipment" | "completed" | "failed";
+
+// Update the insert payment schema
+export const insertPaymentSchema = createInsertSchema(payments)
+  .omit({
+    id: true,
+    paypalOrderId: true,
+    status: true,
+    trackingInfo: true,
+    createdAt: true,
+    updatedAt: true,
+    completedAt: true,
+  })
+  .extend({
+    payoutProcessed: z.boolean().default(false).optional()
+  });
+
+
+// Add seller payout schemas
 export const sellerPayouts = pgTable("seller_payouts", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").notNull().references(() => users.id),
@@ -142,119 +165,6 @@ export const sellerPayouts = pgTable("seller_payouts", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
-
-export const fulfillments = pgTable("fulfillments", {
-  id: serial("id").primaryKey(),
-  auctionId: integer("auction_id").notNull().unique(),
-  shippingCarrier: text("shipping_carrier").notNull(),
-  trackingNumber: text("tracking_number").notNull(),
-  shippingDate: timestamp("shipping_date").notNull(),
-  estimatedDeliveryDate: timestamp("estimated_delivery_date"),
-  additionalNotes: text("additional_notes"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-export const insertProfileSchema = createInsertSchema(profiles)
-  .omit({
-    id: true,
-    userId: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    fullName: z.string().min(2, "Full name must be at least 2 characters"),
-    email: z.string().email(),
-    phoneNumber: z.string().regex(/^\+?[\d\s-()]{10,}$/, "Invalid phone number format"),
-    address: z.string().min(5, "Address must be at least 5 characters"),
-    city: z.string().min(2, "City must be at least 2 characters"),
-    state: z.string().min(2, "State must be at least 2 characters"),
-    zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, "Invalid ZIP code format"),
-    bio: z.string().optional(),
-    isPublicBio: z.boolean().default(true),
-    profilePicture: z.string().optional(),
-    businessName: z.string().optional(),
-    breedSpecialty: z.string().optional(),
-    npipNumber: z.string().optional(),
-    // Add notification preferences to schema
-    emailBidNotifications: z.boolean().default(true),
-    emailAuctionNotifications: z.boolean().default(true),
-    emailPaymentNotifications: z.boolean().default(true),
-    emailAdminNotifications: z.boolean().default(true),
-  });
-
-export const insertAuctionSchema = createInsertSchema(auctions)
-  .omit({
-    id: true,
-    sellerId: true,
-    approved: true,
-    currentPrice: true,
-    paymentStatus: true,
-    paymentDueDate: true,
-    winningBidderId: true,
-    status: true,
-    sellerDecision: true,
-    reserveMet: true,
-    fulfillmentRequired: true
-  })
-  .extend({
-    title: z.string().min(5, "Title must be at least 5 characters"),
-    description: z.string().min(20, "Description must be at least 20 characters"),
-    species: z.string(),
-    category: z.string(),
-    startPrice: z.number().or(z.string().transform(val => Number(val)))
-      .refine(val => !isNaN(val) && val > 0, "Start price must be greater than 0"),
-    reservePrice: z.number().or(z.string().transform(val => Number(val)))
-      .refine(val => !isNaN(val) && val >= 0, "Reserve price must be valid"),
-    startDate: z.date().or(z.string().transform(val => new Date(val))),
-    endDate: z.date().or(z.string().transform(val => new Date(val))),
-    imageUrl: z.string().optional(),
-    images: z.array(z.string()).optional().default([]),
-  })
-  .refine(
-    (data) => {
-      const reservePrice = Number(data.reservePrice);
-      const startPrice = Number(data.startPrice);
-      return reservePrice >= startPrice;
-    },
-    "Reserve price must be greater than or equal to start price"
-  )
-  .refine(
-    (data) => {
-      const start = new Date(data.startDate);
-      const end = new Date(data.endDate);
-      return end > start;
-    },
-    "End date must be after start date"
-  );
-
-export const insertBidSchema = createInsertSchema(bids).omit({
-  id: true,
-  timestamp: true,
-});
-
-// Update the payment schema
-export const insertPaymentSchema = createInsertSchema(payments)
-  .omit({
-    id: true,
-    paypalOrderId: true,
-    status: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    payoutProcessed: z.boolean().default(false).optional()
-  });
-
-// Add seller payout schemas
-export const insertSellerPayoutSchema = createInsertSchema(sellerPayouts)
-  .omit({
-    id: true,
-    paypalPayoutId: true,
-    status: true,
-    createdAt: true,
-    updatedAt: true,
-  });
 
 export const buyerRequests = pgTable("buyer_requests", {
   id: serial("id").primaryKey(),
@@ -310,6 +220,18 @@ export const insertUserSchema = createInsertSchema(users)
     role: z.enum(["buyer", "seller"]), // Restrict roles to only buyer and seller for registration
   });
 
+export const fulfillments = pgTable("fulfillments", {
+  id: serial("id").primaryKey(),
+  auctionId: integer("auction_id").notNull().unique(),
+  shippingCarrier: text("shipping_carrier").notNull(),
+  trackingNumber: text("tracking_number").notNull(),
+  shippingDate: timestamp("shipping_date").notNull(),
+  estimatedDeliveryDate: timestamp("estimated_delivery_date"),
+  additionalNotes: text("additional_notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const insertFulfillmentSchema = createInsertSchema(fulfillments)
   .omit({
     id: true,
@@ -340,5 +262,11 @@ export type InsertSellerPayout = z.infer<typeof insertSellerPayoutSchema>;
 export type Fulfillment = typeof fulfillments.$inferSelect;
 export type InsertFulfillment = z.infer<typeof insertFulfillmentSchema>;
 
-// Update the payment status type
-export type PaymentStatus = "pending" | "processing" | "completed" | "failed";
+export const insertSellerPayoutSchema = createInsertSchema(sellerPayouts)
+  .omit({
+    id: true,
+    paypalPayoutId: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+  });
