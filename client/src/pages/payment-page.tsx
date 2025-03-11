@@ -16,7 +16,7 @@ const INSURANCE_FEE = 800; // $8.00 in cents
 
 export default function PaymentPage() {
   const { id } = useParams<{ id: string }>();
-  const location = useLocation();
+  const [, setLocation] = useLocation();
   const auctionId = parseInt(id || "0");
   const { data: auction, isLoading: isAuctionLoading } = useAuction(auctionId);
   const [includeInsurance, setIncludeInsurance] = useState(false);
@@ -75,27 +75,28 @@ export default function PaymentPage() {
 
   const onApprove = async (data: { orderID: string }) => {
     try {
-      console.log("[PayPal] Payment approved, capturing payment:", data.orderID);
-
-      const response = await fetch(`/api/payments/${data.orderID}/capture`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to capture payment");
-      }
-
-      // Redirect to success page
-      window.location.href = `/payment-success?order=${data.orderID}`;
+      console.log("[PayPal] Payment approved, redirecting to success page:", data.orderID);
+      // Redirect to success page and let it handle the capture
+      window.location.href = `/payment-success?orderId=${data.orderID}`;
     } catch (error) {
-      console.error("[PayPal] Payment capture error:", error);
-      setPaymentError(error instanceof Error ? error.message : "Payment capture failed");
-      setIsProcessing(false);
+      console.error("[PayPal] Payment approval error:", error);
+      window.location.href = `/payment-failure?orderId=${data.orderID}&error=${encodeURIComponent(error instanceof Error ? error.message : "Payment failed")}`;
     }
+  };
+
+  const onError = (err: any) => {
+    console.error("[PayPal] Button error:", err);
+    setPaymentError("Payment failed. Please try again.");
+    setIsProcessing(false);
+    // Redirect to failure page
+    window.location.href = `/payment-failure?error=${encodeURIComponent("Payment processing failed. Please try again.")}`;
+  };
+
+  const onCancel = () => {
+    console.log("[PayPal] Payment cancelled by user");
+    setIsProcessing(false);
+    // Redirect to failure page with cancelled status
+    window.location.href = `/payment-failure?error=${encodeURIComponent("Payment was cancelled.")}`;
   };
 
   if (isAuctionLoading) {
@@ -168,11 +169,8 @@ export default function PaymentPage() {
               disabled={isProcessing}
               createOrder={createOrder}
               onApprove={onApprove}
-              onError={(err) => {
-                console.error("[PayPal] Button error:", err);
-                setPaymentError("Payment failed. Please try again.");
-                setIsProcessing(false);
-              }}
+              onError={onError}
+              onCancel={onCancel}
             />
           </CardFooter>
         </Card>
