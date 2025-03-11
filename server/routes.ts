@@ -1067,11 +1067,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
-        const { carrier, trackingNumber } = req.body;
+        const { carrier, trackingNumber, notes } = req.body;
 
         console.log(`[FULFILLMENT] Processing fulfillment for auction ${auctionId}`, {
           carrier,
-          trackingNumber: trackingNumber.substring(0, 8) + "..."
+          trackingNumber: trackingNumber ? trackingNumber.substring(0, 8) + "..." : "missing",
+          notes: notes ? "provided" : "not provided"
         });
 
         // Validate input
@@ -1090,37 +1091,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "Only the seller can submit fulfillment details" });
         }
 
-        // Get payment
-        const payment = await storage.getPaymentByAuctionId(auctionId);
-        if (!payment) {
-          return res.status(404).json({ message: "Payment record not found" });
-        }
+        try {
+          // Create fulfillment record
+          const fulfillment = await storage.createFulfillment({
+            auctionId,
+            sellerId: auction.sellerId,
+            buyerId: auction.winningBidderId!,
+            shippingCarrier: carrier,
+            trackingNumber,
+            additionalNotes: notes,
+            status: "shipped",
+            shippingDate: new Date(),
+          });
+          
+          // Update auction status
+          await storage.updateAuction(auctionId, {
+            status: "fulfilled",
+          });
 
-        if (payment.status !== "completed_pending_shipment") {
-          return res.status(400).json({ 
-            message: "Payment must be completed and pending shipment to submit tracking" 
+          // Find the payment for this auction
+          const payment = await storage.findPaymentByAuctionId(auctionId);
+          if (payment && payment.status === "completed" && !payment.payoutProcessed) {
+            try {
+              // Now that we have tracking info, create the payout to the seller
+              await SellerPaymentService.createPayout(
+                payment.id,
+                auction.sellerId,
+                payment.sellerPayout
+              );
+
+              // Mark that payout has been processed
+              await storage.markPaymentPayoutProcessed(payment.id);
+            } catch (payoutError) {
+              console.error("[FULFILLMENT] Error processing seller payout:", payoutError);
+              // We'll still mark the auction as fulfilled, but log the payout error
+            }
+          }
+
+          // Notify the buyer
+          if (auction.winningBidderId) {
+            await NotificationService.notifyFulfillment(
+              auction.winningBidderId,
+              auction.title,
+              trackingNumber,
+              carrier
+            );
+          }
+
+          console.log(`[FULFILLMENT] Successfully processed fulfillment for auction ${auctionId}`);
+          res.status(200).json({ success: true, fulfillment });
+        } catch (storageError) {
+          console.error("[FULFILLMENT] Error creating fulfillment record:", storageError);
+          return res.status(500).json({ 
+            message: "Failed to create fulfillment record", 
+            error: storageError instanceof Error ? storageError.message : "Unknown error" 
           });
         }
-
-        // Create fulfillment record
-        const fulfillment = await storage.createFulfillment({
-          auctionId,
-          sellerId: auction.sellerId,
-          buyerId: auction.winningBidderId!,
-          shippingCarrier: carrier,
-          trackingNumber,
-          status: "shipped",
-          shippingDate: new Date(),
-        });
-
-        // Release funds to seller
-        await PaymentService.releaseFundsToSeller(payment.id, `${carrier}: ${trackingNumber}`);
-
-        console.log(`[FULFILLMENT] Successfully processed fulfillment for auction ${auctionId}`);
-        res.json(fulfillment);
       } catch (error) {
         console.error("[FULFILLMENT] Error processing fulfillment:", error);
-        res.status(500).json({ message: "Failed to process fulfillment" });
+        res.status(500).json({ 
+          message: "Failed to process fulfillment",
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
       }
     });
 

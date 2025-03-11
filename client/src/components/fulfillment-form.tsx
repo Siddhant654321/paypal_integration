@@ -1,6 +1,7 @@
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertFulfillmentSchema } from "@shared/schema";
+import { z } from "zod";
 import { Loader2 } from "lucide-react";
 import {
   Form,
@@ -13,100 +14,103 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
-interface FormData {
-  shippingCarrier: string;
-  trackingNumber: string;
-}
+// Simplified schema for fulfillment form
+const fulfillmentFormSchema = z.object({
+  carrier: z.string().min(2, "Carrier name is required"),
+  trackingNumber: z.string().min(4, "Valid tracking number is required"),
+  notes: z.string().optional()
+});
+
+type FulfillmentFormValues = z.infer<typeof fulfillmentFormSchema>;
 
 interface FulfillmentFormProps {
-  onSubmit: (data: { carrier: string; trackingNumber: string }) => void;
+  onSubmit: (data: FulfillmentFormValues) => void;
   isPending?: boolean;
 }
 
 export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
-  const form = useForm<FormData>({
-    resolver: zodResolver(
-      insertFulfillmentSchema
-        .pick({ shippingCarrier: true, trackingNumber: true })
-        .extend({
-          shippingCarrier: insertFulfillmentSchema.shape.shippingCarrier
-            .min(2, "Please enter a valid carrier name"),
-          trackingNumber: insertFulfillmentSchema.shape.trackingNumber
-            .min(4, "Please enter a valid tracking number")
-        })
-    ),
+  const form = useForm<FulfillmentFormValues>({
+    resolver: zodResolver(fulfillmentFormSchema),
     defaultValues: {
-      shippingCarrier: "",
+      carrier: "",
       trackingNumber: "",
+      notes: ""
     },
   });
 
-  const handleSubmit = (data: FormData) => {
+  const handleSubmit = (data: FulfillmentFormValues) => {
     console.log("Submitting fulfillment data:", data);
-    onSubmit({
-      carrier: data.shippingCarrier,
-      trackingNumber: data.trackingNumber
-    });
+    onSubmit(data);
   };
 
   return (
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(handleSubmit)}
-        className="space-y-6"
+        className="space-y-6 overflow-auto max-h-[70vh] px-1 pb-4"
       >
-        <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="shippingCarrier"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center gap-1">
-                  Shipping Carrier
-                  <span className="text-red-500">*</span>
-                </FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="USPS, FedEx, UPS, etc." />
-                </FormControl>
-                <FormDescription>
-                  Enter the carrier that will deliver the package
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="trackingNumber"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center gap-1">
-                  Tracking Number
-                  <span className="text-red-500">*</span>
-                </FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="Enter tracking number" />
-                </FormControl>
-                <FormDescription>
-                  The tracking number provided by the shipping carrier
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={isPending}
-        >
-          {isPending && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <FormField
+          control={form.control}
+          name="carrier"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Shipping Carrier</FormLabel>
+              <FormControl>
+                <Input placeholder="USPS, FedEx, UPS, etc." {...field} />
+              </FormControl>
+              <FormDescription>
+                Enter the name of the shipping carrier you used
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
           )}
-          Submit Shipping Details
+        />
+
+        <FormField
+          control={form.control}
+          name="trackingNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tracking Number</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter tracking number" {...field} />
+              </FormControl>
+              <FormDescription>
+                Enter the tracking number provided by the carrier
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="notes"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Additional Notes (Optional)</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Any additional shipping details or notes for the buyer" 
+                  {...field} 
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button type="submit" className="w-full" disabled={isPending}>
+          {isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Submitting...
+            </>
+          ) : (
+            "Submit Shipping Details"
+          )}
         </Button>
       </form>
     </Form>

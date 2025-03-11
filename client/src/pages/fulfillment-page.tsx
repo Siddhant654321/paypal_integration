@@ -27,23 +27,41 @@ export default function FulfillmentPage() {
   // Submit fulfillment mutation
   const fulfillMutation = useMutation({
     mutationFn: async (formData) => {
-      const response = await fetch(`/api/auctions/${params?.id}/fulfill`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          auctionId: parseInt(params?.id || '0'),
-        }),
+      console.log("Submitting fulfillment with data:", {
+        ...formData,
+        auctionId: params?.id
       });
+      
+      try {
+        const response = await fetch(`/api/auctions/${params?.id}/fulfill`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            trackingNumber: formData.trackingNumber,
+            carrier: formData.carrier,
+            notes: formData.notes || "",
+            // Add fallback values for required fields
+            shippingDate: new Date().toISOString(),
+            status: "shipped"
+          }),
+          credentials: 'include' // Include credentials for auth
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to submit fulfillment');
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("Fulfillment error response:", errorData);
+          throw new Error(errorData.message || 'Failed to submit fulfillment');
+        }
+        
+        const result = await response.json();
+        console.log("Fulfillment success response:", result);
+        return result;
+      } catch (error) {
+        console.error("Fulfillment submission error:", error);
+        throw error;
       }
-
-      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -80,9 +98,9 @@ export default function FulfillmentPage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto py-4 px-4 md:py-8 md:px-8 overflow-y-auto" style={{ maxHeight: "calc(100vh - 80px)" }}>
       <Link href="/seller/dashboard">
-        <Button variant="ghost" className="mb-6">
+        <Button variant="ghost" className="mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Dashboard
         </Button>
