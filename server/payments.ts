@@ -77,7 +77,7 @@ export class PaymentService {
 
       const accessToken = await this.getAccessToken();
 
-      // Create PayPal order
+      // Create PayPal order - values are already in cents, so divide by 100 for dollar display
       const orderRequest = {
         intent: "CAPTURE",
         purchase_units: [
@@ -138,6 +138,7 @@ export class PaymentService {
       const payment = await storage.insertPayment({
         auctionId,
         buyerId,
+        sellerId: auction.sellerId, // Add the seller ID
         amount: totalAmount,
         platformFee,
         insuranceFee,
