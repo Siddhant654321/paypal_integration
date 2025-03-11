@@ -1,11 +1,11 @@
 
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { CheckCircle2, XCircle, ExternalLink } from "lucide-react";
-import { LoadingSpinner } from "../components/ui/loading-spinner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 
 export default function PaymentSuccessPage() {
   const [searchParams] = useSearchParams();
@@ -27,7 +27,8 @@ export default function PaymentSuccessPage() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-      }
+      },
+      credentials: 'include'
     })
     .then(response => {
       if (response.ok) {
@@ -41,6 +42,7 @@ export default function PaymentSuccessPage() {
       }
     })
     .catch((error) => {
+      console.error("[PayPal] Payment capture error:", error);
       setStatus("error");
       setError(error.message || "An error occurred processing your payment. Please contact support.");
     });
@@ -133,7 +135,7 @@ export default function PaymentSuccessPage() {
               <Button variant="outline" onClick={() => navigate(-1)}>
                 Go Back
               </Button>
-              <Button>
+              <Button onClick={() => navigate("/contact")}>
                 Contact Support
                 <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
