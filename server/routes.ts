@@ -2252,6 +2252,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const auctionId = parseInt(req.params.id);
         const { trackingNumber, carrier, notes } = req.body;
 
+        console.log("[FULFILLMENT] Processing fulfillment for auction", {
+          auctionId,
+          requestBody: req.body,
+          trackingNumber,
+          carrier,
+          userId: req.user?.id
+        });
+
         // Verify auction belongs to seller
         const auction = await storage.getAuction(auctionId);
         if (!auction) {
@@ -2266,8 +2274,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createFulfillment({
           auctionId,
           trackingNumber,
-          carrier,
-          notes,
+          shippingCarrier: carrier, // Make sure this field name matches what's expected by storage
+          additionalNotes: notes,
           status: "shipped"
         });
 
