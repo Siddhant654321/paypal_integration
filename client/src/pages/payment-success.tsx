@@ -4,6 +4,7 @@ import { useSearchParams, useNavigate } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 
@@ -53,7 +54,7 @@ export default function PaymentSuccessPage() {
     let timer: number;
     if (status === "success") {
       timer = window.setTimeout(() => {
-        navigate("/dashboard");
+        navigate("/buyer-dashboard");
       }, 5000);
     }
     return () => clearTimeout(timer);
@@ -125,7 +126,7 @@ export default function PaymentSuccessPage() {
         
         <CardFooter className="flex justify-center gap-4">
           {status === "success" && (
-            <Button onClick={() => navigate("/dashboard")}>
+            <Button onClick={() => navigate("/buyer-dashboard")}>
               Go to Dashboard
             </Button>
           )}
