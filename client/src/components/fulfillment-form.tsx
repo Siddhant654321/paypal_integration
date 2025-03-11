@@ -46,11 +46,8 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
 
   return (
     <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit(handleSubmit)}
-        className="space-y-6"
-      >
-        <div className="max-h-[70vh] overflow-y-auto px-1 py-4 space-y-6">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-4 pb-4">
           <FormField
             control={form.control}
             name="carrier"
@@ -103,16 +100,18 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
           />
         </div>
 
-        <Button type="submit" className="w-full" disabled={isPending}>
-          {isPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Submitting...
-            </>
-          ) : (
-            "Submit Shipping Details"
-          )}
-        </Button>
+        <div className="sticky bottom-0 pt-4 bg-background">
+          <Button type="submit" className="w-full" disabled={isPending}>
+            {isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Submitting...
+              </>
+            ) : (
+              "Submit Shipping Details"
+            )}
+          </Button>
+        </div>
       </form>
     </Form>
   );
