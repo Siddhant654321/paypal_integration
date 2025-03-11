@@ -14,6 +14,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Simplified schema for fulfillment form
 const fulfillmentFormSchema = z.object({
@@ -23,6 +30,17 @@ const fulfillmentFormSchema = z.object({
 });
 
 type FulfillmentFormValues = z.infer<typeof fulfillmentFormSchema>;
+
+// Common carriers for shipping poultry
+const commonCarriers = [
+  "USPS",
+  "FedEx",
+  "UPS",
+  "DHL",
+  "OnTrac",
+  "Local Delivery",
+  "Other"
+];
 
 interface FulfillmentFormProps {
   onSubmit: (data: FulfillmentFormValues) => void;
@@ -56,11 +74,22 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Shipping Carrier</FormLabel>
-              <FormControl>
-                <Input placeholder="USPS, FedEx, UPS, etc." {...field} />
-              </FormControl>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a shipping carrier" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {commonCarriers.map((carrier) => (
+                    <SelectItem key={carrier} value={carrier}>
+                      {carrier}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormDescription>
-                Enter the name of the shipping carrier you used
+                Select the shipping carrier you used
               </FormDescription>
               <FormMessage />
             </FormItem>
