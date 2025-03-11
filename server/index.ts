@@ -16,43 +16,37 @@ async function checkRequiredEnvVars() {
   ];
 
   const missingVars = requiredVars.filter(varName => !process.env[varName]);
-
   if (missingVars.length > 0) {
     throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
   }
-
-  log("All required environment variables are present", "startup");
 }
 
-async function initializeServer() {
+async function testDatabaseConnection(retries = 3): Promise<void> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await db.execute(sql`SELECT 1`);
+      return;
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt === retries) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+
+  throw new Error(`Failed to connect to database after ${retries} attempts: ${lastError?.message}`);
+}
+
+async function initializeServer(): Promise<Express> {
   const app = express();
-  const DEFAULT_PORT = 5000;
 
   try {
-    log("Starting server initialization", "startup");
-
-    // Check environment variables first
-    log("Checking environment variables...", "startup");
-    await checkRequiredEnvVars();
-    log("Environment variables verified", "startup");
-
-    // Test database connection with retry logic
-    let retries = 5;
-    while (retries > 0) {
-      try {
-        log("Testing database connection...", "startup");
-        await db.execute(sql`SELECT 1`);
-        log("Database connection successful", "startup");
-        break;
-      } catch (error) {
-        retries--;
-        if (retries === 0) {
-          throw new Error(`Failed to connect to database after 5 attempts: ${error}`);
-        }
-        log(`Database connection failed, retrying... (${retries} attempts remaining)`, "startup");
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
+    // Check environment variables and database connection concurrently
+    await Promise.all([
+      checkRequiredEnvVars(),
+      testDatabaseConnection()
+    ]);
 
     // Configure CORS
     app.use(cors({
@@ -65,24 +59,20 @@ async function initializeServer() {
     }));
 
     // Basic middleware setup
-    log("Setting up middleware", "startup");
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
 
-    // Request logging middleware
-    app.use((req, res, next) => {
-      log(`${req.method} ${req.path}`, "request");
-      next();
-    });
+    // Request logging middleware (only in development)
+    if (process.env.NODE_ENV !== 'production') {
+      app.use((req, res, next) => {
+        log(`${req.method} ${req.path}`, "request");
+        next();
+      });
+    }
 
     // Error handling middleware
-    app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-      console.error("[ERROR]", err);
-      if (err.stack) {
-        console.error("[ERROR STACK]", err.stack);
-      }
-
-      // Send detailed error in development
+    app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+      console.error("[ERROR]", err.message);
       if (process.env.NODE_ENV !== 'production') {
         res.status(500).json({
           message: "Internal server error",
@@ -94,20 +84,6 @@ async function initializeServer() {
       }
     });
 
-    // Global error handler for uncaught exceptions
-    process.on('uncaughtException', (error) => {
-      console.error('[FATAL] Uncaught Exception:', error);
-      if (error.stack) {
-        console.error('[FATAL] Stack trace:', error.stack);
-      }
-      process.exit(1);
-    });
-
-    process.on('unhandledRejection', (reason, promise) => {
-      console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
-      process.exit(1);
-    });
-
     // Health check endpoint
     app.get("/api/status", (_req, res) => {
       res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -115,10 +91,7 @@ async function initializeServer() {
 
     return app;
   } catch (error) {
-    log(`Fatal error during server initialization: ${error}`, "startup");
-    if (error instanceof Error && error.stack) {
-      log(`Stack trace: ${error.stack}`, "startup");
-    }
+    console.error("[FATAL] Server initialization error:", error);
     throw error;
   }
 }
@@ -126,64 +99,39 @@ async function initializeServer() {
 async function startServer(port: number = 5000): Promise<void> {
   try {
     const app = await initializeServer();
-
-    // Setup routes
-    log("Setting up routes...", "startup");
     const server = await registerRoutes(app);
-    log("Routes setup complete", "startup");
 
     // Setup frontend
-    try {
-      if (process.env.NODE_ENV === "production") {
-        log("Setting up static file serving...", "startup");
-        serveStatic(app);
-      } else {
-        log("Setting up Vite development server...", "startup");
-        await setupVite(app, server);
-      }
-      log("Frontend setup complete", "startup");
-    } catch (frontendError) {
-      log(`Frontend setup error: ${frontendError}`, "startup");
-      console.error('[FRONTEND] Setup error:', frontendError);
+    if (process.env.NODE_ENV === "production") {
+      serveStatic(app);
+    } else {
+      await setupVite(app, server);
     }
 
-    // Start server with error handling
-    await new Promise<void>((resolve, reject) => {
-      server.listen({
-        port,
-        host: "0.0.0.0",
-      }, () => {
-        log(`Server started on port ${port}`, "startup");
-        resolve();
-      }).on('error', (error: any) => {
-        if (error.code === 'EADDRINUSE') {
-          log(`Port ${port} is already in use`, "startup");
-          reject(error);
-        } else {
-          log(`Server error: ${error}`, "startup");
-          reject(error);
-        }
-      });
-
-      // Handle graceful shutdown
-      const shutdown = () => {
-        log('Shutting down gracefully...', "startup");
-        server.close(() => {
-          log('Server closed', "startup");
-          process.exit(0);
-        });
-      };
-
-      process.on('SIGTERM', shutdown);
-      process.on('SIGINT', shutdown);
+    server.listen({
+      port,
+      host: "0.0.0.0",
+    }, () => {
+      log(`Server started on port ${port}`, "startup");
     });
+
+    // Handle graceful shutdown
+    const shutdown = () => {
+      log('Shutting down gracefully...', "startup");
+      server.close(() => {
+        log('Server closed', "startup");
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
 
   } catch (error: any) {
     if (error.code === 'EADDRINUSE') {
-      log(`Retrying with port ${port + 1}`, "startup");
+      log(`Port ${port} is in use, retrying with port ${port + 1}`, "startup");
       await startServer(port + 1);
     } else {
-      log(`Fatal error during startup: ${error}`, "startup");
       console.error('[FATAL] Server startup error:', error);
       process.exit(1);
     }
@@ -192,7 +140,6 @@ async function startServer(port: number = 5000): Promise<void> {
 
 // Start the server
 startServer().catch((error) => {
-  log(`Unhandled error during server startup: ${error}`, "startup");
   console.error('[FATAL] Unhandled server startup error:', error);
   process.exit(1);
 });
