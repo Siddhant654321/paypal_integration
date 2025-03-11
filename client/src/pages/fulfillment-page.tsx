@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation, useNavigate } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,54 +22,43 @@ export default function FulfillmentPage() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    async function fetchWinnerDetails() {
+    const fetchWinnerDetails = async () => {
+      if (!id) return;
+      
       try {
-        setLoading(true);
         const response = await fetch(`/api/auctions/${id}/winner`);
+        
         if (!response.ok) {
-          throw new Error("Failed to load winner details");
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch winner details');
         }
+        
         const data = await response.json();
         setWinnerDetails(data);
       } catch (err) {
-        console.error("Error fetching winner details:", err);
-        setError(err instanceof Error ? err.message : "An error occurred");
-        toast({
-          variant: "destructive",
-          title: "Error Loading Data",
-          description: err instanceof Error ? err.message : "Failed to load winner details",
-        });
+        setError(err instanceof Error ? err.message : 'An error occurred while fetching winner details');
+        console.error('Error fetching winner details:', err);
       } finally {
         setLoading(false);
       }
-    }
-
-    if (id) {
-      fetchWinnerDetails();
-    }
-  }, [id, toast]);
+    };
+    
+    fetchWinnerDetails();
+  }, [id]);
 
   const handleSuccess = () => {
-    toast({
-      title: "Fulfillment Submitted",
-      description: "Tracking information has been sent to the buyer",
-    });
-
-    // Update auction data and refresh
-    queryClient.invalidateQueries([`/api/auctions/${id}`]);
-    queryClient.invalidateQueries([`/api/auctions/${id}/winner`]);
-    queryClient.invalidateQueries([`/api/seller/auctions`]);
-
-    // Redirect back to seller dashboard after a short delay
+    // Invalidate relevant queries to refresh UI
+    queryClient.invalidateQueries({ queryKey: ['seller-auctions'] });
     setTimeout(() => {
-      navigate("/seller/dashboard");
-    }, 2000);
+      navigate('/seller/dashboard');
+    }, 3000);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[70vh]">
-        <LoadingSpinner className="w-12 h-12" />
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <LoadingSpinner className="h-12 w-12" />
+        <p className="mt-4">Loading winner details...</p>
       </div>
     );
   }
