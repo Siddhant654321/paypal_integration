@@ -69,6 +69,8 @@ export class SellerPaymentService {
           ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
           : (process.env.REPL_ID ? `https://${process.env.REPL_ID}.id.repl.co` : 'http://localhost:5001');
         
+        console.log("[PAYPAL] Using return base URL:", baseUrl);
+        
         // Update profile with test merchant ID
         await storage.updateSellerPayPalAccount(profile.userId, {
           merchantId: testMerchantId,
