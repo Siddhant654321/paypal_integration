@@ -53,7 +53,7 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
 
   return (
     <Form {...form}>
-      <ScrollArea>
+      <ScrollArea className="h-[400px] pr-4"> 
       <form
         onSubmit={form.handleSubmit(handleSubmit)}
         className="space-y-6"
