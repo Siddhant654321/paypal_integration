@@ -2555,4 +2555,3 @@ router.post("/api/register", async (req, res) => {
       });
     }
   });
-}
