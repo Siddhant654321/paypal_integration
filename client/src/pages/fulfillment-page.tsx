@@ -80,7 +80,7 @@ export default function FulfillmentPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 max-h-screen overflow-y-auto">
+    <div className="container mx-auto py-8">
       <Link href="/seller/dashboard">
         <Button variant="ghost" className="mb-6">
           <ArrowLeft className="h-4 w-4 mr-2" />

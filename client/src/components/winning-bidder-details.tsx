@@ -159,11 +159,11 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
       </Card>
 
       {currentPaymentStatus === 'completed_pending_shipment' && (
-        <Card className="overflow-auto max-h-[80vh]">
+        <Card>
           <CardHeader>
             <CardTitle>Submit Shipping Details</CardTitle>
           </CardHeader>
-          <CardContent className="overflow-y-auto">
+          <CardContent>
             <FulfillmentForm 
               onSubmit={(data) => fulfillmentMutation.mutate(data)}
               isPending={fulfillmentMutation.isPending}
