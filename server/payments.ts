@@ -74,6 +74,9 @@ export class PaymentService {
       const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
+      
+      // Calculate seller payout (what the seller receives after fees)
+      const sellerPayout = baseAmount - Math.round(baseAmount * 0.03); // 3% processing fee to seller
 
       const accessToken = await this.getAccessToken();
 
@@ -87,6 +90,7 @@ export class PaymentService {
         platformFee,
         insuranceFee,
         totalAmount,
+        sellerPayout,
         baseAmountDollars,
         feeAmountDollars,
         totalAmountDollars
@@ -153,10 +157,11 @@ export class PaymentService {
       const payment = await storage.insertPayment({
         auctionId,
         buyerId,
-        sellerId: auction.sellerId, // Add the seller ID
+        sellerId: auction.sellerId,
         amount: totalAmount,
         platformFee,
         insuranceFee,
+        sellerPayout, // Add seller payout amount
         status: 'pending',
         paypalOrderId: orderId
       });
