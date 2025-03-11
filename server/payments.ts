@@ -465,6 +465,14 @@ export class PaymentService {
         console.log("[PAYPAL] Order status from PayPal:", orderStatus);
       }
 
+      // Get the auction to check both statuses
+      const auction = await storage.getAuction(auctionId);
+      console.log("[PAYPAL] Current status in tables:", {
+        paymentTableStatus: payment.status,
+        auctionTableStatus: auction?.paymentStatus
+      });
+
+      // Return the payment table status as it's more accurate
       return payment.status;
     } catch (error) {
       console.error("[PAYPAL] Error getting payment status:", error);

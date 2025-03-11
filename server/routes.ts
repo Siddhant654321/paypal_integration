@@ -939,7 +939,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Check if auction has a winner
         if (!auction.winningBidderId) {
-
           console.log(`[WINNER] No winner found for auction ${auctionId}`);
           return res.status(404).json({ message: "No winning bidder for this auction" });
         }
@@ -951,14 +950,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ message: "Winner profile not found" });
         }
 
-        // Get payment status - explicitly fetch the payment 
+        // Get payment status from the payments table directly
         const payment = await storage.getPaymentByAuctionId(auctionId);
-        const paymentStatus = payment?.status || auction.paymentStatus || "pending";
         
         console.log(`[WINNER] Found winner details and payment info:`, {
           auctionId,
           paymentId: payment?.id,
-          paymentStatus,
+          paymentStatus: payment?.status,
           winningBidderId: auction.winningBidderId
         });
 
@@ -968,7 +966,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             title: auction.title,
             currentPrice: auction.currentPrice,
             status: auction.status,
-            paymentStatus
+            paymentStatus: payment?.status || "pending"
           },
           profile: {
             fullName: profile.fullName,

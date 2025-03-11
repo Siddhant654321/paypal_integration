@@ -43,8 +43,12 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
     queryKey: [`/api/auctions/${auctionId}/payment-status`],
     enabled: !!auctionId,
     refetchInterval: 5000, // Poll every 5 seconds
-    onSuccess: () => {
-      console.log("Payment status updated:", paymentStatusData?.status);
+    onSuccess: (data) => {
+      console.log("Payment status updated:", {
+        status: data?.status,
+        auctionId,
+        timestamp: new Date().toISOString()
+      });
     }
   });
 
@@ -64,7 +68,7 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/seller/balance'] });
       console.log("Fulfillment successful. Payment status should update soon.");
-      refetch(); //Refetch payment status after fulfillment
+      refetch(); // Refetch payment status after fulfillment
 
       // Call the success callback if provided
       onSuccess?.();
