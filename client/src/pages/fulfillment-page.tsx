@@ -1,118 +1,154 @@
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, useLocation, useNavigate } from "wouter";
+import { useRoute, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Package, CheckCircle, AlertCircle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { ArrowLeft, Loader2, Package } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { FulfillmentForm } from "@/components/fulfillment-form";
-import { useState, useEffect } from 'react';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { WinningBidderDetails } from "@/components/winning-bidder-details";
 
 export default function FulfillmentPage() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const [, params] = useRoute("/seller/fulfill/:id");
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [winnerDetails, setWinnerDetails] = useState<any>(null);
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const fetchWinnerDetails = async () => {
-      if (!id) return;
-      
-      try {
-        const response = await fetch(`/api/auctions/${id}/winner`);
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to fetch winner details');
-        }
-        
-        const data = await response.json();
-        setWinnerDetails(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred while fetching winner details');
-        console.error('Error fetching winner details:', err);
-      } finally {
-        setLoading(false);
+  // Get winner details
+  const { data: winnerDetails, isLoading } = useQuery({
+    queryKey: [`/api/auctions/${params?.id}/winner`],
+    enabled: !!params?.id,
+  });
+
+  // Get fulfillment status
+  const { data: fulfillment } = useQuery({
+    queryKey: [`/api/auctions/${params?.id}/fulfillment`],
+    enabled: !!params?.id,
+  });
+
+  // Submit fulfillment mutation
+  const fulfillMutation = useMutation({
+    mutationFn: async (formData) => {
+      const response = await fetch(`/api/auctions/${params?.id}/fulfill`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...formData,
+          auctionId: parseInt(params?.id || '0'),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to submit fulfillment');
       }
-    };
-    
-    fetchWinnerDetails();
-  }, [id]);
 
-  const handleSuccess = () => {
-    // Invalidate relevant queries to refresh UI
-    queryClient.invalidateQueries({ queryKey: ['seller-auctions'] });
-    setTimeout(() => {
-      navigate('/seller/dashboard');
-    }, 3000);
-  };
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Fulfillment Submitted",
+        description: "Shipping details have been sent to the buyer",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${params?.id}/fulfillment`] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px]">
-        <LoadingSpinner className="h-12 w-12" />
-        <p className="mt-4">Loading winner details...</p>
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  if (error) {
+  if (!winnerDetails) {
     return (
-      <Card className="mx-auto max-w-3xl mt-8">
-        <CardHeader>
-          <CardTitle>Error Loading Information</CardTitle>
-          <CardDescription>
-            We couldn't load the winner details for this auction.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-destructive">{error}</p>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={() => navigate('/seller/dashboard')}>Return to Dashboard</Button>
-        </CardFooter>
-      </Card>
+      <div className="container mx-auto py-8">
+        <div className="text-center text-muted-foreground">
+          Winner details not found or you don't have permission to view them.
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="container py-8 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-8">Submit Fulfillment Details</h1>
+    <div className="container mx-auto py-8">
+      <Link href="/seller/dashboard">
+        <Button variant="ghost" className="mb-6">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Dashboard
+        </Button>
+      </Link>
 
-      {winnerDetails && (
-        <>
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Shipping Information</CardTitle>
-              <CardDescription>
-                The buyer has completed payment and is waiting for their item to be shipped.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <WinningBidderDetails data={winnerDetails} />
-            </CardContent>
-          </Card>
+      <div className="grid gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Winner Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-medium">Auction</h3>
+                <p className="text-muted-foreground">{winnerDetails.auction.title}</p>
+              </div>
 
+              <div>
+                <h3 className="font-medium">Winner Information</h3>
+                <div className="space-y-2">
+                  <p>Name: {winnerDetails.profile.fullName}</p>
+                  <p>Email: {winnerDetails.profile.email}</p>
+                  <p>Address: {winnerDetails.profile.shippingAddress}</p>
+                  {winnerDetails.profile.phoneNumber && (
+                    <p>Phone: {winnerDetails.profile.phoneNumber}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {!fulfillment?.status || fulfillment.status === "pending" ? (
           <Card>
             <CardHeader>
-              <CardTitle>Submit Tracking Information</CardTitle>
-              <CardDescription>
-                Enter the carrier and tracking number to release your payout
-              </CardDescription>
+              <CardTitle>Shipping Details</CardTitle>
             </CardHeader>
             <CardContent>
-              <FulfillmentForm auctionId={parseInt(id!)} onSuccess={handleSuccess} />
+              <FulfillmentForm 
+                onSubmit={(data) => fulfillMutation.mutate(data)}
+                isPending={fulfillMutation.isPending}
+              />
             </CardContent>
           </Card>
-        </>
-      )}
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Fulfillment Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <p>Status: {fulfillment.status}</p>
+                <p>Shipping Carrier: {fulfillment.shippingCarrier}</p>
+                <p>Tracking Number: {fulfillment.trackingNumber}</p>
+                <p>Shipping Date: {new Date(fulfillment.shippingDate).toLocaleDateString()}</p>
+                {fulfillment.estimatedDeliveryDate && (
+                  <p>Estimated Delivery: {new Date(fulfillment.estimatedDeliveryDate).toLocaleDateString()}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

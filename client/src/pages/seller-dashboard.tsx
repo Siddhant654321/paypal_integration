@@ -430,24 +430,6 @@ export const SellerDashboard = () => {
                         View Winner Details & Submit Tracking
                       </Button>
                     )}
-                    {auction.status === "ended" && auction.paymentStatus === "completed_pending_shipment" && auction.winningBidderId && (
-                      <Button
-                        variant="default"
-                        className="ml-2"
-                        onClick={() => {/* Placeholder -  Implement navigation to fulfillment form */}}
-                      >
-                        Submit Tracking Info
-                      </Button>
-                    )}
-                    {auction.status === "fulfilled" && auction.winningBidderId && (
-                      <Button
-                        variant="ghost"
-                        className="ml-2 text-green-600"
-                        disabled
-                      >
-                        Tracking Submitted
-                      </Button>
-                    )}
                   </div>
                 ))}
               </div>

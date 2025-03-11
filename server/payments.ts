@@ -283,12 +283,12 @@ export class PaymentService {
       });
 
       // Notify seller that payment is complete and they can proceed with shipping
-      await NotificationService.createNotification({
-        userId: payment.sellerId,
-        type: "payment",
-        title: "Payment Received",
-        message: "Payment received, please provide shipping information to receive funds."
-      });
+      await NotificationService.notifyPayment(
+        payment.sellerId,
+        payment.amount,
+        "completed_pending_shipment",
+        "Payment received, please provide shipping information to receive funds."
+      );
 
       return { success: true };
     } catch (error) {

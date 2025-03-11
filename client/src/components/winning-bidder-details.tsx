@@ -99,9 +99,6 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
 
   const { auction, profile } = data;
 
-  // Log the payment status to debug
-  console.log("Current payment status:", auction.paymentStatus);
-
   return (
     <div className="space-y-6">
       <Card>
@@ -136,14 +133,6 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
         </CardContent>
       </Card>
 
-      {/* Add debug information */}
-      <div className="text-sm text-gray-500">
-        Debug - Payment Status: {auction.paymentStatus}
-        <br />
-        Should Show Form: {(auction.paymentStatus === 'completed_pending_shipment').toString()}
-      </div>
-
-      {/* Show fulfillment form when payment is completed and pending shipment */}
       {auction.paymentStatus === 'completed_pending_shipment' && (
         <Card>
           <CardHeader>

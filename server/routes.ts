@@ -961,39 +961,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Get payment status
-        const payment = await storage.getPaymentByAuctionId(auctionId);
-        console.log(`[WINNER] Payment details for auction ${auctionId}:`, {
-          paymentId: payment?.id,
-          status: payment?.status,
-          paymentRecord: payment
-        });
+        const payment = await storage.findPaymentByAuctionId(auctionId);
+        console.log(`[WINNER] Found winner details and payment status for auction ${auctionId}`);
 
-        // Map database payment status to expected frontend status
-        let paymentStatus = "pending";
-        if (payment) {
-          switch (payment.status) {
-            case "completed_pending_shipment":
-              paymentStatus = "completed_pending_shipment";
-              break;
-            case "completed":
-              paymentStatus = "completed";
-              break;
-            case "failed":
-              paymentStatus = "failed";
-              break;
-            default:
-              paymentStatus = "pending";
-          }
-        }
-
-        // Return winner details with payment status 
         res.json({
           auction: {
             id: auction.id,
             title: auction.title,
             currentPrice: auction.currentPrice,
             status: auction.status,
-            paymentStatus
+            paymentStatus: payment?.status || "pending"
           },
           profile: {
             fullName: profile.fullName,
