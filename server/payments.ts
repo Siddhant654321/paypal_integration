@@ -77,7 +77,7 @@ export class PaymentService {
 
       const accessToken = await this.getAccessToken();
 
-      // Create PayPal order - values are already in cents, so divide by 100 for dollar display
+      // Create PayPal order - convert from cents to dollars by dividing by 100
       const orderRequest = {
         intent: "CAPTURE",
         purchase_units: [

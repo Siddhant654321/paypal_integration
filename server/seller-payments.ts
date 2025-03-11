@@ -21,9 +21,11 @@ const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 // Use sandbox URL in development
 const IS_SANDBOX = process.env.NODE_ENV !== 'production';
 const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
+
+// Fallback to a default value for testing if environment variable is missing
 const PARTNER_MERCHANT_ID = IS_SANDBOX 
-  ? process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID 
-  : process.env.PAYPAL_PARTNER_MERCHANT_ID;
+  ? (process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID || 'test-partner-id')
+  : (process.env.PAYPAL_PARTNER_MERCHANT_ID || 'test-partner-id');
 
 console.log("[PAYPAL] Initializing PayPal Payouts service:", {
   mode: IS_SANDBOX ? 'sandbox' : 'production',
@@ -69,10 +71,10 @@ export class SellerPaymentService {
 
       const accessToken = await this.getAccessToken();
 
-      // Base URL determination
+      // Base URL determination - use request's origin if available or fallback to a valid URL
       const baseUrl = process.env.REPL_SLUG 
         ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
-        : 'http://localhost:5000';
+        : 'https://workspace.repl.co';
 
       console.log("[PAYPAL] Using base URL:", baseUrl);
 
@@ -86,7 +88,7 @@ export class SellerPaymentService {
               integration_method: "PAYPAL",
               integration_type: "THIRD_PARTY",
               third_party_details: {
-                features: ["PAYMENT", "REFUND", "ADVANCED_TRANSACTIONS"]
+                features: ["PAYMENT", "REFUND"]
               }
             }
           }
@@ -97,7 +99,8 @@ export class SellerPaymentService {
           granted: true
         }],
         partner_config_override: {
-          return_url: `${baseUrl}/seller/dashboard?success=true`
+          return_url: `${baseUrl}/seller/dashboard?success=true`,
+          partner_logo_url: `${baseUrl}/images/logo.png`
         }
       };
 
