@@ -961,7 +961,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Get payment status
-        const payment = await storage.getPaymentByAuctionId(auctionId);
+        const payment = await storage.findPaymentByAuctionId(auctionId);
         console.log(`[WINNER] Found winner details and payment status for auction ${auctionId}`);
 
         res.json({
