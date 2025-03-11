@@ -1,4 +1,3 @@
-
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -41,7 +40,7 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
   });
 
   const handleSubmit = (data: FulfillmentFormValues) => {
-    console.log("Submitting fulfillment data:", data);
+    console.log("[FULFILLMENT] Submitting fulfillment data:", data);
     onSubmit(data);
   };
 
