@@ -32,7 +32,7 @@ interface Balance {
   pending: { amount: number; currency: string }[];
 }
 
-const SellerDashboard = () => {
+export const SellerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,14 +53,14 @@ const SellerDashboard = () => {
     select: (data) => data || [],
   });
 
-  const { data: paypalStatus, isLoading: paypalStatusLoading, refetch: refetchPayPalStatus } = useQuery<PayPalStatus>({
+  const { data: paypalStatus, isLoading: paypalStatusLoading, refetch: refetchPayPalStatus } = useQuery({
     queryKey: ["/api/seller/status"],
     retry: 3,
     retryDelay: 1000,
     refetchInterval: (data) => data?.status === "pending" ? 5000 : false,
   });
 
-  const { data: balance } = useQuery<Balance>({
+  const { data: balance, refetch: refetchBalance } = useQuery({
     queryKey: ["/api/seller/balance"],
     enabled: paypalStatus?.status === "verified",
   });
@@ -80,15 +80,25 @@ const SellerDashboard = () => {
         window.history.replaceState({}, document.title, newUrl);
 
         try {
-          // Force refetch the seller status
-          const result = await refetchPayPalStatus();
-          console.log("[Seller Dashboard] Refetched status:", result.data);
+          // Force refetch both status and balance
+          const [statusResult] = await Promise.all([
+            refetchPayPalStatus(),
+            refetchBalance()
+          ]);
 
-          if (result.data?.status === "verified") {
+          console.log("[Seller Dashboard] Refetched status:", statusResult.data);
+
+          if (statusResult.data?.status === "verified") {
             toast({
               title: "Account Verified",
               description: "Your PayPal account has been successfully verified!",
               variant: "default",
+            });
+          } else if (statusResult.data?.status === "rejected") {
+            toast({
+              title: "Account Verification Failed",
+              description: "Your PayPal account verification was not successful. Please try again or contact support.",
+              variant: "destructive",
             });
           } else {
             toast({
@@ -143,14 +153,12 @@ const SellerDashboard = () => {
         const data = await response.json();
         console.log("PayPal Connect response:", data);
 
-        const url = data.url;
-
-        if (!url) {
+        if (!data.url) {
           console.error("No URL in response:", data);
           throw new Error('No URL received from PayPal Connect');
         }
 
-        return url;
+        return data.url;
       } catch (error) {
         console.error("PayPal Connect error:", error);
         throw error;
@@ -183,7 +191,7 @@ const SellerDashboard = () => {
   }) : [];
 
   const now = new Date();
-  const activeAuctions = filteredAuctions.filter(auction => 
+  const activeAuctions = filteredAuctions.filter(auction =>
     auction.status === "active" && auction.approved && new Date(auction.endDate) > now
   );
   const completedAuctions = filteredAuctions.filter(auction =>

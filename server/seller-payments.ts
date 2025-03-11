@@ -1,6 +1,6 @@
 import { storage } from "./storage";
 import { Profile } from "@shared/schema";
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 // Check for required PayPal environment variables
 if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
@@ -73,7 +73,7 @@ export class SellerPaymentService {
       const baseUrl = process.env.REPL_SLUG 
         ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
         : 'http://localhost:5000';
-      
+
       console.log("[PAYPAL] Using base URL:", baseUrl);
 
       // Create a PayPal merchant integration
@@ -86,7 +86,7 @@ export class SellerPaymentService {
               integration_method: "PAYPAL",
               integration_type: "THIRD_PARTY",
               third_party_details: {
-                features: ["PAYMENT", "REFUND"]
+                features: ["PAYMENT", "REFUND", "ADVANCED_TRANSACTIONS"]
               }
             }
           }
@@ -124,26 +124,33 @@ export class SellerPaymentService {
 
       console.log("[PAYPAL] Generated onboarding link:", {
         merchantId,
-        returnUrl: `${process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.replit.dev` : 'http://localhost:5000'}/seller/dashboard?success=true`
+        returnUrl: `${baseUrl}/seller/dashboard?success=true`
       });
 
       // Update profile with PayPal merchant ID and initial status
       await storage.updateSellerPayPalAccount(profile.userId, {
         merchantId,
-        status: "pending"
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       });
 
       return {
         merchantId,
         url: actionUrl,
       };
-    } catch (error) {
-      console.error("[PAYPAL] Error creating seller account:", error.response?.data || error.message);
-      if (error.response?.data) {
+    } catch (err) {
+      const error = err as Error | AxiosError;
+      console.error("[PAYPAL] Error creating seller account:", error);
+
+      if (axios.isAxiosError(error) && error.response?.data) {
         // Extract specific PayPal error message
-        const errorMessage = error.response.data.details?.[0]?.issue || error.response.data.message || "Failed to connect to PayPal";
+        const errorMessage = error.response.data.details?.[0]?.issue || 
+                           error.response.data.message || 
+                           "Failed to connect to PayPal";
         throw new Error(`PayPal error: ${errorMessage}`);
       }
+
       throw new Error("Failed to connect with PayPal. Please try again later.");
     }
   }
@@ -206,10 +213,13 @@ export class SellerPaymentService {
         sellerId,
         amount,
         paypalPayoutId: response.data.batch_header.payout_batch_id,
-        status: 'pending'
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       });
 
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error | AxiosError;
       console.error("[PAYPAL] Error creating payout:", error);
       throw new Error("Failed to process seller payout");
     }
