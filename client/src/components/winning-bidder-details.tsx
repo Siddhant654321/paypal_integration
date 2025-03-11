@@ -41,6 +41,7 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
   // Handle fulfillment submission
   const fulfillmentMutation = useMutation({
     mutationFn: async (data: { carrier: string; trackingNumber: string }) => {
+      console.log("Submitting fulfillment:", { auctionId, ...data });
       return apiRequest("POST", `/api/auctions/${auctionId}/fulfill`, data);
     },
     onSuccess: () => {
