@@ -44,7 +44,7 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
     enabled: !!auctionId,
     refetchInterval: 5000, // Poll every 5 seconds
     onSuccess: (data) => {
-      console.log("Payment status updated:", {
+      console.log("[PAYMENT] Status updated:", {
         status: data?.status,
         auctionId,
         timestamp: new Date().toISOString()
@@ -54,9 +54,10 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
 
   // Handle fulfillment submission
   const fulfillmentMutation = useMutation({
-    mutationFn: async (data: { carrier: string; trackingNumber: string }) => {
-      console.log("Submitting fulfillment:", { auctionId, ...data });
-      return apiRequest("POST", `/api/auctions/${auctionId}/fulfill`, data);
+    mutationFn: async (data: { carrier: string; trackingNumber: string; notes?: string }) => {
+      console.log("[FULFILLMENT] Submitting:", { auctionId, ...data });
+      const trackingInfo = `${data.carrier}: ${data.trackingNumber}${data.notes ? ` (${data.notes})` : ''}`;
+      return apiRequest("POST", `/api/auctions/${auctionId}/fulfill`, { trackingInfo });
     },
     onSuccess: () => {
       toast({
@@ -67,14 +68,14 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/seller/balance'] });
-      console.log("Fulfillment successful. Payment status should update soon.");
+      console.log("[FULFILLMENT] Successful, payment status should update soon");
       refetch(); // Refetch payment status after fulfillment
 
       // Call the success callback if provided
       onSuccess?.();
     },
     onError: (error: any) => {
-      console.error("Error submitting fulfillment:", error);
+      console.error("[FULFILLMENT] Error:", error);
       toast({
         title: "Error submitting shipping details",
         description: error.message || "Please try again later",
@@ -117,7 +118,7 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
   const currentPaymentStatus = paymentStatusData?.status || auction.paymentStatus;
 
   // Log when the component renders and the payment status
-  console.log("Rendering WinningBidderDetails:", {
+  console.log("[PAYMENT] Rendering WinningBidderDetails:", {
     auctionId,
     originalPaymentStatus: auction.paymentStatus,
     currentPaymentStatus,

@@ -939,6 +939,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Check if auction has a winner
         if (!auction.winningBidderId) {
+
           console.log(`[WINNER] No winner found for auction ${auctionId}`);
           return res.status(404).json({ message: "No winning bidder for this auction" });
         }
