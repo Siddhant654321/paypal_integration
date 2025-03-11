@@ -1769,7 +1769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     router.get("/api/analytics/auction-bids", async (req, res) => {
       try {
-        // Get all auctions with their bids
+        // Get allauctions with their bids
         const auctions = await storage.getAuctions({});
         const auctionBids = await Promise.all(
           auctions.map(async (auction) => {
@@ -2515,7 +2515,7 @@ router.post("/api/register", async (req, res) => {
 });
 
 // Seller PayPal connection
-  app.post("/api/seller/connect", requireAuth, async (req, res) => {
+  router.post("/api/seller/connect", requireAuth, async (req, res) => {
     try {
       const { userId } = req.user;
       const profile = await storage.getProfile(userId);
@@ -2555,3 +2555,4 @@ router.post("/api/register", async (req, res) => {
       });
     }
   });
+}
