@@ -152,3 +152,119 @@ export default function FulfillmentPage() {
     </div>
   );
 }
+import { useEffect, useState } from 'react';
+import { useLocation, useParams, useNavigate } from 'wouter';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { WinningBidderDetails } from '@/components/winning-bidder-details';
+import { FulfillmentForm } from '@/components/fulfillment-form';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+
+export default function FulfillmentPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [winnerDetails, setWinnerDetails] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchWinnerDetails() {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/auctions/${id}/winner`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to load winner details: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setWinnerDetails(data);
+      } catch (err) {
+        console.error('Error fetching winner details:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load winner details');
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to load winner details. Please try again.',
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (id) {
+      fetchWinnerDetails();
+    }
+  }, [id, toast]);
+
+  const handleSuccess = () => {
+    toast({
+      title: 'Tracking Information Submitted',
+      description: 'The buyer has been notified and your payout is being processed.',
+    });
+    navigate('/seller/dashboard');
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[70vh]">
+        <LoadingSpinner className="w-12 h-12" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="mx-auto max-w-3xl mt-8">
+        <CardHeader>
+          <CardTitle>Error Loading Information</CardTitle>
+          <CardDescription>
+            We couldn't load the winner details for this auction.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-destructive">{error}</p>
+        </CardContent>
+        <CardFooter>
+          <Button onClick={() => navigate('/seller/dashboard')}>Return to Dashboard</Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="container py-8 max-w-4xl">
+      <h1 className="text-3xl font-bold mb-8">Submit Fulfillment Details</h1>
+      
+      {winnerDetails && (
+        <>
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Shipping Information</CardTitle>
+              <CardDescription>
+                The buyer has completed payment and is waiting for their item to be shipped.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <WinningBidderDetails data={winnerDetails} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Submit Tracking Information</CardTitle>
+              <CardDescription>
+                Enter the carrier and tracking number to release your payout
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FulfillmentForm auctionId={parseInt(id!)} onSuccess={handleSuccess} />
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}

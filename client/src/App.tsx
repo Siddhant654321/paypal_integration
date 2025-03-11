@@ -36,8 +36,7 @@ function Router() {
         <Route path="/payment-success" component={PaymentSuccessPage} />
         <Route path="/payment-failure" component={PaymentFailurePage} />
         <Route path="/seller/dashboard" component={SellerDashboard} />
-        <Route path="/seller/auction/new" component={NewAuction} />
-        <Route path="/seller/fulfill/:id" component={FulfillmentPage} />
+        <Route path="/fulfillment/:id" component={FulfillmentPage} />
         <Route path="/seller/:id" component={SellerProfilePage} />
         <Route path="/buyer/dashboard" component={BuyerDashboard} />
         <Route path="/admin" component={AdminDashboard} />
