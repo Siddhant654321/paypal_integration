@@ -136,7 +136,7 @@ export default function FulfillmentPage() {
           </CardContent>
         </Card>
 
-        {!fulfillment?.status || fulfillment.status === "pending" ? (
+        {(!fulfillment?.status || fulfillment.status === "pending" || !fulfillment) ? (
           <Card>
             <CardHeader>
               <CardTitle>Shipping Details</CardTitle>

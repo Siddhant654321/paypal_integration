@@ -159,7 +159,8 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
         </CardContent>
       </Card>
 
-      {currentPaymentStatus === 'completed_pending_shipment' && (
+      {(currentPaymentStatus === 'completed_pending_shipment' || 
+   (currentPaymentStatus === 'pending' && auction?.status === 'ended')) && (
         <Card>
           <CardHeader>
             <CardTitle>Submit Shipping Details</CardTitle>
