@@ -38,6 +38,16 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
     enabled: !!auctionId,
   });
 
+  // Fetch current payment status
+  const { data: paymentStatusData, refetch } = useQuery({
+    queryKey: [`/api/auctions/${auctionId}/payment-status`],
+    enabled: !!auctionId,
+    refetchInterval: 5000, // Poll every 5 seconds
+    onSuccess: () => {
+      console.log("Payment status updated:", paymentStatusData?.status);
+    }
+  });
+
   // Handle fulfillment submission
   const fulfillmentMutation = useMutation({
     mutationFn: async (data: { carrier: string; trackingNumber: string }) => {
@@ -53,6 +63,8 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/seller/balance'] });
+      console.log("Fulfillment successful. Payment status should update soon.");
+      refetch(); //Refetch payment status after fulfillment
 
       // Call the success callback if provided
       onSuccess?.();
@@ -98,6 +110,15 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
   }
 
   const { auction, profile } = data;
+  const currentPaymentStatus = paymentStatusData?.status || auction.paymentStatus;
+
+  // Log when the component renders and the payment status
+  console.log("Rendering WinningBidderDetails:", {
+    auctionId,
+    originalPaymentStatus: auction.paymentStatus,
+    currentPaymentStatus,
+    shouldShowForm: currentPaymentStatus === 'completed_pending_shipment'
+  });
 
   return (
     <div className="space-y-6">
@@ -122,8 +143,8 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
 
             <div>
               <h3 className="font-medium">Payment Status</h3>
-              <p className="capitalize">{auction.paymentStatus.replace(/_/g, ' ')}</p>
-              {auction.paymentStatus === 'completed_pending_shipment' && (
+              <p className="capitalize">{currentPaymentStatus.replace(/_/g, ' ')}</p>
+              {currentPaymentStatus === 'completed_pending_shipment' && (
                 <p className="text-sm text-yellow-600 mt-1">
                   Please submit shipping details below to receive your payout
                 </p>
@@ -133,7 +154,7 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
         </CardContent>
       </Card>
 
-      {auction.paymentStatus === 'completed_pending_shipment' && (
+      {currentPaymentStatus === 'completed_pending_shipment' && (
         <Card>
           <CardHeader>
             <CardTitle>Submit Shipping Details</CardTitle>

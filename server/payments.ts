@@ -276,19 +276,19 @@ export class PaymentService {
       await storage.updatePaymentStatus(payment.id, "completed_pending_shipment");
 
       // Update auction status
-      console.log("[PAYPAL] Updating auction status to pending_fulfillment");
+      console.log("[PAYPAL] Updating auction status to pending_fulfillment and payment_status");
       await storage.updateAuction(payment.auctionId, {
         status: "pending_fulfillment",
         paymentStatus: "completed_pending_shipment"
       });
 
       // Notify seller that payment is complete and they can proceed with shipping
-      await NotificationService.notifyPayment(
-        payment.sellerId,
-        payment.amount,
-        "completed_pending_shipment",
-        "Payment received, please provide shipping information to receive funds."
-      );
+      await NotificationService.createNotification({
+        userId: payment.sellerId,
+        type: "payment",
+        title: "Payment Received - Action Required",
+        message: "Payment has been received. Please submit shipping information to receive your funds."
+      });
 
       return { success: true };
     } catch (error) {
@@ -441,6 +441,34 @@ export class PaymentService {
     } catch (error) {
       console.error("[PAYPAL] Error getting order status:", error);
       throw new Error("Failed to get order status from PayPal");
+    }
+  }
+  static async getPaymentStatus(auctionId: number): Promise<string> {
+    try {
+      console.log("[PAYPAL] Getting payment status for auction:", auctionId);
+
+      // Get the payment record
+      const payment = await storage.getPaymentByAuctionId(auctionId);
+      if (!payment) {
+        return "pending";
+      }
+
+      console.log("[PAYPAL] Found payment record:", {
+        paymentId: payment.id,
+        status: payment.status,
+        orderId: payment.paypalOrderId
+      });
+
+      // If payment has PayPal order ID, verify its status
+      if (payment.paypalOrderId) {
+        const orderStatus = await this.getOrderStatus(payment.paypalOrderId);
+        console.log("[PAYPAL] Order status from PayPal:", orderStatus);
+      }
+
+      return payment.status;
+    } catch (error) {
+      console.error("[PAYPAL] Error getting payment status:", error);
+      throw new Error("Failed to get payment status");
     }
   }
 }

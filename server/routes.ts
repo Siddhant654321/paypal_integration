@@ -228,6 +228,40 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
   }
 });
 
+// Add payment status check endpoint
+router.get("/api/auctions/:id/payment-status", requireAuth, async (req, res) => {
+  try {
+    const auctionId = parseInt(req.params.id);
+    console.log(`[PAYMENT] Checking payment status for auction ${auctionId}`);
+
+    // Get auction details
+    const auction = await storage.getAuction(auctionId);
+    if (!auction) {
+      return res.status(404).json({ message: "Auction not found" });
+    }
+
+    // Check if user is the seller
+    if (auction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
+      return res.status(403).json({ message: "Only the seller can check payment status" });
+    }
+
+    // Get current payment status from PayPal
+    const paymentStatus = await PaymentService.getPaymentStatus(auctionId);
+    
+    console.log(`[PAYMENT] Current payment status for auction ${auctionId}:`, paymentStatus);
+
+    // Update auction's payment status if needed
+    if (auction.paymentStatus !== paymentStatus) {
+      await storage.updateAuction(auctionId, { paymentStatus });
+    }
+
+    res.json({ status: paymentStatus });
+  } catch (error) {
+    console.error("[PAYMENT] Error checking payment status:", error);
+    res.status(500).json({ message: "Failed to check payment status" });
+  }
+});
+
 // Add detailed logging for payment capture endpoint
 router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
   try {
@@ -298,6 +332,40 @@ router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
     res.status(500).json({ 
       message: error instanceof Error ? error.message : "Failed to capture payment" 
     });
+  }
+});
+
+// Add payment status check endpoint
+router.get("/api/auctions/:id/payment-status", requireAuth, async (req, res) => {
+  try {
+    const auctionId = parseInt(req.params.id);
+    console.log(`[PAYMENT] Checking payment status for auction ${auctionId}`);
+
+    // Get auction details
+    const auction = await storage.getAuction(auctionId);
+    if (!auction) {
+      return res.status(404).json({ message: "Auction not found" });
+    }
+
+    // Check if user is the seller
+    if (auction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
+      return res.status(403).json({ message: "Only the seller can check payment status" });
+    }
+
+    // Get current payment status from PayPal
+    const paymentStatus = await PaymentService.getPaymentStatus(auctionId);
+    
+    console.log(`[PAYMENT] Current payment status for auction ${auctionId}:`, paymentStatus);
+
+    // Update auction's payment status if needed
+    if (auction.paymentStatus !== paymentStatus) {
+      await storage.updateAuction(auctionId, { paymentStatus });
+    }
+
+    res.json({ status: paymentStatus });
+  } catch (error) {
+    console.error("[PAYMENT] Error checking payment status:", error);
+    res.status(500).json({ message: "Failed to check payment status" });
   }
 });
 
@@ -851,6 +919,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Get winner details for an auction
+    router.get("/api/auctions/:id/winner", requireAuth, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        console.log(`[WINNER] Fetching winner details for auction ${auctionId}`);
+
+        // Get auction details
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Check if user is the seller
+        if (auction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
+          console.log(`[WINNER] Unauthorized access attempt by user ${req.user!.id}`);
+          return res.status(403).json({ message: "Only the seller can view winner details" });
+        }
+
+        // Check if auction has a winner
+        if (!auction.winningBidderId) {
+
+          console.log(`[WINNER] No winner found for auction ${auctionId}`);
+          return res.status(404).json({ message: "No winning bidder for this auction" });
+        }
+
+        // Get winner's profile
+        const profile = await storage.getProfile(auction.winningBidderId);
+        if (!profile) {
+          console.log(`[WINNER] Winner profile not found for user ${auction.winningBidderId}`);
+          return res.status(404).json({ message: "Winner profile not found" });
+        }
+
+        // Get payment status - explicitly fetch the payment 
+        const payment = await storage.getPaymentByAuctionId(auctionId);
+        const paymentStatus = payment?.status || auction.paymentStatus || "pending";
+        
+        console.log(`[WINNER] Found winner details and payment info:`, {
+          auctionId,
+          paymentId: payment?.id,
+          paymentStatus,
+          winningBidderId: auction.winningBidderId
+        });
+
+        res.json({
+          auction: {
+            id: auction.id,
+            title: auction.title,
+            currentPrice: auction.currentPrice,
+            status: auction.status,
+            paymentStatus
+          },
+          profile: {
+            fullName: profile.fullName,
+            email: profile.email,
+            phoneNumber: profile.phoneNumber,
+            address: profile.address,
+            city: profile.city,
+            state: profile.state,
+            zipCode: profile.zipCode
+          }
+        });
+      } catch (error) {
+        console.error("[WINNER] Error getting winner details:", error);
+        res.status(500).json({ message: "Failed to get winner details" });
+      }
+    });
+
     // Profile routes
     router.post("/api/profile", requireAuth, async (req, res) => {
       try {
@@ -928,65 +1063,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Add winner details endpoint
-    router.get("/api/auctions/:id/winner", requireAuth, async (req, res) => {
-      try {
-        const auctionId = parseInt(req.params.id);
-        console.log(`[WINNER] Fetching winner details for auction ${auctionId}`);
 
-        // Get auction details
-        const auction = await storage.getAuction(auctionId);
-        if (!auction) {
-          console.log(`[WINNER] Auction ${auctionId} not found`);
-          return res.status(404).json({ message: "Auction not found" });
-        }
-
-        // Check if user is the seller
-        if (auction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
-          console.log(`[WINNER] Unauthorized access attempt by user ${req.user!.id}`);
-          return res.status(403).json({ message: "Only the seller can view winner details" });
-        }
-
-        // Check if auction has a winner
-        if (!auction.winningBidderId) {
-          console.log(`[WINNER] No winner found for auction ${auctionId}`);
-          return res.status(404).json({ message: "No winning bidder for this auction" });
-        }
-
-        // Get winner's profile
-        const profile = await storage.getProfile(auction.winningBidderId);
-        if (!profile) {
-          console.log(`[WINNER] Winner profile not found for user ${auction.winningBidderId}`);
-          return res.status(404).json({ message: "Winner profile not found" });
-        }
-
-        // Get payment status
-        const payment = await storage.findPaymentByAuctionId(auctionId);
-        console.log(`[WINNER] Found winner details and payment status for auction ${auctionId}`);
-
-        res.json({
-          auction: {
-            id: auction.id,
-            title: auction.title,
-            currentPrice: auction.currentPrice,
-            status: auction.status,
-            paymentStatus: payment?.status || "pending"
-          },
-          profile: {
-            fullName: profile.fullName,
-            email: profile.email,
-            phoneNumber: profile.phoneNumber,
-            address: profile.address,
-            city: profile.city,
-            state: profile.state,
-            zipCode: profile.zipCode
-          }
-        });
-      } catch (error) {
-        console.error("[WINNER] Error fetching winner details:", error);
-        res.status(500).json({ message: "Failed to fetch winner details" });
-      }
-    });
 
     // Add fulfillment endpoint
     router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
