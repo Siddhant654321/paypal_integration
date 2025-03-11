@@ -67,7 +67,7 @@ export class SellerPaymentService {
         // Base URL for return paths
         const baseUrl = process.env.REPL_SLUG 
           ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
-          : 'https://workspace.repl.co';
+          : (process.env.REPL_ID ? `https://${process.env.REPL_ID}.id.repl.co` : 'http://localhost:5001');
         
         // Update profile with test merchant ID
         await storage.updateSellerPayPalAccount(profile.userId, {
@@ -97,10 +97,10 @@ export class SellerPaymentService {
 
       const accessToken = await this.getAccessToken();
 
-      // Base URL determination - use request's origin if available or fallback to a valid URL
+      // Base URL determination - use dynamic approach to get the correct Replit URL
       const baseUrl = process.env.REPL_SLUG 
         ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
-        : 'https://workspace.repl.co';
+        : (process.env.REPL_ID ? `https://${process.env.REPL_ID}.id.repl.co` : 'http://localhost:5001');
 
       console.log("[PAYPAL] Using base URL:", baseUrl);
 
