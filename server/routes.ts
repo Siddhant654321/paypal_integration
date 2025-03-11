@@ -928,6 +928,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Add winner details endpoint
+    router.get("/api/auctions/:id/winner", requireAuth, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        console.log(`[WINNER] Fetching winner details for auction ${auctionId}`);
+
+        // Get auction details
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          console.log(`[WINNER] Auction ${auctionId} not found`);
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Check if user is the seller
+        if (auction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
+          console.log(`[WINNER] Unauthorized access attempt by user ${req.user!.id}`);
+          return res.status(403).json({ message: "Only the seller can view winner details" });
+        }
+
+        // Check if auction has a winner
+        if (!auction.winningBidderId) {
+          console.log(`[WINNER] No winner found for auction ${auctionId}`);
+          return res.status(404).json({ message: "No winning bidder for this auction" });
+        }
+
+        // Get winner's profile
+        const profile = await storage.getProfile(auction.winningBidderId);
+        if (!profile) {
+          console.log(`[WINNER] Winner profile not found for user ${auction.winningBidderId}`);
+          return res.status(404).json({ message: "Winner profile not found" });
+        }
+
+        // Get payment status
+        const payment = await storage.getPaymentByAuctionId(auctionId);
+        console.log(`[WINNER] Found winner details and payment status for auction ${auctionId}`);
+
+        res.json({
+          auction: {
+            id: auction.id,
+            title: auction.title,
+            currentPrice: auction.currentPrice,
+            status: auction.status,
+            paymentStatus: payment?.status || "pending"
+          },
+          profile: {
+            fullName: profile.fullName,
+            email: profile.email,
+            phoneNumber: profile.phoneNumber,
+            address: profile.address,
+            city: profile.city,
+            state: profile.state,
+            zipCode: profile.zipCode
+          }
+        });
+      } catch (error) {
+        console.error("[WINNER] Error fetching winner details:", error);
+        res.status(500).json({ message: "Failed to fetch winner details" });
+      }
+    });
+
+    // Add fulfillment endpoint
+    router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        const { carrier, trackingNumber } = req.body;
+
+        console.log(`[FULFILLMENT] Processing fulfillment for auction ${auctionId}`, {
+          carrier,
+          trackingNumber: trackingNumber.substring(0, 8) + "..."
+        });
+
+        // Validate input
+        if (!carrier || !trackingNumber) {
+          return res.status(400).json({ message: "Carrier and tracking number are required" });
+        }
+
+        // Get auction
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Verify seller
+        if (auction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
+          return res.status(403).json({ message: "Only the seller can submit fulfillment details" });
+        }
+
+        // Get payment
+        const payment = await storage.getPaymentByAuctionId(auctionId);
+        if (!payment) {
+          return res.status(404).json({ message: "Payment record not found" });
+        }
+
+        if (payment.status !== "completed_pending_shipment") {
+          return res.status(400).json({ 
+            message: "Payment must be completed and pending shipment to submit tracking" 
+          });
+        }
+
+        // Create fulfillment record
+        const fulfillment = await storage.createFulfillment({
+          auctionId,
+          sellerId: auction.sellerId,
+          buyerId: auction.winningBidderId!,
+          shippingCarrier: carrier,
+          trackingNumber,
+          status: "shipped",
+          shippingDate: new Date(),
+        });
+
+        // Release funds to seller
+        await PaymentService.releaseFundsToSeller(payment.id, `${carrier}: ${trackingNumber}`);
+
+        console.log(`[FULFILLMENT] Successfully processed fulfillment for auction ${auctionId}`);
+        res.json(fulfillment);
+      } catch (error) {
+        console.error("[FULFILLMENT] Error processing fulfillment:", error);
+        res.status(500).json({ message: "Failed to process fulfillment" });
+      }
+    });
+
     // Update the auction approval endpoint
     router.post("/api/admin/auctions/:id/approve", requireAdmin, async (req, res) => {
       try {
