@@ -40,13 +40,13 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
 
   // Handle fulfillment submission
   const fulfillmentMutation = useMutation({
-    mutationFn: async (data: { trackingNumber: string; carrier: string }) => {
+    mutationFn: async (data: { carrier: string; trackingNumber: string }) => {
       return apiRequest("POST", `/api/auctions/${auctionId}/fulfill`, data);
     },
     onSuccess: () => {
       toast({
-        title: "Shipping details submitted",
-        description: "The buyer will be notified and funds will be released to your account.",
+        title: "Shipping details submitted successfully",
+        description: "The buyer will be notified and funds will be released to your account shortly.",
       });
 
       // Invalidate relevant queries
@@ -57,9 +57,10 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
       onSuccess?.();
     },
     onError: (error: any) => {
+      console.error("Error submitting fulfillment:", error);
       toast({
         title: "Error submitting shipping details",
-        description: error.message || "Please try again",
+        description: error.message || "Please try again later",
         variant: "destructive",
       });
     },

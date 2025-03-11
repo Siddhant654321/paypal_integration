@@ -31,7 +31,7 @@ export class PaymentService {
       console.log("[PAYPAL] Requesting access token...");
 
       const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
-      const response = await axios.post(`${BASE_URL}/v1/oauth2/token`, 
+      const response = await axios.post(`${BASE_URL}/v1/oauth2/token`,
         'grant_type=client_credentials',
         {
           headers: {
@@ -334,19 +334,23 @@ export class PaymentService {
         amount: payment.sellerPayout
       });
 
-      // Process payout to seller
-      await SellerPaymentService.createPayout(
+      // Process payout to seller using PayPal
+      const payoutResult = await SellerPaymentService.createPayout(
         paymentId,
         payment.sellerId,
         payment.sellerPayout
       );
+
+      if (!payoutResult || !payoutResult.batch_header?.payout_batch_id) {
+        throw new Error("Failed to create PayPal payout");
+      }
 
       // Update payment and tracking info
       console.log("[PAYPAL] Updating payment status to completed");
       await storage.updatePayment(paymentId, {
         status: "completed",
         trackingInfo,
-        completedAt: new Date().toISOString()
+        completedAt: new Date()
       });
 
       // Update auction status
@@ -357,11 +361,12 @@ export class PaymentService {
       });
 
       // Notify buyer of shipping info
-      await NotificationService.notifyBuyer(
-        payment.buyerId,
-        "Shipping Information Available",
-        `Your order has been shipped. Tracking information: ${trackingInfo}`
-      );
+      await NotificationService.createNotification({
+        userId: payment.buyerId,
+        type: "fulfillment",
+        title: "Shipping Information Available",
+        message: `Your order has been shipped. Tracking information: ${trackingInfo}`
+      });
 
       return { success: true };
     } catch (error) {
@@ -389,7 +394,7 @@ export class PaymentService {
 
       // Update auction status based on reserve price
       await storage.updateAuction(payment.auctionId, {
-        status: auction.currentPrice < auction.reservePrice ? 
+        status: auction.currentPrice < auction.reservePrice ?
           "pending_seller_decision" : "ended",
         paymentStatus: "failed"
       });
@@ -415,7 +420,7 @@ export class PaymentService {
     try {
       console.log("[PAYPAL] Getting order status for:", orderId);
       const accessToken = await this.getAccessToken();
-      
+
       const response = await axios.get(
         `${BASE_URL}/v2/checkout/orders/${orderId}`,
         {
@@ -425,7 +430,7 @@ export class PaymentService {
           }
         }
       );
-      
+
       console.log("[PAYPAL] Order status response:", response.data.status);
       return {
         id: response.data.id,
