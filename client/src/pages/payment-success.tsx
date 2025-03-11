@@ -6,7 +6,6 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
-import LoadingSpinner from '@/components/ui/loading-spinner';
 
 export default function PaymentSuccessPage() {
   const [searchParams] = useSearchParams();
