@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,14 +13,14 @@ export default function PaymentSuccessPage() {
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const orderId = searchParams.get("orderId") || "";
-  
+
   useEffect(() => {
     if (!orderId) {
       setStatus("error");
       setError("No order ID found in URL parameters");
       return;
     }
-    
+
     // Verify payment success with backend
     fetch(`/api/payments/${orderId}/capture`, {
       method: 'POST',
@@ -67,32 +66,32 @@ export default function PaymentSuccessPage() {
             {status === "loading" && <LoadingSpinner className="mr-2" />}
             {status === "success" && <CheckCircle2 className="mr-2 text-green-600" />}
             {status === "error" && <XCircle className="mr-2 text-red-600" />}
-            
+
             {status === "loading" && "Processing Payment"}
             {status === "success" && "Payment Successful"}
             {status === "error" && "Payment Error"}
           </CardTitle>
-          
+
           {status === "success" && (
             <CardDescription>
               Your payment has been successfully processed.
             </CardDescription>
           )}
-          
+
           {status === "error" && (
             <CardDescription className="text-red-600">
               {error || "An error occurred processing your payment."}
             </CardDescription>
           )}
         </CardHeader>
-        
+
         <CardContent>
           {status === "loading" && (
             <p className="text-center">
               Please wait while we confirm your payment...
             </p>
           )}
-          
+
           {status === "success" && (
             <div className="space-y-4">
               <p>
@@ -109,7 +108,7 @@ export default function PaymentSuccessPage() {
               )}
             </div>
           )}
-          
+
           {status === "error" && (
             <div className="space-y-4">
               <p>
@@ -122,14 +121,14 @@ export default function PaymentSuccessPage() {
             </div>
           )}
         </CardContent>
-        
+
         <CardFooter className="flex justify-center gap-4">
           {status === "success" && (
             <Button onClick={() => navigate("/buyer-dashboard")}>
               Go to Dashboard
             </Button>
           )}
-          
+
           {status === "error" && (
             <>
               <Button variant="outline" onClick={() => navigate(-1)}>
