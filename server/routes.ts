@@ -1772,7 +1772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!req.user) {
           console.log('[PAYMENT] Unauthorized payment attempt - no user in session');
           return res.status(401).json({
-            message: ""Unauthorized - Please log in again",
+            message: "Unauthorized - Please log in again",
             code: "AUTH_REQUIRED"
           });
         }
