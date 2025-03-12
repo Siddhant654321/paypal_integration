@@ -560,12 +560,14 @@ class SellerPaymentService {
       });
 
       // Record the payout in our database
-      await storage.createSellerPayout({
+      await storage.createSellerPayOut({
         sellerId,
         paymentId,
         amount,
         paypalPayoutId: response.data.batch_header.payout_batch_id,
-        status: response.data.batch_header.batch_status
+        status: response.data.batch_header.batch_status,
+        createdAt: new Date(),
+        completedAt: response.data.batch_header.batch_status === 'SUCCESS' ? new Date() : null
       });
 
       return response.data;
