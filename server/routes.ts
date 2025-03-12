@@ -1130,31 +1130,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
-        // Handle multiple possible field structures
-        const carrier = req.body.carrier || (req.body.trackingInfo && req.body.trackingInfo.split(':')[0]?.trim());
-        const trackingNumber = req.body.trackingNumber || (req.body.trackingInfo && req.body.trackingInfo.split(':')[1]?.trim());
-        const notes = req.body.notes || "";
+        
+        // Log full request body for debugging
+        console.log(`[FULFILLMENT] Processing fulfillment for auction ${auctionId}, raw body:`, req.body);
+        
+        // Get carrier and tracking number with better fallbacks
+        let carrier, trackingNumber, notes;
+        
+        if (req.body.trackingInfo && typeof req.body.trackingInfo === 'string' && req.body.trackingInfo.includes(':')) {
+          // Format: "USPS: 1234567890"
+          const parts = req.body.trackingInfo.split(':');
+          carrier = parts[0]?.trim();
+          trackingNumber = parts[1]?.trim();
+        } else {
+          // Direct fields
+          carrier = req.body.carrier || req.body.shippingCarrier;
+          trackingNumber = req.body.trackingNumber || req.body.tracking;
+        }
+        
+        notes = req.body.notes || req.body.additionalNotes || "";
 
-        console.log(`[FULFILLMENT] Processing fulfillment for auction ${auctionId}`, {
+        console.log(`[FULFILLMENT] Extracted shipping data:`, {
           carrier,
-          trackingNumber: trackingNumber ? trackingNumber.substring(0, 8) + "..." : "missing",
-          notes: notes ? "provided" : "not provided",
-          requestBody: req.body
+          trackingNumber,
+          notes
         });
 
-        // Verify input
-        console.log("[FULFILLMENT] Full request data:", req.body);
-        console.log("[FULFILLMENT] Extracted data:", { carrier, trackingNumber, notes });
-
+        // Validate input
         if (!carrier || !trackingNumber) {
-          console.log("[FULFILLMENT] Validation failed:", { 
-            hasCarrier: !!carrier, 
-            hasTrackingNumber: !!trackingNumber,
-            bodyKeys: Object.keys(req.body)
-          });
           return res.status(400).json({ 
             message: "Carrier and tracking number are required",
-            receivedData: { carrier, trackingNumber }
+            receivedData: req.body
           });
         }
 
@@ -1169,6 +1175,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "Only the seller can submit fulfillment details" });
         }
 
+        // Find the payment for this auction
+        const payment = await storage.getPaymentByAuctionId(auctionId);
+        if (!payment) {
+          return res.status(404).json({ message: "Payment record not found for this auction" });
+        }
+
+        console.log(`[FULFILLMENT] Found payment record:`, {
+          paymentId: payment.id,
+          status: payment.status
+        });
+
         try {
           // Create fulfillment record
           const fulfillment = await storage.createFulfillment({
@@ -1182,38 +1199,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
             shippingDate: new Date(),
           });
 
+          console.log(`[FULFILLMENT] Created fulfillment record:`, fulfillment);
+
           // Update auction status
           await storage.updateAuction(auctionId, {
             status: "fulfilled",
+            paymentStatus: "completed"
           });
 
-          // Find the payment for this auction
-          const payment = await storage.findPaymentByAuctionId(auctionId);
-          if (payment && payment.status === "completed" && !payment.payoutProcessed) {
-            try {
-              // Now that we have tracking info, create the payout to the seller
-              await SellerPaymentService.createPayout(
-                payment.id,
-                auction.sellerId,
-                payment.sellerPayout
-              );
-
-              // Mark that payout has been processed
+          // Process payout to seller
+          try {
+            // For PayPal - use direct fund release
+            if (payment.status === "completed_pending_shipment") {
+              await PaymentService.releaseFundsToSeller(payment.id, `${carrier}: ${trackingNumber}`);
+              console.log(`[FULFILLMENT] Successfully released funds to seller`);
+            } 
+            // For other payment methods - mark as processed
+            else if (payment.status === "completed" && !payment.payoutProcessed) {
               await storage.markPaymentPayoutProcessed(payment.id);
-            } catch (payoutError) {
-              console.error("[FULFILLMENT] Error processing seller payout:", payoutError);
-              // We'll still mark the auction as fulfilled, but log the payout error
+              console.log(`[FULFILLMENT] Marked payment as processed`);
             }
+          } catch (payoutError) {
+            console.error("[FULFILLMENT] Error processing seller payout:", payoutError);
+            // Continue with fulfillment even if payout has an error
           }
 
           // Notify the buyer
           if (auction.winningBidderId) {
-            await NotificationService.notifyFulfillment(
-              auction.winningBidderId,
-              auction.title,
-              trackingNumber,
-              carrier
-            );
+            await NotificationService.createNotification({
+              userId: auction.winningBidderId,
+              type: "fulfillment",
+              title: "Order Shipped",
+              message: `Your order "${auction.title}" has been shipped. Tracking: ${carrier} ${trackingNumber}`
+            });
+            console.log(`[FULFILLMENT] Buyer notification sent`);
           }
 
           console.log(`[FULFILLMENT] Successfully processed fulfillment for auction ${auctionId}`);

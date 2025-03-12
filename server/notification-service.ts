@@ -29,7 +29,7 @@ export class NotificationService {
 
       // Extract reference field before sending to storage
       const { reference, ...notificationData } = notification;
-      
+
       const createdNotification = await storage.createNotification({
         ...notificationData,
         userId,
@@ -52,7 +52,7 @@ export class NotificationService {
           // Check if it's appropriate to send email for this notification type
           const shouldSendEmail = user.emailAuctionNotifications && 
             (notification.type === 'auction_ending_soon' || notification.type === 'auction_completed');
-            
+
           if (shouldSendEmail) {
             await EmailService.sendNotification(notification.type, user, {
               message: notification.message,
@@ -188,19 +188,48 @@ export class NotificationService {
     );
   }
 
-  static async notifyPayment(
-    userId: number,
-    amount: number,
-    status: string
-  ): Promise<void> {
-    return this.createNotification(
-      userId,
-      {
-        type: "payment",
-        title: "Payment Update",
-        message: `Payment of $${(amount/100).toFixed(2)} has been ${status}`,
-      }
-    );
+  static async notifyPayment(userId: number, amount: number, status: string) {
+    try {
+      const title = status === "completed" 
+        ? "Payment Received" 
+        : status === "failed" 
+          ? "Payment Failed" 
+          : "Payment Update";
+
+      const message = status === "completed"
+        ? `Payment of $${(amount / 100).toFixed(2)} has been completed`
+        : status === "failed"
+          ? `Payment of $${(amount / 100).toFixed(2)} has failed`
+          : `Payment status: ${status}`;
+
+      await this.createNotification(
+        userId,
+        {
+          type: "payment",
+          title,
+          message
+        }
+      );
+    } catch (error) {
+      console.error("[NOTIFICATION] Error sending payment notification:", error);
+    }
+  }
+
+  static async notifyFulfillment(userId: number, auctionTitle: string, trackingNumber: string, carrier: string) {
+    try {
+      await this.createNotification(
+        userId,
+        {
+          type: "fulfillment",
+          title: "Item Shipped",
+          message: `Your item "${auctionTitle}" has been shipped. Tracking: ${carrier} ${trackingNumber}`
+        }
+      );
+
+      console.log(`[NOTIFICATION] Fulfillment notification sent to user ${userId} for auction "${auctionTitle}"`);
+    } catch (error) {
+      console.error("[NOTIFICATION] Error sending fulfillment notification:", error);
+    }
   }
 
   static async notifyAuctionOneHourRemaining(
