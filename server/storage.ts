@@ -55,6 +55,9 @@ export interface IStorage {
   getPayment(id: number): Promise<Payment | undefined>;
   updatePayment(id: number, updates: Partial<Payment>): Promise<Payment>;
   getPaymentBySessionId(sessionId: string): Promise<Payment | undefined>;
+  getPaymentByAuctionId(auctionId: number): Promise<Payment | undefined>;
+  getBidsForAuction(auctionId: number): Promise<Bid[]>;
+  deleteAuction(auctionId: number): Promise<void>;
 }
 
 // Implementation of the storage interface
@@ -482,9 +485,27 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAuction(auctionId: number): Promise<void> {
     try {
-      await db
-        .delete(auctions)
-        .where(eq(auctions.id, auctionId));
+      log(`Deleting auction ${auctionId}`);
+
+      // Delete in a transaction to ensure all related data is cleaned up
+      await db.transaction(async (tx) => {
+        // First delete all bids for this auction
+        await tx
+          .delete(bids)
+          .where(eq(bids.auctionId, auctionId));
+
+        // Delete any payments associated with this auction
+        await tx
+          .delete(payments)
+          .where(eq(payments.auctionId, auctionId));
+
+        // Finally delete the auction itself
+        await tx
+          .delete(auctions)
+          .where(eq(auctions.id, auctionId));
+      });
+
+      log(`Successfully deleted auction ${auctionId} and all related data`);
     } catch (error) {
       log(`Error deleting auction ${auctionId}: ${error}`);
       throw error;
@@ -1006,11 +1027,7 @@ export class DatabaseStorage implements IStorage {
       log(`Updating payment ${paymentId} status to ${status}`, "payments");
       const [payment] = await db
         .update(payments)
-        .set({ 
-          status,
-          updatedAt: new Date(),
-          completedAt: status === "completed" ? new Date() : undefined
-        })
+        .set({ status })
         .where(eq(payments.id, paymentId))
         .returning();
 
@@ -1018,7 +1035,12 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`Payment ${paymentId} not found`);
       }
 
-      log(`Payment ${paymentId} status updated to ${status}`, "payments");
+      log(`Successfully updated payment status`, {
+        paymentId,
+        newStatus: status,
+        timestamp: new Date().toISOString()
+      });
+
       return payment;
     } catch (error) {
       log(`Error updating payment status: ${error}`, "payments");
@@ -1092,23 +1114,22 @@ export class DatabaseStorage implements IStorage {
   }
   async getPaymentByAuctionId(auctionId: number): Promise<Payment | undefined> {
     try {
-      log(`Getting payment for auction ${auctionId}`, "payments");
+      log(`Finding payment for auction ID: ${auctionId}`, "payments");
       const [payment] = await db
         .select()
         .from(payments)
         .where(eq(payments.auctionId, auctionId))
-        .orderBy(desc(payments.createdAt))
         .limit(1);
 
       if (payment) {
-        log(`Found payment record for auction ${auctionId}: status=${payment.status}`, "payments");
+        log(`Found payment ${payment.id} for auction ${auctionId}`, "payments");
       } else {
-        log(`No payment record found for auction ${auctionId}`, "payments");
+        log(`No payment found for auction ${auctionId}`, "payments");
       }
 
       return payment;
     } catch (error) {
-      log(`Error getting payment for auction ${auctionId}: ${error}`, "payments");
+      log(`Error finding payment for auction ${auctionId}: ${error}`, "payments");
       throw error;
     }
   }
