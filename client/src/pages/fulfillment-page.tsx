@@ -30,11 +30,18 @@ export default function FulfillmentPage() {
       try {
         console.log("[FULFILLMENT] Submitting data:", data);
 
+        // Log the data to see what's being sent
+        console.log("[FULFILLMENT] Form data:", {
+          carrier: data.carrier,
+          trackingNumber: data.trackingNumber,
+          notes: data.notes || ""
+        });
+
         // Ensure field names match what the server expects
         const payload = {
           carrier: data.carrier,
           trackingNumber: data.trackingNumber,
-          notes: data.notes,
+          notes: data.notes || "",
           auctionId: params?.id, // Ensure auctionId is included
           shippingDate: new Date().toISOString(),
           status: "shipped"

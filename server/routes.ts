@@ -247,7 +247,7 @@ router.get("/api/auctions/:id/payment-status", requireAuth, async (req, res) => 
 
     // Get current payment status from PayPal
     const paymentStatus = await PaymentService.getPaymentStatus(auctionId);
-    
+
     console.log(`[PAYMENT] Current payment status for auction ${auctionId}:`, paymentStatus);
 
     // Update auction's payment status if needed
@@ -304,7 +304,7 @@ router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('[PAYMENT CAPTURE] Error:', error);
-    
+
     // Log the full error details
     if (error instanceof Error) {
       console.error('[PAYMENT CAPTURE] Error details:', {
@@ -354,7 +354,7 @@ router.get("/api/auctions/:id/payment-status", requireAuth, async (req, res) => 
 
     // Get current payment status from PayPal
     const paymentStatus = await PaymentService.getPaymentStatus(auctionId);
-    
+
     console.log(`[PAYMENT] Current payment status for auction ${auctionId}:`, paymentStatus);
 
     // Update auction's payment status if needed
@@ -953,7 +953,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Get payment status from the payments table directly
         const payment = await storage.getPaymentByAuctionId(auctionId);
-        
+
         console.log(`[WINNER] Found winner details and payment info:`, {
           auctionId,
           paymentId: payment?.id,
@@ -1076,8 +1076,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notes: notes ? "provided" : "not provided"
         });
 
-        // Validate input
+        // Verify input
+        console.log("[FULFILLMENT] Received data:", { carrier, trackingNumber, notes });
+
         if (!carrier || !trackingNumber) {
+          console.log("[FULFILLMENT] Validation failed:", { 
+            hasCarrier: !!carrier, 
+            hasTrackingNumber: !!trackingNumber 
+          });
           return res.status(400).json({ message: "Carrier and tracking number are required" });
         }
 
@@ -1104,7 +1110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: "shipped",
             shippingDate: new Date(),
           });
-          
+
           // Update auction status
           await storage.updateAuction(auctionId, {
             status: "fulfilled",
@@ -1766,7 +1772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!req.user) {
           console.log('[PAYMENT] Unauthorized payment attempt - no user in session');
           return res.status(401).json({
-            message: "Unauthorized - Please log in again",
+            message: ""Unauthorized - Please log in again",
             code: "AUTH_REQUIRED"
           });
         }
@@ -2691,8 +2697,7 @@ router.get("/api/user", (req: Express.Request, res: Express.Response) => {
 router.get("/api/session/check", (req: Express.Request, res: Express.Response) => {
   console.log("[SESSION] Checking session status:", {
     isAuthenticated: req.isAuthenticated(),
-    sessionID: req.sessionID,
-    hasCookies: !!req.headers.cookie,
+    sessionID: req.sessionID,    hasCookies: !!req.headers.cookie,
     cookies: req.headers.cookie,
     user: req.user ? {
       id: req.user.id,
