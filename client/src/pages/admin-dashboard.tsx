@@ -931,7 +931,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
     queryKey: ["/api/admin/profiles", userId],
     queryFn: () => fetch(`/api/admin/profiles/${userId}`).then(res => {
       if (!res.ok) throw new Error("Failed to fetch profile");
-      return res.json});
+      return res.json();
     }),
   });
 
