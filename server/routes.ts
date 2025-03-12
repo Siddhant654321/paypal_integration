@@ -858,17 +858,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.get("/api/auctions/:id", async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
+        console.log(`[AUCTION] Fetching auction ${auctionId}`);
+
+        if (isNaN(auctionId)) {
+          console.log(`[AUCTION] Invalid auction ID: ${req.params.id}`);
+          return res.status(400).json({ message: "Invalid auction ID" });
+        }
+
         const auction = await storage.getAuction(auctionId);
         if (!auction) {
+          console.log(`[AUCTION] Auction ${auctionId} not found`);
           return res.status(404).json({ message: "Auction not found" });
         }
 
         // Increment view count
         await storage.incrementAuctionViews(auctionId);
+        console.log(`[AUCTION] Incremented views for auction ${auctionId}`);
 
         // Get the seller's profile
         const sellerProfile = await storage.getProfile(auction.sellerId);
-        res.json({ ...auction, sellerProfile });
+        console.log(`[AUCTION] Found seller profile for auction ${auctionId}`);
+
+        // Return auction with seller profile and updated view count
+        res.json({ 
+          ...auction, 
+          sellerProfile,
+          views: (auction.views || 0) + 1 // Include the just-incremented view
+        });
       } catch (error) {
         console.error("Error fetching auction:", error);
         res.status(500).json({ message: "Failed to fetch auction" });
