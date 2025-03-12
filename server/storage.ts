@@ -1120,19 +1120,26 @@ export class DatabaseStorage implements IStorage {
       // Get current views first
       const auction = await this.getAuction(auctionId);
       if (!auction) {
-        throw new Error(`Auction ${auctionId} not found`);
+        log(`Auction ${auctionId} not found for incrementing views`);
+        return; // Silently return without throwing if auction not found
       }
       
       // Increment views count
       const currentViews = auction.views || 0;
-      await db
-        .update(auctions)
-        .set({
-          views: currentViews + 1
-        })
-        .where(eq(auctions.id, auctionId));
+      try {
+        await db
+          .update(auctions)
+          .set({
+            views: currentViews + 1
+          })
+          .where(eq(auctions.id, auctionId));
+        log(`Successfully incremented views for auction ${auctionId} to ${currentViews + 1}`);
+      } catch (dbError) {
+        log(`Database error incrementing views for auction ${auctionId}: ${dbError}`);
+        // Don't throw, just log the database error
+      }
     } catch (error) {
-      log(`Error incrementing views for auction ${auctionId}: ${error}`);
+      log(`Error in incrementAuctionViews for auction ${auctionId}: ${error}`);
       // Don't throw the error, just log it
       // This way the auction can still be viewed even if view counting fails
     }

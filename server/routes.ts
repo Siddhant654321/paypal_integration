@@ -865,19 +865,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid auction ID" });
         }
 
-        const auction = await storage.getAuction(auctionId);
+        // Get auction with error handling
+        let auction;
+        try {
+          auction = await storage.getAuction(auctionId);
+        } catch (dbError) {
+          console.error(`[AUCTION] Database error fetching auction ${auctionId}:`, dbError);
+          return res.status(500).json({ message: "Database error fetching auction" });
+        }
+
         if (!auction) {
           console.log(`[AUCTION] Auction ${auctionId} not found`);
           return res.status(404).json({ message: "Auction not found" });
         }
 
-        // Increment view count
-        await storage.incrementAuctionViews(auctionId);
-        console.log(`[AUCTION] Incremented views for auction ${auctionId}`);
+        // Increment view count (don't wait for this to complete)
+        storage.incrementAuctionViews(auctionId).catch(err => {
+          console.error(`[AUCTION] Non-blocking view increment error:`, err);
+        });
 
         // Get the seller's profile
-        const sellerProfile = await storage.getProfile(auction.sellerId);
-        console.log(`[AUCTION] Found seller profile for auction ${auctionId}`);
+        let sellerProfile = null;
+        try {
+          sellerProfile = await storage.getProfile(auction.sellerId);
+          console.log(`[AUCTION] Found seller profile for auction ${auctionId}`);
+        } catch (profileError) {
+          console.error(`[AUCTION] Error fetching seller profile:`, profileError);
+          // Continue even if profile fetch fails
+        }
 
         // Return auction with seller profile and updated view count
         res.json({ 
@@ -886,8 +901,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           views: (auction.views || 0) + 1 // Include the just-incremented view
         });
       } catch (error) {
-        console.error("Error fetching auction:", error);
-        res.status(500).json({ message: "Failed to fetch auction" });
+        console.error("[AUCTION] Error fetching auction:", error);
+        res.status(500).json({ 
+          message: "Failed to fetch auction", 
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
       }
     });
 
