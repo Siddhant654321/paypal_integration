@@ -854,58 +854,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Update the single auction endpoint to include seller profile and increment views
+    // Update the single auction endpoint to include seller profile
     router.get("/api/auctions/:id", async (req, res) => {
       try {
-        const auctionId = parseInt(req.params.id);
-        console.log(`[AUCTION] Fetching auction ${auctionId}`);
-
-        if (isNaN(auctionId)) {
-          console.log(`[AUCTION] Invalid auction ID: ${req.params.id}`);
-          return res.status(400).json({ message: "Invalid auction ID" });
-        }
-
-        // Get auction with error handling
-        let auction;
-        try {
-          auction = await storage.getAuction(auctionId);
-        } catch (dbError) {
-          console.error(`[AUCTION] Database error fetching auction ${auctionId}:`, dbError);
-          return res.status(500).json({ message: "Database error fetching auction" });
-        }
-
+        const auction = await storage.getAuction(parseInt(req.params.id));
         if (!auction) {
-          console.log(`[AUCTION] Auction ${auctionId} not found`);
           return res.status(404).json({ message: "Auction not found" });
         }
 
-        // Increment view count (don't wait for this to complete)
-        storage.incrementAuctionViews(auctionId).catch(err => {
-          console.error(`[AUCTION] Non-blocking view increment error:`, err);
-        });
-
         // Get the seller's profile
-        let sellerProfile = null;
-        try {
-          sellerProfile = await storage.getProfile(auction.sellerId);
-          console.log(`[AUCTION] Found seller profile for auction ${auctionId}`);
-        } catch (profileError) {
-          console.error(`[AUCTION] Error fetching seller profile:`, profileError);
-          // Continue even if profile fetch fails
-        }
-
-        // Return auction with seller profile and updated view count
-        res.json({ 
-          ...auction, 
-          sellerProfile,
-          views: (auction.views || 0) + 1 // Include the just-incremented view
-        });
+        const sellerProfile = await storage.getProfile(auction.sellerId);
+        res.json({ ...auction, sellerProfile });
       } catch (error) {
-        console.error("[AUCTION] Error fetching auction:", error);
-        res.status(500).json({ 
-          message: "Failed to fetch auction", 
-          error: error instanceof Error ? error.message : "Unknown error"
-        });
+        console.error("Error fetching auction:", error);
+        res.status(500).json({ message: "Failed to fetch auction" });
       }
     });
 

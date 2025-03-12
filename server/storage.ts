@@ -22,7 +22,6 @@ export interface IStorage {
   updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile>;
   createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction>;
   getAuction(id: number): Promise<Auction | undefined>;
-  incrementAuctionViews(auctionId: number): Promise<void>;
   getAuctions(filters?: {
     sellerId?: number;
     approved?: boolean;
@@ -1111,37 +1110,6 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       log(`Error getting payment for auction ${auctionId}: ${error}`, "payments");
       throw error;
-    }
-  }
-
-  async incrementAuctionViews(auctionId: number): Promise<void> {
-    try {
-      log(`Incrementing views for auction ${auctionId}`);
-      // Get current views first
-      const auction = await this.getAuction(auctionId);
-      if (!auction) {
-        log(`Auction ${auctionId} not found for incrementing views`);
-        return; // Silently return without throwing if auction not found
-      }
-      
-      // Increment views count
-      const currentViews = auction.views || 0;
-      try {
-        await db
-          .update(auctions)
-          .set({
-            views: currentViews + 1
-          })
-          .where(eq(auctions.id, auctionId));
-        log(`Successfully incremented views for auction ${auctionId} to ${currentViews + 1}`);
-      } catch (dbError) {
-        log(`Database error incrementing views for auction ${auctionId}: ${dbError}`);
-        // Don't throw, just log the database error
-      }
-    } catch (error) {
-      log(`Error in incrementAuctionViews for auction ${auctionId}: ${error}`);
-      // Don't throw the error, just log it
-      // This way the auction can still be viewed even if view counting fails
     }
   }
 
