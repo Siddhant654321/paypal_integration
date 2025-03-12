@@ -1068,7 +1068,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
-        const { carrier, trackingNumber, notes } = req.body;
+        // Handle multiple possible field structures
+        const carrier = req.body.carrier || (req.body.trackingInfo && req.body.trackingInfo.split(':')[0]?.trim());
+        const trackingNumber = req.body.trackingNumber || (req.body.trackingInfo && req.body.trackingInfo.split(':')[1]?.trim());
+        const notes = req.body.notes || "";
 
         console.log(`[FULFILLMENT] Processing fulfillment for auction ${auctionId}`, {
           carrier,

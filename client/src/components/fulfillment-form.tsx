@@ -60,12 +60,23 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
   const handleSubmit = (data: FulfillmentFormValues) => {
     console.log("[FULFILLMENT] Submitting fulfillment data:", data);
     // Ensure the data is valid before submitting
-    if (!data.carrier || !data.trackingNumber) {
+    if (!data.carrier || !data.carrier.trim() === '') {
       form.setError("carrier", { message: "Carrier is required" });
+      return;
+    }
+    if (!data.trackingNumber || data.trackingNumber.trim() === '') {
       form.setError("trackingNumber", { message: "Tracking number is required" });
       return;
     }
-    onSubmit(data);
+    
+    // Trim data to prevent whitespace issues
+    const cleanData = {
+      carrier: data.carrier.trim(),
+      trackingNumber: data.trackingNumber.trim(),
+      notes: data.notes?.trim() || ""
+    };
+    
+    onSubmit(cleanData);
   };
 
   return (

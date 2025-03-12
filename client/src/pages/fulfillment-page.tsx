@@ -44,8 +44,7 @@ export default function FulfillmentPage() {
           carrier: data.carrier,
           trackingNumber: data.trackingNumber,
           notes: data.notes || "",
-          shippingDate: new Date().toISOString(),
-          status: "shipped"
+          shippingDate: new Date().toISOString()
         };
         
         console.log("[FULFILLMENT] Sending payload to server:", payload);
