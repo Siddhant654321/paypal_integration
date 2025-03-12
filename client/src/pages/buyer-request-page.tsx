@@ -3,7 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Trash, Edit } from "lucide-react";
+import { Loader2, Trash, Edit, User, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { BuyerRequest, Profile } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
@@ -139,13 +139,29 @@ export default function BuyerRequestPage() {
         <CardContent>
           <div className="space-y-4">
             <p className="text-lg">{request.description}</p>
-            {request.buyerProfile && (
+            {isAdmin && request.buyerProfile && (
               <div className="mt-6 pt-6 border-t">
-                <h3 className="font-medium mb-2">Buyer Information</h3>
-                <p>{request.buyerProfile.fullName}</p>
-                <p className="text-sm text-muted-foreground">
-                  {request.buyerProfile.city}, {request.buyerProfile.state}
-                </p>
+                <h3 className="font-medium mb-4">Buyer Information</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span>{request.buyerProfile.fullName}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span>
+                      {request.buyerProfile.city}, {request.buyerProfile.state} {request.buyerProfile.zipCode}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Email: {request.buyerProfile.email}
+                  </p>
+                  {request.buyerProfile.phoneNumber && (
+                    <p className="text-sm text-muted-foreground">
+                      Phone: {request.buyerProfile.phoneNumber}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

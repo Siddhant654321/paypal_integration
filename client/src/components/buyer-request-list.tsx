@@ -3,14 +3,14 @@ import { type BuyerRequest, type Profile } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Clock, Edit, Trash } from "lucide-react";
+import { Clock, Edit, Trash, User } from "lucide-react";
 import { format } from "date-fns";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { LoadingSpinner } from "@/components/ui/loading-spinner"; // Fixed import path
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 interface BuyerRequestWithProfile extends BuyerRequest {
   buyerProfile: Profile;
@@ -100,10 +100,16 @@ export function BuyerRequestList() {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center text-sm text-muted-foreground space-x-4">
-                  <div className="flex items-center gap-1">
-                    <Eye className="h-4 w-4" />
-                    <span>{request.views} views</span>
-                  </div>
+                  {/* Show buyer info for admins */}
+                  {isAdmin && request.buyerProfile && (
+                    <div className="flex items-center gap-1">
+                      <User className="h-4 w-4" />
+                      <span>{request.buyerProfile.fullName}</span>
+                      <span className="text-muted-foreground">
+                        ({request.buyerProfile.city}, {request.buyerProfile.state})
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-1">
                     <Clock className="h-4 w-4" />
                     <span>{format(new Date(request.createdAt), "MMM d")}</span>

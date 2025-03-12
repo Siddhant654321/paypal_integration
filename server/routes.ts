@@ -1777,38 +1777,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Create buyer request (no auth required)
-    router.post("/api/buyer-requests", async (req, res) => {
+    // Create buyer request with admin notifications
+    router.post("/api/buyer-requests", requireAuth, async (req, res) => {
       try {
-        console.log("Creating buyer request with data:", req.body);
-
-        try {
-          const requestData = insertBuyerRequestSchema.parse(req.body);
-          console.log("Validated request data:", requestData);
-
-          const buyerRequest = await storage.createBuyerRequest({
-            ...requestData,
-            buyerId: req.user?.id || 0, // Use 0 for anonymous requests
-          });
-
-          console.log("Successfully created buyer request:", buyerRequest);
-          res.status(201).json(buyerRequest);
-        } catch (error) {
-          console.error("Validation or creation error:", error);
-          if (error instanceof ZodError) {
-            return res.status(400).json({
-              message: "Invalid request data",
-              errors: error.errors,
-            });
-          }
-          throw error;
-        }
-      } catch (error) {
-        console.error("Error creating buyer request:", error);
-        res.status(500).json({ 
-          message: "Failed to create buyer request",
-          error: error instanceof Error ? error.message : "Unknown error"
+        console.log("[BUYER REQUEST] Creating new request:", {
+          userId: req.user?.id,
+          title: req.body.title
         });
+
+        const validatedData = insertBuyerRequestSchema.parse(req.body);
+        const request = await storage.createBuyerRequest({
+          ...validatedData,
+          buyerId: req.user!.id,
+          status: "open"
+        });
+
+        // Notify all admin users
+        const adminUsers = await storage.getUsersByRole(["admin", "seller_admin"]);
+        
+        await Promise.all(adminUsers.map(admin => 
+          NotificationService.createNotification({
+            userId: admin.id,
+            type: "admin",
+            title: "New Buyer Request",
+            message: `A new buyer request has been submitted: "${request.title}"`,
+            reference: `buyer-request-${request.id}`
+          })
+        ));
+
+        console.log("[BUYER REQUEST] Created successfully:", {
+          requestId: request.id,
+          notifiedAdmins: adminUsers.length
+        });
+
+        res.status(201).json(request);
+      } catch (error) {
+        console.error("[BUYER REQUEST] Error creating request:", error);
+        if (error instanceof ZodError) {
+          return res.status(400).json({
+            message: "Invalid request data",
+            errors: error.errors
+          });
+        }
+        res.status(500).json({ message: "Failed to create buyer request" });
       }
     });
 
