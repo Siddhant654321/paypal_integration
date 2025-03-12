@@ -80,7 +80,7 @@ export const auctions = pgTable("auctions", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   species: text("species").notNull(),
-  category: text("category").notNull(),  // Remove enum constraint to allow flexibility
+  category: text("category").notNull(),
   imageUrl: text("image_url"),
   images: text("images").array().notNull().default([]),
   startPrice: integer("start_price").notNull(),
@@ -102,6 +102,7 @@ export const auctions = pgTable("auctions", {
   }),
   reserveMet: boolean("reserve_met").notNull().default(false),
   fulfillmentRequired: boolean("fulfillment_required").notNull().default(false),
+  views: integer("views").notNull().default(0)  // Added views column
 });
 
 export const bids = pgTable("bids", {

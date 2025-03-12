@@ -637,7 +637,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
-    // Update the getAuctions endpoint to include seller profiles
+    // Update the auctions list endpoint to include view counts
     router.get("/api/auctions", async (req, res) => {
       try {
         const filters = {
@@ -651,7 +651,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const auctionsWithProfiles = await Promise.all(
           auctions.map(async (auction) => {
             const sellerProfile = await storage.getProfile(auction.sellerId);
-            return { ...auction, sellerProfile };
+            return { 
+              ...auction, 
+              sellerProfile,
+              views: auction.views || 0  // Ensure views is included
+            };
           })
         );
 
@@ -854,16 +858,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Update the single auction endpoint to include seller profile
+    // Update the single auction endpoint to include view tracking
     router.get("/api/auctions/:id", async (req, res) => {
       try {
-        const auction = await storage.getAuction(parseInt(req.params.id));
+        const auctionId = parseInt(req.params.id);
+        
+        // Increment views counter atomically using SQL
+        await db.execute(
+          sql`UPDATE auctions SET views = views + 1 WHERE id = ${auctionId}`
+        );
+
+        const auction = await storage.getAuction(auctionId);
         if (!auction) {
           return res.status(404).json({ message: "Auction not found" });
         }
 
         // Get the seller's profile
         const sellerProfile = await storage.getProfile(auction.sellerId);
+
+        console.log(`[VIEWS] Incremented view count for auction ${auctionId}`);
+        
         res.json({ ...auction, sellerProfile });
       } catch (error) {
         console.error("Error fetching auction:", error);
