@@ -330,22 +330,11 @@ export class PaymentService {
 
       console.log("[PAYPAL] Processing payout to seller:", {
         sellerId: payment.sellerId,
-        merchantId: sellerProfile.paypalMerchantId,
+        merchantId: sellerProfile.paypalMerchantId.substring(0, 8) + '...',
         amount: payment.sellerPayout
       });
 
-      // Process payout to seller using PayPal
-      const payoutResult = await SellerPaymentService.createPayout(
-        paymentId,
-        payment.sellerId,
-        payment.sellerPayout
-      );
-
-      if (!payoutResult || !payoutResult.batch_header?.payout_batch_id) {
-        throw new Error("Failed to create PayPal payout");
-      }
-
-      // Update payment and tracking info
+      // Update payment and tracking info first
       console.log("[PAYPAL] Updating payment status to completed");
       await storage.updatePayment(paymentId, {
         status: "completed",
@@ -360,6 +349,17 @@ export class PaymentService {
         paymentStatus: "completed"
       });
 
+      // Process payout to seller using PayPal
+      const payoutResult = await SellerPaymentService.createPayout(
+        paymentId,
+        payment.sellerId,
+        payment.sellerPayout
+      );
+
+      if (!payoutResult || !payoutResult.batch_header?.payout_batch_id) {
+        throw new Error("Failed to create PayPal payout");
+      }
+
       // Notify buyer of shipping info
       await NotificationService.createNotification({
         userId: payment.buyerId,
@@ -371,7 +371,17 @@ export class PaymentService {
       return { success: true };
     } catch (error) {
       console.error("[PAYPAL] Error releasing funds:", error);
-      throw new Error("Failed to release funds to seller");
+
+      // Check if it's a PayPal API error and provide more details
+      if (axios.isAxiosError(error) && error.response) {
+        console.error("[PAYPAL] PayPal API Error:", {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers
+        });
+      }
+
+      throw new Error("Failed to release funds to seller. Please contact support if this persists.");
     }
   }
   static async handlePaymentFailure(orderId: string) {
