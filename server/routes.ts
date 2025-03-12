@@ -369,6 +369,58 @@ router.get("/api/auctions/:id/payment-status", requireAuth, async (req, res) => 
   }
 });
 
+// Add fulfillment endpoint
+router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
+  try {
+    const auctionId = parseInt(req.params.id);
+    console.log(`[FULFILLMENT] Processing fulfillment for auction ${auctionId}`);
+
+    // Get auction details
+    const auction = await storage.getAuction(auctionId);
+    if (!auction) {
+      return res.status(404).json({ message: "Auction not found" });
+    }
+
+    // Verify user is seller
+    if (auction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
+      return res.status(403).json({ message: "Only the seller can fulfill the auction" });
+    }
+
+    // Get payment record
+    const payment = await storage.getPaymentByAuctionId(auctionId);
+    if (!payment) {
+      return res.status(404).json({ message: "Payment record not found" });
+    }
+
+    console.log(`[FULFILLMENT] Found payment record:`, {
+      paymentId: payment.id,
+      status: payment.status,
+      auctionId
+    });
+
+    const { trackingInfo } = req.body;
+    if (!trackingInfo) {
+      return res.status(400).json({ message: "Tracking information is required" });
+    }
+
+    // Release funds to seller and update statuses
+    await PaymentService.releaseFundsToSeller(payment.id, trackingInfo);
+
+    console.log(`[FULFILLMENT] Successfully processed fulfillment:`, {
+      auctionId,
+      paymentId: payment.id,
+      trackingInfo
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[FULFILLMENT] Error processing fulfillment:", error);
+    res.status(500).json({ 
+      message: error instanceof Error ? error.message : "Failed to process fulfillment" 
+    });
+  }
+});
+
 // Middleware to check if user is an approved seller or seller_admin
 const requireApprovedSeller = (req: any, res: any, next: any) => {
   try {
