@@ -43,7 +43,6 @@ export interface IStorage {
   getUnreadNotificationsCount(userId: number): Promise<number>;
   updateUser(userId: number, updates: Partial<User>): Promise<User>;
   authenticateUser(username: string, password: string): Promise<User | undefined>;
-  getUsersByRole(roles: string[]): Promise<User[]>;
   insertPayment(paymentData: InsertPayment): Promise<Payment>;
   findPaymentByPayPalId(orderId: string): Promise<Payment | undefined>;
   updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment>;
@@ -691,48 +690,24 @@ export class DatabaseStorage implements IStorage {
     return undefined;
   }
 
-  async createBuyerRequest(buyerRequest: InsertBuyerRequest): Promise<BuyerRequest> {
+  async createBuyerRequest(requestData: InsertBuyerRequest & { buyerId: number }): Promise<BuyerRequest> {
     try {
-      log(`Creating buyer request: ${buyerRequest.title}`, "buyer-requests");
+      log(`Creating buyer request for user ${requestData.buyerId}`);
+      const [request] = await db
+        .insert(buyerRequests)
+        .values({
+          ...requestData,
+          status: "open",
+          views: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
 
-      // Make sure we have all required fields and convert any string numbers to actual numbers
-      const requestData = {
-        ...buyerRequest,
-        buyerId: typeof buyerRequest.buyerId === 'string' ? parseInt(buyerRequest.buyerId) : buyerRequest.buyerId,
-        budgetMin: buyerRequest.budgetMin ? Number(buyerRequest.budgetMin) : null,
-        budgetMax: buyerRequest.budgetMax ? Number(buyerRequest.budgetMax) : null,
-        createdAt: buyerRequest.createdAt || new Date(),
-        updatedAt: buyerRequest.updatedAt || new Date(),
-        views: buyerRequest.views || 0,
-        status: buyerRequest.status || 'open'
-      };
-
-      log(`Prepared data for database insert: ${JSON.stringify(requestData)}`, "buyer-requests");
-
-      // Perform the insert operation
-      const insertResult = await db.insert(buyerRequests).values(requestData).returning();
-
-      // Check that we got a result
-      if (!insertResult || insertResult.length === 0) {
-        throw new Error("Database insert did not return a result");
-      }
-
-      const request = insertResult[0];
-      log(`Successfully created buyer request with ID: ${request.id}`, "buyer-requests");
-
+      log(`Successfully created buyer request ${request.id}`);
       return request;
     } catch (error) {
-      // Add detailed error logging
-      if (error instanceof Error) {
-        log(`Error creating buyer request: ${error.message}`, "buyer-requests");
-        log(`Error stack: ${error.stack}`, "buyer-requests");
-
-        if ('code' in error) {
-          log(`Database error code: ${error.code}`, "buyer-requests");
-        }
-      } else {
-        log(`Unknown error creating buyer request: ${String(error)}`, "buyer-requests");
-      }
+      log(`Error creating buyer request: ${error}`);
       throw error;
     }
   }
@@ -1045,7 +1020,7 @@ export class DatabaseStorage implements IStorage {
 
       log(`Payment ${paymentId} status updated to ${status}`, "payments");
       return payment;
-        } catch (error) {
+    } catch (error) {
       log(`Error updating payment status: ${error}`, "payments");
       throw error;
     }
@@ -1100,30 +1075,6 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       log(`Error getting user by email ${email}: ${error}`, "users");
       throw error;
-    }
-  }
-
-  async getUsersByRole(roles: string[]): Promise<User[]> {
-    try {
-      log(`Getting users with roles: ${roles.join(', ')}`, "users");
-      let userList;
-
-      if (roles.length === 1) {
-        userList = await db
-          .select()
-          .from(users)
-          .where(eq(users.role, roles[0]));
-      } else {
-        // For multiple roles, get all users and filter in memory
-        const allUsers = await db.select().from(users);
-        userList = allUsers.filter(user => roles.includes(user.role));
-      }
-
-      log(`Found ${userList.length} users with requested roles`, "users");
-      return userList;
-    } catch (error) {
-      log(`Error getting users by roles: ${error}`, "users");
-      return [];
     }
   }
 

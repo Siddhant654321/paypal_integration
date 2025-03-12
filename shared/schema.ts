@@ -193,12 +193,16 @@ export const insertBuyerRequestSchema = createInsertSchema(buyerRequests)
     updatedAt: true,
   })
   .extend({
-    title: z.string().min(3, "Title must be at least 3 characters"),
-    species: z.string().optional().default("Any"),
-    category: z.string().optional().default("Any"),
-    description: z.string().optional().default(""),
-    budgetMin: z.number().optional().nullable(),
-    budgetMax: z.number().optional().nullable()
+    title: z.string().min(5, "Title must be at least 5 characters"),
+    species: z.string().refine(
+      (val) => ["bantam", "standard", "waterfowl", "quail", "other"].includes(val),
+      "Invalid species"
+    ),
+    category: z.string().refine(
+      (val) => ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(val),
+      "Invalid category"
+    ),
+    description: z.string().min(20, "Description must be at least 20 characters"),
   });
 
 // Add types for buyer requests
