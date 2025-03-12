@@ -1,4 +1,3 @@
-
 import nodemailer from 'nodemailer';
 import { User } from '@shared/schema';
 
@@ -96,24 +95,16 @@ const emailTemplates = {
   }),
   fulfillment: (data: { 
     auctionTitle: string; 
-    shippingCarrier: string;
-    trackingNumber: string;
+    trackingInfo: string;
     shippingDate: string;
-    estimatedDeliveryDate?: string;
   }) => ({
     subject: `Shipping Update: ${data.auctionTitle}`,
     html: `
       <h2>Your Item Has Been Shipped!</h2>
       <p>The seller has shipped your item from auction "${data.auctionTitle}".</p>
-      <p><strong>Shipping Details:</strong></p>
-      <ul>
-        <li>Carrier: ${data.shippingCarrier}</li>
-        <li>Tracking Number: ${data.trackingNumber}</li>
-        <li>Shipped On: ${new Date(data.shippingDate).toLocaleDateString()}</li>
-        ${data.estimatedDeliveryDate ? 
-          `<li>Estimated Delivery: ${new Date(data.estimatedDeliveryDate).toLocaleDateString()}</li>` 
-          : ''}
-      </ul>
+      <p><strong>Tracking Information:</strong></p>
+      <p>${data.trackingInfo}</p>
+      <p>Shipped On: ${new Date(data.shippingDate).toLocaleDateString()}</p>
       <p>Log in to your account to view more details.</p>
     `,
   }),
@@ -126,16 +117,12 @@ export class EmailService {
     data: Parameters<typeof emailTemplates[T]>[0]
   ) {
     try {
-      // Get the email template based on notification type
       const template = emailTemplates[type](data as any);
-
-      // Send the email
       await transporter.sendMail({
         from: `"Pips 'n Chicks" <${process.env.SMTP_USER}>`,
         to: user.email,
         ...template,
       });
-
       return true;
     } catch (error) {
       console.error('Failed to send email notification:', error);
@@ -159,10 +146,6 @@ export class EmailService {
       console.log(`  To: ${to}`);
       console.log(`  Subject: ${subject}`);
       console.log(`  Body: ${body}`);
-      
-      // In a production environment, you would integrate with an email service
-      // like SendGrid, Mailgun, AWS SES, etc. here
-      
       console.log("[EMAIL] Email sending simulated (no actual email sent)");
     } catch (error) {
       console.error("[EMAIL] Error sending email:", error);
@@ -220,5 +203,42 @@ export class EmailService {
     }
     
     await this.sendEmail(email, subject, body);
+  }
+
+  static async sendTrackingInfo(
+    buyerId: number,
+    auctionId: number,
+    trackingInfo: string
+  ): Promise<void> {
+    try {
+      const buyer = await storage.getUser(buyerId);
+      if (!buyer?.email) {
+        throw new Error("Buyer email not found");
+      }
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        throw new Error("Auction not found");
+      }
+
+      const emailData = {
+        auctionTitle: auction.title,
+        trackingInfo: trackingInfo,
+        shippingDate: new Date().toISOString()
+      };
+
+      console.log("[EMAIL] Sending tracking info to buyer:", {
+        buyerId,
+        auctionId,
+        email: buyer.email
+      });
+
+      await this.sendNotification("fulfillment", buyer, emailData);
+
+      console.log("[EMAIL] Successfully sent tracking info email");
+    } catch (error) {
+      console.error("[EMAIL] Error sending tracking info:", error);
+      throw error;
+    }
   }
 }

@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { NotificationService } from "./notification-service";
 import axios from 'axios';
+import {EmailService} from './email-service'; // Added import for EmailService
 
 // Check for required PayPal environment variables
 if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
@@ -328,26 +329,39 @@ export class PaymentService {
         throw new Error("Seller PayPal account not found");
       }
 
+      // Handle both sandbox and production merchant IDs
+      const isSandbox = IS_SANDBOX || sellerProfile.paypalMerchantId.startsWith('test_');
+      const recipientType = isSandbox ? "EMAIL" : "MERCHANT";
+      const receiver = isSandbox ?
+        process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID :
+        sellerProfile.paypalMerchantId;
+
+      if (!receiver) {
+        throw new Error("Invalid PayPal receiver configuration");
+      }
+
       console.log("[PAYPAL] Processing payout to seller:", {
         sellerId: payment.sellerId,
-        merchantId: sellerProfile.paypalMerchantId.substring(0, 8) + '...',
-        amount: payment.sellerPayout
+        merchantId: receiver.substring(0, 8) + '...',
+        amount: payment.sellerPayout,
+        isSandbox,
+        recipientType
       });
 
-      try {
-        // Process payout to seller using PayPal first
-        const payoutResult = await SellerPaymentService.createPayout(
-          paymentId,
-          payment.sellerId,
-          payment.sellerPayout
-        );
-
-        if (!payoutResult || !payoutResult.batch_header?.payout_batch_id) {
-          console.log("[PAYPAL] No payout batch ID returned, but continuing with fulfillment");
+      // Process payout to seller using PayPal first
+      const payoutResult = await SellerPaymentService.createPayout(
+        paymentId,
+        payment.sellerId,
+        payment.sellerPayout,
+        {
+          isSandbox,
+          recipientType,
+          receiver
         }
-      } catch (paypalError) {
-        // Log the error but continue with the fulfillment process
-        console.error("[PAYPAL] Error with PayPal payout, continuing with fulfillment:", paypalError);
+      );
+
+      if (!payoutResult || !payoutResult.batch_header?.payout_batch_id) {
+        throw new Error("Failed to create PayPal payout");
       }
 
       // If payout successful, update payment and tracking info
@@ -365,7 +379,10 @@ export class PaymentService {
         paymentStatus: "completed"
       });
 
-      // Notify buyer of shipping info
+      // Send tracking info to buyer via email and notification
+      await EmailService.sendTrackingInfo(payment.buyerId, payment.auctionId, trackingInfo);
+
+      // Create notification for buyer
       await NotificationService.createNotification({
         userId: payment.buyerId,
         type: "fulfillment",
@@ -376,21 +393,7 @@ export class PaymentService {
       return { success: true };
     } catch (error) {
       console.error("[PAYPAL] Error releasing funds:", error);
-
-      // Check if it's a PayPal API error and provide more details
-      if (axios.isAxiosError(error) && error.response) {
-        console.error("[PAYPAL] PayPal API Error:", {
-          status: error.response.status,
-          data: error.response.data
-        });
-
-        // If it's a validation error, provide more specific message
-        if (error.response.data?.name === 'VALIDATION_ERROR') {
-          throw new Error("PayPal payout validation failed. Please ensure your PayPal account is properly set up.");
-        }
-      }
-
-      throw new Error("Failed to release funds to seller. Please contact support if this persists.");
+      throw error;
     }
   }
   static async handlePaymentFailure(orderId: string) {
@@ -501,30 +504,18 @@ export class PaymentService {
 }
 
 class SellerPaymentService {
-  static async createPayout(paymentId: number, sellerId: number, amount: number) {
+  static async createPayout(paymentId: number, sellerId: number, amount: number, options: {isSandbox: boolean, recipientType: string, receiver: string}) {
     try {
       console.log(`[PAYPAL] Creating payout for payment ${paymentId} to seller ${sellerId}`);
-      const profile = await storage.getProfile(sellerId);
-
-      if (!profile?.paypalMerchantId) {
-        throw new Error("Seller PayPal account not found");
-      }
 
       const accessToken = await PaymentService.getAccessToken();
 
-      // Handle both sandbox and production merchant IDs
-      const isSandbox = profile.paypalMerchantId.startsWith('test_');
-      const recipientType = isSandbox ? "EMAIL" : "MERCHANT";
-      const receiver = isSandbox ?
-        "sb-" + profile.paypalMerchantId.substring(5) + "@business.example.com" :
-        profile.paypalMerchantId;
+      // Validate amount is greater than 0
+      if (amount <= 0) {
+        throw new Error("Payout amount must be greater than 0");
+      }
 
-      console.log("[PAYPAL] Payout configuration:", {
-        isSandbox,
-        recipientType,
-        receiverPrefix: receiver.substring(0, 8) + '...',
-        amount: (amount / 100).toFixed(2)
-      });
+      const amountInDollars = (amount / 100).toFixed(2);
 
       const payoutRequest = {
         sender_batch_header: {
@@ -533,16 +524,23 @@ class SellerPaymentService {
           email_message: "Your auction payment has been processed and funds are now available."
         },
         items: [{
-          recipient_type: recipientType,
+          recipient_type: options.recipientType,
           amount: {
-            value: (amount / 100).toFixed(2),
+            value: amountInDollars,
             currency: "USD"
           },
-          receiver: receiver,
+          receiver: options.receiver,
           note: `Payment for auction ID: ${paymentId}`,
           sender_item_id: `item_${paymentId}_${Date.now()}`
         }]
       };
+
+      console.log("[PAYPAL] Sending payout request:", {
+        batchId: payoutRequest.sender_batch_header.sender_batch_id,
+        recipientType: options.recipientType,
+        receiverPrefix: options.receiver.substring(0, 8) + '...',
+        amount: amountInDollars
+      });
 
       const response = await axios.post(
         `${BASE_URL}/v1/payments/payouts`,

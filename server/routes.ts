@@ -882,6 +882,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Add endpoint to get tracking info for buyers
+    router.get("/api/auctions/:id/tracking", requireAuth, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        console.log(`[TRACKING] Retrieving tracking info for auction ${auctionId}`);
+
+        // Get auction details
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Verify user is the buyer
+        if (auction.winningBidderId !== req.user!.id && req.user!.role !== "seller_admin") {
+          return res.status(403).json({ message: "Only the buyer can view tracking information" });
+        }
+
+        // Get payment record with tracking info
+        const payment = await storage.getPaymentByAuctionId(auctionId);
+        if (!payment) {
+          return res.status(404).json({ message: "Payment record not found" });
+        }
+
+        console.log(`[TRACKING] Found tracking info:`, {
+          auctionId,
+          paymentId: payment.id,
+          hasTracking: !!payment.trackingInfo
+        });
+
+        res.json({
+          trackingInfo: payment.trackingInfo || null, 
+          status: payment.status,
+          updatedAt: payment.updatedAt
+        });
+      } catch (error) {
+        console.error("[TRACKING] Error retrieving tracking info:", error);
+        res.status(500).json({ message: "Failed to retrieve tracking information" });
+      }
+    });
+
     // Get admin auctions (including pending)
     router.get("/api/admin/auctions", requireAdmin, async (req, res) => {
       try {
