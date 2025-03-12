@@ -507,10 +507,19 @@ class SellerPaymentService {
 
       const accessToken = await PaymentService.getAccessToken();
 
-      // Validate merchant ID format
-      if (!profile.paypalMerchantId.match(/^[A-Z0-9]+$/)) {
-        throw new Error("Invalid PayPal merchant ID format");
-      }
+      // Handle both sandbox and production merchant IDs
+      const isSandbox = profile.paypalMerchantId.startsWith('test_');
+      const recipientType = isSandbox ? "EMAIL" : "MERCHANT";
+      const receiver = isSandbox ? 
+        "sb-" + profile.paypalMerchantId.substring(5) + "@business.example.com" : 
+        profile.paypalMerchantId;
+
+      console.log("[PAYPAL] Payout configuration:", {
+        isSandbox,
+        recipientType,
+        receiverPrefix: receiver.substring(0, 8) + '...',
+        amount: (amount / 100).toFixed(2)
+      });
 
       const payoutRequest = {
         sender_batch_header: {
@@ -519,23 +528,16 @@ class SellerPaymentService {
           email_message: "Your auction payment has been processed and funds are now available."
         },
         items: [{
-          recipient_type: "MERCHANT",  // Changed from PAYPAL_ID to MERCHANT
+          recipient_type: recipientType,
           amount: {
             value: (amount / 100).toFixed(2),
             currency: "USD"
           },
-          receiver: profile.paypalMerchantId,
+          receiver: receiver,
           note: `Payment for auction ID: ${paymentId}`,
           sender_item_id: `item_${paymentId}_${Date.now()}`
         }]
       };
-
-      console.log("[PAYPAL] Sending payout request:", {
-        batchId: payoutRequest.sender_batch_header.sender_batch_id,
-        merchantIdPrefix: profile.paypalMerchantId.substring(0, 8) + '...',
-        amount: (amount / 100).toFixed(2),
-        recipientType: payoutRequest.items[0].recipient_type
-      });
 
       const response = await axios.post(
         `${BASE_URL}/v1/payments/payouts`,
