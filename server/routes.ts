@@ -1073,18 +1073,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[FULFILLMENT] Processing fulfillment for auction ${auctionId}`, {
           carrier,
           trackingNumber: trackingNumber ? trackingNumber.substring(0, 8) + "..." : "missing",
-          notes: notes ? "provided" : "not provided"
+          notes: notes ? "provided" : "not provided",
+          requestBody: req.body
         });
 
         // Verify input
-        console.log("[FULFILLMENT] Received data:", { carrier, trackingNumber, notes });
+        console.log("[FULFILLMENT] Full request data:", req.body);
+        console.log("[FULFILLMENT] Extracted data:", { carrier, trackingNumber, notes });
 
         if (!carrier || !trackingNumber) {
           console.log("[FULFILLMENT] Validation failed:", { 
             hasCarrier: !!carrier, 
-            hasTrackingNumber: !!trackingNumber 
+            hasTrackingNumber: !!trackingNumber,
+            bodyKeys: Object.keys(req.body)
           });
-          return res.status(400).json({ message: "Carrier and tracking number are required" });
+          return res.status(400).json({ 
+            message: "Carrier and tracking number are required",
+            receivedData: { carrier, trackingNumber }
+          });
         }
 
         // Get auction

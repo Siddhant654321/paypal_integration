@@ -59,6 +59,12 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
 
   const handleSubmit = (data: FulfillmentFormValues) => {
     console.log("[FULFILLMENT] Submitting fulfillment data:", data);
+    // Ensure the data is valid before submitting
+    if (!data.carrier || !data.trackingNumber) {
+      form.setError("carrier", { message: "Carrier is required" });
+      form.setError("trackingNumber", { message: "Tracking number is required" });
+      return;
+    }
     onSubmit(data);
   };
 

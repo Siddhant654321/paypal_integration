@@ -37,15 +37,18 @@ export default function FulfillmentPage() {
           notes: data.notes || ""
         });
 
+        console.log("[FULFILLMENT] Data received from form:", data);
+        
         // Ensure field names match what the server expects
         const payload = {
           carrier: data.carrier,
           trackingNumber: data.trackingNumber,
           notes: data.notes || "",
-          auctionId: params?.id, // Ensure auctionId is included
           shippingDate: new Date().toISOString(),
           status: "shipped"
         };
+        
+        console.log("[FULFILLMENT] Sending payload to server:", payload);
 
         const response = await fetch(`/api/auctions/${params?.id}/fulfill`, {
           method: 'POST',
@@ -105,7 +108,7 @@ export default function FulfillmentPage() {
   }
 
   return (
-    <div className="container mx-auto py-4 px-4 md:py-8 md:px-8 overflow-y-auto"> {/* Removed maxHeight restriction */}
+    <div className="container mx-auto py-4 px-4 md:py-8 md:px-8">
       <Link href="/seller/dashboard">
         <Button variant="ghost" className="mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
