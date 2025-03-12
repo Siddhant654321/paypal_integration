@@ -384,7 +384,6 @@ export const SellerDashboard = () => {
             <DollarSign className="w-4 h-4 mr-2" />
             Payments & Payouts
           </TabsTrigger>
-          <TabsTrigger value="payouts">Payouts</TabsTrigger> {/* Added Payouts Tab */}
         </TabsList>
 
         <TabsContent value="auctions">
@@ -488,22 +487,6 @@ export const SellerDashboard = () => {
               Complete your PayPal account setup to view payment information
             </div>
           )}
-        </TabsContent>
-        <TabsContent value="payouts"> {/* Added Payouts Content */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Payouts</CardTitle>
-                <CardDescription>View your payouts</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {/* Add your payout information here */}
-                <div className="text-center text-muted-foreground">
-                  No payouts found yet.  Completed payouts will appear here.
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </TabsContent>
       </Tabs>
     </div>
