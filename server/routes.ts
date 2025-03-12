@@ -413,6 +413,13 @@ router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
         paymentId: payment.id,
         trackingInfo
       });
+      // Notify buyer of shipping info
+      await NotificationService.notifyFulfillment(
+        payment.buyerId,
+        auction.title,
+        trackingInfo.split(':')[1]?.trim() || trackingInfo,
+        trackingInfo.split(':')[0]?.trim() || "Carrier"
+      );
       res.json({ success: true });
     } catch (error) {
       console.error("[FULFILLMENT] PayPal payout error:", error);
@@ -884,8 +891,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Get admin auctions (including pending)
     router.get("/api/admin/auctions", requireAdmin, async (req, res) => {
-      try {
-        const status = req.query.status as string | undefined;
+      try {        const status = req.query.status as string | undefined;
         const approved = req.query.approved === 'true' ? true : 
                           req.query.approved === 'false' ? false : undefined;
 
@@ -1130,13 +1136,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
-        
+
         // Log full request body for debugging
         console.log(`[FULFILLMENT] Processing fulfillment for auction ${auctionId}, raw body:`, req.body);
-        
+
         // Get carrier and tracking number with better fallbacks
         let carrier, trackingNumber, notes;
-        
+
         if (req.body.trackingInfo && typeof req.body.trackingInfo === 'string' && req.body.trackingInfo.includes(':')) {
           // Format: "USPS: 1234567890"
           const parts = req.body.trackingInfo.split(':');
@@ -1147,7 +1153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           carrier = req.body.carrier || req.body.shippingCarrier;
           trackingNumber = req.body.trackingNumber || req.body.tracking;
         }
-        
+
         notes = req.body.notes || req.body.additionalNotes || "";
 
         console.log(`[FULFILLMENT] Extracted shipping data:`, {
@@ -1247,8 +1253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("[FULFILLMENT] Error processing fulfillment:", error);
         res.status(500).json({ 
-          message: "Failed to process fulfillment",
-          error: error instanceof Error ? error.message : "Unknown error"
+          message: error instanceof Error ? error.message : "Failed to process fulfillment" 
         });
       }
     });
@@ -2349,7 +2354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Handle multiple possible input formats
         let carrier, trackingNumber, notes;
-        
+
         if (req.body.trackingInfo) {
           // Format: "USPS: 1234567890"
           const parts = req.body.trackingInfo.split(':');
@@ -2671,7 +2676,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const category = auction.category || "Uncategorized";
           acc[category] = (acc[category] || 0) + 1;
           return acc;
-        }, {} as Record<string, number>);
+        }, {} asRecord<string, number>);
 
         const popularCategories = Object.entries(categoryCount)
           .map(([category, count]) => ({ category, count }))

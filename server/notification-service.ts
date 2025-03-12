@@ -215,18 +215,22 @@ export class NotificationService {
     }
   }
 
-  static async notifyFulfillment(userId: number, auctionTitle: string, trackingNumber: string, carrier: string) {
+  static async notifyFulfillment(
+    buyerId: number,
+    auctionTitle: string,
+    trackingNumber: string,
+    carrier: string
+  ): Promise<void> {
+    log(`Notifying buyer ${buyerId} about shipment for "${auctionTitle}"`);
     try {
-      await this.createNotification(
-        userId,
+      return this.createNotification(
+        buyerId,
         {
           type: "fulfillment",
-          title: "Item Shipped",
-          message: `Your item "${auctionTitle}" has been shipped. Tracking: ${carrier} ${trackingNumber}`
+          title: "Order Shipped",
+          message: `Your order for "${auctionTitle}" has been shipped via ${carrier} with tracking number ${trackingNumber}`
         }
       );
-
-      console.log(`[NOTIFICATION] Fulfillment notification sent to user ${userId} for auction "${auctionTitle}"`);
     } catch (error) {
       console.error("[NOTIFICATION] Error sending fulfillment notification:", error);
     }
@@ -286,23 +290,6 @@ export class NotificationService {
         title,
         message,
         reference: auctionId.toString()
-      }
-    );
-  }
-
-  static async notifyFulfillment(
-    buyerId: number,
-    auctionTitle: string,
-    trackingNumber: string,
-    carrier: string
-  ): Promise<void> {
-    log(`Notifying buyer ${buyerId} about shipment for "${auctionTitle}"`);
-    return this.createNotification(
-      buyerId,
-      {
-        type: "fulfillment",
-        title: "Order Shipped",
-        message: `Your order for "${auctionTitle}" has been shipped via ${carrier} with tracking number ${trackingNumber}`
       }
     );
   }
