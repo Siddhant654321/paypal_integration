@@ -35,6 +35,7 @@ import {
   DialogDescription as DialogDescription2,
   DialogTrigger 
 } from "@/components/ui/dialog";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 
 export default function AuctionPage() {
