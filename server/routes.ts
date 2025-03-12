@@ -900,6 +900,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Endpoint for admins to trigger test emails
+    router.post("/api/admin/test-emails", requireAdmin, async (req, res) => {
+      try {
+        const testEmail = "pipsnchicks@gmail.com";
+        console.log("[TEST] Sending test emails to:", testEmail);
+
+        await EmailService.sendTestEmails(testEmail);
+
+        res.json({ 
+          success: true, 
+          message: "Test emails sent successfully" 
+        });
+      } catch (error) {
+        console.error("[TEST] Error sending test emails:", error);
+        res.status(500).json({ 
+          message: "Failed to send test emails",
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    });
+
     // Admin routes for auction management 
     router.get("/api/admin/auctions", requireAdmin, async (req, res) => {
       try {

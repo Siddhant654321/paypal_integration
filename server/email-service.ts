@@ -257,4 +257,82 @@ export class EmailService {
       console.error("[EMAIL] Error sending admin notifications for new auction:", error);
     }
   }
+
+  static async sendTestEmails(testEmail: string) {
+    try {
+      console.log("[EMAIL] Sending test emails to:", testEmail);
+
+      // Create a test user for sending notifications
+      const testUser: User = {
+        id: 999,
+        username: "Test User",
+        email: testEmail,
+        role: "seller_admin",
+        approved: true,
+        hasProfile: true,
+        emailNotificationsEnabled: true,
+        password: ""
+      };
+
+      // 1. Test Daily Digest
+      await this.sendNotification('daily_digest', testUser, {
+        newAuctions: [
+          {
+            id: 1,
+            title: "Show Quality Bantam Pair",
+            startPrice: 5000, // $50.00
+            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+          },
+          {
+            id: 2,
+            title: "Heritage Breed Hatching Eggs",
+            startPrice: 3500, // $35.00
+            endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days from now
+          }
+        ],
+        userName: "Test User"
+      });
+      console.log("[EMAIL] Sent test daily digest email");
+
+      // 2. Test New Seller Notification
+      await this.sendNotification('admin_new_seller', testUser, {
+        sellerName: "John Smith",
+        sellerEmail: "john.smith@example.com",
+        sellerId: 123
+      });
+      console.log("[EMAIL] Sent test new seller notification");
+
+      // 3. Test New Auction Notification
+      await this.sendNotification('admin_new_auction', testUser, {
+        auctionTitle: "Premium Bantam Breeding Pair",
+        sellerName: "Jane Doe",
+        startPrice: 7500, // $75.00
+        category: "Show Quality",
+        auctionId: 456
+      });
+      console.log("[EMAIL] Sent test new auction notification");
+
+      // 4. Test Bid Update (both new bid and outbid)
+      await this.sendNotification('bid', testUser, {
+        auctionTitle: "Rare Breed Chickens",
+        bidAmount: 8000, // $80.00
+        auctionId: 789,
+        isOutbid: false
+      });
+
+      await this.sendNotification('bid', testUser, {
+        auctionTitle: "Rare Breed Chickens",
+        bidAmount: 8500, // $85.00
+        auctionId: 789,
+        isOutbid: true
+      });
+      console.log("[EMAIL] Sent test bid notifications");
+
+      console.log("[EMAIL] Successfully sent all test emails");
+      return true;
+    } catch (error) {
+      console.error("[EMAIL] Error sending test emails:", error);
+      throw error;
+    }
+  }
 }
