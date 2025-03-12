@@ -55,6 +55,7 @@ export function BuyerRequestForm({ onClose, initialData, isEditing }: BuyerReque
       species: "",
       category: "",
       description: "",
+      status: "open" // Added default status
     },
   });
 
@@ -65,7 +66,12 @@ export function BuyerRequestForm({ onClose, initialData, isEditing }: BuyerReque
         : "/api/buyer-requests";
       const method = isEditing ? "PATCH" : "POST";
 
-      return apiRequest(method, endpoint, data);
+      const response = await apiRequest(method, endpoint, data);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to save request");
+      }
+      return response.json();
     },
     onSuccess: () => {
       // Invalidate all buyer request queries to ensure lists are updated
@@ -106,7 +112,22 @@ export function BuyerRequestForm({ onClose, initialData, isEditing }: BuyerReque
       });
       return;
     }
-    mutation.mutate(data);
+
+    // Add status if not present
+    const requestData = {
+      ...data,
+      status: data.status || "open"
+    };
+
+    mutation.mutate(requestData);
+  }
+
+  if (!user) {
+    return (
+      <div className="p-4 text-center">
+        Please log in to create a buyer request
+      </div>
+    );
   }
 
   return (
