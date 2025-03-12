@@ -932,7 +932,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
 
         {isLoadingProfile ? (
           <div className="flex justify-center p-4">
-            <LoadingSpinner className="h-6 w-6" />
+            <LoadingSpinner className="h6 w-6" />
           </div>
         ) : !profile ? (
           <p className="text-muted-foreground">No profile information found</p>
