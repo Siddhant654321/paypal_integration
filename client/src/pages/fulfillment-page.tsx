@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, Package } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { FulfillmentForm } from "@/components/fulfillment-form";
+import {Alert, AlertDescription} from "@/components/ui/alert"
 
 export default function FulfillmentPage() {
   const [, params] = useRoute("/seller/fulfill/:id");
@@ -38,7 +39,7 @@ export default function FulfillmentPage() {
         });
 
         console.log("[FULFILLMENT] Data received from form:", data);
-        
+
         // Ensure field names match what the server expects
         const payload = {
           carrier: data.carrier,
@@ -46,7 +47,7 @@ export default function FulfillmentPage() {
           notes: data.notes || "",
           shippingDate: new Date().toISOString()
         };
-        
+
         console.log("[FULFILLMENT] Sending payload to server:", payload);
 
         const response = await fetch(`/api/auctions/${params?.id}/fulfill`, {
@@ -160,18 +161,14 @@ export default function FulfillmentPage() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>Fulfillment Status</CardTitle>
+              <CardTitle>Already Fulfilled</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <p>Status: {fulfillment.status}</p>
-                <p>Shipping Carrier: {fulfillment.shippingCarrier}</p>
-                <p>Tracking Number: {fulfillment.trackingNumber}</p>
-                <p>Shipping Date: {new Date(fulfillment.shippingDate).toLocaleDateString()}</p>
-                {fulfillment.estimatedDeliveryDate && (
-                  <p>Estimated Delivery: {new Date(fulfillment.estimatedDeliveryDate).toLocaleDateString()}</p>
-                )}
-              </div>
+              <Alert>
+                <AlertDescription>
+                  This auction has already been fulfilled.
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
         )}

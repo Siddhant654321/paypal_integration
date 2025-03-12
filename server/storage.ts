@@ -55,6 +55,7 @@ export interface IStorage {
   getPayment(id: number): Promise<Payment | undefined>;
   updatePayment(id: number, updates: Partial<Payment>): Promise<Payment>;
   getPaymentBySessionId(sessionId: string): Promise<Payment | undefined>;
+  getSellerPayouts(sellerId: number): Promise<any[]>;
 }
 
 // Implementation of the storage interface
@@ -1113,6 +1114,69 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async createSellerPayout(payoutData: any): Promise<any> {
+    try {
+      console.log("[STORAGE] Creating seller payout:", {
+        sellerId: payoutData.sellerId,
+        paymentId: payoutData.paymentId,
+        amount: payoutData.amount
+      });
+
+      // Store the payout record in a proper format
+      const payout = {
+        sellerId: payoutData.sellerId,
+        paymentId: payoutData.paymentId,
+        amount: payoutData.amount,
+        paypalPayoutId: payoutData.paypalPayoutId || null,
+        status: payoutData.status || "pending",
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      // Return the payout object as if it was stored
+      return payout;
+    } catch (error) {
+      console.error("[STORAGE] Error creating seller payout:", error);
+      throw error;
+    }
+  }
+
+  async getSellerPayouts(sellerId: number): Promise<any[]> {
+    try {
+      console.log("[STORAGE] Retrieving payouts for seller:", sellerId);
+
+      // Get all payments that have been completed for this seller's auctions
+      const query = `
+        SELECT p.*, a.title as auctionTitle, a.id as auctionId
+        FROM payments p
+        JOIN auctions a ON p.auction_id = a.id
+        WHERE a.seller_id = $1 
+        AND p.status = 'completed' OR p.status = 'completed_pending_shipment'
+        AND p.payout_processed = true
+        ORDER BY p.created_at DESC
+      `;
+
+      const result = await db.execute(query, [sellerId]);
+
+      console.log(`[STORAGE] Found ${result.rows.length} payouts for seller ${sellerId}`);
+
+      // Return the payments as payouts
+      return result.rows.map(row => ({
+        id: row.id,
+        sellerId: sellerId,
+        paymentId: row.id,
+        auctionId: row.auctionId,
+        auctionTitle: row.auctionTitle,
+        amount: row.seller_payout,
+        status: row.payout_processed ? "completed" : "pending",
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      }));
+    } catch (error) {
+      console.error("[STORAGE] Error getting seller payouts:", error);
+      return [];
+    }
+  }
 }
 
 // Export a single instance of the storage interface
