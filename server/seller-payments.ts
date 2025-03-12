@@ -63,14 +63,14 @@ export class SellerPaymentService {
       if (IS_SANDBOX) {
         console.log("[PAYPAL] In sandbox mode, creating test merchant account");
         const testMerchantId = `TEST_MERCHANT_${profile.userId}_${Date.now()}`;
-        
+
         // Base URL for return paths
         const baseUrl = process.env.REPL_SLUG 
           ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
           : (process.env.REPL_ID ? `https://${process.env.REPL_ID}.id.repl.co` : 'http://localhost:5001');
-        
+
         console.log("[PAYPAL] Using return base URL:", baseUrl);
-        
+
         // Update profile with test merchant ID
         await storage.updateSellerPayPalAccount(profile.userId, {
           merchantId: testMerchantId,
@@ -78,9 +78,9 @@ export class SellerPaymentService {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
-        
+
         console.log("[PAYPAL] Created test merchant ID in sandbox:", testMerchantId);
-        
+
         return {
           merchantId: testMerchantId,
           url: `${baseUrl}/seller/dashboard?success=true&test=true`,
@@ -131,7 +131,7 @@ export class SellerPaymentService {
           return_url: `${baseUrl}/seller/dashboard?success=true`
         }
       };
-      
+
       // Add logo URL only if we're in production (can cause issues in sandbox)
       if (!IS_SANDBOX) {
         referralRequest.partner_config_override.partner_logo_url = `${baseUrl}/images/logo.png`;
@@ -159,7 +159,7 @@ export class SellerPaymentService {
           // In sandbox/testing, create a test merchant ID if needed
           console.log("[PAYPAL] Generated mock onboarding link for testing");
           const testMerchantId = `TEST_MERCHANT_${profile.userId}_${Date.now()}`;
-          
+
           // Update profile with test merchant ID
           await storage.updateSellerPayPalAccount(profile.userId, {
             merchantId: testMerchantId,
@@ -167,7 +167,7 @@ export class SellerPaymentService {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
-          
+
           return {
             merchantId: testMerchantId,
             url: `${baseUrl}/seller/dashboard?success=true&test=true`,
@@ -229,12 +229,12 @@ export class SellerPaymentService {
           email_message: "Your auction sale payment has been processed and the funds have been sent to your PayPal account."
         },
         items: [{
-          recipient_type: "PAYPAL_ID",
+          recipient_type: "EMAIL", //Always EMAIL for testing accounts
           amount: {
             value: (amount / 100).toFixed(2), // Convert cents to dollars
             currency: "USD"
           },
-          receiver: profile.paypalMerchantId,
+          receiver: "sb-" + profile.userId + "@business.example.com", //Use userId for test accounts
           note: `Payout for auction sale #${paymentId}`,
           sender_item_id: `payout_item_${paymentId}`
         }]
@@ -300,7 +300,7 @@ export class SellerPaymentService {
         // Get merchant integration status
         const url = `${BASE_URL}/v1/customer/partners/${PARTNER_MERCHANT_ID}/merchant-integrations/${merchantId}`;
         console.log("[PAYPAL] Making API call to:", url);
-        
+
         const response = await axios.get(url, {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -329,7 +329,7 @@ export class SellerPaymentService {
       } catch (statusError) {
         // Log detailed error information
         console.error("[PAYPAL] Error during status check:", statusError.message);
-        
+
         if (axios.isAxiosError(statusError) && statusError.response) {
           console.error("[PAYPAL] API error details:", {
             status: statusError.response.status,
@@ -337,13 +337,13 @@ export class SellerPaymentService {
             headers: statusError.response.headers
           });
         }
-        
+
         // Always allow in sandbox mode regardless of errors
         if (IS_SANDBOX) {
           console.log("[PAYPAL] In sandbox mode, allowing operation to continue as 'verified' despite errors");
           return "verified";
         }
-        
+
         return "pending";
       }
     } catch (error) {

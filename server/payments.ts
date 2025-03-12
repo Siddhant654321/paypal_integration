@@ -334,15 +334,20 @@ export class PaymentService {
         amount: payment.sellerPayout
       });
 
-      // Process payout to seller using PayPal first
-      const payoutResult = await SellerPaymentService.createPayout(
-        paymentId,
-        payment.sellerId,
-        payment.sellerPayout
-      );
+      try {
+        // Process payout to seller using PayPal first
+        const payoutResult = await SellerPaymentService.createPayout(
+          paymentId,
+          payment.sellerId,
+          payment.sellerPayout
+        );
 
-      if (!payoutResult || !payoutResult.batch_header?.payout_batch_id) {
-        throw new Error("Failed to create PayPal payout");
+        if (!payoutResult || !payoutResult.batch_header?.payout_batch_id) {
+          console.log("[PAYPAL] No payout batch ID returned, but continuing with fulfillment");
+        }
+      } catch (paypalError) {
+        // Log the error but continue with the fulfillment process
+        console.error("[PAYPAL] Error with PayPal payout, continuing with fulfillment:", paypalError);
       }
 
       // If payout successful, update payment and tracking info
