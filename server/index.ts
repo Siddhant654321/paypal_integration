@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import { EmailService } from "./email-service";
 
 async function checkRequiredEnvVars() {
   const requiredVars = [
@@ -12,7 +13,11 @@ async function checkRequiredEnvVars() {
     'PAYPAL_CLIENT_ID',
     'PAYPAL_CLIENT_SECRET',
     'PAYPAL_PARTNER_MERCHANT_ID',
-    'PAYPAL_SANDBOX_PARTNER_MERCHANT_ID'
+    'PAYPAL_SANDBOX_PARTNER_MERCHANT_ID',
+    'SMTP_HOST',
+    'SMTP_PORT',
+    'SMTP_USER',
+    'SMTP_PASSWORD'
   ];
 
   const missingVars = requiredVars.filter(varName => !process.env[varName]);
@@ -38,14 +43,28 @@ async function testDatabaseConnection(retries = 3): Promise<void> {
   throw new Error(`Failed to connect to database after ${retries} attempts: ${lastError?.message}`);
 }
 
+async function testEmailService(): Promise<void> {
+  try {
+    log("Testing email service connection...", "startup");
+    const isConnected = await EmailService.verifyConnection();
+    if (!isConnected) {
+      throw new Error("Failed to verify email service connection");
+    }
+    log("Email service connection verified successfully", "startup");
+  } catch (error) {
+    throw new Error(`Email service verification failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 async function initializeServer(): Promise<Express> {
   const app = express();
 
   try {
-    // Check environment variables and database connection concurrently
+    // Check environment variables, database connection, and email service concurrently
     await Promise.all([
       checkRequiredEnvVars(),
-      testDatabaseConnection()
+      testDatabaseConnection(),
+      testEmailService()
     ]);
 
     // Configure CORS
@@ -125,7 +144,7 @@ async function startServer(port: number = 5000, maxRetries: number = 10): Promis
         host: "0.0.0.0",
       }, () => {
         log(`Server started on port ${port}`, "startup");
-        
+
         // Handle graceful shutdown
         const shutdown = () => {
           log('Shutting down gracefully...', "startup");
@@ -137,7 +156,7 @@ async function startServer(port: number = 5000, maxRetries: number = 10): Promis
 
         process.on('SIGTERM', shutdown);
         process.on('SIGINT', shutdown);
-        
+
         resolve();
       }).on('error', (err: any) => {
         if (err.code === 'EADDRINUSE') {

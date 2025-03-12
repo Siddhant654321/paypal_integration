@@ -461,6 +461,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: user.role
         });
 
+        // If registering as a seller, notify admins
+        if (user.role === "seller") {
+          await EmailService.notifyAdminsOfNewSeller(user);
+        }
+
         res.status(201).json({
           id: user.id,
           username: user.username,
@@ -665,6 +670,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...validatedData,
             sellerId: userId
           });
+
+          // Notify admins about the new auction
+          await EmailService.notifyAdminsOfNewAuction(result.id);
+
           return res.status(201).json(result);
         } catch (validationError) {
           return res.status(400).json({

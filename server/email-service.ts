@@ -1,15 +1,18 @@
 import nodemailer from 'nodemailer';
 import { User } from '@shared/schema';
+import { storage } from './storage';
 
-// Initialize nodemailer transport
+// Initialize nodemailer transport with detailed logging
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
+  secure: false, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD,
   },
+  logger: true, // Enable logging
+  debug: true, // Enable debug logging
 });
 
 // Email templates for different notification types
@@ -108,6 +111,38 @@ const emailTemplates = {
       <p>Log in to your account to view more details.</p>
     `,
   }),
+  admin_new_seller: (data: { sellerName: string; sellerEmail: string }) => ({
+    subject: 'New Seller Registration Pending Approval',
+    html: `
+      <h2>New Seller Registration</h2>
+      <p>A new seller has registered and is waiting for approval:</p>
+      <ul>
+        <li><strong>Name:</strong> ${data.sellerName}</li>
+        <li><strong>Email:</strong> ${data.sellerEmail}</li>
+      </ul>
+      <p>Please log in to the admin dashboard to review and approve/reject this registration.</p>
+    `,
+  }),
+
+  admin_new_auction: (data: { 
+    auctionTitle: string; 
+    sellerName: string;
+    startPrice: number;
+    category: string;
+  }) => ({
+    subject: 'New Auction Pending Review',
+    html: `
+      <h2>New Auction Listing</h2>
+      <p>A new auction has been created and requires review:</p>
+      <ul>
+        <li><strong>Title:</strong> ${data.auctionTitle}</li>
+        <li><strong>Seller:</strong> ${data.sellerName}</li>
+        <li><strong>Start Price:</strong> $${(data.startPrice/100).toFixed(2)}</li>
+        <li><strong>Category:</strong> ${data.category}</li>
+      </ul>
+      <p>Please log in to the admin dashboard to review the auction details and approve/reject the listing.</p>
+    `,
+  }),
 };
 
 export class EmailService {
@@ -133,9 +168,10 @@ export class EmailService {
   static async verifyConnection() {
     try {
       await transporter.verify();
+      console.log('[EMAIL] SMTP connection verified successfully');
       return true;
     } catch (error) {
-      console.error('Email service verification failed:', error);
+      console.error('[EMAIL] SMTP connection verification failed:', error);
       return false;
     }
   }
@@ -239,6 +275,91 @@ export class EmailService {
     } catch (error) {
       console.error("[EMAIL] Error sending tracking info:", error);
       throw error;
+    }
+  }
+
+  static async notifyAdminsOfNewSeller(seller: User): Promise<void> {
+    try {
+      console.log("[EMAIL] Preparing to notify admins about new seller registration:", {
+        sellerId: seller.id,
+        username: seller.username
+      });
+
+      // Get all admin users
+      const admins = await storage.getUsers({ role: "seller_admin" });
+
+      if (!admins || admins.length === 0) {
+        console.log("[EMAIL] No admin users found to notify");
+        return;
+      }
+
+      const sellerProfile = await storage.getProfile(seller.id);
+      if (!sellerProfile) {
+        console.log("[EMAIL] Seller profile not found");
+        return;
+      }
+
+      const emailData = {
+        sellerName: sellerProfile.fullName || seller.username,
+        sellerEmail: sellerProfile.email
+      };
+
+      // Send notification to each admin
+      for (const admin of admins) {
+        if (!admin.email) continue;
+
+        await this.sendNotification("admin_new_seller", admin, emailData);
+        console.log("[EMAIL] Sent new seller notification to admin:", admin.email);
+      }
+
+    } catch (error) {
+      console.error("[EMAIL] Error sending admin notifications for new seller:", error);
+    }
+  }
+
+  static async notifyAdminsOfNewAuction(auctionId: number): Promise<void> {
+    try {
+      console.log("[EMAIL] Preparing to notify admins about new auction:", auctionId);
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        console.log("[EMAIL] Auction not found:", auctionId);
+        return;
+      }
+
+      const seller = await storage.getUser(auction.sellerId);
+      if (!seller) {
+        console.log("[EMAIL] Seller not found for auction:", auctionId);
+        return;
+      }
+
+      const sellerProfile = await storage.getProfile(seller.id);
+
+      // Get all admin users
+      const admins = await storage.getUsers({ role: "seller_admin" });
+
+      if (!admins || admins.length === 0) {
+        console.log("[EMAIL] No admin users found to notify");
+        return;
+      }
+
+      const emailData = {
+        auctionTitle: auction.title,
+        sellerName: sellerProfile?.fullName || seller.username,
+        startPrice: auction.startPrice,
+        category: auction.category
+      };
+
+      // Send notification to each admin
+      for (const admin of admins) {
+        if (!admin.email) continue;
+
+        await this.sendNotification("admin_new_auction", admin, emailData);
+        console.log("[EMAIL] Sent new auction notification to admin:", admin.email);
+      }
+
+    } catch (error) {
+      console.error("[EMAIL] Error sending admin notifications for new auction:", error);
     }
   }
 }
