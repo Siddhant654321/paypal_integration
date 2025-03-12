@@ -1082,12 +1082,18 @@ export class DatabaseStorage implements IStorage {
   async getUsersByRole(roles: string[]): Promise<User[]> {
     try {
       log(`Getting users with roles: ${roles.join(', ')}`, "users");
-      const userList = await db
-        .select()
-        .from(users)
-        .where(roles.length === 1 
-          ? eq(users.role, roles[0]) 
-          : users.role.in(roles));
+      let userList;
+      
+      if (roles.length === 1) {
+        userList = await db
+          .select()
+          .from(users)
+          .where(eq(users.role, roles[0]));
+      } else {
+        // For multiple roles, get all users and filter in memory
+        const allUsers = await db.select().from(users);
+        userList = allUsers.filter(user => roles.includes(user.role));
+      }
       
       log(`Found ${userList.length} users with requested roles`, "users");
       return userList;
