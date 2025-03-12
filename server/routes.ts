@@ -1790,7 +1790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Log user information for debugging
         console.log(`[BUYER REQUEST] User: ID=${req.user.id}, Username=${req.user.username}, Role=${req.user.role}`);
 
-        // Directly extract and validate the key fields from the request
+        // Directly extract fields from the request
         const { title, description, budgetMin, budgetMax, species, category } = req.body;
 
         if (!title) {
@@ -1806,61 +1806,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
           budgetMin: budgetMin ? Number(budgetMin) : null,
           budgetMax: budgetMax ? Number(budgetMax) : null,
           species: species || "Any",
-          category: category || "Any",
-          status: "open",
-          views: 0,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          category: category || "Any"
+          // Don't include status, views, etc. - let storage function handle defaults
         };
 
         console.log("[BUYER REQUEST] Processed request data:", requestData);
 
+        // Create the buyer request
+        const request = await storage.createBuyerRequest(requestData);
+        
+        console.log("[BUYER REQUEST] Successfully created:", {
+          id: request.id,
+          title: request.title
+        });
+
+        // Notify admins
         try {
-          // Create the buyer request
-          const request = await storage.createBuyerRequest(requestData);
+          const adminUsers = await storage.getUsersByRole(["admin", "seller_admin"]);
           
-          console.log("[BUYER REQUEST] Successfully created:", {
-            id: request.id,
-            title: request.title
-          });
-
-          // Notify admins
-          try {
-            const adminUsers = await storage.getUsersByRole(["admin", "seller_admin"]);
+          if (adminUsers && adminUsers.length > 0) {
+            await Promise.all(adminUsers.map(admin => 
+              NotificationService.createNotification({
+                userId: admin.id,
+                type: "admin",
+                title: "New Buyer Request",
+                message: `A new buyer request has been submitted: "${request.title}"`,
+                reference: `buyer-request-${request.id}`
+              })
+            ));
             
-            if (adminUsers && adminUsers.length > 0) {
-              await Promise.all(adminUsers.map(admin => 
-                NotificationService.createNotification({
-                  userId: admin.id,
-                  type: "admin",
-                  title: "New Buyer Request",
-                  message: `A new buyer request has been submitted: "${request.title}"`,
-                  reference: `buyer-request-${request.id}`
-                })
-              ));
-              
-              console.log(`[BUYER REQUEST] Notified ${adminUsers.length} admins`);
-            } else {
-              console.log("[BUYER REQUEST] No admins found to notify");
-            }
-          } catch (notifyError) {
-            console.error("[BUYER REQUEST] Error sending notifications:", notifyError);
-            // Continue without failing the request
+            console.log(`[BUYER REQUEST] Notified ${adminUsers.length} admins`);
           }
+        } catch (notifyError) {
+          console.error("[BUYER REQUEST] Error sending notifications:", notifyError);
+          // Continue without failing the request
+        }
 
-          // Return the created request
-          return res.status(201).json(request);
-        } catch (dbError) {
-          console.error("[BUYER REQUEST] Database error:", dbError);
-          return res.status(500).json({ 
-            message: "Failed to save buyer request to database",
-            error: dbError instanceof Error ? dbError.message : "Unknown database error"
+        // Return the created request
+        return res.status(201).json(request);
+      } catch (error) {
+        console.error("[BUYER REQUEST] Error creating request:", error);
+        
+        // Handle validation errors
+        if (error.name === 'ZodError') {
+          return res.status(400).json({ 
+            message: "Invalid buyer request data",
+            errors: error.errors
           });
         }
-      } catch (error) {
-        console.error("[BUYER REQUEST] Unexpected error:", error);
+        
         return res.status(500).json({ 
-          message: "An unexpected error occurred",
+          message: "Failed to create buyer request",
           error: error instanceof Error ? error.message : "Unknown error"
         });
       }
@@ -1883,6 +1879,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[BUYER REQUESTS] Found profile for buyer ${request.buyerId}:`, 
               buyerProfile ? "yes" : "no");          return { ...request, buyerProfile };
           })
+
+    // Debug endpoint for buyer requests (temporary)
+    router.get("/api/debug/buyer-requests/schema", requireAdmin, (req, res) => {
+      try {
+        const schemaFields = Object.keys(buyerRequests);
+        const insertSchemaFields = Object.keys(insertBuyerRequestSchema.shape);
+        
+        res.json({
+          databaseSchema: schemaFields,
+          insertSchema: insertSchemaFields,
+          sample: {
+            title: "Sample Request",
+            description: "This is a sample buyer request for debugging",
+            species: "bantam",
+            category: "Show Quality",
+            buyerId: 1
+          }
+        });
+      } catch (error) {
+        console.error("[DEBUG] Error in schema debug endpoint:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+
         );
 
         console.log(`[BUYER REQUESTS] Returning ${requestsWithProfiles.length} requests with profiles`);

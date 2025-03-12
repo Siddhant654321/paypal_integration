@@ -711,18 +711,28 @@ export class DatabaseStorage implements IStorage {
 
       // Perform the insert operation
       const insertResult = await db.insert(buyerRequests).values(requestData).returning();
-      
+
       // Check that we got a result
       if (!insertResult || insertResult.length === 0) {
         throw new Error("Database insert did not return a result");
       }
-      
+
       const request = insertResult[0];
       log(`Successfully created buyer request with ID: ${request.id}`, "buyer-requests");
-      
+
       return request;
     } catch (error) {
-      log(`Error creating buyer request: ${error}`, "buyer-requests");
+      // Add detailed error logging
+      if (error instanceof Error) {
+        log(`Error creating buyer request: ${error.message}`, "buyer-requests");
+        log(`Error stack: ${error.stack}`, "buyer-requests");
+
+        if ('code' in error) {
+          log(`Database error code: ${error.code}`, "buyer-requests");
+        }
+      } else {
+        log(`Unknown error creating buyer request: ${String(error)}`, "buyer-requests");
+      }
       throw error;
     }
   }
