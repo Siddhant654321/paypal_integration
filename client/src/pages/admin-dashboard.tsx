@@ -106,6 +106,11 @@ function AdminDashboard() {
   const [buyerSearchTerm, setBuyerSearchTerm] = useState("");
   const [selectedUser, setSelectedUser] = useState<{ id: number; username: string; role: string } | null>(null);
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
+  const [deleteAuctionId, setDeleteAuctionId] = useState(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [viewBidsDialogOpen, setViewBidsDialogOpen] = useState(false);
+  const [selectedAuctionId, setSelectedAuctionId] = useState(null);
+  const [selectedAuctionTitle, setSelectedAuctionTitle] = useState('');
 
 
   if (!user || (user.role !== "admin" && user.role !== "seller_admin")) {
@@ -747,6 +752,18 @@ function AdminDashboard() {
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => {
+                                  setSelectedAuctionId(auction.id);
+                                  setSelectedAuctionTitle(auction.title);
+                                  setViewBidsDialogOpen(true);
+                                }}
+                                className="ml-2"
+                              >
+                                View Bids
+                              </Button>
                             </div>
                           }
                         />
@@ -814,6 +831,18 @@ function AdminDashboard() {
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => {
+                                  setSelectedAuctionId(auction.id);
+                                  setSelectedAuctionTitle(auction.title);
+                                  setViewBidsDialogOpen(true);
+                                }}
+                                className="ml-2"
+                              >
+                                View Bids
+                              </Button>
                             </div>
                           }
                         />
@@ -887,6 +916,14 @@ function AdminDashboard() {
           onClose={closeEditDialog}
         />
       )}
+
+      {/* View Bids Dialog */}
+      <ViewBidsDialog 
+        isOpen={viewBidsDialogOpen} 
+        onClose={() => setViewBidsDialogOpen(false)} 
+        auctionId={selectedAuctionId}
+        auctionTitle={selectedAuctionTitle}
+      />
     </div>
   );
 }
