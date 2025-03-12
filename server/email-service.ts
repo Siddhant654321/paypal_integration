@@ -15,103 +15,66 @@ const transporter = nodemailer.createTransport({
   debug: true, // Enable debug logging
 });
 
+const SITE_URL = process.env.SITE_URL || 'http://localhost:5000';
+
 // Email templates for different notification types
 const emailTemplates = {
-  bid: (data: { auctionTitle: string; bidAmount: number; isOutbid?: boolean }) => ({
+  bid: (data: { auctionTitle: string; bidAmount: number; auctionId: number; isOutbid?: boolean }) => ({
     subject: data.isOutbid 
       ? `You've been outbid on ${data.auctionTitle}`
       : `New Bid on ${data.auctionTitle}`,
     html: data.isOutbid
       ? `
         <h2>You've Been Outbid!</h2>
-        <p>Someone has placed a higher bid of $${data.bidAmount} on "${data.auctionTitle}".</p>
-        <p>Log in now to place a new bid!</p>
+        <p>Someone has placed a higher bid of $${(data.bidAmount/100).toFixed(2)} on "${data.auctionTitle}".</p>
+        <p><a href="${SITE_URL}/auctions/${data.auctionId}">Log in now to place a new bid!</a></p>
+        <hr>
+        <p><small>You received this email because you opted in to auction notifications. 
+        <a href="${SITE_URL}/profile/notifications">Manage your notification preferences</a></small></p>
       `
       : `
         <h2>New Bid Received</h2>
-        <p>A new bid of $${data.bidAmount} has been placed on your auction "${data.auctionTitle}".</p>
-        <p>Log in to your account to view the details.</p>
+        <p>A new bid of $${(data.bidAmount/100).toFixed(2)} has been placed on your auction "${data.auctionTitle}".</p>
+        <p><a href="${SITE_URL}/auctions/${data.auctionId}">View auction details</a></p>
+        <hr>
+        <p><small>You received this email because you opted in to auction notifications. 
+        <a href="${SITE_URL}/profile/notifications">Manage your notification preferences</a></small></p>
       `,
   }),
-  auction: (data: { auctionTitle: string; status: string; isWinner?: boolean }) => ({
-    subject: `Auction ${data.status === 'ending soon' 
-      ? 'Ending Soon' 
-      : data.isWinner 
-        ? 'Won!' 
-        : 'Ended'}: ${data.auctionTitle}`,
-    html: data.status === 'ending soon'
-      ? `
-        <h2>Auction Ending Soon</h2>
-        <p>The auction "${data.auctionTitle}" will end in 1 hour.</p>
-        <p>Log in now to check the current status and place your final bids!</p>
-      `
-      : data.isWinner
-        ? `
-          <h2>Congratulations! You've Won!</h2>
-          <p>You are the winning bidder for "${data.auctionTitle}"!</p>
-          <p>Log in to your account to complete the payment and arrange delivery.</p>
-        `
-        : `
-          <h2>Auction Has Ended</h2>
-          <p>The auction "${data.auctionTitle}" has ended.</p>
-          <p>Log in to your account to view the final results.</p>
-        `,
-  }),
-  auction_ending_soon: (data: { auctionTitle: string }) => ({
-    subject: `Auction Ending Soon: ${data.auctionTitle}`,
-    html: `
-      <h2>Auction Ending Soon</h2>
-      <p>The auction "${data.auctionTitle}" will end in 1 hour.</p>
-      <p>Log in now to check the current status and place your final bids!</p>
-    `,
-  }),
-  auction_completed: (data: { auctionTitle: string; isWinner?: boolean }) => ({
-    subject: data.isWinner 
-      ? `Congratulations! You've Won: ${data.auctionTitle}` 
-      : `Auction Ended: ${data.auctionTitle}`,
-    html: data.isWinner
-      ? `
-        <h2>Congratulations! You've Won!</h2>
-        <p>You are the winning bidder for "${data.auctionTitle}"!</p>
-        <p>Log in to your account to complete the payment and arrange delivery.</p>
-      `
-      : `
-        <h2>Auction Has Ended</h2>
-        <p>The auction "${data.auctionTitle}" has ended.</p>
-        <p>Log in to your account to view the final results.</p>
-      `,
-  }),
-  payment: (data: { amount: number; status: string }) => ({
-    subject: 'Payment Notification',
-    html: `
-      <h2>Payment Update</h2>
-      <p>A payment of $${data.amount} has been ${data.status}.</p>
-      <p>Log in to your account to view the transaction details.</p>
-    `,
-  }),
-  admin: (data: { message: string }) => ({
-    subject: 'Administrative Notification',
-    html: `
-      <h2>Administrative Notice</h2>
-      <p>${data.message}</p>
-    `,
-  }),
-  fulfillment: (data: { 
-    auctionTitle: string; 
-    trackingInfo: string;
-    shippingDate: string;
+
+  daily_digest: (data: { 
+    newAuctions: Array<{
+      id: number;
+      title: string;
+      startPrice: number;
+      endDate: Date;
+    }>;
+    userName: string;
   }) => ({
-    subject: `Shipping Update: ${data.auctionTitle}`,
+    subject: 'Your Daily Auction Update',
     html: `
-      <h2>Your Item Has Been Shipped!</h2>
-      <p>The seller has shipped your item from auction "${data.auctionTitle}".</p>
-      <p><strong>Tracking Information:</strong></p>
-      <p>${data.trackingInfo}</p>
-      <p>Shipped On: ${new Date(data.shippingDate).toLocaleDateString()}</p>
-      <p>Log in to your account to view more details.</p>
+      <h2>Hello ${data.userName}!</h2>
+      <p>Here are the new auctions from the last 24 hours:</p>
+      ${data.newAuctions.length > 0 
+        ? `<ul>
+            ${data.newAuctions.map(auction => `
+              <li>
+                <strong><a href="${SITE_URL}/auctions/${auction.id}">${auction.title}</a></strong><br>
+                Starting at: $${(auction.startPrice/100).toFixed(2)}<br>
+                Ends: ${new Date(auction.endDate).toLocaleDateString()}
+              </li>
+            `).join('')}
+          </ul>`
+        : '<p>No new auctions were added today.</p>'
+      }
+      <p><a href="${SITE_URL}/auctions">Browse all active auctions</a></p>
+      <hr>
+      <p><small>You received this email because you opted in to daily auction updates. 
+      <a href="${SITE_URL}/profile/notifications">Manage your notification preferences</a></small></p>
     `,
   }),
-  admin_new_seller: (data: { sellerName: string; sellerEmail: string }) => ({
+
+  admin_new_seller: (data: { sellerName: string; sellerEmail: string; sellerId: number }) => ({
     subject: 'New Seller Registration Pending Approval',
     html: `
       <h2>New Seller Registration</h2>
@@ -120,7 +83,9 @@ const emailTemplates = {
         <li><strong>Name:</strong> ${data.sellerName}</li>
         <li><strong>Email:</strong> ${data.sellerEmail}</li>
       </ul>
-      <p>Please log in to the admin dashboard to review and approve/reject this registration.</p>
+      <p><a href="${SITE_URL}/admin/sellers/${data.sellerId}">Review this seller registration</a></p>
+      <hr>
+      <p><small>You received this email because you are an administrator.</small></p>
     `,
   }),
 
@@ -129,6 +94,7 @@ const emailTemplates = {
     sellerName: string;
     startPrice: number;
     category: string;
+    auctionId: number;
   }) => ({
     subject: 'New Auction Pending Review',
     html: `
@@ -140,7 +106,9 @@ const emailTemplates = {
         <li><strong>Start Price:</strong> $${(data.startPrice/100).toFixed(2)}</li>
         <li><strong>Category:</strong> ${data.category}</li>
       </ul>
-      <p>Please log in to the admin dashboard to review the auction details and approve/reject the listing.</p>
+      <p><a href="${SITE_URL}/admin/auctions/${data.auctionId}">Review this auction</a></p>
+      <hr>
+      <p><small>You received this email because you are an administrator.</small></p>
     `,
   }),
 };
@@ -152,6 +120,11 @@ export class EmailService {
     data: Parameters<typeof emailTemplates[T]>[0]
   ) {
     try {
+      if (!user.emailNotificationsEnabled && type !== 'admin_new_seller' && type !== 'admin_new_auction') {
+        console.log(`[EMAIL] Skipping notification for user ${user.id} (notifications disabled)`);
+        return false;
+      }
+
       const template = emailTemplates[type](data as any);
       await transporter.sendMail({
         from: `"Pips 'n Chicks" <${process.env.SMTP_USER}>`,
@@ -160,7 +133,7 @@ export class EmailService {
       });
       return true;
     } catch (error) {
-      console.error('Failed to send email notification:', error);
+      console.error('[EMAIL] Failed to send notification:', error);
       return false;
     }
   }
@@ -176,105 +149,33 @@ export class EmailService {
     }
   }
 
-  static async sendEmail(to: string, subject: string, body: string): Promise<void> {
+  static async sendDailyDigest() {
     try {
-      console.log("[EMAIL] Would send email:");
-      console.log(`  To: ${to}`);
-      console.log(`  Subject: ${subject}`);
-      console.log(`  Body: ${body}`);
-      console.log("[EMAIL] Email sending simulated (no actual email sent)");
-    } catch (error) {
-      console.error("[EMAIL] Error sending email:", error);
-      throw error;
-    }
-  }
+      // Get users who opted in for daily digests
+      const subscribedUsers = await storage.getUsers({ emailDigestEnabled: true });
 
-  static async sendWinningBidEmail(
-    email: string, 
-    auctionTitle: string, 
-    bidAmount: number
-  ): Promise<void> {
-    const subject = `Congratulations! You won the auction for "${auctionTitle}"`;
-    const body = `
-      Hello,
-      
-      Congratulations! You have won the auction for "${auctionTitle}" with a bid of $${(bidAmount/100).toFixed(2)}.
-      
-      Please proceed to payment to complete your purchase.
-      
-      Thank you,
-      Pips 'n Chicks Auctions Team
-    `;
-    
-    await this.sendEmail(email, subject, body);
-  }
-
-  static async sendAuctionEndedEmail(
-    email: string, 
-    auctionTitle: string, 
-    soldPrice: number | null
-  ): Promise<void> {
-    let subject, body;
-    
-    if (soldPrice) {
-      subject = `Your auction "${auctionTitle}" has ended and sold!`;
-      body = `
-        Hello,
-        
-        Your auction "${auctionTitle}" has ended and sold for $${(soldPrice/100).toFixed(2)}.
-        
-        Thank you,
-        Pips 'n Chicks Auctions Team
-      `;
-    } else {
-      subject = `Your auction "${auctionTitle}" has ended`;
-      body = `
-        Hello,
-        
-        Your auction "${auctionTitle}" has ended without any bids.
-        
-        Thank you,
-        Pips 'n Chicks Auctions Team
-      `;
-    }
-    
-    await this.sendEmail(email, subject, body);
-  }
-
-  static async sendTrackingInfo(
-    buyerId: number,
-    auctionId: number,
-    trackingInfo: string
-  ): Promise<void> {
-    try {
-      const buyer = await storage.getUser(buyerId);
-      if (!buyer?.email) {
-        throw new Error("Buyer email not found");
-      }
-
-      const auction = await storage.getAuction(auctionId);
-      if (!auction) {
-        throw new Error("Auction not found");
-      }
-
-      const emailData = {
-        auctionTitle: auction.title,
-        trackingInfo: trackingInfo,
-        shippingDate: new Date().toISOString()
-      };
-
-      console.log("[EMAIL] Sending tracking info to buyer:", {
-        buyerId,
-        auctionId,
-        email: buyer.email
+      // Get auctions created in the last 24 hours
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const newAuctions = await storage.getAuctions({ 
+        createdAfter: oneDayAgo,
+        approved: true 
       });
 
-      await this.sendNotification("fulfillment", buyer, emailData);
+      console.log(`[EMAIL] Sending daily digest to ${subscribedUsers.length} users, ${newAuctions.length} new auctions`);
 
-      console.log("[EMAIL] Successfully sent tracking info email");
+      // Send digest to each subscribed user
+      for (const user of subscribedUsers) {
+        if (!user.email) continue;
+
+        await this.sendNotification('daily_digest', user, {
+          newAuctions,
+          userName: user.username
+        });
+      }
+
+      console.log('[EMAIL] Daily digest sent successfully');
     } catch (error) {
-      console.error("[EMAIL] Error sending tracking info:", error);
-      throw error;
+      console.error('[EMAIL] Error sending daily digest:', error);
     }
   }
 
@@ -285,10 +186,8 @@ export class EmailService {
         username: seller.username
       });
 
-      // Get all admin users
       const admins = await storage.getUsers({ role: "seller_admin" });
-
-      if (!admins || admins.length === 0) {
+      if (!admins?.length) {
         console.log("[EMAIL] No admin users found to notify");
         return;
       }
@@ -301,13 +200,12 @@ export class EmailService {
 
       const emailData = {
         sellerName: sellerProfile.fullName || seller.username,
-        sellerEmail: sellerProfile.email
+        sellerEmail: sellerProfile.email,
+        sellerId: seller.id
       };
 
-      // Send notification to each admin
       for (const admin of admins) {
         if (!admin.email) continue;
-
         await this.sendNotification("admin_new_seller", admin, emailData);
         console.log("[EMAIL] Sent new seller notification to admin:", admin.email);
       }
@@ -334,11 +232,9 @@ export class EmailService {
       }
 
       const sellerProfile = await storage.getProfile(seller.id);
-
-      // Get all admin users
       const admins = await storage.getUsers({ role: "seller_admin" });
 
-      if (!admins || admins.length === 0) {
+      if (!admins?.length) {
         console.log("[EMAIL] No admin users found to notify");
         return;
       }
@@ -347,13 +243,12 @@ export class EmailService {
         auctionTitle: auction.title,
         sellerName: sellerProfile?.fullName || seller.username,
         startPrice: auction.startPrice,
-        category: auction.category
+        category: auction.category,
+        auctionId: auction.id
       };
 
-      // Send notification to each admin
       for (const admin of admins) {
         if (!admin.email) continue;
-
         await this.sendNotification("admin_new_auction", admin, emailData);
         console.log("[EMAIL] Sent new auction notification to admin:", admin.email);
       }

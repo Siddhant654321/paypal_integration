@@ -5,6 +5,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { EmailService } from "./email-service";
+import { CronService } from "./cron-service";
 
 async function checkRequiredEnvVars() {
   const requiredVars = [
@@ -69,7 +70,7 @@ async function initializeServer(): Promise<Express> {
 
     // Configure CORS
     app.use(cors({
-      origin: process.env.NODE_ENV === 'production' 
+      origin: process.env.NODE_ENV === 'production'
         ? [process.env.PUBLIC_URL || ''].filter(Boolean)
         : ['http://localhost:5173', 'http://localhost:5000'],
       credentials: true,
@@ -145,9 +146,18 @@ async function startServer(port: number = 5000, maxRetries: number = 10): Promis
       }, () => {
         log(`Server started on port ${port}`, "startup");
 
+        // Initialize cron jobs after server starts
+        CronService.initialize();
+        log("Cron jobs initialized", "startup");
+
         // Handle graceful shutdown
         const shutdown = () => {
           log('Shutting down gracefully...', "startup");
+
+          // Stop cron jobs
+          CronService.stop();
+          log('Cron jobs stopped', "startup");
+
           server.close(() => {
             log('Server closed', "startup");
             process.exit(0);

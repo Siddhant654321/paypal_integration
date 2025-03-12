@@ -31,6 +31,7 @@ export const profiles = pgTable("profiles", {
   emailAuctionNotifications: boolean("email_auction_notifications").notNull().default(true),
   emailPaymentNotifications: boolean("email_payment_notifications").notNull().default(true),
   emailAdminNotifications: boolean("email_admin_notifications").notNull().default(true),
+  emailDailyDigest: boolean("email_daily_digest").notNull().default(true),
   // Seller specific fields
   businessName: text("business_name"),
   breedSpecialty: text("breed_specialty"),
@@ -43,6 +44,36 @@ export const profiles = pgTable("profiles", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// Update insert schema for profiles
+export const insertProfileSchema = createInsertSchema(profiles)
+  .omit({
+    id: true,
+    paypalMerchantId: true,
+    paypalAccountStatus: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    fullName: z.string().min(2, "Full name is required"),
+    email: z.string().email("Invalid email format"),
+    phoneNumber: z.string().min(10, "Valid phone number is required"),
+    address: z.string().min(5, "Valid address is required"),
+    city: z.string().min(2, "City is required"),
+    state: z.string().min(2, "State is required"),
+    zipCode: z.string().min(5, "Valid ZIP code is required"),
+    bio: z.string().optional(),
+    isPublicBio: z.boolean().default(true),
+    profilePicture: z.string().optional(),
+    businessName: z.string().optional(),
+    breedSpecialty: z.string().optional(),
+    npipNumber: z.string().optional(),
+    emailBidNotifications: z.boolean().default(true),
+    emailAuctionNotifications: z.boolean().default(true),
+    emailPaymentNotifications: z.boolean().default(true),
+    emailAdminNotifications: z.boolean().default(true),
+    emailDailyDigest: z.boolean().default(true),
+  });
 
 // Update user decisions enum
 const sellerDecisionEnum = z.enum(["accept", "void"]);
@@ -285,31 +316,6 @@ export const insertBidSchema = createInsertSchema(bids)
   })
   .extend({
     amount: z.number().min(1, "Bid amount must be positive"),
-  });
-
-// Add insert schema for profiles
-export const insertProfileSchema = createInsertSchema(profiles)
-  .omit({
-    id: true,
-    paypalMerchantId: true,
-    paypalAccountStatus: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    fullName: z.string().min(2, "Full name is required"),
-    email: z.string().email("Invalid email format"),
-    phoneNumber: z.string().min(10, "Valid phone number is required"),
-    address: z.string().min(5, "Valid address is required"),
-    city: z.string().min(2, "City is required"),
-    state: z.string().min(2, "State is required"),
-    zipCode: z.string().min(5, "Valid ZIP code is required"),
-    bio: z.string().optional(),
-    isPublicBio: z.boolean().default(true),
-    profilePicture: z.string().optional(),
-    businessName: z.string().optional(),
-    breedSpecialty: z.string().optional(),
-    npipNumber: z.string().optional(),
   });
 
 export const insertSellerPayoutSchema = createInsertSchema(sellerPayouts)
