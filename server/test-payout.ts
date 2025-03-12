@@ -10,20 +10,23 @@ async function testPayPalPayout() {
       paymentId: 999,
       sellerId: 1,
       amount: 1000, // $10.00 in cents - using a smaller amount for testing
-      // Use a sandbox personal account - this should be replaced with an actual sandbox account
-      merchantId: "sb-buyer@business.example.com" // Using PayPal's test account format
+      // Using PayPal's sandbox test account format
+      receiverEmail: "sb-47rbv22431969@business.example.com",
+      senderEmail: process.env.PAYPAL_SANDBOX_SENDER_EMAIL || "facilitator@business.example.com"
     };
 
     console.log("[PAYPAL] Creating test payout with data:", {
       ...testData,
-      merchantId: testData.merchantId.substring(0, 8) + '...'
+      receiverEmail: testData.receiverEmail.substring(0, 8) + '...',
+      senderEmail: testData.senderEmail.substring(0, 8) + '...'
     });
 
     const result = await SellerPaymentService.createPayout(
       testData.paymentId,
       testData.sellerId,
       testData.amount,
-      testData.merchantId
+      testData.receiverEmail,
+      testData.senderEmail
     );
 
     console.log("[PAYPAL] Payout result:", {

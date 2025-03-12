@@ -18,8 +18,10 @@ console.log("[PAYPAL] Initializing PayPal service:", {
 export class SellerPaymentService {
   private static async getAccessToken(): Promise<string> {
     try {
+      console.log("[PAYPAL] Requesting access token...");
+
       const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
-      const response = await axios.post(`${BASE_URL}/v1/oauth2/token`, 
+      const response = await axios.post(`${BASE_URL}/v1/oauth2/token`,
         'grant_type=client_credentials',
         {
           headers: {
@@ -34,9 +36,9 @@ export class SellerPaymentService {
     } catch (error) {
       console.error("[PAYPAL] Error getting access token:", error);
       if (axios.isAxiosError(error) && error.response) {
-        console.error("[PAYPAL] Auth Error Response:", {
+        console.error("[PAYPAL] Auth Error Details:", {
           status: error.response.status,
-          data: error.response.data
+          data: JSON.stringify(error.response.data, null, 2)
         });
       }
       throw new Error("Failed to authenticate with PayPal");
@@ -194,12 +196,17 @@ export class SellerPaymentService {
     paymentId: number, 
     sellerId: number, 
     amount: number,
-    merchantId: string
+    receiverEmail: string,
+    senderEmail: string
   ): Promise<any> {
     try {
       console.log(`[PAYPAL] Creating payout for payment ${paymentId} to seller ${sellerId}`);
 
       const accessToken = await this.getAccessToken();
+
+      if (!receiverEmail) {
+        throw new Error("Receiver email is required for payout");
+      }
 
       // Validate amount is greater than 0
       if (amount <= 0) {
@@ -208,10 +215,10 @@ export class SellerPaymentService {
 
       const amountInDollars = (amount / 100).toFixed(2);
 
-      // Simplified payout request for sandbox testing
+      // Create minimal payout request according to PayPal documentation
       const payoutRequest = {
         sender_batch_header: {
-          sender_batch_id: `TEST_PAYOUT_${paymentId}_${Date.now()}`,
+          sender_batch_id: `PAYOUT_${paymentId}_${Date.now()}`,
           email_subject: "You have a payout from your auction sale",
           email_message: "Your auction payment has been processed."
         },
@@ -221,16 +228,17 @@ export class SellerPaymentService {
             value: amountInDollars,
             currency: "USD"
           },
-          receiver: merchantId,
+          receiver: receiverEmail,
           note: `Payout for auction #${paymentId}`,
-          sender_item_id: `PAYOUT_${paymentId}_${Date.now()}`
+          sender_item_id: `PAYOUT_ITEM_${paymentId}_${Date.now()}`
         }]
       };
 
       console.log("[PAYPAL] Sending payout request:", {
         batchId: payoutRequest.sender_batch_header.sender_batch_id,
         recipientType: "EMAIL",
-        receiverPrefix: merchantId.substring(0, 8) + '...',
+        receiverEmail: receiverEmail.substring(0, 8) + '...',
+        senderEmail: senderEmail.substring(0, 8) + '...',
         amount: amountInDollars,
         request: JSON.stringify(payoutRequest, null, 2)
       });
@@ -242,7 +250,8 @@ export class SellerPaymentService {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
-            'PayPal-Request-Id': payoutRequest.sender_batch_header.sender_batch_id
+            'PayPal-Request-Id': payoutRequest.sender_batch_header.sender_batch_id,
+            'PayPal-Partner-Attribution-Id': process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID
           }
         }
       );
@@ -251,17 +260,6 @@ export class SellerPaymentService {
         status: response.status,
         statusText: response.statusText,
         data: JSON.stringify(response.data, null, 2)
-      });
-
-      // Store the payout details
-      await storage.createSellerPayOut({
-        sellerId,
-        paymentId,
-        amount,
-        paypalPayoutId: response.data.batch_header.payout_batch_id,
-        status: response.data.batch_header.batch_status,
-        createdAt: new Date(),
-        completedAt: response.data.batch_header.batch_status === 'SUCCESS' ? new Date() : null
       });
 
       return response.data;
@@ -279,10 +277,9 @@ export class SellerPaymentService {
           message: error.response.data?.message
         });
 
-        // Handle specific PayPal error cases
-        if (error.response.status === 422) {
-          const details = error.response.data?.details?.[0] || {};
-          throw new Error(`PayPal validation error: ${details.issue || error.response.data?.message || 'Invalid request'}`);
+        if (error.response.status === 422 || error.response.status === 400) {
+          const errorDetails = error.response.data?.details?.[0] || error.response.data;
+          throw new Error(`PayPal validation error: ${JSON.stringify(errorDetails)}`);
         }
       }
       throw new Error("Failed to process seller payout. Please ensure your PayPal account is properly configured.");
