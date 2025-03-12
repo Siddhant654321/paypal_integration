@@ -314,6 +314,63 @@ export default function AuctionPage() {
             </div>
           )}
 
+          {user && (user.role === "admin" || user.role === "seller_admin") && (
+            <div className="mt-4">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    View All Bids (Admin)
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Bids for {auction.title}</DialogTitle>
+                    <DialogDescription>
+                      Manage bids for this auction
+                    </DialogDescription>
+                  </DialogHeader>
+                  {isLoadingBids ? (
+                    <div className="flex justify-center p-4">
+                      <LoadingSpinner className="h-6 w-6" />
+                    </div>
+                  ) : !bids?.length ? (
+                    <p className="text-muted-foreground">No bids have been placed yet</p>
+                  ) : (
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+                      {bids.map((bid) => (
+                        <div key={bid.id} className="flex flex-col p-4 border rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <div className="font-medium">{formatPrice(bid.amount)}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {bid.bidderProfile ? (
+                                  <>
+                                    <p>Bidder: {bid.bidderProfile.firstName} {bid.bidderProfile.lastName || ""}</p>
+                                    <p>Email: {bid.bidderProfile.email || "No email provided"}</p>
+                                  </>
+                                ) : (
+                                  <p className="text-sm text-muted-foreground">No bidder information</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-sm text-right">
+                              <div>
+                                {formatDistanceToNow(new Date(bid.timestamp), {
+                                  addSuffix: true,
+                                })}
+                              </div>
+                              <div>ID: {bid.id}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+
           {bids && bids.length > 0 && (
             <div className="space-y-4">
               <h2 className="text-xl font-semibold">Bid History</h2>
