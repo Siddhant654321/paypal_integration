@@ -949,6 +949,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status,
           approved
         });
+        router.get("/api/admin/auctions/:id/bids", requireAdmin, async (req, res) => {
+          try {
+            const auctionId = parseInt(req.params.id);
+            console.log(`[ADMIN] Fetching bid history for auction ${auctionId}`);
+            
+            const auction = await storage.getAuction(auctionId);
+            if (!auction) {
+              return res.status(404).json({ message: "Auction not found" });
+            }
+
+            // Get all bids for the auction
+            const bids = await storage.getBidsForAuction(auctionId);
+            
+            // Get bidder profiles for each bid
+            const bidsWithProfiles = await Promise.all(
+              bids.map(async (bid) => {
+                const bidderProfile = await storage.getProfile(bid.bidderId);
+                return {
+                  ...bid,
+                  bidderProfile
+                };
+              })
+            );
+
+            console.log(`[ADMIN] Found ${bids.length} bids for auction ${auctionId}`);
+            res.json(bidsWithProfiles);
+          } catch (error) {
+            console.error("[ADMIN] Error fetching bid history:", error);
+            res.status(500).json({ message: "Failed to fetch bid history" });
+          }
+        });
+
+        // Admin route for auction deletion
+        router.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
+          try {
+            const auctionId = parseInt(req.params.id);
+            console.log(`[ADMIN] Attempting to delete auction ${auctionId}`);
+            
+            const auction = await storage.getAuction(auctionId);
+            if (!auction) {
+              return res.status(404).json({ message: "Auction not found" });
+            }
+
+            // First delete all bids associated with the auction
+            await storage.deleteBidsForAuction(auctionId);
+            
+            // Then delete the auction itself
+            await storage.deleteAuction(auctionId);
+            
+            console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
+            res.json({ message: "Auction deleted successfully" });
+          } catch (error) {
+            console.error("[ADMIN] Error deleting auction:", error);
+            res.status(500).json({ message: "Failed to delete auction" });
+          }
+        });
+
+        // Admin route for detailed auction status
+        router.get("/api/admin/auctions/:id/status", requireAdmin, async (req, res) => {
+          try {
+            const auctionId = parseInt(req.params.id);
+            console.log(`[ADMIN] Fetching detailed status for auction ${auctionId}`);
+            
+            const auction = await storage.getAuction(auctionId);
+            if (!auction) {
+              return res.status(404).json({ message: "Auction not found" });
+            }
+
+            // Get associated payment information
+            const payment = await storage.getPaymentByAuctionId(auctionId);
+            
+            // Get seller profile
+            const sellerProfile = await storage.getProfile(auction.sellerId);
+            
+            // Get winning bidder profile if exists
+            let winningBidderProfile = null;
+            if (auction.winningBidderId) {
+              winningBidderProfile = await storage.getProfile(auction.winningBidderId);
+            }
+
+            const detailedStatus = {
+              auction: {
+                ...auction,
+                sellerProfile
+              },
+              payment: payment ? {
+                status: payment.status,
+                amount: payment.amount,
+                createdAt: payment.createdAt,
+                completedAt: payment.completedAt,
+                trackingInfo: payment.trackingInfo
+              } : null,
+              winner: winningBidderProfile ? {
+                id: winningBidderProfile.userId,
+                fullName: winningBidderProfile.fullName,
+                email: winningBidderProfile.email
+              } : null
+            };
+
+            console.log(`[ADMIN] Retrieved detailed status for auction ${auctionId}`);
+            res.json(detailedStatus);
+          } catch (error) {
+            console.error("[ADMIN] Error fetching auction status:", error);
+            res.status(500).json({ message: "Failed to fetch auction status" });
+          }
+        });
 
         // Get seller profiles for each auction
         const auctionsWithSellerProfiles = await Promise.all(
@@ -1169,12 +1275,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     // Admin routes
+    // Admin routes for enhanced auction management
     router.get("/api/admin/auctions", requireAdmin, async (req, res) => {
       try {
         const auctions = await storage.getAuctions({ approved: false });
         res.json(auctions);
       } catch (error) {
         res.status(500).json({ message: "Failed to fetch pending auctions" });
+      }
+    });
+
+    // Get detailed bid history for an auction
+    router.get("/api/admin/auctions/:id/bids", requireAdmin, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        console.log(`[ADMIN] Fetching bid history for auction ${auctionId}`);
+        
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Get all bids for the auction
+        const bids = await storage.getBidsForAuction(auctionId);
+        
+        // Get bidder profiles for each bid
+        const bidsWithProfiles = await Promise.all(
+          bids.map(async (bid) => {
+            const bidderProfile = await storage.getProfile(bid.bidderId);
+            return {
+              ...bid,
+              bidderProfile
+            };
+          })
+        );
+
+        console.log(`[ADMIN] Found ${bids.length} bids for auction ${auctionId}`);
+        res.json(bidsWithProfiles);
+      } catch (error) {
+        console.error("[ADMIN] Error fetching bid history:", error);
+        res.status(500).json({ message: "Failed to fetch bid history" });
+      }
+    });
+
+    // Delete an auction and its associated bids
+    router.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        console.log(`[ADMIN] Attempting to delete auction ${auctionId}`);
+        
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // First delete all bids associated with the auction
+        await storage.deleteBidsForAuction(auctionId);
+        
+        // Then delete the auction itself
+        await storage.deleteAuction(auctionId);
+        
+        console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
+        res.json({ message: "Auction deleted successfully" });
+      } catch (error) {
+        console.error("[ADMIN] Error deleting auction:", error);
+        res.status(500).json({ message: "Failed to delete auction" });
+      }
+    });
+
+    // Get detailed auction status including payments and winner info
+    router.get("/api/admin/auctions/:id/status", requireAdmin, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        console.log(`[ADMIN] Fetching detailed status for auction ${auctionId}`);
+        
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Get associated payment information
+        const payment = await storage.getPaymentByAuctionId(auctionId);
+        
+        // Get seller profile
+        const sellerProfile = await storage.getProfile(auction.sellerId);
+        
+        // Get winning bidder profile if exists
+        let winningBidderProfile = null;
+        if (auction.winningBidderId) {
+          winningBidderProfile = await storage.getProfile(auction.winningBidderId);
+        }
+
+        const detailedStatus = {
+          auction: {
+            ...auction,
+            sellerProfile
+          },
+          payment: payment ? {
+            status: payment.status,
+            amount: payment.amount,
+            createdAt: payment.createdAt,
+            completedAt: payment.completedAt,
+            trackingInfo: payment.trackingInfo
+          } : null,
+          winner: winningBidderProfile ? {
+            id: winningBidderProfile.userId,
+            fullName: winningBidderProfile.fullName,
+            email: winningBidderProfile.email
+          } : null
+        };
+
+        console.log(`[ADMIN] Retrieved detailed status for auction ${auctionId}`);
+        res.json(detailedStatus);
+      } catch (error) {
+        console.error("[ADMIN] Error fetching auction status:", error);
+        res.status(500).json({ message: "Failed to fetch auction status" });
       }
     });
 
