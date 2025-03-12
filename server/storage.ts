@@ -43,6 +43,7 @@ export interface IStorage {
   getUnreadNotificationsCount(userId: number): Promise<number>;
   updateUser(userId: number, updates: Partial<User>): Promise<User>;
   authenticateUser(username: string, password: string): Promise<User | undefined>;
+  getUsersByRole(roles: string[]): Promise<User[]>;
   insertPayment(paymentData: InsertPayment): Promise<Payment>;
   findPaymentByPayPalId(orderId: string): Promise<Payment | undefined>;
   updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment>;
@@ -1075,6 +1076,24 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       log(`Error getting user by email ${email}: ${error}`, "users");
       throw error;
+    }
+  }
+
+  async getUsersByRole(roles: string[]): Promise<User[]> {
+    try {
+      log(`Getting users with roles: ${roles.join(', ')}`, "users");
+      const userList = await db
+        .select()
+        .from(users)
+        .where(roles.length === 1 
+          ? eq(users.role, roles[0]) 
+          : users.role.in(roles));
+      
+      log(`Found ${userList.length} users with requested roles`, "users");
+      return userList;
+    } catch (error) {
+      log(`Error getting users by roles: ${error}`, "users");
+      return [];
     }
   }
 
