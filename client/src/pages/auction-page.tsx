@@ -27,6 +27,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader as DialogHeader2, 
+  DialogTitle, 
+  DialogDescription as DialogDescription2,
+  DialogTrigger 
+} from "@/components/ui/dialog";
+
 
 export default function AuctionPage() {
   const [, params] = useRoute("/auction/:id");
@@ -323,12 +332,12 @@ export default function AuctionPage() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
-                  <DialogHeader>
+                  <DialogHeader2>
                     <DialogTitle>Bids for {auction.title}</DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription2>
                       Manage bids for this auction
-                    </DialogDescription>
-                  </DialogHeader>
+                    </DialogDescription2>
+                  </DialogHeader2>
                   {isLoadingBids ? (
                     <div className="flex justify-center p-4">
                       <LoadingSpinner className="h-6 w-6" />
