@@ -94,6 +94,7 @@ type SellerProfile = {
   businessName: string;
   breedSpecialty: string;
   npipNumber: string;
+  paypalAccountStatus?: "verified" | "pending" | "not_started"; // Added paypalAccountStatus
 };
 
 
@@ -457,16 +458,11 @@ function AdminDashboard() {
                           </CardHeader>
                           <CardContent>
                             <div className="mt-2 flex flex-col gap-1">
-                              <div className="text-sm font-medium">Stripe Status:</div>
-                              {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status ? (
-                                <Badge variant={
-                                  sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status === "verified"
-                                    ? "success"
-                                    : "warning"
-                                }
-                                >
-                                  {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status.replace("_", " ")}
-                                </Badge>
+                              <div className="text-sm font-medium">PayPal Status:</div>
+                              {sellerProfiles?.find(p => p.userId === seller.id)?.paypalAccountStatus === "verified" ? (
+                                <Badge variant="success">Verified</Badge>
+                              ) : sellerProfiles?.find(p => p.userId === seller.id)?.paypalAccountStatus === "pending" ? (
+                                <Badge variant="warning">Pending</Badge>
                               ) : (
                                 <Badge variant="destructive">Not Started</Badge>
                               )}
@@ -516,9 +512,9 @@ function AdminDashboard() {
                                       <AlertDialogTitle>Approve Seller</AlertDialogTitle>
                                       <AlertDialogDescription>
                                         Are you sure you want to approve {seller.username} as a seller?
-                                        {!sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status || sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status !== "verified" ? (
+                                        {!sellerProfiles?.find(p => p.userId === seller.id)?.paypalAccountStatus || sellerProfiles?.find(p => p.userId === seller.id)?.paypalAccountStatus !== "verified" ? (
                                           <div className="mt-2 text-destructive">
-                                            Warning: This seller has not completed their Stripe verification.
+                                            Warning: This seller has not completed their PayPal verification.
                                           </div>
                                         ) : null}
                                       </AlertDialogDescription>
@@ -585,9 +581,9 @@ function AdminDashboard() {
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
-                            {sellerStripeStatuses?.find(s => s.sellerId === seller.id)?.status === "verified"
-                              ? <CheckCircle2 className="h-4 w-4 text-green-500" title="Stripe account set up" />
-                              : <AlertCircle className="h-4 w-4 text-amber-500" title="No Stripe account" />
+                            {sellerProfiles?.find(p => p.userId === seller.id)?.paypalAccountStatus === "verified"
+                              ? <CheckCircle2 className="h-4 w-4 text-green-500" title="PayPal account set up" />
+                              : <AlertCircle className="h-4 w-4 text-amber-500" title="No PayPal account" />
                             }
                           </div>
                         </Card>
@@ -699,8 +695,8 @@ function AdminDashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredPendingAuctions.map((auction) => {
                       const seller = approvedSellers?.find(seller => seller.id === auction.sellerId);
-                      const sellerStripeStatus = sellerStripeStatuses?.find(s => s.sellerId === auction.sellerId);
-                      const isStripeVerified = sellerStripeStatus?.status === "verified";
+                      const sellerPayPalStatus = sellerProfiles?.find(s => s.userId === auction.sellerId)?.paypalAccountStatus; // Use PayPal status
+                      const isPayPalVerified = sellerPayPalStatus === "verified"; // Use PayPal verification
 
                       return (
                         <AuctionCard
@@ -935,7 +931,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
     queryKey: ["/api/admin/profiles", userId],
     queryFn: () => fetch(`/api/admin/profiles/${userId}`).then(res => {
       if (!res.ok) throw new Error("Failed to fetch profile");
-      return res.json();
+      return res.json});
     }),
   });
 
@@ -1001,6 +997,7 @@ function UserProfileDialog({ userId, username, role, onClose }: { userId: number
                   <p><span className="font-medium">Business Name:</span> {profile.businessName}</p>
                   <p><span className="font-medium">Breed Specialty:</span> {profile.breedSpecialty}</p>
                   <p><span className="font-medium">NPIP Number:</span> {profile.npipNumber}</p>
+                  <p><span className="font-medium">PayPal Status:</span> {profile.paypalAccountStatus || "Not Started"}</p> {/* Added PayPal Status */}
                 </div>
               </div>
             )}
