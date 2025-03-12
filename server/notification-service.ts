@@ -260,4 +260,21 @@ export class NotificationService {
       }
     );
   }
+
+  static async notifyFulfillment(
+    buyerId: number,
+    auctionTitle: string,
+    trackingNumber: string,
+    carrier: string
+  ): Promise<void> {
+    log(`Notifying buyer ${buyerId} about shipment for "${auctionTitle}"`);
+    return this.createNotification(
+      buyerId,
+      {
+        type: "fulfillment",
+        title: "Order Shipped",
+        message: `Your order for "${auctionTitle}" has been shipped via ${carrier} with tracking number ${trackingNumber}`
+      }
+    );
+  }
 }

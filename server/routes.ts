@@ -2265,15 +2265,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.post("/api/auctions/:id/fulfill", requireAuth, requireApprovedSeller, async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
-        const { trackingNumber, carrier, notes } = req.body;
+
+        // Handle multiple possible input formats
+        let carrier, trackingNumber, notes;
+        
+        if (req.body.trackingInfo) {
+          // Format: "USPS: 1234567890"
+          const parts = req.body.trackingInfo.split(':');
+          carrier = parts[0]?.trim();
+          trackingNumber = parts[1]?.trim();
+          notes = req.body.notes || "";
+        } else {
+          // Direct fields format
+          carrier = req.body.carrier;
+          trackingNumber = req.body.trackingNumber;
+          notes = req.body.notes || "";
+        }
 
         console.log("[FULFILLMENT] Processing fulfillment for auction", {
           auctionId,
           requestBody: req.body,
           trackingNumber,
           carrier,
+          notes,
           userId: req.user?.id
         });
+
+        if (!carrier || !trackingNumber) {
+          return res.status(400).json({ 
+            message: "Carrier and tracking number are required",
+            receivedData: req.body
+          });
+        }
 
         // Verify auction belongs to seller
         const auction = await storage.getAuction(auctionId);
@@ -2289,9 +2312,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createFulfillment({
           auctionId,
           trackingNumber,
-          shippingCarrier: carrier, // Make sure this field name matches what's expected by storage
+          shippingCarrier: carrier,
           additionalNotes: notes,
-          status: "shipped"
+          status: "shipped",
+          shippingDate: new Date()
         });
 
         // Update auction status
@@ -2322,18 +2346,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Notify the buyer
         if (auction.winningBidderId) {
-          await NotificationService.notifyFulfillment(
-            auction.winningBidderId,
-            auction.title,
-            trackingNumber,
-            carrier
-          );
+          try {
+            await NotificationService.notifyFulfillment(
+              auction.winningBidderId,
+              auction.title,
+              trackingNumber,
+              carrier
+            );
+            console.log(`Successfully notified buyer ${auction.winningBidderId} about fulfillment`);
+          } catch (notifyError) {
+            console.error("Error notifying buyer:", notifyError);
+            // Continue with fulfillment even if notification fails
+          }
         }
 
         return res.json({ success: true });
       } catch (error) {
         console.error("Error fulfilling auction:", error);
-        res.status(500).json({ message: "Failed to fulfill auction" });
+        res.status(500).json({ 
+          message: "Failed to fulfill auction", 
+          error: error instanceof Error ? error.message : "Unknown error" 
+        });
       }
     });
 
