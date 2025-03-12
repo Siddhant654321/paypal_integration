@@ -1780,34 +1780,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Create buyer request with admin notifications
     router.post("/api/buyer-requests", requireAuth, async (req, res) => {
       try {
-        console.log("[BUYER REQUEST] Creating new request:", {
-          userId: req.user?.id,
-          title: req.body.title
-        });
+        console.log("[BUYER REQUEST] Starting request creation with body:", req.body);
 
         if (!req.user) {
+          console.log("[BUYER REQUEST] No authenticated user found");
           return res.status(401).json({ message: "Authentication required" });
         }
 
+        // Log user information for debugging
+        console.log(`[BUYER REQUEST] User: ID=${req.user.id}, Username=${req.user.username}, Role=${req.user.role}`);
+
+        // Directly extract and validate the key fields from the request
+        const { title, description, budgetMin, budgetMax, species, category } = req.body;
+
+        if (!title) {
+          console.log("[BUYER REQUEST] Missing required field: title");
+          return res.status(400).json({ message: "Title is required" });
+        }
+
+        // Create the request data object with appropriate defaults
+        const requestData = {
+          title,
+          description: description || "",
+          buyerId: req.user.id,
+          budgetMin: budgetMin ? Number(budgetMin) : null,
+          budgetMax: budgetMax ? Number(budgetMax) : null,
+          species: species || "Any",
+          category: category || "Any",
+          status: "open",
+          views: 0,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        console.log("[BUYER REQUEST] Processed request data:", requestData);
+
         try {
-          // Validate request data
-          const validatedData = insertBuyerRequestSchema.parse(req.body);
+          // Create the buyer request
+          const request = await storage.createBuyerRequest(requestData);
           
-          // Create buyer request
-          const request = await storage.createBuyerRequest({
-            ...validatedData,
-            buyerId: req.user.id,
-            status: "open",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            views: 0
+          console.log("[BUYER REQUEST] Successfully created:", {
+            id: request.id,
+            title: request.title
           });
 
-          console.log("[BUYER REQUEST] Created successfully:", {
-            requestId: request.id
-          });
-
-          // Notify all admin users
+          // Notify admins
           try {
             const adminUsers = await storage.getUsersByRole(["admin", "seller_admin"]);
             
@@ -1822,30 +1839,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 })
               ));
               
-              console.log("[BUYER REQUEST] Notified admins:", {
-                notifiedAdmins: adminUsers.length
-              });
+              console.log(`[BUYER REQUEST] Notified ${adminUsers.length} admins`);
+            } else {
+              console.log("[BUYER REQUEST] No admins found to notify");
             }
           } catch (notifyError) {
-            // Log but don't fail the request if notifications fail
             console.error("[BUYER REQUEST] Error sending notifications:", notifyError);
+            // Continue without failing the request
           }
 
+          // Return the created request
           return res.status(201).json(request);
-        } catch (zodError) {
-          if (zodError instanceof ZodError) {
-            console.error("[BUYER REQUEST] Validation error:", zodError.errors);
-            return res.status(400).json({
-              message: "Invalid request data",
-              errors: zodError.errors
-            });
-          }
-          throw zodError; // Re-throw if it's not a ZodError
+        } catch (dbError) {
+          console.error("[BUYER REQUEST] Database error:", dbError);
+          return res.status(500).json({ 
+            message: "Failed to save buyer request to database",
+            error: dbError instanceof Error ? dbError.message : "Unknown database error"
+          });
         }
       } catch (error) {
-        console.error("[BUYER REQUEST] Error creating request:", error);
+        console.error("[BUYER REQUEST] Unexpected error:", error);
         return res.status(500).json({ 
-          message: "Failed to create buyer request",
+          message: "An unexpected error occurred",
           error: error instanceof Error ? error.message : "Unknown error"
         });
       }

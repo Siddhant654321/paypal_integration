@@ -693,22 +693,36 @@ export class DatabaseStorage implements IStorage {
 
   async createBuyerRequest(buyerRequest: InsertBuyerRequest): Promise<BuyerRequest> {
     try {
-      log(`Creating buyer request: ${buyerRequest.title}`);
+      log(`Creating buyer request: ${buyerRequest.title}`, "buyer-requests");
 
-      // Make sure we have all required fields
+      // Make sure we have all required fields and convert any string numbers to actual numbers
       const requestData = {
         ...buyerRequest,
+        buyerId: typeof buyerRequest.buyerId === 'string' ? parseInt(buyerRequest.buyerId) : buyerRequest.buyerId,
+        budgetMin: buyerRequest.budgetMin ? Number(buyerRequest.budgetMin) : null,
+        budgetMax: buyerRequest.budgetMax ? Number(buyerRequest.budgetMax) : null,
         createdAt: buyerRequest.createdAt || new Date(),
         updatedAt: buyerRequest.updatedAt || new Date(),
         views: buyerRequest.views || 0,
         status: buyerRequest.status || 'open'
       };
 
-      const [request] = await db.insert(buyerRequests).values(requestData).returning();
-      log(`Successfully created buyer request with ID: ${request.id}`);
+      log(`Prepared data for database insert: ${JSON.stringify(requestData)}`, "buyer-requests");
+
+      // Perform the insert operation
+      const insertResult = await db.insert(buyerRequests).values(requestData).returning();
+      
+      // Check that we got a result
+      if (!insertResult || insertResult.length === 0) {
+        throw new Error("Database insert did not return a result");
+      }
+      
+      const request = insertResult[0];
+      log(`Successfully created buyer request with ID: ${request.id}`, "buyer-requests");
+      
       return request;
     } catch (error) {
-      log(`Error creating buyer request: ${error}`);
+      log(`Error creating buyer request: ${error}`, "buyer-requests");
       throw error;
     }
   }
