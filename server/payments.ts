@@ -322,12 +322,6 @@ export class PaymentService {
         throw new Error(`Invalid payment status for fund release: ${payment.status}`);
       }
 
-      // Get auction details for notification
-      const auction = await storage.getAuction(payment.auctionId);
-      if (!auction) {
-        throw new Error("Auction not found");
-      }
-
       // Get seller's PayPal info
       const sellerProfile = await storage.getProfile(payment.sellerId);
       if (!sellerProfile?.paypalMerchantId) {
@@ -356,14 +350,6 @@ export class PaymentService {
         console.error("[PAYPAL] Error with PayPal payout, continuing with fulfillment:", paypalError);
       }
 
-      // Parse carrier and tracking number
-      let carrier = trackingInfo, trackingNumber = '';
-      if (trackingInfo.includes(':')) {
-        const parts = trackingInfo.split(':');
-        carrier = parts[0].trim();
-        trackingNumber = parts[1].trim();
-      }
-
       // If payout successful, update payment and tracking info
       console.log("[PAYPAL] Payout successful, updating payment status to completed");
       await storage.updatePayment(paymentId, {
@@ -380,12 +366,12 @@ export class PaymentService {
       });
 
       // Notify buyer of shipping info
-      await NotificationService.notifyFulfillment(
-        payment.buyerId,
-        auction.title,
-        trackingNumber || trackingInfo,
-        carrier || "Carrier"
-      );
+      await NotificationService.createNotification({
+        userId: payment.buyerId,
+        type: "fulfillment",
+        title: "Shipping Information Available",
+        message: `Your order has been shipped. Tracking information: ${trackingInfo}`
+      });
 
       return { success: true };
     } catch (error) {
