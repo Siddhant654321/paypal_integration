@@ -334,8 +334,19 @@ export class PaymentService {
         amount: payment.sellerPayout
       });
 
-      // Update payment and tracking info first
-      console.log("[PAYPAL] Updating payment status to completed");
+      // Process payout to seller using PayPal first
+      const payoutResult = await SellerPaymentService.createPayout(
+        paymentId,
+        payment.sellerId,
+        payment.sellerPayout
+      );
+
+      if (!payoutResult || !payoutResult.batch_header?.payout_batch_id) {
+        throw new Error("Failed to create PayPal payout");
+      }
+
+      // If payout successful, update payment and tracking info
+      console.log("[PAYPAL] Payout successful, updating payment status to completed");
       await storage.updatePayment(paymentId, {
         status: "completed",
         trackingInfo,
@@ -348,17 +359,6 @@ export class PaymentService {
         status: "fulfilled",
         paymentStatus: "completed"
       });
-
-      // Process payout to seller using PayPal
-      const payoutResult = await SellerPaymentService.createPayout(
-        paymentId,
-        payment.sellerId,
-        payment.sellerPayout
-      );
-
-      if (!payoutResult || !payoutResult.batch_header?.payout_batch_id) {
-        throw new Error("Failed to create PayPal payout");
-      }
 
       // Notify buyer of shipping info
       await NotificationService.createNotification({
@@ -376,9 +376,13 @@ export class PaymentService {
       if (axios.isAxiosError(error) && error.response) {
         console.error("[PAYPAL] PayPal API Error:", {
           status: error.response.status,
-          data: error.response.data,
-          headers: error.response.headers
+          data: error.response.data
         });
+
+        // If it's a validation error, provide more specific message
+        if (error.response.data?.name === 'VALIDATION_ERROR') {
+          throw new Error("PayPal payout validation failed. Please ensure your PayPal account is properly set up.");
+        }
       }
 
       throw new Error("Failed to release funds to seller. Please contact support if this persists.");
@@ -503,6 +507,11 @@ class SellerPaymentService {
 
       const accessToken = await PaymentService.getAccessToken();
 
+      // Validate merchant ID format
+      if (!profile.paypalMerchantId.match(/^[A-Z0-9]+$/)) {
+        throw new Error("Invalid PayPal merchant ID format");
+      }
+
       const payoutRequest = {
         sender_batch_header: {
           sender_batch_id: `payout_${paymentId}_${Date.now()}`,
@@ -510,9 +519,9 @@ class SellerPaymentService {
           email_message: "Your auction payment has been processed and funds are now available."
         },
         items: [{
-          recipient_type: "PAYPAL_ID",
+          recipient_type: "MERCHANT",  // Changed from PAYPAL_ID to MERCHANT
           amount: {
-            value: (amount / 100).toFixed(2), // Convert cents to dollars
+            value: (amount / 100).toFixed(2),
             currency: "USD"
           },
           receiver: profile.paypalMerchantId,
@@ -521,7 +530,12 @@ class SellerPaymentService {
         }]
       };
 
-      console.log("[PAYPAL] Sending payout request:", payoutRequest);
+      console.log("[PAYPAL] Sending payout request:", {
+        batchId: payoutRequest.sender_batch_header.sender_batch_id,
+        merchantIdPrefix: profile.paypalMerchantId.substring(0, 8) + '...',
+        amount: (amount / 100).toFixed(2),
+        recipientType: payoutRequest.items[0].recipient_type
+      });
 
       const response = await axios.post(
         `${BASE_URL}/v1/payments/payouts`,
@@ -529,7 +543,8 @@ class SellerPaymentService {
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'PayPal-Request-Id': `payout_${paymentId}_${Date.now()}`
           }
         }
       );
@@ -545,7 +560,7 @@ class SellerPaymentService {
         paymentId,
         amount,
         paypalPayoutId: response.data.batch_header.payout_batch_id,
-        status: 'pending'
+        status: response.data.batch_header.batch_status
       });
 
       return response.data;
@@ -554,10 +569,17 @@ class SellerPaymentService {
       if (axios.isAxiosError(error) && error.response) {
         console.error("[PAYPAL] API Error Response:", {
           status: error.response.status,
-          data: error.response.data
+          data: error.response.data,
+          name: error.response.data?.name,
+          message: error.response.data?.message,
+          details: error.response.data?.details
         });
+
+        if (error.response.data?.name === 'VALIDATION_ERROR') {
+          throw new Error(`PayPal validation error: ${error.response.data?.message || 'Invalid payout request'}`);
+        }
       }
-      throw new Error("Failed to process seller payout");
+      throw new Error("Failed to process seller payout. Please ensure your PayPal account is properly configured.");
     }
   }
 }

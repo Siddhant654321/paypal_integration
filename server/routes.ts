@@ -395,7 +395,9 @@ router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
     console.log(`[FULFILLMENT] Found payment record:`, {
       paymentId: payment.id,
       status: payment.status,
-      auctionId
+      auctionId,
+      amount: payment.amount,
+      sellerPayout: payment.sellerPayout
     });
 
     const { trackingInfo } = req.body;
@@ -404,15 +406,23 @@ router.post("/api/auctions/:id/fulfill", requireAuth, async (req, res) => {
     }
 
     // Release funds to seller and update statuses
-    await PaymentService.releaseFundsToSeller(payment.id, trackingInfo);
-
-    console.log(`[FULFILLMENT] Successfully processed fulfillment:`, {
-      auctionId,
-      paymentId: payment.id,
-      trackingInfo
-    });
-
-    res.json({ success: true });
+    try {
+      await PaymentService.releaseFundsToSeller(payment.id, trackingInfo);
+      console.log(`[FULFILLMENT] Successfully processed fulfillment:`, {
+        auctionId,
+        paymentId: payment.id,
+        trackingInfo
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[FULFILLMENT] PayPal payout error:", error);
+      if (error instanceof Error && error.message.includes('PayPal validation error')) {
+        return res.status(400).json({
+          message: "Failed to process payout. Please ensure your PayPal account is properly set up and try again."
+        });
+      }
+      throw error;
+    }
   } catch (error) {
     console.error("[FULFILLMENT] Error processing fulfillment:", error);
     res.status(500).json({ 
