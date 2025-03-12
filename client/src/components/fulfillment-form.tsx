@@ -66,7 +66,7 @@ export function FulfillmentForm({ onSubmit, isPending }: FulfillmentFormProps) {
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(handleSubmit)}
-        className="space-y-6 overflow-auto max-h-[70vh] px-1 pb-4"
+        className="space-y-6 px-1 pb-4"
       >
         <FormField
           control={form.control}
