@@ -102,6 +102,7 @@ export const auctions = pgTable("auctions", {
   }),
   reserveMet: boolean("reserve_met").notNull().default(false),
   fulfillmentRequired: boolean("fulfillment_required").notNull().default(false),
+  views: integer("views").notNull().default(0), // Add views field
 });
 
 export const bids = pgTable("bids", {
@@ -259,6 +260,7 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     sellerDecision: true,
     reserveMet: true,
     fulfillmentRequired: true,
+    views: true,
   })
   .extend({
     startPrice: z.number().min(1, "Starting price must be at least $1"),

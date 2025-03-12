@@ -22,6 +22,7 @@ export interface IStorage {
   updateProfile(userId: number, profile: Partial<InsertProfile>): Promise<Profile>;
   createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction>;
   getAuction(id: number): Promise<Auction | undefined>;
+  incrementAuctionViews(auctionId: number): Promise<void>;
   getAuctions(filters?: {
     sellerId?: number;
     approved?: boolean;
@@ -1109,6 +1110,21 @@ export class DatabaseStorage implements IStorage {
       return payment;
     } catch (error) {
       log(`Error getting payment for auction ${auctionId}: ${error}`, "payments");
+      throw error;
+    }
+  }
+
+  async incrementAuctionViews(auctionId: number): Promise<void> {
+    try {
+      log(`Incrementing views for auction ${auctionId}`);
+      await db
+        .update(auctions)
+        .set({
+          views: db.raw('views + 1'),
+        })
+        .where(eq(auctions.id, auctionId));
+    } catch (error) {
+      log(`Error incrementing views for auction ${auctionId}: ${error}`);
       throw error;
     }
   }

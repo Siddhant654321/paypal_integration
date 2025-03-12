@@ -854,13 +854,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Update the single auction endpoint to include seller profile
+    // Update the single auction endpoint to include seller profile and increment views
     router.get("/api/auctions/:id", async (req, res) => {
       try {
-        const auction = await storage.getAuction(parseInt(req.params.id));
+        const auctionId = parseInt(req.params.id);
+        const auction = await storage.getAuction(auctionId);
         if (!auction) {
           return res.status(404).json({ message: "Auction not found" });
         }
+
+        // Increment view count
+        await storage.incrementAuctionViews(auctionId);
 
         // Get the seller's profile
         const sellerProfile = await storage.getProfile(auction.sellerId);
