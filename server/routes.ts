@@ -1785,41 +1785,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: req.body.title
         });
 
-        const validatedData = insertBuyerRequestSchema.parse(req.body);
-        const request = await storage.createBuyerRequest({
-          ...validatedData,
-          buyerId: req.user!.id,
-          status: "open"
-        });
+        if (!req.user) {
+          return res.status(401).json({ message: "Authentication required" });
+        }
 
-        // Notify all admin users
-        const adminUsers = await storage.getUsersByRole(["admin", "seller_admin"]);
-        
-        await Promise.all(adminUsers.map(admin => 
-          NotificationService.createNotification({
-            userId: admin.id,
-            type: "admin",
-            title: "New Buyer Request",
-            message: `A new buyer request has been submitted: "${request.title}"`,
-            reference: `buyer-request-${request.id}`
-          })
-        ));
+        try {
+          // Validate request data
+          const validatedData = insertBuyerRequestSchema.parse(req.body);
+          
+          // Create buyer request
+          const request = await storage.createBuyerRequest({
+            ...validatedData,
+            buyerId: req.user.id,
+            status: "open",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            views: 0
+          });
 
-        console.log("[BUYER REQUEST] Created successfully:", {
-          requestId: request.id,
-          notifiedAdmins: adminUsers.length
-        });
+          console.log("[BUYER REQUEST] Created successfully:", {
+            requestId: request.id
+          });
 
-        res.status(201).json(request);
+          // Notify all admin users
+          try {
+            const adminUsers = await storage.getUsersByRole(["admin", "seller_admin"]);
+            
+            if (adminUsers && adminUsers.length > 0) {
+              await Promise.all(adminUsers.map(admin => 
+                NotificationService.createNotification({
+                  userId: admin.id,
+                  type: "admin",
+                  title: "New Buyer Request",
+                  message: `A new buyer request has been submitted: "${request.title}"`,
+                  reference: `buyer-request-${request.id}`
+                })
+              ));
+              
+              console.log("[BUYER REQUEST] Notified admins:", {
+                notifiedAdmins: adminUsers.length
+              });
+            }
+          } catch (notifyError) {
+            // Log but don't fail the request if notifications fail
+            console.error("[BUYER REQUEST] Error sending notifications:", notifyError);
+          }
+
+          return res.status(201).json(request);
+        } catch (zodError) {
+          if (zodError instanceof ZodError) {
+            console.error("[BUYER REQUEST] Validation error:", zodError.errors);
+            return res.status(400).json({
+              message: "Invalid request data",
+              errors: zodError.errors
+            });
+          }
+          throw zodError; // Re-throw if it's not a ZodError
+        }
       } catch (error) {
         console.error("[BUYER REQUEST] Error creating request:", error);
-        if (error instanceof ZodError) {
-          return res.status(400).json({
-            message: "Invalid request data",
-            errors: error.errors
-          });
-        }
-        res.status(500).json({ message: "Failed to create buyer request" });
+        return res.status(500).json({ 
+          message: "Failed to create buyer request",
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
       }
     });
 

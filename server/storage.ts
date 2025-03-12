@@ -691,21 +691,21 @@ export class DatabaseStorage implements IStorage {
     return undefined;
   }
 
-  async createBuyerRequest(requestData: InsertBuyerRequest & { buyerId: number }): Promise<BuyerRequest> {
+  async createBuyerRequest(buyerRequest: InsertBuyerRequest): Promise<BuyerRequest> {
     try {
-      log(`Creating buyer request for user ${requestData.buyerId}`);
-      const [request] = await db
-        .insert(buyerRequests)
-        .values({
-          ...requestData,
-          status: "open",
-          views: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning();
+      log(`Creating buyer request: ${buyerRequest.title}`);
 
-      log(`Successfully created buyer request ${request.id}`);
+      // Make sure we have all required fields
+      const requestData = {
+        ...buyerRequest,
+        createdAt: buyerRequest.createdAt || new Date(),
+        updatedAt: buyerRequest.updatedAt || new Date(),
+        views: buyerRequest.views || 0,
+        status: buyerRequest.status || 'open'
+      };
+
+      const [request] = await db.insert(buyerRequests).values(requestData).returning();
+      log(`Successfully created buyer request with ID: ${request.id}`);
       return request;
     } catch (error) {
       log(`Error creating buyer request: ${error}`);
@@ -1021,7 +1021,7 @@ export class DatabaseStorage implements IStorage {
 
       log(`Payment ${paymentId} status updated to ${status}`, "payments");
       return payment;
-    } catch (error) {
+        } catch (error) {
       log(`Error updating payment status: ${error}`, "payments");
       throw error;
     }
@@ -1083,7 +1083,7 @@ export class DatabaseStorage implements IStorage {
     try {
       log(`Getting users with roles: ${roles.join(', ')}`, "users");
       let userList;
-      
+
       if (roles.length === 1) {
         userList = await db
           .select()
@@ -1094,7 +1094,7 @@ export class DatabaseStorage implements IStorage {
         const allUsers = await db.select().from(users);
         userList = allUsers.filter(user => roles.includes(user.role));
       }
-      
+
       log(`Found ${userList.length} users with requested roles`, "users");
       return userList;
     } catch (error) {
