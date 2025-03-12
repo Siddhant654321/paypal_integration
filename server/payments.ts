@@ -515,8 +515,8 @@ class SellerPaymentService {
       // Handle both sandbox and production merchant IDs
       const isSandbox = profile.paypalMerchantId.startsWith('test_');
       const recipientType = isSandbox ? "EMAIL" : "MERCHANT";
-      const receiver = isSandbox ? 
-        "sb-" + profile.paypalMerchantId.substring(5) + "@business.example.com" : 
+      const receiver = isSandbox ?
+        "sb-" + profile.paypalMerchantId.substring(5) + "@business.example.com" :
         profile.paypalMerchantId;
 
       console.log("[PAYPAL] Payout configuration:", {
