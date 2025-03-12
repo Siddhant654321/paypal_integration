@@ -2,19 +2,7 @@ import { storage } from "./storage";
 import { Profile } from "@shared/schema";
 import axios, { AxiosError } from 'axios';
 
-// Check for required PayPal environment variables
-if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
-  throw new Error("Missing required PayPal credentials (CLIENT_ID or CLIENT_SECRET)");
-}
-
-// Log warning if partner merchant IDs are missing
-if (!process.env.PAYPAL_PARTNER_MERCHANT_ID) {
-  console.warn("Warning: PAYPAL_PARTNER_MERCHANT_ID is missing for production mode");
-}
-if (!process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID) {
-  console.warn("Warning: PAYPAL_SANDBOX_PARTNER_MERCHANT_ID is missing for sandbox/development mode");
-}
-
+// PayPal API Configuration
 const PRODUCTION_URL = 'https://api-m.paypal.com';
 const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 
@@ -22,15 +10,9 @@ const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 const IS_SANDBOX = process.env.NODE_ENV !== 'production';
 const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
 
-// Fallback to a default value for testing if environment variable is missing
-const PARTNER_MERCHANT_ID = IS_SANDBOX 
-  ? (process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID || 'test-partner-id')
-  : (process.env.PAYPAL_PARTNER_MERCHANT_ID || 'test-partner-id');
-
 console.log("[PAYPAL] Initializing PayPal Payouts service:", {
   mode: IS_SANDBOX ? 'sandbox' : 'production',
-  baseUrl: BASE_URL,
-  clientIdPrefix: process.env.PAYPAL_CLIENT_ID.substring(0, 8) + '...'
+  baseUrl: BASE_URL
 });
 
 export class SellerPaymentService {
@@ -210,40 +192,48 @@ export class SellerPaymentService {
     }
   }
 
-  static async createPayout(paymentId: number, sellerId: number, amount: number): Promise<void> {
+  static async createPayout(
+    paymentId: number, 
+    sellerId: number, 
+    amount: number,
+    merchantId: string
+  ): Promise<any> {
     try {
-      console.log("[PAYPAL] Creating payout for:", { paymentId, sellerId, amount });
-
-      const profile = await storage.getProfile(sellerId);
-      if (!profile?.paypalMerchantId) {
-        throw new Error("Seller has no PayPal account");
-      }
+      console.log(`[PAYPAL] Creating payout for payment ${paymentId} to seller ${sellerId}`);
 
       const accessToken = await this.getAccessToken();
 
-      // Create a payout using the Payouts API
+      // Validate amount is greater than 0
+      if (amount <= 0) {
+        throw new Error("Payout amount must be greater than 0");
+      }
+
+      const amountInDollars = (amount / 100).toFixed(2);
+
+      // Create payout using PayPal's V1 Payouts API
       const payoutRequest = {
         sender_batch_header: {
           sender_batch_id: `payout_${paymentId}_${Date.now()}`,
-          email_subject: "You have a payout from your auction sale",
+          email_subject: "Your auction payment has been processed",
           email_message: "Your auction sale payment has been processed and the funds have been sent to your PayPal account."
         },
         items: [{
-          recipient_type: "EMAIL", //Always EMAIL for testing accounts
+          recipient_type: "PAYPAL_ID",
           amount: {
-            value: (amount / 100).toFixed(2), // Convert cents to dollars
+            value: amountInDollars,
             currency: "USD"
           },
-          receiver: "sb-" + profile.userId + "@business.example.com", //Use userId for test accounts
-          note: `Payout for auction sale #${paymentId}`,
-          sender_item_id: `payout_item_${paymentId}`
+          receiver: merchantId,
+          note: `Payment for auction sale #${paymentId}`,
+          sender_item_id: `item_${paymentId}_${Date.now()}`
         }]
       };
 
       console.log("[PAYPAL] Sending payout request:", {
         batchId: payoutRequest.sender_batch_header.sender_batch_id,
-        amount: payoutRequest.items[0].amount.value,
-        receiverId: profile.paypalMerchantId.substring(0, 8) + '...'
+        recipientType: "PAYPAL_ID",
+        receiverPrefix: merchantId.substring(0, 8) + '...',
+        amount: amountInDollars
       });
 
       const response = await axios.post(
@@ -252,7 +242,8 @@ export class SellerPaymentService {
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'PayPal-Request-Id': `payout_${paymentId}_${Date.now()}`
           }
         }
       );
@@ -262,21 +253,34 @@ export class SellerPaymentService {
         status: response.data.batch_header.batch_status
       });
 
-      // Store the payout details
-      await storage.createSellerPayout({
-        paymentId,
+      // Record the payout in our database
+      await storage.createSellerPayOut({
         sellerId,
+        paymentId,
         amount,
         paypalPayoutId: response.data.batch_header.payout_batch_id,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        status: response.data.batch_header.batch_status,
+        createdAt: new Date(),
+        completedAt: response.data.batch_header.batch_status === 'SUCCESS' ? new Date() : null
       });
 
-    } catch (err) {
-      const error = err as Error | AxiosError;
+      return response.data;
+    } catch (error) {
       console.error("[PAYPAL] Error creating payout:", error);
-      throw new Error("Failed to process seller payout");
+      if (axios.isAxiosError(error) && error.response) {
+        console.error("[PAYPAL] API Error Response:", {
+          status: error.response.status,
+          data: error.response.data,
+          name: error.response.data?.name,
+          message: error.response.data?.message,
+          details: error.response.data?.details
+        });
+
+        if (error.response.data?.name === 'VALIDATION_ERROR') {
+          throw new Error(`PayPal validation error: ${error.response.data?.message || 'Invalid payout request'}`);
+        }
+      }
+      throw new Error("Failed to process seller payout. Please ensure your PayPal account is properly configured.");
     }
   }
 
