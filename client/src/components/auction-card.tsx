@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { type Auction } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
-import { Store, MapPin, CreditCard, Check, X } from "lucide-react";
+import { Store, MapPin, CreditCard, Check, X, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { formatPrice } from "../utils/formatters";
 import React from 'react';
@@ -144,6 +144,10 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
         <p className="text-sm text-muted-foreground line-clamp-2 whitespace-pre-line">
           {auction.description}
         </p>
+        <div className="mt-2 flex items-center gap-1 text-sm text-muted-foreground">
+          <Eye className="h-4 w-4" />
+          <span>{auction.views || 0} views</span>
+        </div>
       </CardContent>
       <CardFooter className="p-4 pt-0 flex flex-col gap-2">
         <div className="flex w-full justify-between items-center">

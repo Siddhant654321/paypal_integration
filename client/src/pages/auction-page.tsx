@@ -4,7 +4,7 @@ import { Auction, Bid, Profile } from "@shared/schema";
 import BidForm from "@/components/bid-form";
 import { formatDistanceToNow, differenceInSeconds } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Clock, Store, User, MapPin } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, Store, User, MapPin, Eye } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -122,12 +122,12 @@ export default function AuctionPage() {
     // Check if auction hasn't started yet
     const now = new Date();
     const startDate = new Date(auction.startDate);
-    
+
     // If auction hasn't started yet, show Preview badge
     if (now < startDate) {
       return <Badge variant="outline">Preview</Badge>;
     }
-    
+
     // Otherwise use status from database
     switch (auction.status) {
       case "active":
@@ -257,25 +257,29 @@ export default function AuctionPage() {
                 </Badge>
               )}
             </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Eye className="h-5 w-5" />
+              <span>{auction.views || 0} views</span>
+            </div>
           </div>
 
           <div className="prose max-w-none">
             <p className="whitespace-pre-wrap">{auction.description}</p>
           </div>
-          
+
           {/* Payment button for winning bidder */}
-          {auction.status === "ended" && 
-           user?.id === auction.winningBidderId && 
-           auction.paymentStatus !== "completed" && (
-            <div className="mt-4">
-              <Link href={`/auction/${auction.id}/pay`}>
-                <Button size="lg" className="w-full" variant="default">
-                  <CreditCard className="mr-2 h-5 w-5" />
-                  Complete Purchase
-                </Button>
-              </Link>
-            </div>
-          )}
+          {auction.status === "ended" &&
+            user?.id === auction.winningBidderId &&
+            auction.paymentStatus !== "completed" && (
+              <div className="mt-4">
+                <Link href={`/auction/${auction.id}/pay`}>
+                  <Button size="lg" className="w-full" variant="default">
+                    <CreditCard className="mr-2 h-5 w-5" />
+                    Complete Purchase
+                  </Button>
+                </Link>
+              </div>
+            )}
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-lg">
