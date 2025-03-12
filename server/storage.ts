@@ -1021,13 +1021,16 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-
   async updatePaymentStatus(paymentId: number, status: PaymentStatus): Promise<Payment> {
     try {
       log(`Updating payment ${paymentId} status to ${status}`, "payments");
       const [payment] = await db
         .update(payments)
-        .set({ status })
+        .set({ 
+          status,
+          updatedAt: new Date(),
+          completedAt: status === "completed" ? new Date() : undefined
+        })
         .where(eq(payments.id, paymentId))
         .returning();
 
@@ -1035,12 +1038,7 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`Payment ${paymentId} not found`);
       }
 
-      log(`Successfully updated payment status`, {
-        paymentId,
-        newStatus: status,
-        timestamp: new Date().toISOString()
-      });
-
+      log(`Payment ${paymentId} status updated to ${status}`, "payments");
       return payment;
     } catch (error) {
       log(`Error updating payment status: ${error}`, "payments");
