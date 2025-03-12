@@ -1,11 +1,11 @@
 import express, { type Express } from "express";
 import { createServer } from "http";
-import { setupSession } from "./auth";
+import { setupAuth } from "./auth";
 import { db } from "./db";
 
 export async function registerRoutes(app: Express) {
   // Set up authentication
-  setupSession(app);
+  setupAuth(app);
   
   // Create HTTP server
   const server = createServer(app);
