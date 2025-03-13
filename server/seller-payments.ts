@@ -70,9 +70,7 @@ export class SellerPaymentService {
         // Update profile with test merchant ID
         await storage.updateSellerPayPalAccount(profile.userId, {
           merchantId: testMerchantId,
-          status: "verified", // Mark as verified in sandbox
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          status: "verified" // Mark as verified in sandbox
         });
 
         console.log("[PAYPAL] Created test merchant ID in sandbox:", testMerchantId);
@@ -113,10 +111,17 @@ export class SellerPaymentService {
         }
       };
 
-      console.log("[PAYPAL] Sending partner referral request:", JSON.stringify(referralRequest, null, 2));
+      // Log the full request URL and headers for debugging
+      const requestUrl = `${BASE_URL}/v2/customer/partner-referrals`;
+      console.log("[PAYPAL] Making API request to:", requestUrl);
+      console.log("[PAYPAL] With headers:", {
+        Authorization: 'Bearer <token>',
+        'Content-Type': 'application/json',
+        'PayPal-Partner-Attribution-Id': process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID
+      });
 
       const response = await axios.post(
-        `${BASE_URL}/v2/customer/partner-referrals`,
+        requestUrl,
         referralRequest,
         {
           headers: {
@@ -126,6 +131,11 @@ export class SellerPaymentService {
           }
         }
       );
+
+      console.log("[PAYPAL] Partner referral response:", {
+        status: response.status,
+        data: JSON.stringify(response.data, null, 2)
+      });
 
       const links = response.data.links;
       const actionUrl = links.find((link: any) => link.rel === "action_url")?.href;
@@ -143,9 +153,7 @@ export class SellerPaymentService {
       // Update profile with PayPal merchant ID and initial status
       await storage.updateSellerPayPalAccount(profile.userId, {
         merchantId,
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        status: "pending"
       });
 
       return {
@@ -159,9 +167,14 @@ export class SellerPaymentService {
       if (axios.isAxiosError(error) && error.response?.data) {
         console.error("[PAYPAL] API Error Details:", {
           status: error.response.status,
+          url: error.config?.url,
           data: JSON.stringify(error.response.data, null, 2),
           details: error.response.data.details || []
         });
+
+        if (error.response.status === 404) {
+          throw new Error("Unable to connect to PayPal API. Please ensure you're using a sandbox account for testing.");
+        }
 
         // Extract specific PayPal error message
         const errorMessage = error.response.data.details?.[0]?.issue || 
