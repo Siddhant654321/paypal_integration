@@ -489,73 +489,62 @@ export class DatabaseStorage implements IStorage {
     try {
       log(`[DELETE] Starting deletion process for auction ${auctionId}`);
 
-      // Delete in a transaction to ensure all related data is cleaned up atomically
+      // First get the auction to check if it exists
+      const auction = await db
+        .select()
+        .from(auctions)
+        .where(eq(auctions.id, auctionId))
+        .then(rows => rows[0]);
+
+      if (!auction) {
+        throw new Error(`Auction ${auctionId} not found`);
+      }
+
+      // Delete related records in the correct order
       await db.transaction(async (tx) => {
-        // First get the auction to ensure it exists and get image URLs
-        const [auction] = await tx
-          .select()
-          .from(auctions)
-          .where(eq(auctions.id, auctionId));
-
-        if (!auction) {
-          throw new Error(`Auction ${auctionId} not found`);
-        }
-
-        // Delete seller payouts first as they reference payments
-        await tx
-          .delete(sellerPayouts)
+        // First delete seller payouts that reference payments
+        await tx.delete(sellerPayouts)
           .where(eq(sellerPayouts.auctionId, auctionId));
 
-        // Delete payments
-        await tx
-          .delete(payments)
+        // Then delete any payments
+        await tx.delete(payments)
           .where(eq(payments.auctionId, auctionId));
 
         // Delete bids
-        await tx
-          .delete(bids)
+        await tx.delete(bids)
           .where(eq(bids.auctionId, auctionId));
 
-        // Delete notifications
-        await tx
-          .delete(notifications)
-          .where(
-            and(
-              eq(notifications.type, "auction"),
-              eq(notifications.reference, auctionId.toString())
-            )
-          );
-
-        // Finally delete the auction
-        await tx
-          .delete(auctions)
+        // Delete the auction itself
+        await tx.delete(auctions)
           .where(eq(auctions.id, auctionId));
+      });
 
-        // Clean up image files if they exist
-        if (auction.images && Array.isArray(auction.images)) {
-          for (const imageUrl of auction.images) {
-            try {
-              const imagePath = imageUrl.split('/uploads/')[1];
-              if (imagePath) {
-                const fullPath = path.join(process.cwd(), 'uploads', imagePath);
-                fs.unlink(fullPath, (err) => {
-                  if (err) {
-                    log(`[DELETE] Warning: Could not delete image file ${imagePath}: ${err.message}`);
-                  }
-                });
+      // After successful database deletion, clean up image files
+      if (auction.images && Array.isArray(auction.images)) {
+        for (const imageUrl of auction.images) {
+          try {
+            // Extract filename from URL
+            const urlParts = imageUrl.split('/');
+            const filename = urlParts[urlParts.length - 1];
+
+            if (filename) {
+              const filePath = path.join(process.cwd(), 'uploads', filename);
+              if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                log(`[DELETE] Deleted image file: ${filename}`);
               }
-            } catch (err) {
-              log(`[DELETE] Warning: Error processing image URL ${imageUrl}: ${err instanceof Error ? err.message : String(err)}`);
             }
+          } catch (err) {
+            log(`[DELETE] Warning: Error deleting image: ${err instanceof Error ? err.message : String(err)}`);
           }
         }
-      });
+      }
 
       log(`[DELETE] Successfully deleted auction ${auctionId} and all related data`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log(`[DELETE] Error during auction deletion: ${errorMessage}`);
-      throw new Error(`Failed to delete auction: ${errorMessage}`);
+      throw error;
     }
   }
 
@@ -1015,7 +1004,7 @@ export class DatabaseStorage implements IStorage {
 
   async insertPayment(paymentData: InsertPayment): Promise<Payment> {
     try {
-log(`Creating payment record for auction ${paymentData.auctionId}`, "payments");
+      log(`Creating payment record for auction ${paymentData.auctionId}`, "payments");
       const [payment] = await db
         .insert(payments)
         .values(paymentData)
