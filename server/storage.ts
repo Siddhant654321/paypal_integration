@@ -485,41 +485,69 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAuction(auctionId: number): Promise<void> {
     try {
-      log(`Deleting auction ${auctionId} and all related data`);
+      log(`Starting deletion process for auction ${auctionId}`, "deletion");
 
       // Delete in a transaction to ensure all related data is cleaned up atomically
       await db.transaction(async (tx) => {
-        // First delete all bids for this auction
-        await tx
+        // Get all related notifications first
+        const notifications = await tx
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.type, "auction"),
+              eq(notifications.reference, auctionId.toString())
+            )
+          );
+
+        if (notifications.length > 0) {
+          log(`Found ${notifications.length} notifications to delete`, "deletion");
+          await tx
+            .delete(notifications)
+            .where(
+              and(
+                eq(notifications.type, "auction"),
+                eq(notifications.reference, auctionId.toString())
+              )
+            );
+        }
+
+        // Delete all bids
+        const bidsResult = await tx
           .delete(bids)
-          .where(eq(bids.auctionId, auctionId));
-        log(`Deleted bids for auction ${auctionId}`);
+          .where(eq(bids.auctionId, auctionId))
+          .returning();
+        log(`Deleted ${bidsResult.length} bids`, "deletion");
 
-        // Delete any payments associated with this auction
-        await tx
+        // Delete all payments
+        const paymentsResult = await tx
           .delete(payments)
-          .where(eq(payments.auctionId, auctionId));
-        log(`Deleted payments for auction ${auctionId}`);
+          .where(eq(payments.auctionId, auctionId))
+          .returning();
+        log(`Deleted ${paymentsResult.length} payments`, "deletion");
 
-        // Delete any notifications related to this auction
-        await tx
-          .delete(notifications)
-          .where(and(
-            eq(notifications.type, "auction"),
-            eq(notifications.reference, auctionId.toString())
-          ));
-        log(`Deleted notifications for auction ${auctionId}`);
+        // Delete seller payouts if any
+        const payoutsResult = await tx
+          .delete(sellerPayouts)
+          .where(eq(sellerPayouts.auctionId, auctionId))
+          .returning();
+        log(`Deleted ${payoutsResult.length} payouts`, "deletion");
 
-        // Finally delete the auction itself
-        await tx
+        // Finally delete the auction
+        const [deletedAuction] = await tx
           .delete(auctions)
-          .where(eq(auctions.id, auctionId));
-        log(`Deleted auction ${auctionId}`);
+          .where(eq(auctions.id, auctionId))
+          .returning();
+
+        if (!deletedAuction) {
+          throw new Error(`Auction ${auctionId} not found or already deleted`);
+        }
+
+        log(`Successfully deleted auction ${auctionId}`, "deletion");
       });
 
-      log(`Successfully deleted auction ${auctionId} and all related data`);
     } catch (error) {
-      log(`Error deleting auction ${auctionId}: ${error}`);
+      log(`Error during auction deletion: ${error instanceof Error ? error.message : String(error)}`, "deletion");
       throw error;
     }
   }
@@ -1017,7 +1045,7 @@ export class DatabaseStorage implements IStorage {
         .set({
           ...updates,
           updatedAt: new Date()
-                })
+        })
         .where(eq(payments.id, id))
         .returning();
 
@@ -1038,7 +1066,7 @@ export class DatabaseStorage implements IStorage {
       log(`Updating payment ${paymentId} status to ${status}`, "payments");
       const [payment] = await db
         .update(payments)
-        .set({ 
+        .set({
           status,
           updatedAt: new Date(),
           completedAt: status === "completed" ? new Date() : undefined
