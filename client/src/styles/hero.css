@@ -1,0 +1,31 @@
+
+.hero-section {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  height: 500px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-content {
+  text-align: center;
+  color: white;
+  z-index: 10;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  background-color: rgba(29, 53, 87, 0.7); /* Deep blue with transparency */
+}
+
+.hero-title {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.hero-subtitle {
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+}
+
