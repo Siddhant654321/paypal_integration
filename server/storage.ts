@@ -485,24 +485,36 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAuction(auctionId: number): Promise<void> {
     try {
-      log(`Deleting auction ${auctionId}`);
+      log(`Deleting auction ${auctionId} and all related data`);
 
-      // Delete in a transaction to ensure all related data is cleaned up
+      // Delete in a transaction to ensure all related data is cleaned up atomically
       await db.transaction(async (tx) => {
         // First delete all bids for this auction
         await tx
           .delete(bids)
           .where(eq(bids.auctionId, auctionId));
+        log(`Deleted bids for auction ${auctionId}`);
 
         // Delete any payments associated with this auction
         await tx
           .delete(payments)
           .where(eq(payments.auctionId, auctionId));
+        log(`Deleted payments for auction ${auctionId}`);
+
+        // Delete any notifications related to this auction
+        await tx
+          .delete(notifications)
+          .where(and(
+            eq(notifications.type, "auction"),
+            eq(notifications.reference, auctionId.toString())
+          ));
+        log(`Deleted notifications for auction ${auctionId}`);
 
         // Finally delete the auction itself
         await tx
           .delete(auctions)
           .where(eq(auctions.id, auctionId));
+        log(`Deleted auction ${auctionId}`);
       });
 
       log(`Successfully deleted auction ${auctionId} and all related data`);
@@ -1005,7 +1017,7 @@ export class DatabaseStorage implements IStorage {
         .set({
           ...updates,
           updatedAt: new Date()
-        })
+                })
         .where(eq(payments.id, id))
         .returning();
 

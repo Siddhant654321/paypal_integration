@@ -1055,27 +1055,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Delete an auction (admin only)
-    router.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
-      try {
-        const auctionId = parseInt(req.params.id);
-        console.log(`[ADMIN] Attempting to delete auction ${auctionId}`);
-        
-        const auction = await storage.getAuction(auctionId);
-        if (!auction) {
-          return res.status(404).json({ message: "Auction not found" });
-        }
 
-        // Delete the auction and all related data
-        await storage.deleteAuction(auctionId);
-        
-        console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
-        res.json({ message: "Auction deleted successfully" });
-      } catch (error) {
-        console.error("[ADMIN] Error deleting auction:", error);
-        res.status(500).json({ message: "Failed to delete auction" });
-      }
-    });
 
     // Get detailed auction status including payment info
     router.get("/api/auctions/:id/status", async (req, res) => {
@@ -1481,7 +1461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Delete an auction and its associated bids
+    // Delete an auction and all associated data
     router.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
@@ -1492,17 +1472,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ message: "Auction not found" });
         }
 
-        // First delete all bids associated with the auction
-        await storage.deleteBidsForAuction(auctionId);
-        
-        // Then delete the auction itself
+        // Delete auction and all related data using the storage method
+        // which handles the deletion in the correct order within a transaction
         await storage.deleteAuction(auctionId);
         
         console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
         res.json({ message: "Auction deleted successfully" });
       } catch (error) {
         console.error("[ADMIN] Error deleting auction:", error);
-        res.status(500).json({ message: "Failed to delete auction" });
+        res.status(500).json({ 
+          message: "Failed to delete auction",
+          error: error instanceof Error ? error.message : "Unknown error"
+        });
       }
     });
 
