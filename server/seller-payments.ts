@@ -6,15 +6,18 @@ import axios, { AxiosError } from 'axios';
 const PRODUCTION_URL = 'https://api-m.paypal.com';
 const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 
-// Only use sandbox when explicitly configured, or in non-production
-const IS_SANDBOX = process.env.NODE_ENV !== 'production' || 
-                  (process.env.PAYPAL_ENV === 'sandbox' || process.env.VITE_PAYPAL_ENV === 'sandbox');
+// Force sandbox mode if Client ID starts with 'sb-'
+const IS_SANDBOX = process.env.PAYPAL_CLIENT_ID?.startsWith('sb-') || 
+                  process.env.PAYPAL_ENV === 'sandbox' || 
+                  process.env.VITE_PAYPAL_ENV === 'sandbox';
+
 const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
 
 console.log("[PAYPAL] Initializing PayPal service:", {
   mode: IS_SANDBOX ? 'sandbox' : 'production',
   baseUrl: BASE_URL,
-  clientIdPrefix: process.env.PAYPAL_CLIENT_ID?.substring(0, 8) + '...'
+  clientIdPrefix: process.env.PAYPAL_CLIENT_ID?.substring(0, 8) + '...',
+  isSandboxClientId: process.env.PAYPAL_CLIENT_ID?.startsWith('sb-')
 });
 
 export class SellerPaymentService {
@@ -23,7 +26,7 @@ export class SellerPaymentService {
       console.log("[PAYPAL] Requesting access token...");
 
       if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
-        throw new Error("PayPal credentials not configured. Please check your environment variables.");
+        throw new Error("PayPal API credentials are not configured. Please check the environment variables.");
       }
 
       const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
@@ -46,8 +49,15 @@ export class SellerPaymentService {
           status: error.response.status,
           data: JSON.stringify(error.response.data, null, 2)
         });
+
+        if (error.response.status === 401) {
+          const errorMessage = IS_SANDBOX ?
+            "Invalid sandbox credentials. Please verify your PayPal Sandbox API keys." :
+            "Invalid production credentials. Please verify your PayPal Business account API keys.";
+          throw new Error(errorMessage);
+        }
       }
-      throw new Error("Failed to authenticate with PayPal. Please check your credentials and try again.");
+      throw new Error("Failed to authenticate with PayPal. Please verify your API credentials and try again.");
     }
   }
 
@@ -55,17 +65,15 @@ export class SellerPaymentService {
     try {
       console.log("[PAYPAL] Creating seller account for:", profile.email);
 
-      // Base URL determination - use dynamic approach to get the correct Replit URL
+      // Base URL determination for return URLs
       const baseUrl = process.env.REPL_SLUG 
         ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
         : (process.env.REPL_ID ? `https://${process.env.REPL_ID}.id.repl.co` : 'http://localhost:5001');
 
-      // Always create a test merchant ID in sandbox mode
+      // For sandbox/testing environment
       if (IS_SANDBOX) {
-        console.log("[PAYPAL] In sandbox mode, creating test merchant account");
+        console.log("[PAYPAL] Using sandbox environment");
         const testMerchantId = `TEST_MERCHANT_${profile.userId}_${Date.now()}`;
-
-        console.log("[PAYPAL] Using return base URL:", baseUrl);
 
         // Update profile with test merchant ID
         await storage.updateSellerPayPalAccount(profile.userId, {
@@ -73,21 +81,18 @@ export class SellerPaymentService {
           status: "verified" // Mark as verified in sandbox
         });
 
-        console.log("[PAYPAL] Created test merchant ID in sandbox:", testMerchantId);
-
         return {
           merchantId: testMerchantId,
-          url: `${baseUrl}/seller/dashboard?success=true&test=true`,
+          url: `${baseUrl}/seller/dashboard?success=true&sandbox=true`,
         };
       }
 
+      // Production environment - Get access token
       const accessToken = await this.getAccessToken();
 
-      console.log("[PAYPAL] Using base URL:", baseUrl);
-
-      // Create a PayPal merchant integration
-      const referralRequest = {
-        tracking_id: `seller_${profile.userId}_${Date.now()}`,
+      // Create merchant integration using PayPal's v2 Partner API
+      const partnerReferralRequest = {
+        tracking_id: `SELLER_${profile.userId}_${Date.now()}`,
         operations: [{
           operation: "API_INTEGRATION",
           api_integration_preference: {
@@ -100,7 +105,10 @@ export class SellerPaymentService {
             }
           }
         }],
-        products: ["EXPRESS_CHECKOUT"],
+        products: [
+          "EXPRESS_CHECKOUT",
+          "PPCP"
+        ],
         legal_consents: [{
           type: "SHARE_DATA_CONSENT",
           granted: true
@@ -111,22 +119,23 @@ export class SellerPaymentService {
         }
       };
 
-      // Log the full request URL and headers for debugging
+      // Log the API request for debugging
       const requestUrl = `${BASE_URL}/v2/customer/partner-referrals`;
-      console.log("[PAYPAL] Making API request to:", requestUrl);
-      console.log("[PAYPAL] With headers:", {
-        Authorization: 'Bearer <token>',
-        'Content-Type': 'application/json',
-        'PayPal-Partner-Attribution-Id': process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID
+      console.log("[PAYPAL] Making Partner API request:", {
+        url: requestUrl,
+        trackingId: partnerReferralRequest.tracking_id,
+        integrationMethod: partnerReferralRequest.operations[0].api_integration_preference.rest_api_integration.integration_method,
+        features: partnerReferralRequest.operations[0].api_integration_preference.rest_api_integration.third_party_details.features
       });
 
       const response = await axios.post(
         requestUrl,
-        referralRequest,
+        partnerReferralRequest,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
+            'PayPal-Request-Id': partnerReferralRequest.tracking_id,
             'PayPal-Partner-Attribution-Id': process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID
           }
         }
@@ -134,23 +143,18 @@ export class SellerPaymentService {
 
       console.log("[PAYPAL] Partner referral response:", {
         status: response.status,
-        data: JSON.stringify(response.data, null, 2)
+        links: response.data.links,
+        headers: response.headers
       });
 
-      const links = response.data.links;
-      const actionUrl = links.find((link: any) => link.rel === "action_url")?.href;
+      const actionUrl = response.data.links.find((link: any) => link.rel === "action_url")?.href;
       const merchantId = response.data.merchant_id;
 
       if (!actionUrl || !merchantId) {
-        throw new Error("Failed to generate PayPal onboarding URL. Please try again later.");
+        throw new Error("Failed to generate PayPal onboarding URL. Please ensure you have the correct Partner permissions.");
       }
 
-      console.log("[PAYPAL] Generated onboarding link:", {
-        merchantId,
-        returnUrl: `${baseUrl}/seller/dashboard?success=true`
-      });
-
-      // Update profile with PayPal merchant ID and initial status
+      // Update profile with pending status
       await storage.updateSellerPayPalAccount(profile.userId, {
         merchantId,
         status: "pending"
@@ -158,38 +162,73 @@ export class SellerPaymentService {
 
       return {
         merchantId,
-        url: actionUrl,
+        url: actionUrl
       };
-    } catch (err) {
-      const error = err as Error | AxiosError;
+
+    } catch (error) {
       console.error("[PAYPAL] Error creating seller account:", error);
 
-      if (axios.isAxiosError(error) && error.response?.data) {
+      if (axios.isAxiosError(error)) {
         console.error("[PAYPAL] API Error Details:", {
-          status: error.response.status,
+          status: error.response?.status,
           url: error.config?.url,
-          data: JSON.stringify(error.response.data, null, 2),
-          details: error.response.data.details || []
+          method: error.config?.method,
+          headers: error.config?.headers,
+          data: error.response?.data ? JSON.stringify(error.response.data, null, 2) : undefined
         });
 
-        if (error.response.status === 404) {
-          throw new Error("Unable to connect to PayPal API. Please ensure you're using a sandbox account for testing.");
+        // Handle specific PayPal error cases with clear error messages
+        if (error.response?.status === 404) {
+          const errorMessage = IS_SANDBOX ?
+            `PayPal Partner API not accessible in sandbox mode. Please check:
+            1. You're using sandbox credentials (Client ID starts with 'sb-')
+            2. Your sandbox account has Partner Integration enabled
+            3. PAYPAL_ENV environment variable is set to 'sandbox'` :
+            `PayPal Partner API not accessible in production mode. Please check:
+            1. You're using production credentials from your PayPal Business account
+            2. Your account has Partner Integration permissions
+            3. PAYPAL_ENV environment variable is NOT set to 'sandbox'`;
+          throw new Error(errorMessage);
         }
 
-        // Extract specific PayPal error message
-        const errorMessage = error.response.data.details?.[0]?.issue || 
-                           error.response.data.message || 
-                           "Failed to connect to PayPal";
-        throw new Error(`PayPal error: ${errorMessage}`);
+        if (error.response?.status === 401) {
+          throw new Error("Unauthorized: Please verify your PayPal API credentials and Partner Integration permissions.");
+        }
+
+        if (error.response?.status === 403) {
+          throw new Error("Access denied: Your PayPal account does not have the required Partner Integration permissions.");
+        }
+
+        // Extract PayPal-specific error details
+        const paypalError = error.response?.data?.details?.[0]?.issue || 
+                              error.response?.data?.message || 
+                              "Unknown PayPal error";
+
+        throw new Error(`PayPal error: ${paypalError}. Please contact PayPal support if this persists.`);
       }
 
+      // Handle configuration errors
       if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
-        throw new Error("PayPal is not properly configured. Please ensure your PayPal API credentials are set up correctly.");
+        throw new Error(
+          "PayPal API credentials are not configured. " +
+          "Please set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables."
+        );
       }
 
-      throw new Error("Failed to connect with PayPal. Please check your internet connection and try again later.");
+      if (!process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID) {
+        throw new Error(
+          "PayPal Partner Merchant ID is not configured. " +
+          "Please set PAYPAL_SANDBOX_PARTNER_MERCHANT_ID environment variable."
+        );
+      }
+
+      throw new Error(
+        "Failed to connect to PayPal. " +
+        "Please check your internet connection and verify your PayPal integration settings."
+      );
     }
   }
+
   // Helper function to map PayPal status to our schema status
   private static mapPayPalStatus(paypalStatus: string): PaymentStatus {
     switch (paypalStatus) {
