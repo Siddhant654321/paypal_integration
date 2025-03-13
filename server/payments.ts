@@ -99,12 +99,12 @@ export class PaymentService {
         if (!auction) {
           throw new Error("Auction not found");
         }
-
+        
         // Verify buyer is winning bidder
         if (auction.winningBidderId !== buyerId) {
           throw new Error("Only the winning bidder can make payment");
         }
-
+        
         // Calculate amounts (same as real checkout)
         const baseAmount = auction.currentPrice;
         const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
@@ -127,47 +127,47 @@ export class PaymentService {
           status: 'pending',
           paypalOrderId: simulatedOrderId
         });
-
+        
         // Update auction status to pending_payment
         await storage.updateAuction(auctionId, {
           status: "pending_payment",
           paymentStatus: "pending"
         });
-
+        
         return {
           orderId: simulatedOrderId,
           payment,
           simulated: true
         };
       }
-
+      
       // Get auction details
       const auction = await storage.getAuction(auctionId);
       if (!auction) {
         throw new Error("Auction not found");
       }
-
+      
       // Verify buyer is winning bidder
       if (auction.winningBidderId !== buyerId) {
         throw new Error("Only the winning bidder can make payment");
       }
-
+      
       // Calculate amounts
       const baseAmount = auction.currentPrice;
       const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
-
+      
       // Calculate seller payout (what the seller receives after fees)
       const sellerPayout = baseAmount - Math.round(baseAmount * SELLER_FEE_PERCENTAGE);
-
+      
       const accessToken = await this.getAccessToken();
-
+      
       // Calculate dollar amounts from cents and ensure proper decimal precision
       const totalAmountDollars = (totalAmount / 100).toFixed(2);
       const baseAmountDollars = (baseAmount / 100).toFixed(2);
       const feeAmountDollars = ((platformFee + insuranceFee) / 100).toFixed(2);
-
+      
       console.log("[PAYPAL] Payment amounts:", {
         baseAmount,
         platformFee,
@@ -178,7 +178,7 @@ export class PaymentService {
         feeAmountDollars,
         totalAmountDollars
       });
-
+      
       // Create PayPal order
       const orderRequest = {
         intent: "CAPTURE",
@@ -215,9 +215,9 @@ export class PaymentService {
           }
         ]
       };
-
+      
       console.log("[PAYPAL] Creating order with request:", orderRequest);
-
+      
       const response = await axios.post(
         `${BASE_URL}/v2/checkout/orders`,
         orderRequest,
@@ -229,13 +229,13 @@ export class PaymentService {
           }
         }
       );
-
+      
       const orderId = response.data.id;
       console.log("[PAYPAL] Order created successfully:", {
         orderId,
         status: response.data.status
       });
-
+      
       // Create payment record in pending state
       const payment = await storage.insertPayment({
         auctionId,
@@ -248,13 +248,13 @@ export class PaymentService {
         status: 'pending',
         paypalOrderId: orderId
       });
-
+      
       // Update auction status to pending_payment
       await storage.updateAuction(auctionId, {
         status: "pending_payment",
         paymentStatus: "pending"
       });
-
+      
       return {
         orderId,
         payment
@@ -274,27 +274,27 @@ export class PaymentService {
   static async handlePaymentSuccess(orderId: string) {
     try {
       console.log("[PAYPAL] Processing payment capture for order:", orderId);
-
+      
       // Find payment record
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
         console.error("[PAYPAL] Payment record not found for order:", orderId);
         throw new Error("Payment record not found");
       }
-
+      
       console.log("[PAYPAL] Found payment record:", {
         paymentId: payment.id,
         auctionId: payment.auctionId,
         status: payment.status
       });
-
+      
       if (payment.status !== 'pending') {
         console.error("[PAYPAL] Invalid payment status for capture:", payment.status);
         throw new Error(`Payment cannot be captured in status: ${payment.status}`);
       }
-
+      
       const accessToken = await this.getAccessToken();
-
+      
       // Verify order status before capture
       const orderResponse = await axios.get(
         `${BASE_URL}/v2/checkout/orders/${orderId}`,
@@ -305,18 +305,18 @@ export class PaymentService {
           }
         }
       );
-
+      
       console.log("[PAYPAL] Order status before capture:", {
         orderId,
         status: orderResponse.data.status,
         intent: orderResponse.data.intent,
         purchaseUnits: orderResponse.data.purchase_units
       });
-
+      
       if (orderResponse.data.status !== 'APPROVED') {
         throw new Error(`Invalid order status for capture: ${orderResponse.data.status}`);
       }
-
+      
       // Capture the payment
       const captureResponse = await axios.post(
         `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
@@ -329,32 +329,32 @@ export class PaymentService {
           }
         }
       );
-
+      
       const captureStatus = captureResponse.data.status;
       const captureId = captureResponse.data.purchase_units[0]?.payments?.captures[0]?.id;
-
+      
       console.log("[PAYPAL] Payment captured successfully:", {
         orderId,
         status: captureStatus,
         captureId,
         response: captureResponse.data
       });
-
+      
       if (captureStatus !== 'COMPLETED') {
         throw new Error(`Unexpected capture status: ${captureStatus}`);
       }
-
+      
       // Update payment status to completed but funds held
       console.log("[PAYPAL] Updating payment status to completed_pending_shipment");
       await storage.updatePaymentStatus(payment.id, "completed_pending_shipment");
-
+      
       // Update auction status
       console.log("[PAYPAL] Updating auction status to pending_fulfillment and payment_status");
       await storage.updateAuction(payment.auctionId, {
         status: "pending_fulfillment",
         paymentStatus: "completed_pending_shipment"
       });
-
+      
       // Notify seller that payment is complete and they can proceed with shipping
       await NotificationService.createNotification({
         userId: payment.sellerId,
@@ -362,7 +362,7 @@ export class PaymentService {
         title: "Payment Received - Action Required",
         message: "Payment has been received. Please submit shipping information to receive your funds."
       });
-
+      
       return { success: true };
     } catch (error) {
       console.error("[PAYPAL] Error capturing payment:", error);
@@ -397,16 +397,16 @@ export class PaymentService {
 
       // Get seller's PayPal info
       const sellerProfile = await storage.getProfile(payment.sellerId);
-      
+
       // Calculate seller payout (90% of the final bid amount)
       const sellerPayout = Math.round(payment.amount * 0.90);
-      
+
       let payoutResult;
-      
+
       // Check if seller has PayPal info and PayPal is configured
       if (!sellerProfile?.paypalMerchantId || !PAYPAL_ENABLED) {
         console.warn("[PAYPAL] PayPal not fully configured, using simulated payout");
-        
+
         // If in production but PayPal not configured, create a simulated payout
         payoutResult = await SellerPaymentService.createPayout(
           paymentId,
@@ -476,35 +476,35 @@ export class PaymentService {
   static async handlePaymentFailure(orderId: string) {
     try {
       console.log("[PAYPAL] Processing failed payment for order:", orderId);
-
+      
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
         throw new Error("Payment record not found");
       }
-
+      
       // Get auction for reserve price check
       const auction = await storage.getAuction(payment.auctionId);
       if (!auction) {
         throw new Error("Auction not found");
       }
-
+      
       // Update payment status
       await storage.updatePaymentStatus(payment.id, "failed");
-
+      
       // Update auction status based on reserve price
       await storage.updateAuction(payment.auctionId, {
         status: auction.currentPrice < auction.reservePrice ?
           "pending_seller_decision" : "ended",
         paymentStatus: "failed"
       });
-
+      
       // Notify seller
       await NotificationService.notifyPayment(
         payment.sellerId,
         payment.amount,
         "failed"
       );
-
+      
       console.log("[PAYPAL] Payment failure processed:", {
         orderId,
         paymentId: payment.id,
@@ -519,7 +519,7 @@ export class PaymentService {
     try {
       console.log("[PAYPAL] Getting order status for:", orderId);
       const accessToken = await this.getAccessToken();
-
+      
       const response = await axios.get(
         `${BASE_URL}/v2/checkout/orders/${orderId}`,
         {
@@ -529,7 +529,7 @@ export class PaymentService {
           }
         }
       );
-
+      
       console.log("[PAYPAL] Order status response:", response.data.status);
       return {
         id: response.data.id,
@@ -545,32 +545,32 @@ export class PaymentService {
   static async getPaymentStatus(auctionId: number): Promise<string> {
     try {
       console.log("[PAYPAL] Getting payment status for auction:", auctionId);
-
+      
       // Get the payment record
       const payment = await storage.getPaymentByAuctionId(auctionId);
       if (!payment) {
         return "pending";
       }
-
+      
       console.log("[PAYPAL] Found payment record:", {
         paymentId: payment.id,
         status: payment.status,
         orderId: payment.paypalOrderId
       });
-
+      
       // If payment has PayPal order ID, verify its status
       if (payment.paypalOrderId) {
         const orderStatus = await this.getOrderStatus(payment.paypalOrderId);
         console.log("[PAYPAL] Order status from PayPal:", orderStatus);
       }
-
+      
       // Get the auction to check both statuses
       const auction = await storage.getAuction(auctionId);
       console.log("[PAYPAL] Current status in tables:", {
         paymentTableStatus: payment.status,
         auctionTableStatus: auction?.paymentStatus
       });
-
+      
       // Return the payment table status as it's more accurate
       return payment.status;
     } catch (error) {
@@ -614,22 +614,22 @@ class SellerPaymentService {
       }
       
       console.log(`[PAYPAL] Creating payout for payment ${paymentId} to seller ${sellerId}`);
-
+      
       const accessToken = await PaymentService.getAccessToken();
-
+      
       // Validate amount is greater than 0
       if (amount <= 0) {
         throw new Error("Payout amount must be greater than 0");
       }
-
+      
       // Validate receiver email format
       if (!receiverEmail || typeof receiverEmail !== 'string' || !receiverEmail.includes('@')) {
         console.warn("[PAYPAL] Invalid receiver email format:", receiverEmail);
         throw new Error("Invalid PayPal receiver email format");
       }
-
+      
       const amountInDollars = (amount / 100).toFixed(2);
-
+      
       const payoutRequest = {
         sender_batch_header: {
           sender_batch_id: `payout_${paymentId}_${Date.now()}`,
@@ -647,14 +647,14 @@ class SellerPaymentService {
           sender_item_id: `item_${paymentId}_${Date.now()}`
         }]
       };
-
+      
       console.log("[PAYPAL] Sending payout request:", {
         batchId: payoutRequest.sender_batch_header.sender_batch_id,
         recipientType: "EMAIL",
         receiverPrefix: receiverEmail.substring(0, 4) + '***@***' + receiverEmail.split('@')[1],
         amount: amountInDollars
       });
-
+      
       const response = await axios.post(
         `${BASE_URL}/v1/payments/payouts`,
         payoutRequest,
@@ -666,12 +666,12 @@ class SellerPaymentService {
           }
         }
       );
-
+      
       console.log("[PAYPAL] Payout created successfully:", {
         payoutBatchId: response.data.batch_header.payout_batch_id,
         status: response.data.batch_header.batch_status
       });
-
+      
       // Record the payout in our database
       await storage.createSellerPayOut({
         sellerId,
@@ -682,7 +682,7 @@ class SellerPaymentService {
         createdAt: new Date(),
         completedAt: response.data.batch_header.batch_status === 'SUCCESS' ? new Date() : null
       });
-
+      
       return response.data;
     } catch (error) {
       console.error("[PAYPAL] Error creating payout:", error);
@@ -694,7 +694,7 @@ class SellerPaymentService {
           message: error.response.data?.message,
           details: error.response.data?.details
         });
-
+        
         if (error.response.data?.name === 'VALIDATION_ERROR') {
           throw new Error(`PayPal validation error: ${error.response.data?.message || 'Invalid payout request'}`);
         }
