@@ -22,6 +22,10 @@ export class SellerPaymentService {
     try {
       console.log("[PAYPAL] Requesting access token...");
 
+      if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+        throw new Error("PayPal credentials not configured. Please check your environment variables.");
+      }
+
       const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
       const response = await axios.post(`${BASE_URL}/v1/oauth2/token`,
         'grant_type=client_credentials',
@@ -43,10 +47,136 @@ export class SellerPaymentService {
           data: JSON.stringify(error.response.data, null, 2)
         });
       }
-      throw new Error("Failed to authenticate with PayPal");
+      throw new Error("Failed to authenticate with PayPal. Please check your credentials and try again.");
     }
   }
 
+  static async createSellerAccount(profile: Profile): Promise<{ merchantId: string; url: string }> {
+    try {
+      console.log("[PAYPAL] Creating seller account for:", profile.email);
+
+      // Base URL determination - use dynamic approach to get the correct Replit URL
+      const baseUrl = process.env.REPL_SLUG 
+        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_SLUG?.includes('.') ? 'replit.dev' : 'repl.co'}`
+        : (process.env.REPL_ID ? `https://${process.env.REPL_ID}.id.repl.co` : 'http://localhost:5001');
+
+      // Always create a test merchant ID in sandbox mode
+      if (IS_SANDBOX) {
+        console.log("[PAYPAL] In sandbox mode, creating test merchant account");
+        const testMerchantId = `TEST_MERCHANT_${profile.userId}_${Date.now()}`;
+
+        console.log("[PAYPAL] Using return base URL:", baseUrl);
+
+        // Update profile with test merchant ID
+        await storage.updateSellerPayPalAccount(profile.userId, {
+          merchantId: testMerchantId,
+          status: "verified", // Mark as verified in sandbox
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        console.log("[PAYPAL] Created test merchant ID in sandbox:", testMerchantId);
+
+        return {
+          merchantId: testMerchantId,
+          url: `${baseUrl}/seller/dashboard?success=true&test=true`,
+        };
+      }
+
+      const accessToken = await this.getAccessToken();
+
+      console.log("[PAYPAL] Using base URL:", baseUrl);
+
+      // Create a PayPal merchant integration
+      const referralRequest = {
+        tracking_id: `seller_${profile.userId}_${Date.now()}`,
+        operations: [{
+          operation: "API_INTEGRATION",
+          api_integration_preference: {
+            rest_api_integration: {
+              integration_method: "PAYPAL",
+              integration_type: "THIRD_PARTY",
+              third_party_details: {
+                features: ["PAYMENT", "REFUND", "DELAYED_DISBURSEMENT"]
+              }
+            }
+          }
+        }],
+        products: ["EXPRESS_CHECKOUT"],
+        legal_consents: [{
+          type: "SHARE_DATA_CONSENT",
+          granted: true
+        }],
+        partner_config_override: {
+          return_url: `${baseUrl}/seller/dashboard?success=true`,
+          partner_logo_url: `${baseUrl}/images/logo.png`
+        }
+      };
+
+      console.log("[PAYPAL] Sending partner referral request:", JSON.stringify(referralRequest, null, 2));
+
+      const response = await axios.post(
+        `${BASE_URL}/v2/customer/partner-referrals`,
+        referralRequest,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'PayPal-Partner-Attribution-Id': process.env.PAYPAL_SANDBOX_PARTNER_MERCHANT_ID
+          }
+        }
+      );
+
+      const links = response.data.links;
+      const actionUrl = links.find((link: any) => link.rel === "action_url")?.href;
+      const merchantId = response.data.merchant_id;
+
+      if (!actionUrl || !merchantId) {
+        throw new Error("Failed to generate PayPal onboarding URL. Please try again later.");
+      }
+
+      console.log("[PAYPAL] Generated onboarding link:", {
+        merchantId,
+        returnUrl: `${baseUrl}/seller/dashboard?success=true`
+      });
+
+      // Update profile with PayPal merchant ID and initial status
+      await storage.updateSellerPayPalAccount(profile.userId, {
+        merchantId,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      return {
+        merchantId,
+        url: actionUrl,
+      };
+    } catch (err) {
+      const error = err as Error | AxiosError;
+      console.error("[PAYPAL] Error creating seller account:", error);
+
+      if (axios.isAxiosError(error) && error.response?.data) {
+        console.error("[PAYPAL] API Error Details:", {
+          status: error.response.status,
+          data: JSON.stringify(error.response.data, null, 2),
+          details: error.response.data.details || []
+        });
+
+        // Extract specific PayPal error message
+        const errorMessage = error.response.data.details?.[0]?.issue || 
+                           error.response.data.message || 
+                           "Failed to connect to PayPal";
+        throw new Error(`PayPal error: ${errorMessage}`);
+      }
+
+      if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+        throw new Error("PayPal is not properly configured. Please ensure your PayPal API credentials are set up correctly.");
+      }
+
+      throw new Error("Failed to connect with PayPal. Please check your internet connection and try again later.");
+    }
+  }
   // Helper function to map PayPal status to our schema status
   private static mapPayPalStatus(paypalStatus: string): PaymentStatus {
     switch (paypalStatus) {
