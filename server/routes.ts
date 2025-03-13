@@ -1162,6 +1162,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Delete an auction (admin only)
+    router.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        console.log(`[ADMIN] Attempting to delete auction ${auctionId}`);
+        
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Delete the auction and all related data
+        await storage.deleteAuction(auctionId);
+        
+        console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
+        res.json({ message: "Auction deleted successfully" });
+      } catch (error) {
+        console.error("[ADMIN] Error deleting auction:", error);
+        // Send a more detailed error message to help with debugging
+        res.status(500).json({ 
+          message: "Failed to delete auction",
+          error: error instanceof Error ? error.message : "Unknown error occurred"
+        });
+      }
+    });
+
     // Update the user bids endpoint to include payment information
     router.get("/api/user/bids", requireAuth, async (req, res) => {
       try {

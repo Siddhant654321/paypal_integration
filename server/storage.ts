@@ -489,10 +489,9 @@ export class DatabaseStorage implements IStorage {
 
       // Delete in a transaction to ensure all related data is cleaned up atomically
       await db.transaction(async (tx) => {
-        // Get all related notifications first
-        const notifications = await tx
-          .select()
-          .from(notifications)
+        // Delete notifications first
+        await tx
+          .delete(notifications)
           .where(
             and(
               eq(notifications.type, "auction"),
@@ -500,38 +499,15 @@ export class DatabaseStorage implements IStorage {
             )
           );
 
-        if (notifications.length > 0) {
-          log(`Found ${notifications.length} notifications to delete`, "deletion");
-          await tx
-            .delete(notifications)
-            .where(
-              and(
-                eq(notifications.type, "auction"),
-                eq(notifications.reference, auctionId.toString())
-              )
-            );
-        }
-
-        // Delete all bids
-        const bidsResult = await tx
+        // Delete bids
+        await tx
           .delete(bids)
-          .where(eq(bids.auctionId, auctionId))
-          .returning();
-        log(`Deleted ${bidsResult.length} bids`, "deletion");
+          .where(eq(bids.auctionId, auctionId));
 
-        // Delete all payments
-        const paymentsResult = await tx
+        // Delete payments
+        await tx
           .delete(payments)
-          .where(eq(payments.auctionId, auctionId))
-          .returning();
-        log(`Deleted ${paymentsResult.length} payments`, "deletion");
-
-        // Delete seller payouts if any
-        const payoutsResult = await tx
-          .delete(sellerPayouts)
-          .where(eq(sellerPayouts.auctionId, auctionId))
-          .returning();
-        log(`Deleted ${payoutsResult.length} payouts`, "deletion");
+          .where(eq(payments.auctionId, auctionId));
 
         // Finally delete the auction
         const [deletedAuction] = await tx
@@ -542,13 +518,13 @@ export class DatabaseStorage implements IStorage {
         if (!deletedAuction) {
           throw new Error(`Auction ${auctionId} not found or already deleted`);
         }
-
-        log(`Successfully deleted auction ${auctionId}`, "deletion");
       });
 
+      log(`Successfully deleted auction ${auctionId}`, "deletion");
     } catch (error) {
-      log(`Error during auction deletion: ${error instanceof Error ? error.message : String(error)}`, "deletion");
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log(`Error during auction deletion: ${errorMessage}`, "deletion");
+      throw new Error(`Failed to delete auction: ${errorMessage}`);
     }
   }
 
