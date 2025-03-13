@@ -1179,21 +1179,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log(`[ADMIN] Deleting auction ${auctionId}, status: ${auction.status}`);
         
-        // Delete bids first (separate operation to avoid reference issues)
-        await storage.deleteBidsForAuction(auctionId);
-        
-        // Then delete the auction and other related data
+        // Use the storage.deleteAuction method which handles all related entities 
+        // in a single transaction
         await storage.deleteAuction(auctionId);
         
         console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
         res.json({ message: "Auction deleted successfully" });
       } catch (error) {
         console.error("[ADMIN] Error deleting auction:", error);
+        
+        // Handle syntax errors and other database issues more specifically
+        let errorMessage = "Failed to delete auction";
+        if (error instanceof Error) {
+          if (error.message.includes("syntax error")) {
+            errorMessage = "Database syntax error when deleting auction";
+          }
+        }
+        
         // Send a more detailed error message to help with debugging
         res.status(500).json({ 
-          message: "Failed to delete auction",
-          error: error instanceof Error ? error.message : "Unknown error occurred",
-          details: String(error)
+          message: errorMessage,
+          error: error instanceof Error ? error.message : "Unknown error occurred"
         });
       }
     });
