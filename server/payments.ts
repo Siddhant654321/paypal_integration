@@ -4,17 +4,22 @@ import axios from 'axios';
 import {EmailService} from './email-service'; // Added import for EmailService
 
 // Check for required PayPal environment variables
+const isPayPalConfigured = process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET;
+
 if (process.env.NODE_ENV !== 'production') {
   // In development, always require the credentials
-  if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+  if (!isPayPalConfigured) {
     throw new Error("Missing PayPal environment variables");
   }
 } else {
   // In production, log a warning but don't crash
-  if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+  if (!isPayPalConfigured) {
     console.warn("[PAYPAL] Warning: Missing PayPal environment variables in production");
   }
 }
+
+// Flag to indicate if PayPal functionality should be available
+const PAYPAL_ENABLED = isPayPalConfigured;
 
 // PayPal API Configuration
 const PRODUCTION_URL = 'https://api-m.paypal.com';
@@ -37,6 +42,12 @@ const INSURANCE_FEE = 800; // $8.00 in cents
 
 export class PaymentService {
   private static async getAccessToken(): Promise<string> {
+    // Check if PayPal is configured
+    if (!PAYPAL_ENABLED) {
+      console.warn("[PAYPAL] Cannot get access token: PayPal is not configured");
+      throw new Error("PayPal is not configured in this environment");
+    }
+    
     try {
       console.log("[PAYPAL] Requesting access token...");
 
@@ -75,8 +86,60 @@ export class PaymentService {
         auctionId,
         buyerId,
         includeInsurance,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        paypalEnabled: PAYPAL_ENABLED
       });
+      
+      // If PayPal is not configured in production, create a simulated checkout for testing
+      if (!PAYPAL_ENABLED && process.env.NODE_ENV === 'production') {
+        console.warn("[PAYPAL] PayPal not configured, creating simulated checkout for testing");
+        
+        // Get auction details
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          throw new Error("Auction not found");
+        }
+
+        // Verify buyer is winning bidder
+        if (auction.winningBidderId !== buyerId) {
+          throw new Error("Only the winning bidder can make payment");
+        }
+
+        // Calculate amounts (same as real checkout)
+        const baseAmount = auction.currentPrice;
+        const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
+        const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
+        const totalAmount = baseAmount + platformFee + insuranceFee;
+        const sellerPayout = baseAmount - Math.round(baseAmount * SELLER_FEE_PERCENTAGE);
+        
+        // Create simulated order ID
+        const simulatedOrderId = `DEV_${auctionId}_${Date.now()}`;
+        
+        // Create payment record in pending state
+        const payment = await storage.insertPayment({
+          auctionId,
+          buyerId,
+          sellerId: auction.sellerId,
+          amount: totalAmount,
+          platformFee,
+          insuranceFee,
+          sellerPayout,
+          status: 'pending',
+          paypalOrderId: simulatedOrderId
+        });
+
+        // Update auction status to pending_payment
+        await storage.updateAuction(auctionId, {
+          status: "pending_payment",
+          paymentStatus: "pending"
+        });
+
+        return {
+          orderId: simulatedOrderId,
+          payment,
+          simulated: true
+        };
+      }
 
       // Get auction details
       const auction = await storage.getAuction(auctionId);
