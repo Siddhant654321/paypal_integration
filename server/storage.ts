@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest, notifications, type Notification, type InsertNotification, payments, type Payment, type InsertPayment, PaymentStatus, sellerPayouts, type SellerPayout, type InsertSellerPayout } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -485,11 +487,36 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAuction(auctionId: number): Promise<void> {
     try {
-      log(`Starting deletion process for auction ${auctionId}`, "deletion");
+      log(`[DELETE] Starting deletion process for auction ${auctionId}`);
 
       // Delete in a transaction to ensure all related data is cleaned up atomically
       await db.transaction(async (tx) => {
-        // Delete notifications first
+        // First get the auction to ensure it exists and get image URLs
+        const [auction] = await tx
+          .select()
+          .from(auctions)
+          .where(eq(auctions.id, auctionId));
+
+        if (!auction) {
+          throw new Error(`Auction ${auctionId} not found`);
+        }
+
+        // Delete seller payouts first as they reference payments
+        await tx
+          .delete(sellerPayouts)
+          .where(eq(sellerPayouts.auctionId, auctionId));
+
+        // Delete payments
+        await tx
+          .delete(payments)
+          .where(eq(payments.auctionId, auctionId));
+
+        // Delete bids
+        await tx
+          .delete(bids)
+          .where(eq(bids.auctionId, auctionId));
+
+        // Delete notifications
         await tx
           .delete(notifications)
           .where(
@@ -499,31 +526,35 @@ export class DatabaseStorage implements IStorage {
             )
           );
 
-        // Delete bids
-        await tx
-          .delete(bids)
-          .where(eq(bids.auctionId, auctionId));
-
-        // Delete payments
-        await tx
-          .delete(payments)
-          .where(eq(payments.auctionId, auctionId));
-
         // Finally delete the auction
-        const [deletedAuction] = await tx
+        await tx
           .delete(auctions)
-          .where(eq(auctions.id, auctionId))
-          .returning();
+          .where(eq(auctions.id, auctionId));
 
-        if (!deletedAuction) {
-          throw new Error(`Auction ${auctionId} not found or already deleted`);
+        // Clean up image files if they exist
+        if (auction.images && Array.isArray(auction.images)) {
+          for (const imageUrl of auction.images) {
+            try {
+              const imagePath = imageUrl.split('/uploads/')[1];
+              if (imagePath) {
+                const fullPath = path.join(process.cwd(), 'uploads', imagePath);
+                fs.unlink(fullPath, (err) => {
+                  if (err) {
+                    log(`[DELETE] Warning: Could not delete image file ${imagePath}: ${err.message}`);
+                  }
+                });
+              }
+            } catch (err) {
+              log(`[DELETE] Warning: Error processing image URL ${imageUrl}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
         }
       });
 
-      log(`Successfully deleted auction ${auctionId}`, "deletion");
+      log(`[DELETE] Successfully deleted auction ${auctionId} and all related data`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log(`Error during auction deletion: ${errorMessage}`, "deletion");
+      log(`[DELETE] Error during auction deletion: ${errorMessage}`);
       throw new Error(`Failed to delete auction: ${errorMessage}`);
     }
   }
@@ -978,14 +1009,13 @@ export class DatabaseStorage implements IStorage {
         .where(eq(payments.paypalOrderId, orderId));
       return payment;
     } catch (error) {
-      log(`Error finding payment by PayPal order ID ${orderId}: ${error}`, "payments");
-      throw error;
+      log(`Error finding payment by PayPal order ID ${orderId}: ${error}`, "payments");      throw error;
     }
   }
 
   async insertPayment(paymentData: InsertPayment): Promise<Payment> {
     try {
-      log(`Creating payment record for auction ${paymentData.auctionId}`, "payments");
+log(`Creating payment record for auction ${paymentData.auctionId}`, "payments");
       const [payment] = await db
         .insert(payments)
         .values(paymentData)
