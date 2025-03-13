@@ -8,22 +8,56 @@ import { EmailService } from "./email-service";
 import { CronService } from "./cron-service";
 
 async function checkRequiredEnvVars() {
-  const requiredVars = [
+  // Always required environment variables
+  const criticalVars = [
     'DATABASE_URL',
-    'SESSION_SECRET',
+    'SESSION_SECRET'
+  ];
+  
+  // Check for critical variables first
+  const missingCriticalVars = criticalVars.filter(varName => !process.env[varName]);
+  if (missingCriticalVars.length > 0) {
+    throw new Error(`Missing critical environment variables: ${missingCriticalVars.join(', ')}`);
+  }
+  
+  // Variables that are required in development but optional in production
+  const devOnlyVars = [
     'PAYPAL_CLIENT_ID',
     'PAYPAL_CLIENT_SECRET',
     'PAYPAL_PARTNER_MERCHANT_ID',
-    'PAYPAL_SANDBOX_PARTNER_MERCHANT_ID',
+    'PAYPAL_SANDBOX_PARTNER_MERCHANT_ID'
+  ];
+  
+  // Email related variables - warn but don't crash
+  const emailVars = [
     'SMTP_HOST',
     'SMTP_PORT',
     'SMTP_USER',
     'SMTP_PASSWORD'
   ];
-
-  const missingVars = requiredVars.filter(varName => !process.env[varName]);
-  if (missingVars.length > 0) {
-    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+  
+  // In development, check all variables
+  if (process.env.NODE_ENV !== 'production') {
+    const missingDevVars = devOnlyVars.filter(varName => !process.env[varName]);
+    if (missingDevVars.length > 0) {
+      throw new Error(`Missing development environment variables: ${missingDevVars.join(', ')}`);
+    }
+    
+    const missingEmailVars = emailVars.filter(varName => !process.env[varName]);
+    if (missingEmailVars.length > 0) {
+      console.warn(`[WARNING] Missing email variables: ${missingEmailVars.join(', ')}`);
+    }
+  } else {
+    // In production, just log warnings for non-critical missing variables
+    const missingDevVars = devOnlyVars.filter(varName => !process.env[varName]);
+    if (missingDevVars.length > 0) {
+      console.warn(`[WARNING] Missing payment variables: ${missingDevVars.join(', ')}`);
+    }
+    
+    const missingEmailVars = emailVars.filter(varName => !process.env[varName]);
+    if (missingEmailVars.length > 0) {
+      console.warn(`[WARNING] Missing email variables: ${missingEmailVars.join(', ')}`);
+    }
   }
 }
 
@@ -47,13 +81,29 @@ async function testDatabaseConnection(retries = 3): Promise<void> {
 async function testEmailService(): Promise<void> {
   try {
     log("Testing email service connection...", "startup");
+    // Skip email verification in production if email settings are missing
+    if (process.env.NODE_ENV === 'production' && 
+        (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD)) {
+      log("Skipping email verification in production due to missing credentials", "startup");
+      return;
+    }
+    
     const isConnected = await EmailService.verifyConnection();
     if (!isConnected) {
-      throw new Error("Failed to verify email service connection");
+      if (process.env.NODE_ENV === 'production') {
+        log("Warning: Failed to verify email service connection in production", "startup");
+      } else {
+        throw new Error("Failed to verify email service connection");
+      }
+    } else {
+      log("Email service connection verified successfully", "startup");
     }
-    log("Email service connection verified successfully", "startup");
   } catch (error) {
-    throw new Error(`Email service verification failed: ${error instanceof Error ? error.message : String(error)}`);
+    if (process.env.NODE_ENV === 'production') {
+      log(`Warning: Email service verification failed: ${error instanceof Error ? error.message : String(error)}`, "startup");
+    } else {
+      throw new Error(`Email service verification failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }
 
@@ -61,12 +111,27 @@ async function initializeServer(): Promise<Express> {
   const app = express();
 
   try {
-    // Check environment variables, database connection, and email service concurrently
-    await Promise.all([
-      checkRequiredEnvVars(),
-      testDatabaseConnection(),
-      testEmailService()
-    ]);
+    // Always check environment variables
+    await checkRequiredEnvVars();
+    
+    // In production, handle service checks differently
+    if (process.env.NODE_ENV === 'production') {
+      // Always test database connection even in production
+      await testDatabaseConnection();
+      
+      // Try email service but don't fail if it doesn't work
+      try {
+        await testEmailService();
+      } catch (error) {
+        log(`Warning: Email service check failed but continuing startup: ${error instanceof Error ? error.message : String(error)}`, "startup");
+      }
+    } else {
+      // In development, check everything concurrently
+      await Promise.all([
+        testDatabaseConnection(),
+        testEmailService()
+      ]);
+    }
 
     // Configure CORS
     app.use(cors({
