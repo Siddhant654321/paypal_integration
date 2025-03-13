@@ -516,8 +516,9 @@ export class DatabaseStorage implements IStorage {
             .where(eq(bids.auctionId, auctionId));
 
           // Delete notifications related to this auction - convert auctionId to string
+          const auctionIdStr = String(auctionId);
           await tx.delete(notifications)
-            .where(eq(notifications.reference, auctionId.toString()));
+            .where(eq(notifications.reference, auctionIdStr));
 
           // Delete the auction itself
           await tx.delete(auctions)
