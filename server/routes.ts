@@ -1168,12 +1168,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const auctionId = parseInt(req.params.id);
         console.log(`[ADMIN] Attempting to delete auction ${auctionId}`);
         
+        if (isNaN(auctionId)) {
+          return res.status(400).json({ message: "Invalid auction ID" });
+        }
+        
         const auction = await storage.getAuction(auctionId);
         if (!auction) {
           return res.status(404).json({ message: "Auction not found" });
         }
 
-        // Delete the auction and all related data
+        console.log(`[ADMIN] Deleting auction ${auctionId}, status: ${auction.status}`);
+        
+        // Delete bids first (separate operation to avoid reference issues)
+        await storage.deleteBidsForAuction(auctionId);
+        
+        // Then delete the auction and other related data
         await storage.deleteAuction(auctionId);
         
         console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
@@ -1183,7 +1192,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Send a more detailed error message to help with debugging
         res.status(500).json({ 
           message: "Failed to delete auction",
-          error: error instanceof Error ? error.message : "Unknown error occurred"
+          error: error instanceof Error ? error.message : "Unknown error occurred",
+          details: String(error)
         });
       }
     });

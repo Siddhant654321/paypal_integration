@@ -515,9 +515,9 @@ export class DatabaseStorage implements IStorage {
           await tx.delete(bids)
             .where(eq(bids.auctionId, auctionId));
 
-          // Delete notifications related to this auction
+          // Delete notifications related to this auction - use string comparison instead of equality
           await tx.delete(notifications)
-            .where(eq(notifications.reference, auctionId.toString()));
+            .where(eq(notifications.reference, String(auctionId)));
 
           // Delete the auction itself
           await tx.delete(auctions)
