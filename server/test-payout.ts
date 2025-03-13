@@ -10,7 +10,7 @@ async function testPayPalPayout() {
       paymentId: 999,
       sellerId: 1,
       amount: 1000, // $10.00 in cents - using a smaller amount for testing
-      // Using PayPal's sandbox test account format
+      // Using PayPal's sandbox test account format - for testing use 'POSPYO001' in note field for positive response
       receiverEmail: "sb-47rbv22431969@business.example.com",
       senderEmail: process.env.PAYPAL_SANDBOX_SENDER_EMAIL || "facilitator@business.example.com"
     };
