@@ -176,12 +176,13 @@ export default function AuctionPage() {
               alt={auction.title}
               className="w-full h-full object-cover"
               onError={(e) => {
+                console.log("Image failed to load:", e.currentTarget.src);
                 e.currentTarget.src = '/images/placeholder.jpg';
               }}
             />
           </div>
 
-          {auction.images && auction.images.length > 1 && (
+          {auction.images && Array.isArray(auction.images) && auction.images.length > 1 && (
             <div className="grid grid-cols-5 gap-2">
               {auction.images.map((img, index) => (
                 <div key={index} className="aspect-square overflow-hidden rounded cursor-pointer">
@@ -190,6 +191,7 @@ export default function AuctionPage() {
                     alt={`${auction.title} - Image ${index + 1}`}
                     className="w-full h-full object-cover"
                     onError={(e) => {
+                      console.log("Thumbnail failed to load:", e.currentTarget.src);
                       e.currentTarget.src = '/images/placeholder.jpg';
                     }}
                   />

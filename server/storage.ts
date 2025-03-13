@@ -502,27 +502,38 @@ export class DatabaseStorage implements IStorage {
 
       // Delete related records in the correct order
       await db.transaction(async (tx) => {
-        // First delete seller payouts that reference payments
-        await tx.delete(sellerPayouts)
-          .where(eq(sellerPayouts.auctionId, auctionId));
+        try {
+          // First delete seller payouts that reference payments
+          await tx.delete(sellerPayouts)
+            .where(eq(sellerPayouts.auctionId, auctionId));
 
-        // Then delete any payments
-        await tx.delete(payments)
-          .where(eq(payments.auctionId, auctionId));
+          // Then delete any payments
+          await tx.delete(payments)
+            .where(eq(payments.auctionId, auctionId));
 
-        // Delete bids
-        await tx.delete(bids)
-          .where(eq(bids.auctionId, auctionId));
+          // Delete bids
+          await tx.delete(bids)
+            .where(eq(bids.auctionId, auctionId));
 
-        // Delete the auction itself
-        await tx.delete(auctions)
-          .where(eq(auctions.id, auctionId));
+          // Delete notifications related to this auction
+          await tx.delete(notifications)
+            .where(eq(notifications.reference, auctionId.toString()));
+
+          // Delete the auction itself
+          await tx.delete(auctions)
+            .where(eq(auctions.id, auctionId));
+        } catch (txError) {
+          log(`[DELETE] Transaction error: ${txError instanceof Error ? txError.message : String(txError)}`);
+          throw txError;
+        }
       });
 
       // After successful database deletion, clean up image files
       if (auction.images && Array.isArray(auction.images)) {
         for (const imageUrl of auction.images) {
           try {
+            if (!imageUrl) continue;
+            
             // Extract filename from URL
             const urlParts = imageUrl.split('/');
             const filename = urlParts[urlParts.length - 1];
