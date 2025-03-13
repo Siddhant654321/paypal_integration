@@ -4,16 +4,25 @@ import axios from 'axios';
 import {EmailService} from './email-service'; // Added import for EmailService
 
 // Check for required PayPal environment variables
-if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
-  throw new Error("Missing PayPal environment variables");
+if (process.env.NODE_ENV !== 'production') {
+  // In development, always require the credentials
+  if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+    throw new Error("Missing PayPal environment variables");
+  }
+} else {
+  // In production, log a warning but don't crash
+  if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+    console.warn("[PAYPAL] Warning: Missing PayPal environment variables in production");
+  }
 }
 
 // PayPal API Configuration
 const PRODUCTION_URL = 'https://api-m.paypal.com';
 const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 
-// Use sandbox in development or when explicitly configured
-const IS_SANDBOX = process.env.NODE_ENV !== 'production' || process.env.VITE_PAYPAL_ENV === 'sandbox';
+// Only use sandbox when explicitly configured, or in non-production
+const IS_SANDBOX = process.env.NODE_ENV !== 'production' || 
+                  (process.env.PAYPAL_ENV === 'sandbox' || process.env.VITE_PAYPAL_ENV === 'sandbox');
 const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
 
 console.log("[PAYPAL] Initializing PayPal service:", {
