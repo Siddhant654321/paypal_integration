@@ -422,12 +422,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       maxAge: '1d',
       etag: true,
       lastModified: true,
+      dotfiles: 'allow',
       setHeaders: (res, path) => {
+        // Add CORS headers
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        // Set caching headers for images
         if (path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png')) {
           res.setHeader('Cache-Control', 'public, max-age=86400');
         }
       }
     }));
+
+    // Add error handling for static files
+    app.use((err: any, req: any, res: any, next: any) => {
+      if (err.code === 'ENOENT') {
+        console.error(`[STATIC] File not found: ${req.url}`);
+        res.status(404).json({ message: 'File not found' });
+      } else {
+        console.error(`[STATIC] Error serving file: ${err}`);
+        next(err);
+      }
+    });
 
     // Basic middleware setup
     app.use(express.json());
