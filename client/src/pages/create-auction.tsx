@@ -63,17 +63,14 @@ const createAuctionMutation = useMutation({
       });
       setLocation("/seller/dashboard");
     },
-    onError: (error) => {
-      console.error("[CreateAuction] Mutation error:", error);
+    onError: (error: Error) => {
+      console.error("[CreateAuction] Submission error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to create auction",
         variant: "destructive"
       });
     }
-    onError: (error: Error) => {
-      console.error("[CreateAuction] Submission error:", error);
-      toast({
         title: "Error",
         description: error.message || "Failed to create auction",
         variant: "destructive"
