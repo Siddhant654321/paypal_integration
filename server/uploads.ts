@@ -2,19 +2,30 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import sharp from 'sharp';
 import { Request, Response } from 'express';
 
 // Constants
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
+const THUMBNAILS_DIR = path.join(UPLOADS_DIR, 'thumbnails');
+const MAX_WIDTH = 1920;
+const MAX_HEIGHT = 1080;
+const THUMB_WIDTH = 300;
+const THUMB_HEIGHT = 300;
+const JPEG_QUALITY = 80;
 
-// Ensure the uploads directory exists
+// Ensure the uploads and thumbnails directories exist
 try {
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
     console.log("[UPLOAD] Created uploads directory at:", UPLOADS_DIR);
   }
+  if (!fs.existsSync(THUMBNAILS_DIR)) {
+    fs.mkdirSync(THUMBNAILS_DIR, { recursive: true });
+    console.log("[UPLOAD] Created thumbnails directory at:", THUMBNAILS_DIR);
+  }
 } catch (error) {
-  console.error("[UPLOAD] Error creating uploads directory:", error);
+  console.error("[UPLOAD] Error creating directories:", error);
 }
 
 // Configure multer storage
@@ -48,8 +59,49 @@ export const upload = multer({
 function getBaseUrl(req: Request): string {
   const isProduction = process.env.NODE_ENV === 'production';
   const protocol = isProduction ? 'https' : req.protocol;
-  const host = isProduction ? 'poultryauction.co' : req.get('host');
+  const host = isProduction ? process.env.HOST_URL || req.get('host') : req.get('host');
   return `${protocol}://${host}`;
+}
+
+// Optimize image and create thumbnail
+async function optimizeImage(filePath: string, filename: string): Promise<{ mainUrl: string, thumbnailUrl: string }> {
+  const ext = path.extname(filename);
+  const baseFilename = path.basename(filename, ext);
+  const optimizedFilename = `${baseFilename}_opt${ext}`;
+  const thumbnailFilename = `${baseFilename}_thumb${ext}`;
+  const optimizedPath = path.join(UPLOADS_DIR, optimizedFilename);
+  const thumbnailPath = path.join(THUMBNAILS_DIR, thumbnailFilename);
+
+  try {
+    // Process main image
+    await sharp(filePath)
+      .resize(MAX_WIDTH, MAX_HEIGHT, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      .jpeg({ quality: JPEG_QUALITY })
+      .toFile(optimizedPath);
+
+    // Create thumbnail
+    await sharp(filePath)
+      .resize(THUMB_WIDTH, THUMB_HEIGHT, {
+        fit: 'cover',
+        position: 'centre'
+      })
+      .jpeg({ quality: JPEG_QUALITY })
+      .toFile(thumbnailPath);
+
+    // Delete original file
+    await fs.promises.unlink(filePath);
+
+    return {
+      mainUrl: `/uploads/${optimizedFilename}`,
+      thumbnailUrl: `/uploads/thumbnails/${thumbnailFilename}`
+    };
+  } catch (error) {
+    console.error('[UPLOAD] Error optimizing image:', error);
+    throw new Error('Failed to optimize image');
+  }
 }
 
 // Handler for file uploads
@@ -70,25 +122,34 @@ export async function handleFileUpload(req: Request, res: Response) {
     const baseUrl = getBaseUrl(req);
     console.log("[UPLOAD] Using base URL:", baseUrl);
 
-    // Generate URLs for the uploaded files
-    const urls = files.map(file => {
-      const url = `${baseUrl}/uploads/${file.filename}`;
-      console.log("[UPLOAD] Generated URL for file:", {
-        filename: file.filename,
-        url: url
-      });
-      return url;
-    });
+    // Process and optimize each file
+    const processedFiles = await Promise.all(files.map(async (file) => {
+      try {
+        const { mainUrl, thumbnailUrl } = await optimizeImage(file.path, file.filename);
+        return {
+          original: file.originalname,
+          optimized: `${baseUrl}${mainUrl}`,
+          thumbnail: `${baseUrl}${thumbnailUrl}`
+        };
+      } catch (error) {
+        console.error('[UPLOAD] Error processing file:', file.originalname, error);
+        return null;
+      }
+    }));
 
-    console.log("[UPLOAD] Successfully processed all files:", {
-      count: files.length,
-      urls: urls
+    // Filter out failed optimizations
+    const successfulUploads = processedFiles.filter(Boolean);
+
+    console.log("[UPLOAD] Successfully processed files:", {
+      total: files.length,
+      successful: successfulUploads.length,
+      urls: successfulUploads.map(f => f?.optimized)
     });
 
     res.status(201).json({ 
-      message: 'Files uploaded successfully',
-      urls,
-      count: files.length
+      message: 'Files uploaded and optimized successfully',
+      files: successfulUploads,
+      count: successfulUploads.length
     });
   } catch (error) {
     console.error('[UPLOAD] Error uploading files:', error);

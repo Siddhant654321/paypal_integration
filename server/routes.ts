@@ -671,10 +671,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Handle file uploads first
         const uploadedFiles = req.files as Express.Multer.File[];
         let imageUrls = [];
+        let thumbnailUrls = [];
+        
         if (uploadedFiles && uploadedFiles.length > 0) {
           console.log("[AUCTION CREATE] Processing uploaded files:", uploadedFiles.length);
-          const baseUrl = `${req.protocol}://${req.get('host')}`;
-          imageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
+          // Use the response from handleFileUpload which now includes both main and thumbnail URLs
+          const processedFiles = await handleFileUpload(req, res);
+          if (processedFiles.files && processedFiles.files.length > 0) {
+            imageUrls = processedFiles.files.map(file => file.optimized);
+            thumbnailUrls = processedFiles.files.map(file => file.thumbnail);
+          }
         }
 
         // Process auction data with explicit price handling
@@ -687,6 +693,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           endDate: new Date(auctionData.endDate),
           images: imageUrls,
           imageUrl: imageUrls[0] || "",
+          thumbnails: thumbnailUrls,
+          thumbnailUrl: thumbnailUrls[0] || ""
         };
 
         console.log("[AUCTION CREATE] Parsed data:", {
@@ -761,10 +769,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Handle file uploads
         const uploadedFiles = req.files as Express.Multer.File[];
         let newImageUrls = [];
+        let newThumbnailUrls = [];
+        
         if (uploadedFiles && uploadedFiles.length > 0) {
           console.log("[AUCTION UPDATE] Processing new images");
-          const baseUrl = `${req.protocol}://${req.get('host')}`;
-          newImageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
+          const processedFiles = await handleFileUpload(req, res);
+          if (processedFiles.files && processedFiles.files.length > 0) {
+            newImageUrls = processedFiles.files.map(file => file.optimized);
+            newThumbnailUrls = processedFiles.files.map(file => file.thumbnail);
+          }
         }
 
         // Process update data
@@ -775,7 +788,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
           endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
           images: newImageUrls.length > 0 ? newImageUrls : undefined,
-          imageUrl: newImageUrls.length > 0 ? newImageUrls[0] : undefined
+          imageUrl: newImageUrls.length > 0 ? newImageUrls[0] : undefined,
+          thumbnails: newThumbnailUrls.length > 0 ? newThumbnailUrls : undefined,
+          thumbnailUrl: newThumbnailUrls.length > 0 ? newThumbnailUrls[0] : undefined
         };
 
         console.log("[AUCTION UPDATE] Processed update data:", updateData);
