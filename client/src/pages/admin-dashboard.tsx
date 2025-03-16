@@ -311,8 +311,24 @@ function AdminDashboard() {
   };
 
   const updateAuctionMutation = useMutation({
-    mutationFn: async (values: any) => {
-      await apiRequest("PATCH", `/api/admin/auctions/${selectedAuction?.id}`, values);
+    mutationFn: async (data: any) => {
+      // Ensure we have the correct image data structure
+      const newImages = Array.isArray(data.images) ? data.images : [];
+      try {
+        const formData = {
+          ...data,
+          images: newImages,
+          reservePrice: Number(data.reservePrice),
+          startPrice: Number(data.startPrice),
+          startDate: data.startDate instanceof Date ? data.startDate.toISOString() : data.startDate,
+          endDate: data.endDate instanceof Date ? data.endDate.toISOString() : data.endDate,
+        };
+        
+        return await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, formData);
+      } catch (error) {
+        console.error("[EditAuction] Error during form preparation:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
@@ -321,9 +337,10 @@ function AdminDashboard() {
         title: "Success",
         description: "Auction updated successfully",
       });
-      if (closeEditDialog) closeEditDialog();
+      onClose?.();
     },
     onError: (error: any) => {
+      console.error("[EditAuction] Update failed:", error);
       toast({
         title: "Error",
         description: "Failed to update auction: " + error.message,
@@ -331,10 +348,6 @@ function AdminDashboard() {
       });
     },
   });
-
-  const onSubmit = (values: any) => {
-    updateAuctionMutation.mutate(values);
-  };
 
 
   return (
