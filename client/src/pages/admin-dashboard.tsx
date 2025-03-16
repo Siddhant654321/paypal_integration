@@ -322,7 +322,7 @@ function AdminDashboard() {
           startDate: data.startDate instanceof Date ? data.startDate.toISOString() : data.startDate,
           endDate: data.endDate instanceof Date ? data.endDate.toISOString() : data.endDate,
         };
-        
+
         // Use selectedAuction.id for the API request
         return await apiRequest("PATCH", `/api/admin/auctions/${selectedAuction?.id}`, formData);
       } catch (error) {
@@ -1256,6 +1256,11 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
     },
   });
 
+  const onSubmit = (values: any) => {
+    console.log("[EditAuction] Form submitted with values:", values);
+    updateAuctionMutation.mutate(values);
+  };
+
   return (
     <Dialog open onOpenChange={() => onClose?.()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -1267,7 +1272,7 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(values => updateAuctionMutation.mutate(values))} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Title field */}
             <FormField
               control={form.control}

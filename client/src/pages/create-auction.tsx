@@ -1,6 +1,19 @@
 const createAuctionMutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      const response = await apiRequest("POST", "/api/auctions", data);
+    mutationFn: async (data: any) => {
+      console.log("[CreateAuction] Starting submission with data:", data);
+      
+      // Format the data
+      const formData = {
+        ...data,
+        startPrice: Number(data.startPrice),
+        reservePrice: Number(data.reservePrice || data.startPrice),
+        startDate: data.startDate instanceof Date ? data.startDate.toISOString() : data.startDate,
+        endDate: data.endDate instanceof Date ? data.endDate.toISOString() : data.endDate,
+      };
+
+      console.log("[CreateAuction] Submitting formData:", formData);
+      const response = await apiRequest("POST", "/api/auctions", formData);
+      
       if (!response.ok) {
         throw new Error(response.message || 'Failed to create auction');
       }
@@ -14,4 +27,12 @@ const createAuctionMutation = useMutation({
       });
       router.push("/seller/dashboard");
     },
+    onError: (error: Error) => {
+      console.error("[CreateAuction] Submission error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create auction",
+        variant: "destructive"
+      });
+    }
 });
