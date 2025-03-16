@@ -647,6 +647,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Create new auction (sellers only)
     router.post("/api/auctions", requireAuth, requireApprovedSeller, upload.array('images', 5), async (req, res) => {
+  console.log("[AUCTION CREATE] Request body:", req.body);
+  console.log("[AUCTION CREATE] Files:", req.files);
       try {
         console.log("[AUCTION CREATE] Starting auction creation request", {
           body: req.body,
