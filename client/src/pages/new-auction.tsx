@@ -27,8 +27,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect, useLocation } from "wouter";
-import { useState, useEffect } from 'react';
-import { dollarsToCents, formatDollarInput, formatPrice, centsToDollars } from "../utils/formatters";
+import { useState } from 'react';
+import { dollarsToCents, formatDollarInput, centsToDollars } from "../utils/formatters";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 export default function NewAuction() {
@@ -36,19 +36,6 @@ export default function NewAuction() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-
-  useEffect(() => {
-    console.log("NewAuction component mounted", {
-      user,
-      isLoading,
-      auth: {
-        isAuthenticated: !!user,
-        role: user?.role,
-        hasProfile: user?.hasProfile,
-        approved: user?.approved
-      }
-    });
-  }, [user, isLoading]);
 
   if (isLoading) {
     return (
@@ -82,7 +69,7 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      console.log("Submitting form data");
+      console.log("Starting form submission");
       const res = await fetch("/api/auctions", {
         method: "POST",
         body: formData,
@@ -114,31 +101,45 @@ export default function NewAuction() {
   });
 
   const handleSubmit = form.handleSubmit((data) => {
-    console.log("Form data before submission:", data);
-    const formData = new FormData();
+    try {
+      console.log("Form data before processing:", data);
+      const formData = new FormData();
 
-    // Add all fields to FormData
-    Object.entries(data).forEach(([key, value]) => {
-      if (key === 'startPrice' || key === 'reservePrice') {
-        // Convert dollar amounts to cents
-        const cents = dollarsToCents(parseFloat(value as string));
-        formData.append(key, cents.toString());
-      } else if (key === 'startDate' || key === 'endDate') {
-        // Ensure proper date format
-        formData.append(key, new Date(value as string).toISOString());
-      } else if (value !== undefined && value !== null) {
-        formData.append(key, value.toString());
+      // Convert dollar amounts to cents and format dates
+      const processedData = {
+        ...data,
+        startPrice: dollarsToCents(parseFloat(data.startPrice)),
+        reservePrice: dollarsToCents(parseFloat(data.reservePrice)),
+        startDate: new Date(data.startDate).toISOString(),
+        endDate: new Date(data.endDate).toISOString(),
+      };
+
+      console.log("Processed data:", processedData);
+
+      // Add all fields to FormData
+      Object.entries(processedData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formData.append(key, value.toString());
+        }
+      });
+
+      // Add images if present
+      if (selectedFiles.length > 0) {
+        selectedFiles.forEach(file => {
+          formData.append('images', file);
+        });
       }
-    });
 
-    // Add images if present
-    if (selectedFiles.length > 0) {
-      selectedFiles.forEach(file => {
-        formData.append('images', file);
+      console.log("FormData created, submitting...");
+      createAuctionMutation.mutate(formData);
+    } catch (error) {
+      console.error("Error processing form data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process form data. Please check your inputs.",
+        variant: "destructive",
       });
     }
-
-    createAuctionMutation.mutate(formData);
   });
 
   const handleSuggestionsReceived = (suggestions: {
