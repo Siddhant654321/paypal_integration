@@ -855,20 +855,35 @@ export class DatabaseStorage implements IStorage {
     try {
       log(`Deleting user ${userId}`);
 
-      // Delete in a transaction to ensure both operations succeed or fail together
+      // Delete in a transaction to ensure all operations succeed or fail together
       await db.transaction(async (tx) => {
-        // First delete the profile if it exists
+        // Delete notifications
+        await tx
+          .delete(notifications)
+          .where(eq(notifications.userId, userId));
+
+        // Delete bids
+        await tx
+          .delete(bids)
+          .where(eq(bids.bidderId, userId));
+
+        // Delete profile if exists
         await tx
           .delete(profiles)
           .where(eq(profiles.userId, userId));
 
-        // Then delete the user
+        // Delete auctions for sellers
+        await tx
+          .delete(auctions)
+          .where(eq(auctions.sellerId, userId));
+
+        // Finally delete the user
         await tx
           .delete(users)
           .where(eq(users.id, userId));
       });
 
-      log(`Successfully deleted user ${userId} and associated profile`);
+      log(`Successfully deleted user ${userId} and all associated data`);
     } catch (error) {
       log(`Error deleting user ${userId}: ${error}`);
       throw error;
