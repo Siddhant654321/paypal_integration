@@ -293,8 +293,14 @@ export const insertAuctionSchema = createInsertSchema(auctions)
     fulfillmentRequired: true,
   })
   .extend({
-    startPrice: z.number().min(1, "Starting price must be at least $1"),
-    reservePrice: z.number().min(0, "Reserve price cannot be negative"),
+    startPrice: z.union([
+      z.number().min(1, "Starting price must be at least $1"),
+      z.string().transform(val => Number(val))
+    ]),
+    reservePrice: z.union([
+      z.number().min(0, "Reserve price cannot be negative"),
+      z.string().transform(val => Number(val))
+    ]),
     species: z.string().refine(
       (val) => ["bantam", "standard", "waterfowl", "quail", "other"].includes(val),
       "Invalid species"
@@ -303,8 +309,14 @@ export const insertAuctionSchema = createInsertSchema(auctions)
       (val) => ["Show Quality", "Purebred & Production", "Fun & Mixed"].includes(val),
       "Invalid category"
     ),
-    startDate: z.string().transform(str => new Date(str)),
-    endDate: z.string().transform(str => new Date(str)),
+    startDate: z.union([
+      z.date(),
+      z.string().transform(str => new Date(str))
+    ]),
+    endDate: z.union([
+      z.date(), 
+      z.string().transform(str => new Date(str))
+    ]),
     images: z.array(z.string()).optional(),
   });
 

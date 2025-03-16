@@ -170,23 +170,39 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createAuction(insertAuction: InsertAuction & { sellerId: number }): Promise<Auction> {
+  async createAuction(data: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
-      const auctionData = {
-        ...insertAuction,
-        startPrice: Number(insertAuction.startPrice),
-        reservePrice: Number(insertAuction.reservePrice),
-        currentPrice: Number(insertAuction.startPrice),
+      // Ensure prices are numbers
+      if (typeof data.startPrice === 'string') {
+        data.startPrice = Number(data.startPrice);
+      }
+      if (typeof data.reservePrice === 'string') {
+        data.reservePrice = Number(data.reservePrice);
+      }
+
+      // Ensure dates are Date objects
+      if (data.startDate && !(data.startDate instanceof Date)) {
+        data.startDate = new Date(data.startDate);
+      }
+      if (data.endDate && !(data.endDate instanceof Date)) {
+        data.endDate = new Date(data.endDate);
+      }
+
+      log(`Creating auction with processed data:`, {
+        startPrice: data.startPrice,
+        reservePrice: data.reservePrice,
+        startDate: data.startDate,
+        endDate: data.endDate
+      });
+
+      const result = await db.insert(auctions).values({
+        ...data,
+        currentPrice: data.startPrice,
         status: "pending_review",
         approved: false,
-      };
+      }).returning();
 
-      const [auction] = await db
-        .insert(auctions)
-        .values(auctionData)
-        .returning();
-
-      return auction;
+      return result[0];
     } catch (error) {
       log(`Error creating auction: ${error}`);
       throw error;
@@ -487,7 +503,6 @@ export class DatabaseStorage implements IStorage {
     try {
       log(`Deleting auction ${auctionId}`);
 
-      // Delete all associated records
       await db.transaction(async (tx) => {
         // Delete seller payouts first since they reference payments
         await tx
@@ -1010,7 +1025,7 @@ export class DatabaseStorage implements IStorage {
   async getPayment(id: number): Promise<Payment | undefined> {
     try {
       log(`Getting payment ${id}`, "payments");
-      const [payment] = await db
+      const[payment] = await db
         .select()
         .from(payments)
         .where(eq(payments.id, id));
