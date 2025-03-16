@@ -1074,10 +1074,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     router.delete("/api/admin/auctions/:id", requireAdmin, async (req, res) => {
       try {
         const auctionId = parseInt(req.params.id);
+        if (isNaN(auctionId)) {
+          console.log(`[ADMIN] Invalid auction ID provided: ${req.params.id}`);
+          return res.status(400).json({ message: "Invalid auction ID" });
+        }
+
         console.log(`[ADMIN] Attempting to delete auction ${auctionId}`);
         
         const auction = await storage.getAuction(auctionId);
         if (!auction) {
+          console.log(`[ADMIN] Auction ${auctionId} not found`);
           return res.status(404).json({ message: "Auction not found" });
         }
 
@@ -1085,10 +1091,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.deleteAuction(auctionId);
         
         console.log(`[ADMIN] Successfully deleted auction ${auctionId}`);
-        res.json({ message: "Auction deleted successfully" });
+        return res.json({ success: true, message: "Auction deleted successfully" });
       } catch (error) {
         console.error("[ADMIN] Error deleting auction:", error);
-        res.status(500).json({ message: "Failed to delete auction" });
+        return res.status(500).json({ 
+          message: "Failed to delete auction",
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     });
 
