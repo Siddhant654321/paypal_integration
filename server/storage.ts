@@ -489,7 +489,16 @@ export class DatabaseStorage implements IStorage {
 
       // Delete all associated records
       await db.transaction(async (tx) => {
-        // Delete bids first
+        // Delete seller payouts first since they reference payments
+        await tx
+          .delete(sellerPayouts)
+          .where(eq(sellerPayouts.paymentId, db
+            .select({ id: payments.id })
+            .from(payments)
+            .where(eq(payments.auctionId, auctionId))
+          ));
+
+        // Delete bids
         await tx
           .delete(bids)
           .where(eq(bids.auctionId, auctionId));
@@ -498,11 +507,6 @@ export class DatabaseStorage implements IStorage {
         await tx
           .delete(payments)
           .where(eq(payments.auctionId, auctionId));
-
-        // Delete seller payouts
-        await tx
-          .delete(sellerPayouts)
-          .where(eq(sellerPayouts.auctionId, auctionId));
 
         // Finally delete the auction
         await tx
