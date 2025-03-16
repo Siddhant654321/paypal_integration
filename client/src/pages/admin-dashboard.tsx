@@ -1201,21 +1201,28 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
   });
 
   const updateAuctionMutation = useMutation({
-    mutationFn: async (values: any) => {
+    mutationFn: async (data: any) => {
       // Ensure we have the correct image data structure
-      const updateData = {
-        ...values,
-        images: Array.isArray(values.images) ? values.images : [],
-        imageUrl: values.imageUrl || (Array.isArray(values.images) && values.images.length > 0 ? values.images[0] : null)
-      };
-
-      console.log("[EditAuction] Submitting update:", {
-        auctionId: auction.id,
-        imageCount: updateData.images.length,
-        imageUrl: updateData.imageUrl
-      });
-
-      return await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, updateData);
+      const newImages = Array.isArray(data.images) ? data.images : [];
+      try {
+        const formData = {
+          ...data,
+          images: newImages,
+          reservePrice: Number(data.reservePrice) * 100,
+          startPrice: Number(data.startPrice) * 100,
+          startDate: data.startDate instanceof Date ? data.startDate.toISOString() : data.startDate,
+          endDate: data.endDate instanceof Date ? data.endDate.toISOString() : data.endDate,
+        };
+        console.log("[EditAuction] Submitting update:", {
+          auctionId: auction.id,
+          imageCount: formData.images.length,
+          imageUrl: formData.imageUrl
+        });
+        return await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, formData);
+      } catch (error) {
+        console.error("[EditAuction] Error during form preparation:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/auctions"] });
