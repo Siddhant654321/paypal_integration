@@ -27,8 +27,8 @@ export default {
           hover: "#43AA8B", /* Rich Teal */
         },
         secondary: {
-          DEFAULT: "#1D3557", /* Deep Blue */
-          foreground: "#FFFFFF",
+          DEFAULT: "#FFBA08", /* Golden Yellow */
+          foreground: "#1D3557", /* Deep Blue */
           hover: "#43AA8B", /* Rich Teal */
         },
         heading: {
@@ -36,6 +36,9 @@ export default {
         },
         body: {
           DEFAULT: "#43AA8B", /* Rich Teal */
+        },
+        accent: {
+          DEFAULT: "#FFBA08", /* Golden Yellow */
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -72,12 +75,20 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
+          from: {
+            height: "0",
+          },
+          to: {
+            height: "var(--radix-accordion-content-height)",
+          },
         },
         "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
+          from: {
+            height: "var(--radix-accordion-content-height)",
+          },
+          to: {
+            height: "0",
+          },
         },
       },
       animation: {

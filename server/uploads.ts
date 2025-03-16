@@ -3,15 +3,18 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import { Request, Response } from 'express';
-import express from 'express';
 
 // Constants
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
 // Ensure the uploads directory exists
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-  console.log("[UPLOAD] Created uploads directory at:", UPLOADS_DIR);
+try {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    console.log("[UPLOAD] Created uploads directory at:", UPLOADS_DIR);
+  }
+} catch (error) {
+  console.error("[UPLOAD] Error creating uploads directory:", error);
 }
 
 // Configure multer storage
@@ -25,7 +28,7 @@ const storage = multer.diskStorage({
   }
 });
 
-// Create multer upload instance
+// Create multer upload instance with file filter for images
 export const upload = multer({
   storage,
   limits: {
@@ -41,17 +44,11 @@ export const upload = multer({
   }
 });
 
-// Configure static file serving
-export function setupUploads(app: express.Express) {
-  // Serve files from the uploads directory
-  app.use('/uploads', express.static(UPLOADS_DIR));
-  console.log("[UPLOAD] Configured static file serving for uploads directory");
-}
-
 // Helper function to get base URL
 function getBaseUrl(req: Request): string {
-  const protocol = req.protocol;
-  const host = req.get('host');
+  const isProduction = process.env.NODE_ENV === 'production';
+  const protocol = isProduction ? 'https' : req.protocol;
+  const host = isProduction ? 'poultryauction.co' : req.get('host');
   return `${protocol}://${host}`;
 }
 

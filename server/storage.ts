@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest, notifications, type Notification, type InsertNotification, payments, type Payment, type InsertPayment, PaymentStatus, sellerPayouts, type SellerPayout, type InsertSellerPayout } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and } from "drizzle-orm";
@@ -487,75 +485,29 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAuction(auctionId: number): Promise<void> {
     try {
-      log(`[DELETE] Starting deletion process for auction ${auctionId}`);
+      log(`Deleting auction ${auctionId}`);
 
-      // First get the auction to check if it exists
-      const auction = await db
-        .select()
-        .from(auctions)
-        .where(eq(auctions.id, auctionId))
-        .then(rows => rows[0]);
-
-      if (!auction) {
-        throw new Error(`Auction ${auctionId} not found`);
-      }
-
-      // Delete related records in the correct order
+      // Delete in a transaction to ensure all related data is cleaned up
       await db.transaction(async (tx) => {
-        try {
-          // First delete seller payouts that reference payments
-          await tx.delete(sellerPayouts)
-            .where(eq(sellerPayouts.auctionId, auctionId));
+        // First delete all bids for this auction
+        await tx
+          .delete(bids)
+          .where(eq(bids.auctionId, auctionId));
 
-          // Then delete any payments
-          await tx.delete(payments)
-            .where(eq(payments.auctionId, auctionId));
+        // Delete any payments associated with this auction
+        await tx
+          .delete(payments)
+          .where(eq(payments.auctionId, auctionId));
 
-          // Delete bids
-          await tx.delete(bids)
-            .where(eq(bids.auctionId, auctionId));
-
-          // Delete notifications related to this auction - convert auctionId to string
-          const auctionIdStr = String(auctionId);
-          await tx.delete(notifications)
-            .where(eq(notifications.reference, auctionIdStr));
-
-          // Delete the auction itself
-          await tx.delete(auctions)
-            .where(eq(auctions.id, auctionId));
-        } catch (txError) {
-          log(`[DELETE] Transaction error: ${txError instanceof Error ? txError.message : String(txError)}`);
-          throw txError;
-        }
+        // Finally delete the auction itself
+        await tx
+          .delete(auctions)
+          .where(eq(auctions.id, auctionId));
       });
 
-      // After successful database deletion, clean up image files
-      if (auction.images && Array.isArray(auction.images)) {
-        for (const imageUrl of auction.images) {
-          try {
-            if (!imageUrl) continue;
-            
-            // Extract filename from URL
-            const urlParts = imageUrl.split('/');
-            const filename = urlParts[urlParts.length - 1];
-
-            if (filename) {
-              const filePath = path.join(process.cwd(), 'uploads', filename);
-              if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-                log(`[DELETE] Deleted image file: ${filename}`);
-              }
-            }
-          } catch (err) {
-            log(`[DELETE] Warning: Error deleting image: ${err instanceof Error ? err.message : String(err)}`);
-          }
-        }
-      }
-
-      log(`[DELETE] Successfully deleted auction ${auctionId} and all related data`);
+      log(`Successfully deleted auction ${auctionId} and all related data`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      log(`[DELETE] Error during auction deletion: ${errorMessage}`);
+      log(`Error deleting auction ${auctionId}: ${error}`);
       throw error;
     }
   }
@@ -1010,7 +962,8 @@ export class DatabaseStorage implements IStorage {
         .where(eq(payments.paypalOrderId, orderId));
       return payment;
     } catch (error) {
-      log(`Error finding payment by PayPal order ID ${orderId}: ${error}`, "payments");      throw error;
+      log(`Error finding payment by PayPal order ID ${orderId}: ${error}`, "payments");
+      throw error;
     }
   }
 
@@ -1073,7 +1026,7 @@ export class DatabaseStorage implements IStorage {
       log(`Updating payment ${paymentId} status to ${status}`, "payments");
       const [payment] = await db
         .update(payments)
-        .set({
+        .set({ 
           status,
           updatedAt: new Date(),
           completedAt: status === "completed" ? new Date() : undefined

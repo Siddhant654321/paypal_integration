@@ -128,7 +128,6 @@ export default function AuctionCard({ auction, showStatus = false, actions }: Pr
           alt={auction.title}
           className="h-full w-full object-cover"
           onError={(e) => {
-            console.log("Card image failed to load:", e.currentTarget.src);
             e.currentTarget.src = '/images/placeholder.jpg';
           }}
         />
