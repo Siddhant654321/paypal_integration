@@ -1443,7 +1443,7 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
                 <FileUpload
                   accept="image/*"
                   maxFiles={5}
-                  onChange={(urls: string[]) => {
+                  onFilesChange={(urls: string[]) => {
                     const currentImages = form.watch("images") || [];
                     const newImages = [...currentImages, ...urls];
                     console.log("[EditAuction] Updating images:", {
