@@ -56,25 +56,37 @@ const createAuctionMutation = useMutation({
         });
 
       try {
+        console.log("[CreateAuction] Submitting form data...");
         const response = await fetch("/api/auctions", {
           method: "POST",
           body: formData,
           credentials: "include"
         });
 
-        const contentType = response.headers.get("content-type");
-        let errorData;
+        console.log("[CreateAuction] Server response status:", response.status);
         
-        if (contentType && contentType.includes("application/json")) {
-          errorData = await response.json();
-        } else {
-          errorData = { message: await response.text() };
+        const contentType = response.headers.get("content-type");
+        let responseData;
+        
+        try {
+          if (contentType && contentType.includes("application/json")) {
+            responseData = await response.json();
+          } else {
+            const text = await response.text();
+            console.log("[CreateAuction] Non-JSON response:", text);
+            responseData = { message: text };
+          }
+        } catch (parseError) {
+          console.error("[CreateAuction] Error parsing response:", parseError);
+          throw new Error("Failed to parse server response");
         }
 
         if (!response.ok) {
-          console.error("[CreateAuction] Server error response:", errorData);
-          throw new Error(errorData.message || 'Failed to create auction');
+          console.error("[CreateAuction] Server error response:", responseData);
+          throw new Error(responseData.message || 'Failed to create auction');
         }
+
+        return responseData;
 
         console.log("[CreateAuction] Server response:", errorData);
         return errorData;
@@ -91,11 +103,11 @@ const createAuctionMutation = useMutation({
       });
       setLocation("/seller/dashboard");
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       console.error("[CreateAuction] Submission error:", error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to create auction",
+        title: "Error Creating Auction",
+        description: error.message || "Failed to create auction. Please try again.",
         variant: "destructive"
       });
     }
