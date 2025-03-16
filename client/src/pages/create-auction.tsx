@@ -5,12 +5,17 @@ const createAuctionMutation = useMutation({
       const formData = new FormData();
       
       // Handle price values
-      formData.append('startPrice', String(dollarsToCents(data.startPrice)));
-      formData.append('reservePrice', String(dollarsToCents(data.reservePrice || data.startPrice)));
+      const startPrice = dollarsToCents(data.startPrice);
+      const reservePrice = dollarsToCents(data.reservePrice || data.startPrice);
+      
+      formData.append('startPrice', String(startPrice));
+      formData.append('reservePrice', String(reservePrice));
       
       // Handle dates
-      formData.append('startDate', new Date(data.startDate).toISOString());
-      formData.append('endDate', new Date(data.endDate).toISOString());
+      const startDate = new Date(data.startDate).toISOString();
+      const endDate = new Date(data.endDate).toISOString();
+      formData.append('startDate', startDate);
+      formData.append('endDate', endDate);
       
       // Add other fields
       formData.append('title', data.title);
@@ -19,13 +24,21 @@ const createAuctionMutation = useMutation({
       formData.append('category', data.category);
 
       // Add image files
-      if (selectedFiles.length > 0) {
+      if (selectedFiles && selectedFiles.length > 0) {
         selectedFiles.forEach(file => {
           formData.append('images', file);
         });
       }
 
-      console.log("[CreateAuction] Submitting form data");
+      console.log("[CreateAuction] Submitting form data:", {
+        title: data.title,
+        startPrice,
+        reservePrice,
+        startDate,
+        endDate,
+        imageCount: selectedFiles?.length || 0
+      });
+
       const response = await fetch("/api/auctions", {
         method: "POST",
         body: formData,
@@ -38,20 +51,26 @@ const createAuctionMutation = useMutation({
         throw new Error(errorData.message || 'Failed to create auction');
       }
       
-      return response.json();
+      const data = await response.json();
+      console.log("[CreateAuction] Server response:", data);
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/seller/auctions"] });
-      toast({
-        title: "Success",
-        description: "Auction created successfully",
-      const data = await response.json();
+      console.log("[CreateAuction] Mutation successful");
       toast({
         title: "Success",
         description: "Auction created successfully and pending approval",
       });
-      router.push("/seller/dashboard");
+      setLocation("/seller/dashboard");
     },
+    onError: (error) => {
+      console.error("[CreateAuction] Mutation error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create auction",
+        variant: "destructive"
+      });
+    }
     onError: (error: Error) => {
       console.error("[CreateAuction] Submission error:", error);
       toast({
