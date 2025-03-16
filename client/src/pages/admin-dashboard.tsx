@@ -312,7 +312,6 @@ function AdminDashboard() {
 
   const updateAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Ensure we have the correct image data structure
       const newImages = Array.isArray(data.images) ? data.images : [];
       try {
         const formData = {
@@ -324,7 +323,8 @@ function AdminDashboard() {
           endDate: data.endDate instanceof Date ? data.endDate.toISOString() : data.endDate,
         };
         
-        return await apiRequest("PATCH", `/api/admin/auctions/${auction.id}`, formData);
+        // Use selectedAuction.id for the API request
+        return await apiRequest("PATCH", `/api/admin/auctions/${selectedAuction?.id}`, formData);
       } catch (error) {
         console.error("[EditAuction] Error during form preparation:", error);
         throw error;
