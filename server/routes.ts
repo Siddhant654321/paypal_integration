@@ -648,11 +648,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Create new auction (sellers only)
     router.post("/api/auctions", requireAuth, requireApprovedSeller, upload.array('images', 5), async (req, res) => {
       try {
+        console.log("[AUCTION CREATE] Starting auction creation request", {
+          body: req.body,
+          files: req.files ? (req.files as Express.Multer.File[]).length : 0,
+          userId: req.user?.id,
+          userRole: req.user?.role
+        });
+
         if (!req.isAuthenticated()) {
+          console.log("[AUCTION CREATE] User not authenticated");
           return res.status(401).json({ message: "Unauthorized" });
         }
 
         if (req.user.role !== "seller" && req.user.role !== "seller_admin") {
+          console.log("[AUCTION CREATE] Invalid user role:", req.user.role);
           return res.status(403).json({ message: "Only sellers can create auctions" });
         }
 
@@ -663,6 +672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const uploadedFiles = req.files as Express.Multer.File[];
         let imageUrls = [];
         if (uploadedFiles && uploadedFiles.length > 0) {
+          console.log("[AUCTION CREATE] Processing uploaded files:", uploadedFiles.length);
           const baseUrl = `${req.protocol}://${req.get('host')}`;
           imageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
         }
@@ -679,11 +689,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           imageUrl: imageUrls[0] || "",
         };
 
+        console.log("[AUCTION CREATE] Parsed data:", {
+          ...parsedData,
+          startPrice: parsedData.startPrice,
+          reservePrice: parsedData.reservePrice,
+          startDate: parsedData.startDate.toISOString(),
+          endDate: parsedData.endDate.toISOString()
+        });
+
         try {
           const validatedData = insertAuctionSchema.parse(parsedData);
+          console.log("[AUCTION CREATE] Data validation passed");
+          
           const result = await storage.createAuction({
             ...validatedData,
             sellerId: userId
+          });
+
+          console.log("[AUCTION CREATE] Auction created successfully:", {
+            auctionId: result.id,
+            title: result.title
           });
 
           // Notify admins about the new auction
@@ -691,6 +716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           return res.status(201).json(result);
         } catch (validationError) {
+          console.error("[AUCTION CREATE] Validation error:", validationError);
           return res.status(400).json({
             message: "Invalid auction data",
             errors: validationError instanceof ZodError ? validationError.errors : String(validationError)
@@ -700,6 +726,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("[AUCTION CREATE] Error:", error);
         return res.status(500).json({
           message: "Failed to create auction",
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    });
+
+    // Update auction endpoint
+    router.patch("/api/auctions/:id", requireAuth, requireApprovedSeller, upload.array('images', 5), async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        console.log("[AUCTION UPDATE] Starting auction update request", {
+          auctionId,
+          body: req.body,
+          files: req.files ? (req.files as Express.Multer.File[]).length : 0,
+          userId: req.user?.id
+        });
+
+        // Get existing auction
+        const existingAuction = await storage.getAuction(auctionId);
+        if (!existingAuction) {
+          console.log("[AUCTION UPDATE] Auction not found:", auctionId);
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Verify ownership
+        if (existingAuction.sellerId !== req.user!.id && req.user!.role !== "seller_admin") {
+          console.log("[AUCTION UPDATE] Unauthorized update attempt", {
+            auctionSellerId: existingAuction.sellerId,
+            requestUserId: req.user!.id
+          });
+          return res.status(403).json({ message: "You can only edit your own auctions" });
+        }
+
+        // Handle file uploads
+        const uploadedFiles = req.files as Express.Multer.File[];
+        let newImageUrls = [];
+        if (uploadedFiles && uploadedFiles.length > 0) {
+          console.log("[AUCTION UPDATE] Processing new images");
+          const baseUrl = `${req.protocol}://${req.get('host')}`;
+          newImageUrls = uploadedFiles.map(file => `${baseUrl}/uploads/${file.filename}`);
+        }
+
+        // Process update data
+        const updateData = {
+          ...req.body,
+          startPrice: req.body.startPrice ? Number(req.body.startPrice) : undefined,
+          reservePrice: req.body.reservePrice ? Number(req.body.reservePrice) : undefined,
+          startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
+          endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
+          images: newImageUrls.length > 0 ? newImageUrls : undefined,
+          imageUrl: newImageUrls.length > 0 ? newImageUrls[0] : undefined
+        };
+
+        console.log("[AUCTION UPDATE] Processed update data:", updateData);
+
+        // Update the auction
+        const updatedAuction = await storage.updateAuction(auctionId, updateData);
+        console.log("[AUCTION UPDATE] Auction updated successfully:", {
+          auctionId: updatedAuction.id,
+          title: updatedAuction.title
+        });
+
+        res.json(updatedAuction);
+      } catch (error) {
+        console.error("[AUCTION UPDATE] Error:", error);
+        res.status(500).json({
+          message: "Failed to update auction",
           error: error instanceof Error ? error.message : String(error)
         });
       }

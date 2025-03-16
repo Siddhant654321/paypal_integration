@@ -69,7 +69,7 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      console.log("Starting form submission");
+      console.log("[AUCTION CREATE] Starting form submission");
       const res = await fetch("/api/auctions", {
         method: "POST",
         body: formData,
@@ -91,7 +91,7 @@ export default function NewAuction() {
       setLocation("/seller/dashboard");
     },
     onError: (error: Error) => {
-      console.error("Auction creation error:", error);
+      console.error("[AUCTION CREATE] Error:", error);
       toast({
         title: "Error creating auction",
         description: error.message,
@@ -102,7 +102,7 @@ export default function NewAuction() {
 
   const handleSubmit = form.handleSubmit((data) => {
     try {
-      console.log("Form data before processing:", data);
+      console.log("[AUCTION CREATE] Form data before processing:", data);
       const formData = new FormData();
 
       // Convert dollar amounts to cents and format dates
@@ -114,7 +114,7 @@ export default function NewAuction() {
         endDate: new Date(data.endDate).toISOString(),
       };
 
-      console.log("Processed data:", processedData);
+      console.log("[AUCTION CREATE] Processed data:", processedData);
 
       // Add all fields to FormData
       Object.entries(processedData).forEach(([key, value]) => {
@@ -130,10 +130,10 @@ export default function NewAuction() {
         });
       }
 
-      console.log("FormData created, submitting...");
+      console.log("[AUCTION CREATE] Submitting form...");
       createAuctionMutation.mutate(formData);
     } catch (error) {
-      console.error("Error processing form data:", error);
+      console.error("[AUCTION CREATE] Error processing form data:", error);
       toast({
         title: "Error",
         description: "Failed to process form data. Please check your inputs.",
