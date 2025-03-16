@@ -37,7 +37,6 @@ export default function NewAuction() {
   const [, setLocation] = useLocation();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
-  // Add debug logging
   useEffect(() => {
     console.log("NewAuction component mounted", {
       user,
@@ -51,9 +50,7 @@ export default function NewAuction() {
     });
   }, [user, isLoading]);
 
-  // Show loading state while checking authentication
   if (isLoading) {
-    console.log("NewAuction: Loading auth state");
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -61,23 +58,13 @@ export default function NewAuction() {
     );
   }
 
-  // Check if user is authenticated and has correct role
   if (!user) {
-    console.log("NewAuction: No authenticated user, redirecting");
     return <Redirect to="/auth" />;
   }
 
   if (user.role !== "seller" && user.role !== "seller_admin") {
-    console.log("NewAuction: User not a seller/admin, redirecting", { role: user.role });
     return <Redirect to="/" />;
   }
-
-  console.log("NewAuction: User authorized", {
-    id: user.id,
-    role: user.role,
-    hasProfile: user.hasProfile,
-    approved: user.approved
-  });
 
   const form = useForm({
     resolver: zodResolver(insertAuctionSchema),
@@ -86,53 +73,16 @@ export default function NewAuction() {
       description: "",
       species: "",
       category: "Show Quality",
-      startPrice: 0,
-      reservePrice: 0,
+      startPrice: "0.00",
+      reservePrice: "0.00",
       startDate: `${new Date().toISOString().split("T")[0]}T00:00`,
       endDate: `${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}T23:59`,
     },
   });
 
   const createAuctionMutation = useMutation({
-    mutationFn: async (auctionData: any) => {
-      console.log("Form data before submission:", auctionData);
-
-      const formData = new FormData();
-
-      // Format dates
-      const startDate = new Date(auctionData.startDate).toISOString();
-      const endDate = new Date(auctionData.endDate).toISOString();
-
-      // Convert dollar amounts to cents and ensure they're numbers
-      const dataToSubmit = {
-        ...auctionData,
-        startDate,
-        endDate,
-        startPrice: dollarsToCents(Number(auctionData.startPrice)),
-        reservePrice: dollarsToCents(Number(auctionData.reservePrice))
-      };
-
-      // Add all fields to FormData
-      Object.entries(dataToSubmit).forEach(([key, value]) => {
-        if (key !== 'files' && key !== 'images' && value !== undefined && value !== null) {
-          formData.append(key, value.toString());
-        }
-      });
-
-      // Add images if present
-      if (selectedFiles.length > 0) {
-        selectedFiles.forEach(file => {
-          formData.append('images', file);
-        });
-      }
-
-      console.log("Submitting FormData with monetary values (in cents):", {
-        startPrice: dataToSubmit.startPrice,
-        reservePrice: dataToSubmit.reservePrice,
-        startDate: dataToSubmit.startDate,
-        endDate: dataToSubmit.endDate
-      });
-
+    mutationFn: async (formData: FormData) => {
+      console.log("Submitting form data");
       const res = await fetch("/api/auctions", {
         method: "POST",
         body: formData,
@@ -163,18 +113,44 @@ export default function NewAuction() {
     },
   });
 
-  // Function to handle AI suggestions
+  const handleSubmit = form.handleSubmit((data) => {
+    console.log("Form data before submission:", data);
+    const formData = new FormData();
+
+    // Add all fields to FormData
+    Object.entries(data).forEach(([key, value]) => {
+      if (key === 'startPrice' || key === 'reservePrice') {
+        // Convert dollar amounts to cents
+        const cents = dollarsToCents(parseFloat(value as string));
+        formData.append(key, cents.toString());
+      } else if (key === 'startDate' || key === 'endDate') {
+        // Ensure proper date format
+        formData.append(key, new Date(value as string).toISOString());
+      } else if (value !== undefined && value !== null) {
+        formData.append(key, value.toString());
+      }
+    });
+
+    // Add images if present
+    if (selectedFiles.length > 0) {
+      selectedFiles.forEach(file => {
+        formData.append('images', file);
+      });
+    }
+
+    createAuctionMutation.mutate(formData);
+  });
+
   const handleSuggestionsReceived = (suggestions: {
     startPrice: number;
     reservePrice: number;
     description?: string;
   }) => {
-    // Update form with suggestions
     if (suggestions.startPrice) {
-      form.setValue('startPrice', centsToDollars(suggestions.startPrice));
+      form.setValue('startPrice', centsToDollars(suggestions.startPrice).toFixed(2));
     }
     if (suggestions.reservePrice) {
-      form.setValue('reservePrice', centsToDollars(suggestions.reservePrice));
+      form.setValue('reservePrice', centsToDollars(suggestions.reservePrice).toFixed(2));
     }
     if (suggestions.description) {
       form.setValue('description', suggestions.description);
@@ -187,10 +163,7 @@ export default function NewAuction() {
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit((data) => {
-            console.log("Form data before submission:", data);
-            createAuctionMutation.mutate(data);
-          })}
+          onSubmit={handleSubmit}
           className="space-y-6"
           encType="multipart/form-data"
         >
@@ -264,7 +237,6 @@ export default function NewAuction() {
             />
           </div>
 
-          {/* AI Price Suggestion Component */}
           <AIPriceSuggestion
             species={form.watch("species")}
             category={form.watch("category")}
@@ -309,13 +281,12 @@ export default function NewAuction() {
                     <Input
                       type="text"
                       placeholder="0.00"
-                      value={field.value}
+                      {...field}
                       onChange={(e) => {
                         const formatted = formatDollarInput(e.target.value);
                         field.onChange(formatted);
                       }}
                       onBlur={(e) => {
-                        // Format to proper dollar amount on blur
                         const value = parseFloat(e.target.value) || 0;
                         field.onChange(value.toFixed(2));
                       }}
@@ -339,13 +310,12 @@ export default function NewAuction() {
                     <Input
                       type="text"
                       placeholder="0.00"
-                      value={field.value}
+                      {...field}
                       onChange={(e) => {
                         const formatted = formatDollarInput(e.target.value);
                         field.onChange(formatted);
                       }}
                       onBlur={(e) => {
-                        // Format to proper dollar amount on blur
                         const value = parseFloat(e.target.value) || 0;
                         field.onChange(value.toFixed(2));
                       }}
