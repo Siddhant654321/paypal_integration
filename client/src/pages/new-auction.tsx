@@ -99,26 +99,38 @@ export default function NewAuction() {
 
       const formData = new FormData();
 
-      // Convert dollar amounts to cents before submission
-      const dataWithCents = {
+      // Format dates
+      const startDate = new Date(auctionData.startDate).toISOString();
+      const endDate = new Date(auctionData.endDate).toISOString();
+
+      // Convert dollar amounts to cents and ensure they're numbers
+      const dataToSubmit = {
         ...auctionData,
-        startPrice: dollarsToCents(auctionData.startPrice),
-        reservePrice: dollarsToCents(auctionData.reservePrice)
+        startDate,
+        endDate,
+        startPrice: dollarsToCents(Number(auctionData.startPrice)),
+        reservePrice: dollarsToCents(Number(auctionData.reservePrice))
       };
 
-      Object.keys(dataWithCents).forEach(key => {
-        if (key !== 'files' && key !== 'images') {
-          formData.append(key, dataWithCents[key].toString());
+      // Add all fields to FormData
+      Object.entries(dataToSubmit).forEach(([key, value]) => {
+        if (key !== 'files' && key !== 'images' && value !== undefined && value !== null) {
+          formData.append(key, value.toString());
         }
       });
 
-      selectedFiles.forEach(file => {
-        formData.append('images', file);
-      });
+      // Add images if present
+      if (selectedFiles.length > 0) {
+        selectedFiles.forEach(file => {
+          formData.append('images', file);
+        });
+      }
 
       console.log("Submitting FormData with monetary values (in cents):", {
-        startPrice: dataWithCents.startPrice,
-        reservePrice: dataWithCents.reservePrice
+        startPrice: dataToSubmit.startPrice,
+        reservePrice: dataToSubmit.reservePrice,
+        startDate: dataToSubmit.startDate,
+        endDate: dataToSubmit.endDate
       });
 
       const res = await fetch("/api/auctions", {

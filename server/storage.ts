@@ -172,37 +172,26 @@ export class DatabaseStorage implements IStorage {
 
   async createAuction(data: InsertAuction & { sellerId: number }): Promise<Auction> {
     try {
-      // Ensure prices are numbers
-      if (typeof data.startPrice === 'string') {
-        data.startPrice = Number(data.startPrice);
-      }
-      if (typeof data.reservePrice === 'string') {
-        data.reservePrice = Number(data.reservePrice);
-      }
-
-      // Ensure dates are Date objects
-      if (data.startDate && !(data.startDate instanceof Date)) {
-        data.startDate = new Date(data.startDate);
-      }
-      if (data.endDate && !(data.endDate instanceof Date)) {
-        data.endDate = new Date(data.endDate);
-      }
-
-      log(`Creating auction with processed data:`, {
-        startPrice: data.startPrice,
-        reservePrice: data.reservePrice,
-        startDate: data.startDate,
-        endDate: data.endDate
-      });
-
-      const result = await db.insert(auctions).values({
+      const processedData = {
         ...data,
-        currentPrice: data.startPrice,
-        status: "pending_review",
+        startPrice: typeof data.startPrice === 'string' ? parseInt(data.startPrice, 10) : data.startPrice,
+        reservePrice: typeof data.reservePrice === 'string' ? parseInt(data.reservePrice, 10) : data.reservePrice,
+        currentPrice: typeof data.startPrice === 'string' ? parseInt(data.startPrice, 10) : data.startPrice,
+        startDate: data.startDate instanceof Date ? data.startDate : new Date(data.startDate),
+        endDate: data.endDate instanceof Date ? data.endDate : new Date(data.endDate),
+        status: "pending_review" as const,
         approved: false,
-      }).returning();
+        views: 0
+      };
 
-      return result[0];
+      log(`Creating auction with processed data: ${JSON.stringify(processedData)}`);
+
+      const [result] = await db
+        .insert(auctions)
+        .values(processedData)
+        .returning();
+
+      return result;
     } catch (error) {
       log(`Error creating auction: ${error}`);
       throw error;
@@ -404,84 +393,44 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateAuction(auctionId: number, data: Partial<Auction>): Promise<Auction> {
+  async updateAuction(auctionId: number, updates: Partial<Auction>): Promise<Auction> {
     try {
       const currentAuction = await this.getAuction(auctionId);
       if (!currentAuction) {
         throw new Error(`Auction with id ${auctionId} not found`);
       }
 
-      const formattedData = { ...data };
+      const processedUpdates = {
+        ...updates,
+        startPrice: updates.startPrice !== undefined ? 
+          (typeof updates.startPrice === 'string' ? parseInt(updates.startPrice, 10) : updates.startPrice) : 
+          undefined,
+        reservePrice: updates.reservePrice !== undefined ? 
+          (typeof updates.reservePrice === 'string' ? parseInt(updates.reservePrice, 10) : updates.reservePrice) : 
+          undefined,
+        currentPrice: updates.startPrice !== undefined && currentAuction.currentPrice === currentAuction.startPrice ? 
+          (typeof updates.startPrice === 'string' ? parseInt(updates.startPrice, 10) : updates.startPrice) : 
+          undefined,
+        startDate: updates.startDate ? 
+          (updates.startDate instanceof Date ? updates.startDate : new Date(updates.startDate)) : 
+          undefined,
+        endDate: updates.endDate ? 
+          (updates.endDate instanceof Date ? updates.endDate : new Date(updates.endDate)) : 
+          undefined
+      };
 
-      // Log incoming data for debugging
-      log(`Received update data for auction ${auctionId}:`, {
-        startDate: formattedData.startDate,
-        endDate: formattedData.endDate
+      // Remove undefined values
+      Object.keys(processedUpdates).forEach(key => {
+        if (processedUpdates[key] === undefined) {
+          delete processedUpdates[key];
+        }
       });
 
-      // Handle date formatting
-      if (formattedData.startDate) {
-        try {
-          // Handle ISO string format from the form
-          const startDate = new Date(formattedData.startDate);
-          if (isNaN(startDate.getTime())) {
-            throw new Error(`Invalid start date: ${formattedData.startDate}`);
-          }
-          formattedData.startDate = startDate;
-          log(`Formatted start date: ${startDate.toISOString()}`);
-        } catch (err) {
-          log(`Error formatting start date: ${err}`);
-          throw new Error(`Invalid start date format: ${formattedData.startDate}`);
-        }
-      }
-
-      if (formattedData.endDate) {
-        try {
-          // Handle ISO string format from the form
-          const endDate = new Date(formattedData.endDate);
-          if (isNaN(endDate.getTime())) {
-            throw new Error(`Invalid end date: ${formattedData.endDate}`);
-          }
-          formattedData.endDate = endDate;
-          log(`Formatted end date: ${endDate.toISOString()}`);
-        } catch (err) {
-          log(`Error formatting end date: ${err}`);
-          throw new Error(`Invalid end date format: ${formattedData.endDate}`);
-        }
-      }
-
-      // Handle price updates
-      if (formattedData.startPrice !== undefined) {
-        formattedData.startPrice = Number(formattedData.startPrice);
-        if (currentAuction.currentPrice === currentAuction.startPrice) {
-          formattedData.currentPrice = formattedData.startPrice;
-        }
-      }
-
-      if (formattedData.reservePrice !== undefined) {
-        formattedData.reservePrice = Number(formattedData.reservePrice);
-      }
-
-      if (formattedData.currentPrice !== undefined) {
-        formattedData.currentPrice = Number(formattedData.currentPrice);
-      }
-
-      // Handle images array
-      if (formattedData.images) {
-        if (!Array.isArray(formattedData.images)) {
-          formattedData.images = [formattedData.images];
-        }
-        if (!formattedData.imageUrl && formattedData.images.length > 0) {
-          formattedData.imageUrl = formattedData.images[0];
-        }
-      }
-
-      // Log the final formatted data
-      log(`Final formatted data for auction ${auctionId}:`, formattedData);
+      log(`Updating auction ${auctionId} with processed data: ${JSON.stringify(processedUpdates)}`);
 
       const [updatedAuction] = await db
         .update(auctions)
-        .set(formattedData)
+        .set(processedUpdates)
         .where(eq(auctions.id, auctionId))
         .returning();
 
@@ -489,9 +438,7 @@ export class DatabaseStorage implements IStorage {
         throw new Error("Failed to update auction in database");
       }
 
-      log(`Successfully updated auction ${auctionId}`);
       return updatedAuction;
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       log(`Error updating auction ${auctionId}: ${errorMessage}`);
@@ -1025,7 +972,7 @@ export class DatabaseStorage implements IStorage {
   async getPayment(id: number): Promise<Payment | undefined> {
     try {
       log(`Getting payment ${id}`, "payments");
-      const[payment] = await db
+      const [payment] = await db
         .select()
         .from(payments)
         .where(eq(payments.id, id));
@@ -1065,7 +1012,7 @@ export class DatabaseStorage implements IStorage {
       log(`Updating payment ${paymentId} status to ${status}`, "payments");
       const [payment] = await db
         .update(payments)
-        .set({ 
+        .set({
           status,
           updatedAt: new Date(),
           completedAt: status === "completed" ? new Date() : undefined
