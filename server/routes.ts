@@ -668,18 +668,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const auctionData = req.body;
         const userId = typeof req.user.id === 'string' ? parseInt(req.user.id, 10) : req.user.id;
 
-        // Handle file uploads first
-        const uploadedFiles = req.files as Express.Multer.File[];
-        let imageUrls = [];
-        let thumbnailUrls = [];
-        
-        if (uploadedFiles && uploadedFiles.length > 0) {
-          console.log("[AUCTION CREATE] Processing uploaded files:", uploadedFiles.length);
-          // Use the response from handleFileUpload which now includes both main and thumbnail URLs
-          const processedFiles = await handleFileUpload(req, res);
-          if (processedFiles.files && processedFiles.files.length > 0) {
-            imageUrls = processedFiles.files.map(file => file.optimized);
-            thumbnailUrls = processedFiles.files.map(file => file.thumbnail);
+        // Process uploaded files
+        let imageUrls: string[] = [];
+        let thumbnailUrls: string[] = [];
+        if (req.files && (req.files as Express.Multer.File[]).length > 0) {
+          try {
+            const response = await handleFileUpload(req, 'auction');
+            const processedFiles = await response.json();
+            if (processedFiles && Array.isArray(processedFiles)) {
+              imageUrls = processedFiles.map((file: { optimized: string; thumbnail: string; }) => file.optimized);
+              thumbnailUrls = processedFiles.map((file: { optimized: string; thumbnail: string; }) => file.thumbnail);
+            }
+          } catch (error) {
+            console.error("[AUCTION CREATE] Error processing files:", error);
           }
         }
 
@@ -766,17 +767,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "You can only edit your own auctions" });
         }
 
-        // Handle file uploads
-        const uploadedFiles = req.files as Express.Multer.File[];
-        let newImageUrls = [];
-        let newThumbnailUrls = [];
-        
-        if (uploadedFiles && uploadedFiles.length > 0) {
-          console.log("[AUCTION UPDATE] Processing new images");
-          const processedFiles = await handleFileUpload(req, res);
-          if (processedFiles.files && processedFiles.files.length > 0) {
-            newImageUrls = processedFiles.files.map(file => file.optimized);
-            newThumbnailUrls = processedFiles.files.map(file => file.thumbnail);
+        // Process uploaded files
+        let newImageUrls: string[] = [];
+        let newThumbnailUrls: string[] = [];
+        if (req.files && (req.files as Express.Multer.File[]).length > 0) {
+          try {
+            const response = await handleFileUpload(req, 'auction');
+            const processedFiles = await response.json();
+            if (processedFiles && Array.isArray(processedFiles)) {
+              newImageUrls = processedFiles.map((file: { optimized: string; thumbnail: string; }) => file.optimized);
+              newThumbnailUrls = processedFiles.map((file: { optimized: string; thumbnail: string; }) => file.thumbnail);
+            }
+          } catch (error) {
+            console.error("[AUCTION UPDATE] Error processing files:", error);
           }
         }
 

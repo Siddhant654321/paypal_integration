@@ -63,18 +63,18 @@ function getBaseUrl(req: Request): string {
   return `${protocol}://${host}`;
 }
 
-// Optimize image and create thumbnail
-async function optimizeImage(filePath: string, filename: string): Promise<{ mainUrl: string, thumbnailUrl: string }> {
-  const ext = path.extname(filename);
-  const baseFilename = path.basename(filename, ext);
-  const optimizedFilename = `${baseFilename}_opt${ext}`;
-  const thumbnailFilename = `${baseFilename}_thumb${ext}`;
-  const optimizedPath = path.join(UPLOADS_DIR, optimizedFilename);
-  const thumbnailPath = path.join(THUMBNAILS_DIR, thumbnailFilename);
-
+// Process and optimize a single image
+async function processImage(file: Express.Multer.File, baseUrl: string): Promise<{ optimized: string; thumbnail: string; } | null> {
   try {
+    const ext = path.extname(file.filename);
+    const baseFilename = path.basename(file.filename, ext);
+    const optimizedFilename = `${baseFilename}_opt${ext}`;
+    const thumbnailFilename = `${baseFilename}_thumb${ext}`;
+    const optimizedPath = path.join(UPLOADS_DIR, optimizedFilename);
+    const thumbnailPath = path.join(THUMBNAILS_DIR, thumbnailFilename);
+
     // Process main image
-    await sharp(filePath)
+    await sharp(file.path)
       .resize(MAX_WIDTH, MAX_HEIGHT, {
         fit: 'inside',
         withoutEnlargement: true
@@ -83,7 +83,7 @@ async function optimizeImage(filePath: string, filename: string): Promise<{ main
       .toFile(optimizedPath);
 
     // Create thumbnail
-    await sharp(filePath)
+    await sharp(file.path)
       .resize(THUMB_WIDTH, THUMB_HEIGHT, {
         fit: 'cover',
         position: 'centre'
@@ -92,61 +92,32 @@ async function optimizeImage(filePath: string, filename: string): Promise<{ main
       .toFile(thumbnailPath);
 
     // Delete original file
-    await fs.promises.unlink(filePath);
+    await fs.promises.unlink(file.path);
 
     return {
-      mainUrl: `/uploads/${optimizedFilename}`,
-      thumbnailUrl: `/uploads/thumbnails/${thumbnailFilename}`
+      optimized: `${baseUrl}/uploads/${optimizedFilename}`,
+      thumbnail: `${baseUrl}/uploads/thumbnails/${thumbnailFilename}`
     };
   } catch (error) {
-    console.error('[UPLOAD] Error optimizing image:', error);
-    throw new Error('Failed to optimize image');
+    console.error('[UPLOAD] Error processing image:', file.originalname, error);
+    return null;
   }
 }
 
 // Handler for file uploads
 export async function handleFileUpload(req: Request, res: Response) {
   try {
-    console.log("[UPLOAD] Starting file upload handling");
-
-    if (!req.files || !Array.isArray(req.files)) {
-      console.log("[UPLOAD] No files uploaded");
+    const files = req.files as Express.Multer.File[];
+    if (!files || !Array.isArray(files)) {
       return res.status(400).json({ message: 'No files uploaded' });
     }
 
-    // Process uploaded files
-    const files = req.files as Express.Multer.File[];
-    console.log("[UPLOAD] Processing", files.length, "files");
-
-    // Get base URL
     const baseUrl = getBaseUrl(req);
-    console.log("[UPLOAD] Using base URL:", baseUrl);
+    const processedFiles = await Promise.all(files.map(async (file) => await processImage(file, baseUrl)));
 
-    // Process and optimize each file
-    const processedFiles = await Promise.all(files.map(async (file) => {
-      try {
-        const { mainUrl, thumbnailUrl } = await optimizeImage(file.path, file.filename);
-        return {
-          original: file.originalname,
-          optimized: `${baseUrl}${mainUrl}`,
-          thumbnail: `${baseUrl}${thumbnailUrl}`
-        };
-      } catch (error) {
-        console.error('[UPLOAD] Error processing file:', file.originalname, error);
-        return null;
-      }
-    }));
-
-    // Filter out failed optimizations
     const successfulUploads = processedFiles.filter(Boolean);
 
-    console.log("[UPLOAD] Successfully processed files:", {
-      total: files.length,
-      successful: successfulUploads.length,
-      urls: successfulUploads.map(f => f?.optimized)
-    });
-
-    res.status(201).json({ 
+    res.status(201).json({
       message: 'Files uploaded and optimized successfully',
       files: successfulUploads,
       count: successfulUploads.length
