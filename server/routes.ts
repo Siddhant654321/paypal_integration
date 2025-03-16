@@ -707,17 +707,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         try {
-          const validatedData = insertAuctionSchema.parse(parsedData);
-          console.log("[AUCTION CREATE] Data validation passed");
-          
-          const result = await storage.createAuction({
-            ...validatedData,
+          const validatedData = insertAuctionSchema.parse({
+            ...parsedData,
+            startPrice: Math.round(parsedData.startPrice * 100), // Convert to cents
+            reservePrice: Math.round((parsedData.reservePrice || parsedData.startPrice) * 100),
             sellerId: userId
           });
+          
+          console.log("[AUCTION CREATE] Data validation passed:", validatedData);
+          
+          const result = await storage.createAuction(validatedData);
 
           console.log("[AUCTION CREATE] Auction created successfully:", {
             auctionId: result.id,
-            title: result.title
+            title: result.title,
+            startPrice: result.startPrice,
+            reservePrice: result.reservePrice
           });
 
           // Notify admins about the new auction
