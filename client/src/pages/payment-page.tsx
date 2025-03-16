@@ -43,8 +43,13 @@ export default function PaymentPage() {
       console.log("[PayPal] Initiating payment for auction:", {
         auctionId,
         includeInsurance,
-        totalAmount
+        totalAmount,
+        timestamp: new Date().toISOString()
       });
+
+      if (!auctionId) {
+        throw new Error("Missing auction ID");
+      }
 
       const response = await fetch(`/api/auctions/${auctionId}/pay`, {
         method: 'POST',

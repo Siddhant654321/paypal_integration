@@ -5,12 +5,17 @@ import {EmailService} from './email-service'; // Added import for EmailService
 
 // Check for required PayPal environment variables
 const isPayPalConfigured = process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET;
+console.log("[PAYPAL] Configuration status:", {
+  isConfigured: isPayPalConfigured,
+  environment: process.env.NODE_ENV,
+  clientIdPrefix: process.env.PAYPAL_CLIENT_ID ? process.env.PAYPAL_CLIENT_ID.substring(0, 8) + '...' : 'missing',
+  sandbox: process.env.PAYPAL_ENV === 'sandbox'
+});
 
-if (process.env.NODE_ENV !== 'production') {
-  // In development, always require the credentials
-  if (!isPayPalConfigured) {
-    throw new Error("Missing PayPal environment variables");
-  }
+if (!isPayPalConfigured) {
+  console.error("[PAYPAL] Missing required environment variables");
+  throw new Error("PayPal is not properly configured. Check PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
+}
 } else {
   // In production, log a warning but don't crash
   if (!isPayPalConfigured) {

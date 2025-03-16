@@ -2435,6 +2435,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     router.post("/api/auctions/:id/pay", requireAuth, requireProfile, async (req, res) => {
+  console.log("[PAYMENT] Starting payment request:", {
+    auctionId: req.params.id,
+    userId: req.user?.id,
+    body: req.body,
+    timestamp: new Date().toISOString(),
+    paypalConfig: {
+      isConfigured: !!process.env.PAYPAL_CLIENT_ID && !!process.env.PAYPAL_CLIENT_SECRET,
+      environment: process.env.NODE_ENV,
+      sandbox: process.env.PAYPAL_ENV === 'sandbox'
+    }
+  });
       try {
         // Log authentication state
         console.log('[PAYMENT] Payment request authentication:', {
