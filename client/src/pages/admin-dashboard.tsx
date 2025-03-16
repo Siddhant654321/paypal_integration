@@ -1203,43 +1203,12 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
       description: auction.description,
       species: auction.species,
       category: auction.category,
-      startPrice: String(auction.startPrice / 100), // Convert cents to dollars
-      reservePrice: String(auction.reservePrice / 100), // Convert cents to dollars
-      startDate: new Date(auction.startDate),
-      endDate: new Date(auction.endDate),
+      startPrice: auction.startPrice,
+      reservePrice: auction.reservePrice,
+      startDate: auction.startDate,
+      endDate: auction.endDate,
       imageUrl: auction.imageUrl || undefined,
       images: auction.images || [],
-    },
-  });
-
-  const updateAuctionMutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      const response = await fetch(`/api/admin/auctions/${auction.id}`, {
-        method: "PATCH",
-        body: data,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update auction");
-      }
-
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Auction updated successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["auctions"] });
-      onClose?.();
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update auction",
-        variant: "destructive",
-      });
     },
   });
 
