@@ -492,22 +492,26 @@ export class DatabaseStorage implements IStorage {
         // First delete any seller payouts
         await tx
           .delete(sellerPayouts)
-          .where(eq(sellerPayouts.auctionId, auctionId));
+          .where(eq(sellerPayouts.auctionId, auctionId))
+          .execute();
 
         // Delete any payments associated with this auction
         await tx
           .delete(payments)
-          .where(eq(payments.auctionId, auctionId));
+          .where(eq(payments.auctionId, auctionId))
+          .execute();
 
         // Delete all bids for this auction
         await tx
           .delete(bids)
-          .where(eq(bids.auctionId, auctionId));
+          .where(eq(bids.auctionId, auctionId))
+          .execute();
 
         // Finally delete the auction itself
         await tx
           .delete(auctions)
-          .where(eq(auctions.id, auctionId));
+          .where(eq(auctions.id, auctionId))
+          .execute();
       });
 
       log(`Successfully deleted auction ${auctionId} and all related data`);
