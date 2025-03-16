@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
 import { EmailService } from "./email-service";
 import { CronService } from "./cron-service";
 import { setupAuth } from "./auth";
+import { setupUploads } from "./uploads";
 
 async function checkRequiredEnvVars() {
   // Always required environment variables
@@ -21,34 +22,28 @@ async function checkRequiredEnvVars() {
     throw new Error(`Missing critical environment variables: ${missingCriticalVars.join(', ')}`);
   }
 
-  // Variables that are required in development but optional in production
-  const devOnlyVars = [
-    'PAYPAL_CLIENT_ID',
-    'PAYPAL_CLIENT_SECRET',
-    'PAYPAL_PARTNER_MERCHANT_ID',
-    'PAYPAL_SANDBOX_PARTNER_MERCHANT_ID'
-  ];
+  // Variables that are required for full functionality
+  const optionalVars = {
+    payment: [
+      'PAYPAL_CLIENT_ID',
+      'PAYPAL_CLIENT_SECRET',
+      'PAYPAL_PARTNER_MERCHANT_ID'
+    ],
+    email: [
+      'SMTP_HOST',
+      'SMTP_PORT',
+      'SMTP_USER',
+      'SMTP_PASSWORD'
+    ]
+  };
 
-  // Email related variables - warn but don't crash
-  const emailVars = [
-    'SMTP_HOST',
-    'SMTP_PORT',
-    'SMTP_USER',
-    'SMTP_PASSWORD'
-  ];
-
-  // In development, check all variables
-  if (process.env.NODE_ENV !== 'production') {
-    const missingDevVars = devOnlyVars.filter(varName => !process.env[varName]);
-    if (missingDevVars.length > 0) {
-      console.warn(`[WARNING] Missing development variables: ${missingDevVars.join(', ')}`);
+  // Log warnings for missing optional variables
+  Object.entries(optionalVars).forEach(([feature, vars]) => {
+    const missingVars = vars.filter(varName => !process.env[varName]);
+    if (missingVars.length > 0) {
+      console.warn(`[WARNING] ${feature} functionality may be limited. Missing variables: ${missingVars.join(', ')}`);
     }
-
-    const missingEmailVars = emailVars.filter(varName => !process.env[varName]);
-    if (missingEmailVars.length > 0) {
-      console.warn(`[WARNING] Missing email variables: ${missingEmailVars.join(', ')}`);
-    }
-  }
+  });
 }
 
 async function testDatabaseConnection(retries = 3): Promise<void> {
@@ -69,7 +64,6 @@ async function testDatabaseConnection(retries = 3): Promise<void> {
   throw new Error(`Failed to connect to database after ${retries} attempts: ${lastError?.message}`);
 }
 
-
 async function initializeServer(): Promise<Express> {
   const app = express();
 
@@ -83,7 +77,7 @@ async function initializeServer(): Promise<Express> {
     // Configure CORS with more specific options
     app.use(cors({
       origin: process.env.NODE_ENV === 'production'
-        ? [process.env.PUBLIC_URL || ''].filter(Boolean)
+        ? [process.env.PUBLIC_URL || '', process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.repl.co` : ''].filter(Boolean)
         : ['http://localhost:5173', 'http://localhost:5000'],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -97,26 +91,22 @@ async function initializeServer(): Promise<Express> {
     // Setup authentication
     setupAuth(app);
 
-    // Request logging middleware (only in development)
-    if (process.env.NODE_ENV !== 'production') {
-      app.use((req, res, next) => {
-        log(`${req.method} ${req.path}`, "request");
-        next();
-      });
-    }
+    // Setup file uploads and static serving
+    setupUploads(app);
+
+    // Request logging middleware
+    app.use((req, res, next) => {
+      log(`${req.method} ${req.path}`, "request");
+      next();
+    });
 
     // Error handling middleware
     app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
       console.error("[ERROR]", err);
-      if (process.env.NODE_ENV !== 'production') {
-        res.status(500).json({
-          message: "Internal server error",
-          error: err.message,
-          stack: err.stack
-        });
-      } else {
-        res.status(500).json({ message: "Internal server error" });
-      }
+      res.status(500).json({
+        message: "Internal server error",
+        error: process.env.NODE_ENV !== 'production' ? err.message : undefined
+      });
     });
 
     // Health check endpoint
@@ -131,23 +121,25 @@ async function initializeServer(): Promise<Express> {
   }
 }
 
-async function startServer(port: number = 5000): Promise<void> {
+async function startServer(): Promise<void> {
   try {
     const app = await initializeServer();
     const server = await registerRoutes(app);
 
-    // Setup frontend
+    // Setup frontend based on environment
     if (process.env.NODE_ENV === "production") {
       serveStatic(app);
     } else {
       await setupVite(app, server);
     }
 
+    // ALWAYS serve on port 5000 as per guidelines
+    const PORT = 5000;
     server.listen({
-      port,
-      host: "0.0.0.0",
+      port: PORT,
+      host: "0.0.0.0", // Required for Replit deployment
     }, () => {
-      log(`Server started on port ${port}`, "startup");
+      log(`Server started on port ${PORT}`, "startup");
 
       // Initialize cron jobs after server starts
       CronService.initialize();
