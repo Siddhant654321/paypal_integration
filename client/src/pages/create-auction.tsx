@@ -2,22 +2,42 @@ const createAuctionMutation = useMutation({
     mutationFn: async (data: any) => {
       console.log("[CreateAuction] Starting submission with data:", data);
       
-      // Format the data
-      const formData = {
-        ...data,
-        startPrice: Number(data.startPrice),
-        reservePrice: Number(data.reservePrice || data.startPrice),
-        startDate: data.startDate instanceof Date ? data.startDate.toISOString() : data.startDate,
-        endDate: data.endDate instanceof Date ? data.endDate.toISOString() : data.endDate,
-      };
-
-      console.log("[CreateAuction] Submitting formData:", formData);
-      const response = await apiRequest("POST", "/api/auctions", formData);
+      const formData = new FormData();
       
-      if (!response.ok) {
-        throw new Error(response.message || 'Failed to create auction');
+      // Handle price values
+      formData.append('startPrice', String(dollarsToCents(data.startPrice)));
+      formData.append('reservePrice', String(dollarsToCents(data.reservePrice || data.startPrice)));
+      
+      // Handle dates
+      formData.append('startDate', new Date(data.startDate).toISOString());
+      formData.append('endDate', new Date(data.endDate).toISOString());
+      
+      // Add other fields
+      formData.append('title', data.title);
+      formData.append('description', data.description);
+      formData.append('species', data.species);
+      formData.append('category', data.category);
+
+      // Add image files
+      if (selectedFiles.length > 0) {
+        selectedFiles.forEach(file => {
+          formData.append('images', file);
+        });
       }
-      return response;
+
+      console.log("[CreateAuction] Submitting form data");
+      const response = await fetch("/api/auctions", {
+        method: "POST",
+        body: formData,
+        credentials: "include"
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create auction');
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/seller/auctions"] });
