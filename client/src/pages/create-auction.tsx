@@ -34,6 +34,7 @@ const createAuctionMutation = useMutation({
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error("[CreateAuction] Server error response:", errorData);
         throw new Error(errorData.message || 'Failed to create auction');
       }
       
@@ -44,6 +45,10 @@ const createAuctionMutation = useMutation({
       toast({
         title: "Success",
         description: "Auction created successfully",
+      const data = await response.json();
+      toast({
+        title: "Success",
+        description: "Auction created successfully and pending approval",
       });
       router.push("/seller/dashboard");
     },
