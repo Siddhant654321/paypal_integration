@@ -1097,10 +1097,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const auctionId = parseInt(req.params.id);
         
-        // Increment views counter atomically using SQL
-        await db.execute(
-          sql`UPDATE auctions SET views = views + 1 WHERE id = ${auctionId}`
-        );
+        // Check if user has already viewed this auction in their session
+        const viewedAuctions = req.session.viewedAuctions || {};
+        const hasViewed = viewedAuctions[auctionId];
+
+        if (!hasViewed) {
+          // Increment views counter atomically using SQL
+          await db.execute(
+            sql`UPDATE auctions SET views = views + 1 WHERE id = ${auctionId}`
+          );
+          
+          // Mark auction as viewed in session
+          viewedAuctions[auctionId] = true;
+          req.session.viewedAuctions = viewedAuctions;
+          
+          console.log(`[VIEWS] Incremented view count for auction ${auctionId}`);
+        }
 
         const auction = await storage.getAuction(auctionId);
         if (!auction) {
@@ -1109,8 +1121,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Get the seller's profile
         const sellerProfile = await storage.getProfile(auction.sellerId);
-
-        console.log(`[VIEWS] Incremented view count for auction ${auctionId}`);
         
         res.json({ ...auction, sellerProfile });
       } catch (error) {
