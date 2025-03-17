@@ -55,7 +55,6 @@ const createAuctionMutation = useMutation({
           imageCount: data.images?.length || 0
         });
 
-      try {
         console.log("[CreateAuction] Submitting form data...");
         const response = await fetch("/api/auctions", {
           method: "POST",
@@ -64,10 +63,10 @@ const createAuctionMutation = useMutation({
         });
 
         console.log("[CreateAuction] Server response status:", response.status);
-        
+
         const contentType = response.headers.get("content-type");
         let responseData;
-        
+
         try {
           if (contentType && contentType.includes("application/json")) {
             responseData = await response.json();
@@ -87,11 +86,14 @@ const createAuctionMutation = useMutation({
         }
 
         return responseData;
-
-        console.log("[CreateAuction] Server response:", errorData);
-        return errorData;
       } catch (error) {
         console.error("[CreateAuction] Network or parsing error:", error);
+        console.error("[CREATE AUCTION] Error:", error);
+        console.error("[CREATE AUCTION] Full error details:", {
+          message: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : undefined,
+          data: error
+        });
         throw error;
       }
     },
