@@ -155,7 +155,20 @@ export default function ProfilePage() {
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit((data) => createProfileMutation.mutate({ ...data, userId: user.id }))}
+          onSubmit={form.handleSubmit((data) => {
+            if (!user?.id) {
+              toast({
+                title: "Error",
+                description: "User ID not found. Please try logging in again.",
+                variant: "destructive",
+              });
+              return;
+            }
+            createProfileMutation.mutate({
+              ...data,
+              userId: user.id
+            });
+          })}
           className="space-y-6"
         >
           <div className="mb-6">
