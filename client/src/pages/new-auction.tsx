@@ -54,8 +54,9 @@ export default function NewAuction() {
     return <Redirect to="/" />;
   }
 
+  // Initialize form with schema omitting sellerId
   const form = useForm({
-    resolver: zodResolver(insertAuctionSchema),
+    resolver: zodResolver(insertAuctionSchema.omit({ sellerId: true })),
     defaultValues: {
       title: "",
       description: "",
@@ -107,17 +108,17 @@ export default function NewAuction() {
       setFormDebug("Form validation passed, processing data...");
       const formData = new FormData();
 
-      // Convert prices to cents and format dates
+      // Process form data with sellerId
       const processedData = {
         ...data,
+        sellerId: user.id.toString(), // Convert to string to ensure proper handling
         startPrice: dollarsToCents(parseFloat(data.startPrice)).toString(),
         reservePrice: dollarsToCents(parseFloat(data.reservePrice)).toString(),
         startDate: new Date(data.startDate).toISOString(),
         endDate: new Date(data.endDate).toISOString(),
-        sellerId: user.id // Include the sellerId from the authenticated user
       };
 
-      setFormDebug(`Processing with sellerId: ${user.id}`);
+      setFormDebug(`Processing with sellerId: ${processedData.sellerId}`);
 
       // Add all fields to FormData
       Object.entries(processedData).forEach(([key, value]) => {
