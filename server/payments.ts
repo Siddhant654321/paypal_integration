@@ -181,7 +181,7 @@ export class PaymentService {
         totalAmountDollars
       });
       
-      // Create PayPal order
+      // Create PayPal order with amounts converted from cents to dollars
       const orderRequest = {
         intent: "CAPTURE",
         purchase_units: [
@@ -191,15 +191,15 @@ export class PaymentService {
             custom_id: `auction_${auctionId}`,
             amount: {
               currency_code: "USD",
-              value: totalAmountDollars,
+              value: (totalAmount / 100).toFixed(2),
               breakdown: {
                 item_total: {
                   currency_code: "USD",
-                  value: baseAmountDollars
+                  value: (baseAmount / 100).toFixed(2)
                 },
                 handling: {
                   currency_code: "USD",
-                  value: (parseFloat(platformFeeDollars) + parseFloat(insuranceFeeDollars)).toFixed(2)
+                  value: ((platformFee + insuranceFee) / 100).toFixed(2)
                 }
               }
             },
@@ -210,7 +210,7 @@ export class PaymentService {
                 quantity: "1",
                 unit_amount: {
                   currency_code: "USD",
-                  value: baseAmountDollars
+                  value: (baseAmount / 100).toFixed(2)
                 }
               }
             ]
