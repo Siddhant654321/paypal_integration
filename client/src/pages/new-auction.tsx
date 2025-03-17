@@ -37,6 +37,9 @@ export default function NewAuction() {
   const [, setLocation] = useLocation();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
+  // Add form debugging
+  const [formDebug, setFormDebug] = useState<string>("");
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -69,11 +72,7 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      toast({
-        title: "Submitting...",
-        description: "Creating your auction...",
-      });
-
+      setFormDebug("Submitting to server...");
       const res = await fetch("/api/auctions", {
         method: "POST",
         body: formData,
@@ -88,6 +87,7 @@ export default function NewAuction() {
       return res.json();
     },
     onSuccess: () => {
+      setFormDebug("Success! Redirecting...");
       toast({
         title: "Success",
         description: "Your auction has been created and is pending approval",
@@ -95,6 +95,7 @@ export default function NewAuction() {
       setLocation("/seller/dashboard");
     },
     onError: (error: Error) => {
+      setFormDebug(`Error: ${error.message}`);
       toast({
         title: "Error creating auction",
         description: error.message,
@@ -103,32 +104,28 @@ export default function NewAuction() {
     },
   });
 
-  const onSubmit = form.handleSubmit((data) => {
-    try {
-      toast({
-        title: "Processing...",
-        description: "Preparing your auction data...",
-      });
+  // Function to handle basic form submission
+  const handleBasicSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormDebug("Form submitted via basic handler");
+    const formData = new FormData(e.target as HTMLFormElement);
+    createAuctionMutation.mutate(formData);
+  };
 
+  // Handle React Hook Form submission
+  const onSubmit = form.handleSubmit((data) => {
+    setFormDebug("Form submitted via React Hook Form");
+    try {
       const formData = new FormData();
 
-      // Process prices and dates
-      const processedData = {
-        ...data,
-        startPrice: dollarsToCents(parseFloat(data.startPrice)),
-        reservePrice: dollarsToCents(parseFloat(data.reservePrice)),
-        startDate: new Date(data.startDate).toISOString(),
-        endDate: new Date(data.endDate).toISOString(),
-      };
-
-      // Add all fields to FormData
-      Object.entries(processedData).forEach(([key, value]) => {
+      // Add basic fields
+      Object.entries(data).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
           formData.append(key, value.toString());
         }
       });
 
-      // Add images if present
+      // Add files
       if (selectedFiles.length > 0) {
         selectedFiles.forEach(file => {
           formData.append('images', file);
@@ -137,9 +134,10 @@ export default function NewAuction() {
 
       createAuctionMutation.mutate(formData);
     } catch (error) {
+      setFormDebug(`Error in submission: ${error}`);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to process form data",
+        description: "Failed to process form data",
         variant: "destructive",
       });
     }
@@ -164,6 +162,13 @@ export default function NewAuction() {
   return (
     <div className="container max-w-2xl mx-auto py-8">
       <h1 className="text-3xl font-bold mb-8">Create New Auction</h1>
+
+      {/* Debug info */}
+      {formDebug && (
+        <div className="mb-4 p-4 bg-gray-100 rounded">
+          <p>Debug: {formDebug}</p>
+        </div>
+      )}
 
       <Form {...form}>
         <form onSubmit={onSubmit} className="space-y-6">
@@ -372,6 +377,7 @@ export default function NewAuction() {
             type="submit"
             className="w-full"
             disabled={createAuctionMutation.isPending}
+            onClick={() => setFormDebug("Submit button clicked")}
           >
             {createAuctionMutation.isPending && (
               <LoadingSpinner className="mr-2 h-4 w-4" />
