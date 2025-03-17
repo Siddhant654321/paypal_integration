@@ -155,14 +155,18 @@ export class PaymentService {
         throw new Error("Only the winning bidder can make payment");
       }
       
-      // Convert from cents to dollars first
+      // Keep original amount in cents for calculations
       const baseAmount = auction.currentPrice;
-      const baseAmountDollars = (baseAmount / 100).toFixed(2);
       
-      // Calculate fees in dollars
-      const platformFee = Math.round(parseFloat(baseAmountDollars) * PLATFORM_FEE_PERCENTAGE * 100) / 100;
-      const insuranceFee = includeInsurance ? INSURANCE_FEE / 100 : 0;
-      const totalAmount = parseFloat(baseAmountDollars) + platformFee + insuranceFee;
+      // Calculate fees in cents
+      const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
+      const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
+      const totalAmountCents = baseAmount + platformFee + insuranceFee;
+      
+      // Convert to dollars for PayPal
+      const baseAmountDollars = (baseAmount / 100).toFixed(2);
+      const feeAmountDollars = ((platformFee + insuranceFee) / 100).toFixed(2);
+      const totalAmountDollars = (totalAmountCents / 100).toFixed(2);
       
       // Calculate seller payout in dollars
       const sellerPayout = parseFloat(baseAmountDollars) - (parseFloat(baseAmountDollars) * SELLER_FEE_PERCENTAGE);
