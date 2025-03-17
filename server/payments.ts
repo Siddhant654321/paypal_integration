@@ -155,20 +155,18 @@ export class PaymentService {
         throw new Error("Only the winning bidder can make payment");
       }
       
-      // Convert all amounts from cents to dollars
-      // Start with base amount in cents and convert to dollars
-      // Keep all calculations in cents until final PayPal conversion
+      // All amounts are in cents, convert everything to dollars for PayPal
       const baseAmount = auction.currentPrice;
       const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
       const sellerPayout = baseAmount - Math.round(baseAmount * SELLER_FEE_PERCENTAGE);
-      
-      // Convert to dollars only for PayPal API
-      const baseAmountDollars = (baseAmount / 100).toFixed(2);
-      const platformFeeDollars = (platformFee / 100).toFixed(2);
-      const insuranceFeeDollars = (insuranceFee / 100).toFixed(2);
-      const totalAmountDollars = (totalAmount / 100).toFixed(2);
+
+      // Convert all amounts to dollars for PayPal by dividing by 100
+      const baseAmountDollars = String(baseAmount / 100);
+      const platformFeeDollars = String(platformFee / 100);
+      const insuranceFeeDollars = String(insuranceFee / 100);
+      const totalAmountDollars = String(totalAmount / 100);
       
       const accessToken = await this.getAccessToken();
       
