@@ -354,20 +354,43 @@ export class EmailService {
     data: Parameters<typeof emailTemplates[T]>[0]
   ) {
     try {
+      // Log attempt to send notification
+      console.log(`[EMAIL] Attempting to send ${type} notification to user:`, {
+        userId: user.id,
+        email: user.email,
+        notificationsEnabled: user.emailNotificationsEnabled,
+        type: type
+      });
+
+      // Skip if notifications are disabled (except for admin notifications)
       if (!user.emailNotificationsEnabled && type !== 'admin_new_seller' && type !== 'admin_new_auction') {
         console.log(`[EMAIL] Skipping notification for user ${user.id} (notifications disabled)`);
         return false;
       }
 
+      // Check if user has an email
+      if (!user.email) {
+        console.log(`[EMAIL] No email address found for user ${user.id}`);
+        return false;
+      }
+
       const template = emailTemplates[type](data as any);
+      console.log(`[EMAIL] Sending ${type} email to:`, user.email);
+
       await transporter.sendMail({
         from: `"Pips 'n Chicks" <${process.env.SMTP_USER}>`,
         to: user.email,
         ...template,
       });
+
+      console.log(`[EMAIL] Successfully sent ${type} email to user ${user.id}`);
       return true;
     } catch (error) {
-      console.error('[EMAIL] Failed to send notification:', error);
+      console.error('[EMAIL] Failed to send notification:', {
+        type,
+        userId: user.id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       return false;
     }
   }

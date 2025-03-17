@@ -839,20 +839,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("[ADMIN] Updating auction status:", {
           auctionId,
           approved,
-          reason: reason || "No reason provided"
+          reason: reason || "No reason provided",
+          adminUser: req.user?.id
         });
 
         // Get the auction details
         const auction = await storage.getAuction(auctionId);
         if (!auction) {
+          console.log("[ADMIN] Auction not found:", auctionId);
           return res.status(404).json({ message: "Auction not found" });
         }
 
         // Get the seller details
         const seller = await storage.getUser(auction.sellerId);
         if (!seller) {
+          console.log("[ADMIN] Seller not found for auction:", auction.sellerId);
           return res.status(404).json({ message: "Seller not found" });
         }
+
+        console.log("[ADMIN] Found seller:", {
+          sellerId: seller.id,
+          email: seller.email,
+          notifications: seller.emailNotificationsEnabled
+        });
 
         // Update the auction status
         const updatedAuction = await storage.updateAuction(auctionId, {
@@ -862,36 +871,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Send email notification based on approval status
         if (approved) {
-          await EmailService.sendNotification("auction_approval", seller, {
-            auctionTitle: auction.title,
-            startDate: auction.startDate,
-            imageUrl: auction.imageUrl,
-            auctionId: auction.id
-          });
+          console.log("[ADMIN] Sending approval notification to seller");
+          try {
+            await EmailService.sendNotification("auction_approval", seller, {
+              auctionTitle: auction.title,
+              startDate: auction.startDate,
+              imageUrl: auction.imageUrl,
+              auctionId: auction.id
+            });
+            console.log("[ADMIN] Approval email sent successfully");
 
-          // Create in-app notification for approval
-          await NotificationService.createNotification({
-            userId: seller.id,
-            type: "auction",
-            message: `Your auction "${auction.title}" has been approved and is now live!`,
-            linkUrl: `/auctions/${auction.id}`,
-            status: "unread"
-          });
+            // Create in-app notification for approval
+            await NotificationService.createNotification({
+              userId: seller.id,
+              type: "auction",
+              title: "Auction Approved", 
+              message: `Your auction "${auction.title}" has been approved and is now live!`,
+              linkUrl: `/auctions/${auction.id}`,
+              status: "unread"
+            });
+            console.log("[ADMIN] Approval notification created");
+          } catch (notifyError) {
+            console.error("[ADMIN] Error sending approval notifications:", notifyError);
+          }
         } else {
-          await EmailService.sendNotification("auction_denial", seller, {
-            auctionTitle: auction.title,
-            reason: reason || "No specific reason provided",
-            auctionId: auction.id
-          });
+          console.log("[ADMIN] Sending denial notification to seller");
+          try {
+            await EmailService.sendNotification("auction_denial", seller, {
+              auctionTitle: auction.title,
+              reason: reason || "No specific reason provided",
+              auctionId: auction.id
+            });
+            console.log("[ADMIN] Denial email sent successfully");
 
-          // Create in-app notification for denial
-          await NotificationService.createNotification({
-            userId: seller.id,
-            type: "auction",
-            message: `Your auction "${auction.title}" requires updates before it can be approved.`,
-            linkUrl: `/seller/auctions/${auction.id}/edit`,
-            status: "unread"
-          });
+            // Create in-app notification for denial
+            await NotificationService.createNotification({
+              userId: seller.id,
+              type: "auction",
+              title: "Auction Update Required",
+              message: `Your auction "${auction.title}" requires updates before it can be approved.`,
+              linkUrl: `/seller/auctions/${auction.id}/edit`,
+              status: "unread"
+            });
+            console.log("[ADMIN] Denial notification created");
+          } catch (notifyError) {
+            console.error("[ADMIN] Error sending denial notifications:", notifyError);
+          }
         }
 
         console.log("[ADMIN] Auction status updated successfully:", {
