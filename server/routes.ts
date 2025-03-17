@@ -647,51 +647,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Create new auction (sellers only)
     router.post("/api/auctions", requireAuth, requireApprovedSeller, upload.array('images', 5), async (req, res) => {
-  console.log("[AUCTION CREATE] Starting auction creation request:", {
-    body: req.body,
-    files: req.files ? (req.files as Express.Multer.File[]).length : 0,
-    user: req.user ? {
-      id: req.user.id,
-      role: req.user.role,
-      approved: req.user.approved
-    } : null,
-    authenticated: req.isAuthenticated()
-  });
-  console.log("[AUCTION CREATE] Files:", req.files);
       try {
-        console.log("[AUCTION CREATE] Starting auction creation request", {
-          body: req.body,
-          files: req.files ? (req.files as Express.Multer.File[]).length : 0,
-          userId: req.user?.id,
-          userRole: req.user?.role
-        });
-
-        if (!req.isAuthenticated()) {
-          console.log("[AUCTION CREATE] User not authenticated");
-          return res.status(401).json({ message: "Unauthorized" });
-        }
-
-        if (req.user.role !== "seller" && req.user.role !== "seller_admin") {
-          console.log("[AUCTION CREATE] Invalid user role:", req.user.role);
-          return res.status(403).json({ message: "Only sellers can create auctions" });
-        }
-
         const auctionData = req.body;
         const userId = typeof req.user.id === 'string' ? parseInt(req.user.id, 10) : req.user.id;
+
+        console.log("[AUCTION CREATE] Starting auction creation request:", {
+          body: req.body,
+          files: req.files ? (req.files as Express.Multer.File[]).length : 0,
+          userId: userId
+        });
 
         // Process uploaded files
         let imageUrls: string[] = [];
         let thumbnailUrls: string[] = [];
         if (req.files && (req.files as Express.Multer.File[]).length > 0) {
           try {
-            const response = await handleFileUpload(req, 'auction');
-            const processedFiles = await response.json();
-            if (processedFiles && Array.isArray(processedFiles)) {
-              imageUrls = processedFiles.map((file: { optimized: string; thumbnail: string; }) => file.optimized);
-              thumbnailUrls = processedFiles.map((file: { optimized: string; thumbnail: string; }) => file.thumbnail);
+            // Process files directly using handleFileUpload with prefix
+            const result = await handleFileUpload(req, 'auction');
+            if (result && result.files && result.files.length > 0) {
+              imageUrls = result.files.map(file => file.optimized);
+              thumbnailUrls = result.files.map(file => file.thumbnail);
+              console.log("[AUCTION CREATE] Processed image URLs:", {
+                images: imageUrls,
+                thumbnails: thumbnailUrls
+              });
             }
           } catch (error) {
             console.error("[AUCTION CREATE] Error processing files:", error);
+            return res.status(500).json({ message: "Failed to process uploaded files" });
           }
         }
 
@@ -788,14 +771,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let newThumbnailUrls: string[] = [];
         if (req.files && (req.files as Express.Multer.File[]).length > 0) {
           try {
-            const response = await handleFileUpload(req, 'auction');
-            const processedFiles = await response.json();
-            if (processedFiles && Array.isArray(processedFiles)) {
-              newImageUrls = processedFiles.map((file: { optimized: string; thumbnail: string; }) => file.optimized);
-              newThumbnailUrls = processedFiles.map((file: { optimized: string; thumbnail: string; }) => file.thumbnail);
+            const uploadResult = await handleFileUpload(req, 'auction');
+            if (uploadResult && uploadResult.files) {
+              newImageUrls = uploadResult.files.map(file => file.optimized);
+              newThumbnailUrls = uploadResult.files.map(file => file.thumbnail);
+              console.log("[AUCTION UPDATE] Processed image URLs:", {
+                images: newImageUrls,
+                thumbnails: newThumbnailUrls
+              });
             }
           } catch (error) {
             console.error("[AUCTION UPDATE] Error processing files:", error);
+            return res.status(500).json({ message: "Failed to process uploaded files" });
           }
         }
 
