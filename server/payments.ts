@@ -156,20 +156,20 @@ export class PaymentService {
       }
       
       // Convert all amounts from cents to dollars
+      // Start with base amount in cents and convert to dollars
       const baseAmount = auction.currentPrice;
       const baseAmountDollars = (baseAmount / 100).toFixed(2);
       
-      // Calculate fees in cents first, then convert to dollars
-      const platformFeeCents = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
-      const insuranceFeeCents = includeInsurance ? INSURANCE_FEE : 0;
+      // Calculate fees in dollars directly
+      const platformFeeDollars = (baseAmount * PLATFORM_FEE_PERCENTAGE / 100).toFixed(2);
+      const insuranceFeeDollars = (includeInsurance ? INSURANCE_FEE / 100 : 0).toFixed(2);
       
-      // Convert fees to dollars
-      const platformFeeDollars = (platformFeeCents / 100).toFixed(2);
-      const insuranceFeeDollars = (insuranceFeeCents / 100).toFixed(2);
-      
-      // Calculate total in cents first, then convert to dollars
-      const totalAmountCents = baseAmount + platformFeeCents + insuranceFeeCents;
-      const totalAmountDollars = (totalAmountCents / 100).toFixed(2);
+      // Calculate total in dollars
+      const totalAmountDollars = (
+        parseFloat(baseAmountDollars) + 
+        parseFloat(platformFeeDollars) + 
+        parseFloat(insuranceFeeDollars)
+      ).toFixed(2);
       
       // Calculate seller payout in dollars
       const sellerPayout = parseFloat(baseAmountDollars) - (parseFloat(baseAmountDollars) * SELLER_FEE_PERCENTAGE);
