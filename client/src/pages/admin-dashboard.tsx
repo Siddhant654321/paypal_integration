@@ -1203,10 +1203,10 @@ function EditAuctionDialog({ auction, onClose }: { auction: Auction; onClose?: (
       description: auction.description,
       species: auction.species,
       category: auction.category,
-      startPrice: auction.startPrice,
-      reservePrice: auction.reservePrice,
-      startDate: auction.startDate,
-      endDate: auction.endDate,
+      startPrice: auction.startPrice / 100, // Convert from cents to dollars
+      reservePrice: auction.reservePrice ? auction.reservePrice / 100 : undefined, // Convert from cents to dollars
+      startDate: new Date(auction.startDate),
+      endDate: new Date(auction.endDate),
       imageUrl: auction.imageUrl || undefined,
       images: auction.images || [],
     },
