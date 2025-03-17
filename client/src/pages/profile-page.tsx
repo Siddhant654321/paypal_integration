@@ -76,6 +76,10 @@ export default function ProfilePage() {
     mutationFn: async (data: InsertProfile) => {
       console.log("Starting profile mutation with data:", data);
       setDebugInfo("Submitting profile data...");
+      
+      if (!user?.id) {
+        throw new Error("User ID not found");
+      }
 
       const res = await fetch("/api/profile", {
         method: "POST",
@@ -91,7 +95,8 @@ export default function ProfilePage() {
       if (!res.ok) {
         const errorData = await res.json();
         console.error("Profile submission error:", errorData);
-        throw new Error(errorData.error || "Failed to save profile");
+        setDebugInfo(`Server error: ${JSON.stringify(errorData)}`);
+        throw new Error(errorData.message || errorData.error || "Failed to save profile");
       }
 
       const responseData = await res.json();
@@ -204,7 +209,18 @@ export default function ProfilePage() {
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit(handleSubmit)}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!user?.id) {
+              toast({
+                title: "Error",
+                description: "User ID not found. Please try logging in again.",
+                variant: "destructive",
+              });
+              return;
+            }
+            form.handleSubmit(handleSubmit)(e);
+          }}
           className="space-y-6"
         >
           <div className="mb-6">
