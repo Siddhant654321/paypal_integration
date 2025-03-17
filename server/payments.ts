@@ -173,10 +173,6 @@ export class PaymentService {
       
       const accessToken = await this.getAccessToken();
       
-      // Format amounts for PayPal
-      const totalAmountDollars = totalAmount.toFixed(2);
-      const feeAmountDollars = (platformFee + insuranceFee).toFixed(2);
-      
       console.log("[PAYPAL] Payment amounts:", {
         baseAmount,
         platformFee,
