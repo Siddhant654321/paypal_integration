@@ -69,11 +69,6 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      console.log("[DEBUG] Form data entries:");
-      for (const [key, value] of formData.entries()) {
-        console.log(`${key}: ${value}`);
-      }
-
       const res = await fetch("/api/auctions", {
         method: "POST",
         body: formData,
@@ -81,14 +76,17 @@ export default function NewAuction() {
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error("[DEBUG] Server response error:", errorData);
-        throw new Error(errorData.message || "Failed to create auction");
+        let errorMessage = "Failed to create auction";
+        try {
+          const errorData = await res.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          console.error("Error parsing error response:", e);
+        }
+        throw new Error(errorMessage);
       }
 
-      const responseData = await res.json();
-      console.log("[DEBUG] Server response:", responseData);
-      return responseData;
+      return res.json();
     },
     onSuccess: () => {
       toast({
@@ -98,7 +96,6 @@ export default function NewAuction() {
       setLocation("/seller/dashboard");
     },
     onError: (error: Error) => {
-      console.error("[DEBUG] Mutation error:", error);
       toast({
         title: "Error creating auction",
         description: error.message,
@@ -107,10 +104,8 @@ export default function NewAuction() {
     },
   });
 
-  const handleSubmit = form.handleSubmit((data) => {
+  const onSubmit = form.handleSubmit((data) => {
     try {
-      console.log("[DEBUG] Raw form data:", data);
-
       // Validate required fields
       if (!data.title || !data.species || !data.category) {
         toast({
@@ -123,7 +118,7 @@ export default function NewAuction() {
 
       const formData = new FormData();
 
-      // Process form data
+      // Process prices and dates
       const processedData = {
         ...data,
         startPrice: dollarsToCents(parseFloat(data.startPrice)),
@@ -131,8 +126,6 @@ export default function NewAuction() {
         startDate: new Date(data.startDate).toISOString(),
         endDate: new Date(data.endDate).toISOString(),
       };
-
-      console.log("[DEBUG] Processed data:", processedData);
 
       // Add all fields to FormData
       Object.entries(processedData).forEach(([key, value]) => {
@@ -146,13 +139,11 @@ export default function NewAuction() {
         selectedFiles.forEach(file => {
           formData.append('images', file);
         });
-        console.log("[DEBUG] Added", selectedFiles.length, "images to form data");
       }
 
-      console.log("[DEBUG] Submitting form...");
       createAuctionMutation.mutate(formData);
     } catch (error) {
-      console.error("[DEBUG] Error in form submission:", error);
+      console.error("Error processing form data:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to process form data",
@@ -182,11 +173,7 @@ export default function NewAuction() {
       <h1 className="text-3xl font-bold mb-8">Create New Auction</h1>
 
       <Form {...form}>
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6"
-          encType="multipart/form-data"
-        >
+        <form onSubmit={onSubmit} className="space-y-6" encType="multipart/form-data">
           <FormField
             control={form.control}
             name="title"
