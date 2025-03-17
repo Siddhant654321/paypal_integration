@@ -660,30 +660,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Process uploaded files
         let imageUrls: string[] = [];
         let thumbnailUrls: string[] = [];
+        
         if (req.files && (req.files as Express.Multer.File[]).length > 0) {
           try {
-            // Process files directly using handleFileUpload with prefix
+            // Handle file upload and get file URLs
             const result = await handleFileUpload(req, 'auction');
+            
             if (result && result.files && result.files.length > 0) {
-              imageUrls = result.files.map(file => file.optimized);
-              thumbnailUrls = result.files.map(file => file.thumbnail);
-              console.log("[AUCTION CREATE] Processed image URLs:", {
-                images: imageUrls,
-                thumbnails: thumbnailUrls
+              imageUrls = result.files.map(f => f.optimized);
+              thumbnailUrls = result.files.map(f => f.thumbnail);
+              
+              console.log("[AUCTION CREATE] Image processing complete:", {
+                imageCount: imageUrls.length,
+                thumbnailCount: thumbnailUrls.length,
+                firstImage: imageUrls[0]?.substring(0, 50) + '...',
+                firstThumbnail: thumbnailUrls[0]?.substring(0, 50) + '...'
               });
+            } else {
+              console.warn("[AUCTION CREATE] No files processed in upload result");
             }
           } catch (error) {
             console.error("[AUCTION CREATE] Error processing files:", error);
             return res.status(500).json({ message: "Failed to process uploaded files" });
           }
+        } else {
+          console.log("[AUCTION CREATE] No files uploaded with auction");
         }
 
-        // Process auction data with explicit price handling
-        const parsedData = {
+        // Process auction data
+        const processedData = {
           ...auctionData,
           sellerId: userId,
-          startPrice: Number(auctionData.startPrice),
-          reservePrice: Number(auctionData.reservePrice || auctionData.startPrice),
+          startPrice: Math.round(parseFloat(auctionData.startPrice) * 100), // Convert to cents
+          reservePrice: Math.round((auctionData.reservePrice || auctionData.startPrice) * 100),
           startDate: new Date(auctionData.startDate),
           endDate: new Date(auctionData.endDate),
           images: imageUrls,
@@ -692,31 +701,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           thumbnailUrl: thumbnailUrls[0] || ""
         };
 
-        console.log("[AUCTION CREATE] Parsed data:", {
-          ...parsedData,
-          startPrice: parsedData.startPrice,
-          reservePrice: parsedData.reservePrice,
-          startDate: parsedData.startDate.toISOString(),
-          endDate: parsedData.endDate.toISOString()
+        console.log("[AUCTION CREATE] Processed auction data:", {
+          title: processedData.title,
+          startPrice: `$${(processedData.startPrice / 100).toFixed(2)}`,
+          reservePrice: `$${(processedData.reservePrice / 100).toFixed(2)}`,
+          startDate: processedData.startDate.toISOString(),
+          endDate: processedData.endDate.toISOString(),
+          imageCount: processedData.images.length
         });
 
         try {
-          const validatedData = insertAuctionSchema.parse({
-            ...parsedData,
-            startPrice: Math.round(parsedData.startPrice * 100), // Convert to cents
-            reservePrice: Math.round((parsedData.reservePrice || parsedData.startPrice) * 100),
-            sellerId: userId
-          });
-          
-          console.log("[AUCTION CREATE] Data validation passed:", validatedData);
-          
-          const result = await storage.createAuction(validatedData);
+          const validatedData = insertAuctionSchema.parse(processedData);
+          console.log("[AUCTION CREATE] Data validation passed");
 
+          const result = await storage.createAuction(validatedData);
           console.log("[AUCTION CREATE] Auction created successfully:", {
             auctionId: result.id,
             title: result.title,
-            startPrice: result.startPrice,
-            reservePrice: result.reservePrice
+            sellerId: result.sellerId
           });
 
           // Notify admins about the new auction
@@ -733,7 +735,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("[AUCTION CREATE] Error:", error);
         return res.status(500).json({
-          message: "Failed to create auction",
+          message: "Failed to create auction", 
           error: error instanceof Error ? error.message : String(error)
         });
       }

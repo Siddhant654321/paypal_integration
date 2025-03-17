@@ -66,6 +66,8 @@ function getBaseUrl(req: Request): string {
 // Process and optimize a single image
 async function processImage(file: Express.Multer.File, baseUrl: string): Promise<{ optimized: string; thumbnail: string; } | null> {
   try {
+    console.log("[UPLOAD] Processing image:", file.originalname);
+
     const ext = path.extname(file.filename);
     const baseFilename = path.basename(file.filename, ext);
     const optimizedFilename = `${baseFilename}_opt${ext}`;
@@ -82,6 +84,8 @@ async function processImage(file: Express.Multer.File, baseUrl: string): Promise
       .jpeg({ quality: JPEG_QUALITY })
       .toFile(optimizedPath);
 
+    console.log("[UPLOAD] Created optimized image at:", optimizedPath);
+
     // Create thumbnail
     await sharp(file.path)
       .resize(THUMB_WIDTH, THUMB_HEIGHT, {
@@ -91,15 +95,22 @@ async function processImage(file: Express.Multer.File, baseUrl: string): Promise
       .jpeg({ quality: JPEG_QUALITY })
       .toFile(thumbnailPath);
 
+    console.log("[UPLOAD] Created thumbnail at:", thumbnailPath);
+
     // Delete original file
     await fs.promises.unlink(file.path);
+    console.log("[UPLOAD] Deleted original file:", file.path);
 
     return {
       optimized: `${baseUrl}/uploads/${optimizedFilename}`,
       thumbnail: `${baseUrl}/uploads/thumbnails/${thumbnailFilename}`
     };
   } catch (error) {
-    console.error('[UPLOAD] Error processing image:', file.originalname, error);
+    console.error('[UPLOAD] Error processing image:', {
+      filename: file.originalname,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return null;
   }
 }
@@ -107,23 +118,37 @@ async function processImage(file: Express.Multer.File, baseUrl: string): Promise
 // Handler for file uploads
 export async function handleFileUpload(req: Request, res: Response) {
   try {
+    console.log("[UPLOAD] Starting file upload handling");
+
     const files = req.files as Express.Multer.File[];
     if (!files || !Array.isArray(files)) {
+      console.log("[UPLOAD] No files found in request");
       return res.status(400).json({ message: 'No files uploaded' });
     }
 
+    console.log("[UPLOAD] Processing", files.length, "files");
     const baseUrl = getBaseUrl(req);
-    const processedFiles = await Promise.all(files.map(async (file) => await processImage(file, baseUrl)));
+
+    const processedFiles = await Promise.all(
+      files.map(async (file) => await processImage(file, baseUrl))
+    );
 
     const successfulUploads = processedFiles.filter(Boolean);
+    console.log("[UPLOAD] Successfully processed files:", {
+      total: files.length,
+      successful: successfulUploads.length
+    });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: 'Files uploaded and optimized successfully',
       files: successfulUploads,
       count: successfulUploads.length
     });
   } catch (error) {
-    console.error('[UPLOAD] Error uploading files:', error);
-    res.status(500).json({ message: 'Failed to upload files' });
+    console.error('[UPLOAD] Error uploading files:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    return res.status(500).json({ message: 'Failed to upload files' });
   }
 }
