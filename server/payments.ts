@@ -155,21 +155,23 @@ export class PaymentService {
         throw new Error("Only the winning bidder can make payment");
       }
       
-      // Calculate amounts
+      // Convert from cents to dollars first
       const baseAmount = auction.currentPrice;
-      const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
-      const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
-      const totalAmount = baseAmount + platformFee + insuranceFee;
+      const baseAmountDollars = (baseAmount / 100).toFixed(2);
       
-      // Calculate seller payout (what the seller receives after fees)
-      const sellerPayout = baseAmount - Math.round(baseAmount * SELLER_FEE_PERCENTAGE);
+      // Calculate fees in dollars
+      const platformFee = Math.round(parseFloat(baseAmountDollars) * PLATFORM_FEE_PERCENTAGE * 100) / 100;
+      const insuranceFee = includeInsurance ? INSURANCE_FEE / 100 : 0;
+      const totalAmount = parseFloat(baseAmountDollars) + platformFee + insuranceFee;
+      
+      // Calculate seller payout in dollars
+      const sellerPayout = parseFloat(baseAmountDollars) - (parseFloat(baseAmountDollars) * SELLER_FEE_PERCENTAGE);
       
       const accessToken = await this.getAccessToken();
       
-      // Calculate dollar amounts from cents and ensure proper decimal precision
-      const totalAmountDollars = (totalAmount / 100).toFixed(2);
-      const baseAmountDollars = (baseAmount / 100).toFixed(2);
-      const feeAmountDollars = ((platformFee + insuranceFee) / 100).toFixed(2);
+      // Format amounts for PayPal
+      const totalAmountDollars = totalAmount.toFixed(2);
+      const feeAmountDollars = (platformFee + insuranceFee).toFixed(2);
       
       console.log("[PAYPAL] Payment amounts:", {
         baseAmount,
