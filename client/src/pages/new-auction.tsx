@@ -107,14 +107,17 @@ export default function NewAuction() {
       setFormDebug("Form validation passed, processing data...");
       const formData = new FormData();
 
-      // Convert prices to cents
+      // Convert prices to cents and format dates
       const processedData = {
         ...data,
         startPrice: dollarsToCents(parseFloat(data.startPrice)).toString(),
         reservePrice: dollarsToCents(parseFloat(data.reservePrice)).toString(),
         startDate: new Date(data.startDate).toISOString(),
         endDate: new Date(data.endDate).toISOString(),
+        sellerId: user.id // Include the sellerId from the authenticated user
       };
+
+      setFormDebug(`Processing with sellerId: ${user.id}`);
 
       // Add all fields to FormData
       Object.entries(processedData).forEach(([key, value]) => {
