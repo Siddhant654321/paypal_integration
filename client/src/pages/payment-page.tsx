@@ -22,15 +22,14 @@ export default function PaymentPage() {
   const [includeInsurance, setIncludeInsurance] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string>("");
 
-  // Calculate payment amounts in cents
+  // Calculate payment amounts
   const baseAmount = auction?.currentPrice || 0;
   const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
   const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
   const totalAmount = baseAmount + platformFee + insuranceFee;
 
-  // Format amounts for display (converting from cents to dollars)
+  // Format amounts for display
   const baseAmountDollars = formatCurrency(baseAmount);
   const platformFeeDollars = formatCurrency(platformFee);
   const insuranceAmountDollars = formatCurrency(INSURANCE_FEE);
@@ -39,20 +38,12 @@ export default function PaymentPage() {
   const createOrder = async () => {
     setPaymentError(null);
     setIsProcessing(true);
-    setDebugInfo(`Creating order with total amount: ${totalAmount} cents (${formatCurrency(totalAmount)})`);
 
     try {
       console.log("[PayPal] Initiating payment for auction:", {
         auctionId,
         includeInsurance,
-        totalAmountCents: totalAmount,
-        totalAmountDollars: formatCurrency(totalAmount),
-        baseAmountCents: baseAmount,
-        baseAmountDollars: formatCurrency(baseAmount),
-        platformFeeCents: platformFee,
-        platformFeeDollars: formatCurrency(platformFee),
-        insuranceFeeCents: insuranceFee,
-        insuranceFeeDollars: formatCurrency(insuranceFee),
+        totalAmount,
         timestamp: new Date().toISOString()
       });
 
@@ -67,8 +58,7 @@ export default function PaymentPage() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          includeInsurance,
-          totalAmount // Send amount in cents
+          includeInsurance
         })
       });
 
@@ -78,10 +68,7 @@ export default function PaymentPage() {
       }
 
       const data = await response.json();
-      console.log("[PayPal] Order created:", {
-        orderId: data.orderId,
-        amount: formatCurrency(totalAmount)
-      });
+      console.log("[PayPal] Order created:", data.orderId);
       return data.orderId;
     } catch (error) {
       console.error("[PayPal] Order creation error:", error);
@@ -128,12 +115,6 @@ export default function PaymentPage() {
   return (
     <div className="container max-w-3xl mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6">Complete Your Purchase</h1>
-
-      {debugInfo && (
-        <div className="mb-4 p-4 bg-gray-100 rounded text-sm">
-          <pre>{debugInfo}</pre>
-        </div>
-      )}
 
       <div className="grid gap-6">
         <Card>

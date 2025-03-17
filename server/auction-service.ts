@@ -118,21 +118,16 @@ export class AuctionService {
             });
             winningBid = sortedBids[0];
 
-            // Ensure amounts are in cents
-            const winningAmount = winningBid.amount;
-            const reserveAmount = auction.reservePrice;
-
             console.log(`[AUCTION SERVICE] Processing auction completion:`, {
               auctionId: auction.id,
               title: auction.title,
-              currentPrice: winningAmount,
-              reservePrice: reserveAmount,
-              belowReserve: winningAmount < reserveAmount,
-              amountInDollars: (winningAmount / 100).toFixed(2)
+              currentPrice: winningBid.amount,
+              reservePrice: auction.reservePrice,
+              belowReserve: winningBid.amount < auction.reservePrice
             });
 
             // Set appropriate status based on reserve price
-            const belowReserve = winningAmount < reserveAmount;
+            const belowReserve = winningBid.amount < auction.reservePrice;
             const newStatus = belowReserve ? "pending_seller_decision" : "ended";
             const newPaymentStatus = belowReserve ? "failed" : "pending";
 
