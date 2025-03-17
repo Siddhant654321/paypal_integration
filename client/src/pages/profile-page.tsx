@@ -46,7 +46,7 @@ const defaultValues: InsertProfile = {
 export default function ProfilePage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
-  const queryClient = useQueryClient(); // Added queryClient
+  const queryClient = useQueryClient();
 
   if (!user) {
     return <Redirect to="/auth" />;
@@ -61,7 +61,6 @@ export default function ProfilePage() {
     defaultValues,
   });
 
-  // Update form values when profile data is loaded
   React.useEffect(() => {
     if (profile) {
       form.reset({
@@ -93,14 +92,17 @@ export default function ProfilePage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({...data, userId: user.id}), // Include userId
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to save profile");
+      if (!res.ok) {
+        const errorData = await res.json();
+        const errorMessage = errorData.error || "Failed to save profile"; //Improved error handling
+        throw new Error(errorMessage);
+      }
       return res.json();
     },
     onSuccess: () => {
-      // Update the user data in the React Query cache
       queryClient.invalidateQueries({ queryKey: ['/api/user'] });
       const currentUser = queryClient.getQueryData(['/api/user']);
       if (currentUser) {
@@ -164,10 +166,7 @@ export default function ProfilePage() {
               });
               return;
             }
-            createProfileMutation.mutate({
-              ...data,
-              userId: user.id
-            });
+            createProfileMutation.mutate({...data, userId: user.id}); //Added userId here
           })}
           className="space-y-6"
         >
@@ -418,7 +417,7 @@ export default function ProfilePage() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="emailAuctionNotifications"
