@@ -36,8 +36,6 @@ export default function NewAuction() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-
-  // Add form debugging
   const [formDebug, setFormDebug] = useState<string>("");
 
   if (isLoading) {
@@ -104,40 +102,41 @@ export default function NewAuction() {
     },
   });
 
-  // Function to handle basic form submission
-  const handleBasicSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormDebug("Form submitted via basic handler");
-    const formData = new FormData(e.target as HTMLFormElement);
-    createAuctionMutation.mutate(formData);
-  };
-
-  // Handle React Hook Form submission
   const onSubmit = form.handleSubmit((data) => {
-    setFormDebug("Form submitted via React Hook Form");
     try {
+      setFormDebug("Form validation passed, processing data...");
       const formData = new FormData();
 
-      // Add basic fields
-      Object.entries(data).forEach(([key, value]) => {
+      // Convert prices to cents
+      const processedData = {
+        ...data,
+        startPrice: dollarsToCents(parseFloat(data.startPrice)).toString(),
+        reservePrice: dollarsToCents(parseFloat(data.reservePrice)).toString(),
+        startDate: new Date(data.startDate).toISOString(),
+        endDate: new Date(data.endDate).toISOString(),
+      };
+
+      // Add all fields to FormData
+      Object.entries(processedData).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
           formData.append(key, value.toString());
         }
       });
 
-      // Add files
+      // Add images if present
       if (selectedFiles.length > 0) {
         selectedFiles.forEach(file => {
           formData.append('images', file);
         });
       }
 
+      setFormDebug("Submitting form data...");
       createAuctionMutation.mutate(formData);
     } catch (error) {
-      setFormDebug(`Error in submission: ${error}`);
+      setFormDebug(`Error in form processing: ${error}`);
       toast({
         title: "Error",
-        description: "Failed to process form data",
+        description: error instanceof Error ? error.message : "Failed to process form data",
         variant: "destructive",
       });
     }
@@ -163,10 +162,20 @@ export default function NewAuction() {
     <div className="container max-w-2xl mx-auto py-8">
       <h1 className="text-3xl font-bold mb-8">Create New Auction</h1>
 
-      {/* Debug info */}
       {formDebug && (
         <div className="mb-4 p-4 bg-gray-100 rounded">
           <p>Debug: {formDebug}</p>
+        </div>
+      )}
+
+      {form.formState.errors && Object.keys(form.formState.errors).length > 0 && (
+        <div className="mb-4 p-4 bg-red-50 text-red-900 rounded">
+          <h3 className="font-semibold">Form Validation Errors:</h3>
+          <ul className="list-disc pl-4">
+            {Object.entries(form.formState.errors).map(([field, error]: [string, any]) => (
+              <li key={field}>{field}: {error.message}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -377,7 +386,6 @@ export default function NewAuction() {
             type="submit"
             className="w-full"
             disabled={createAuctionMutation.isPending}
-            onClick={() => setFormDebug("Submit button clicked")}
           >
             {createAuctionMutation.isPending && (
               <LoadingSpinner className="mr-2 h-4 w-4" />
