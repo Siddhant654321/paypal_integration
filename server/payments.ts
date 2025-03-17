@@ -316,11 +316,17 @@ export class PaymentService {
         purchaseUnits: orderResponse.data.purchase_units
       });
       
-      // Wait for order to be approved if it's still in CREATED state
-      if (orderResponse.data.status === 'CREATED') {
-        throw new Error("Payment not yet approved. Please complete the PayPal checkout first.");
-      } else if (orderResponse.data.status !== 'APPROVED') {
-        throw new Error(`Invalid order status for capture: ${orderResponse.data.status}`);
+      // Check order status and handle various states
+      switch (orderResponse.data.status) {
+        case 'CREATED':
+          throw new Error("Payment not yet approved. Please complete the PayPal checkout first.");
+        case 'APPROVED':
+          break; // Continue with capture
+        case 'COMPLETED':
+          // Order already captured, update our records
+          return { success: true };
+        default:
+          throw new Error(`Cannot capture order in status: ${orderResponse.data.status}. Please try the payment again.`);
       }
       
       // Capture the payment
