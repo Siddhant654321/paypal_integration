@@ -114,3 +114,80 @@ const createAuctionMutation = useMutation({
       });
     }
 });
+
+const handleSubmit = form.handleSubmit(async (data) => {
+    console.log("[CreateAuction] Form submission started", { data });
+
+    try {
+      const processedData = {
+        ...data,
+        startPrice: priceInCents(data.startPrice),
+        reservePrice: data.reservePrice ? priceInCents(data.reservePrice) : undefined,
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate)
+      };
+
+      console.log("[CreateAuction] Processed form data:", processedData);
+
+      // Create FormData object to handle file uploads
+      const formData = new FormData();
+
+        // Validate required fields
+        if (!processedData.title || !processedData.species || !processedData.category || !processedData.startPrice || !processedData.startDate || !processedData.endDate) {
+          throw new Error("Missing required fields");
+        }
+
+        // Handle price values - ensure they are numbers first
+        const startPrice = dollarsToCents(parseFloat(processedData.startPrice));
+        const reservePrice = dollarsToCents(parseFloat(processedData.reservePrice || processedData.startPrice));
+
+        if (isNaN(startPrice) || isNaN(reservePrice)) {
+          throw new Error("Invalid price values");
+        }
+
+        formData.append('startPrice', String(startPrice));
+        formData.append('reservePrice', String(reservePrice));
+
+        // Handle dates
+        const startDate = new Date(processedData.startDate);
+        const endDate = new Date(processedData.endDate);
+
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          throw new Error("Invalid dates");
+        }
+
+        formData.append('startDate', startDate.toISOString());
+        formData.append('endDate', endDate.toISOString());
+
+        // Add other fields
+        formData.append('title', processedData.title);
+        formData.append('description', processedData.description || '');
+        formData.append('species', processedData.species);
+        formData.append('category', processedData.category);
+
+        // Add image files
+        if (processedData.images && processedData.images.length > 0) {
+          processedData.images.forEach((file: File) => {
+            formData.append('images', file);
+          });
+          console.log("[CreateAuction] Added", processedData.images.length, "images");
+        }
+
+
+      console.log("[CreateAuction] Submitting form data to mutation");
+      await createAuctionMutation.mutateAsync(formData);
+
+      console.log("[CreateAuction] Mutation completed successfully");
+      toast({
+        title: "Success",
+        description: "Auction created successfully",
+      });
+    } catch (error) {
+      console.error("[CreateAuction] Error in form submission:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to process form data",
+        variant: "destructive",
+      });
+    }
+  });
