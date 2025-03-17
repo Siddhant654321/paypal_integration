@@ -83,7 +83,53 @@ const requireProfile = async (req: any, res: any, next: any) => {
   }
 };
 
+// Add profile route with enhanced error logging
+router.post("/api/profile", requireAuth, async (req, res) => {
+  try {
+    console.log("[PROFILE] Received profile update request:", {
+      userId: req.user?.id,
+      body: { ...req.body, password: undefined }, // Log body without sensitive data
+    });
 
+    if (!req.user) {
+      console.log("[PROFILE] No authenticated user found");
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Validate the request body
+    try {
+      const validatedData = insertProfileSchema.parse({
+        ...req.body,
+        userId: req.user.id
+      });
+      console.log("[PROFILE] Data validation passed");
+
+      const result = await storage.createProfile(validatedData);
+      console.log("[PROFILE] Profile created/updated successfully:", {
+        userId: result.userId,
+        email: result.email
+      });
+
+      // Update user's hasProfile flag
+      await storage.updateUser(req.user.id, { hasProfile: true });
+      console.log("[PROFILE] Updated user hasProfile flag");
+
+      return res.json(result);
+    } catch (validationError) {
+      console.error("[PROFILE] Validation error:", validationError);
+      return res.status(400).json({
+        message: "Invalid profile data",
+        errors: validationError instanceof Error ? validationError.message : String(validationError)
+      });
+    }
+  } catch (error) {
+    console.error("[PROFILE] Server error:", error);
+    return res.status(500).json({
+      message: "Failed to save profile",
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
 
 // PayPal webhook handler 
 router.post('/webhook/paypal', async (req, res) => {

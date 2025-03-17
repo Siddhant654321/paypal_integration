@@ -21,32 +21,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { FileUpload } from "@/components/file-upload";
 import { Separator } from "@/components/ui/separator";
-import React from 'react';
-
-const defaultValues: InsertProfile = {
-  fullName: "",
-  email: "",
-  phoneNumber: "",
-  address: "",
-  city: "",
-  state: "",
-  zipCode: "",
-  bio: "",
-  isPublicBio: true,
-  profilePicture: "",
-  businessName: "",
-  breedSpecialty: "",
-  npipNumber: "",
-  emailBidNotifications: true,
-  emailAuctionNotifications: true,
-  emailPaymentNotifications: true,
-  emailAdminNotifications: true,
-};
+import React, { useState } from 'react';
 
 export default function ProfilePage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [debugInfo, setDebugInfo] = useState<string>("");
 
   if (!user) {
     return <Redirect to="/auth" />;
@@ -58,51 +39,69 @@ export default function ProfilePage() {
 
   const form = useForm<InsertProfile>({
     resolver: zodResolver(insertProfileSchema),
-    defaultValues,
+    defaultValues: {
+      fullName: "",
+      email: "",
+      phoneNumber: "",
+      address: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      bio: "",
+      isPublicBio: true,
+      profilePicture: "",
+      businessName: "",
+      breedSpecialty: "",
+      npipNumber: "",
+      emailBidNotifications: true,
+      emailAuctionNotifications: true,
+      emailPaymentNotifications: true,
+      emailAdminNotifications: true,
+      emailDailyDigest: true, // Add missing field
+      userId: user.id, // Add required field
+    },
   });
 
   React.useEffect(() => {
     if (profile) {
+      console.log("Setting form values from profile:", profile);
       form.reset({
-        fullName: profile.fullName,
-        email: profile.email,
-        phoneNumber: profile.phoneNumber,
-        address: profile.address,
-        city: profile.city,
-        state: profile.state,
-        zipCode: profile.zipCode,
-        bio: profile.bio || "",
-        isPublicBio: profile.isPublicBio,
-        profilePicture: profile.profilePicture || "",
-        businessName: profile.businessName || "",
-        breedSpecialty: profile.breedSpecialty || "",
-        npipNumber: profile.npipNumber || "",
-        emailBidNotifications: profile.emailBidNotifications,
-        emailAuctionNotifications: profile.emailAuctionNotifications,
-        emailPaymentNotifications: profile.emailPaymentNotifications,
-        emailAdminNotifications: profile.emailAdminNotifications,
+        ...profile,
+        userId: user.id // Ensure userId is always set
       });
     }
   }, [profile, form]);
 
   const createProfileMutation = useMutation({
     mutationFn: async (data: InsertProfile) => {
+      console.log("Starting profile mutation with data:", data);
+      setDebugInfo("Submitting profile data...");
+
       const res = await fetch("/api/profile", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({...data, userId: user.id}), // Include userId
+        body: JSON.stringify({...data, userId: user.id}),
         credentials: "include",
       });
+
+      console.log("Profile submission response status:", res.status);
+
       if (!res.ok) {
         const errorData = await res.json();
-        const errorMessage = errorData.error || "Failed to save profile"; //Improved error handling
-        throw new Error(errorMessage);
+        console.error("Profile submission error:", errorData);
+        throw new Error(errorData.error || "Failed to save profile");
       }
-      return res.json();
+
+      const responseData = await res.json();
+      console.log("Profile submission successful:", responseData);
+      return responseData;
     },
     onSuccess: () => {
+      console.log("Profile mutation succeeded, invalidating queries");
+      setDebugInfo("Profile saved successfully!");
+
       queryClient.invalidateQueries({ queryKey: ['/api/user'] });
       const currentUser = queryClient.getQueryData(['/api/user']);
       if (currentUser) {
@@ -111,12 +110,16 @@ export default function ProfilePage() {
           hasProfile: true
         });
       }
+
       toast({
         title: "Profile saved",
         description: "Your profile has been saved successfully.",
       });
     },
     onError: (error: Error) => {
+      console.error("Profile mutation error:", error);
+      setDebugInfo(`Error: ${error.message}`);
+
       toast({
         title: "Error saving profile",
         description: error.message,
@@ -133,7 +136,34 @@ export default function ProfilePage() {
     );
   }
 
-  const isSeller = user.role === "seller" || user.role === "seller_admin";
+  const handleSubmit = async (formData: InsertProfile) => {
+    console.log("Form submitted with data:", formData);
+    setDebugInfo("Processing form submission...");
+
+    try {
+      if (!user?.id) {
+        throw new Error("User ID not found. Please try logging in again.");
+      }
+
+      // Ensure userId is included
+      const dataWithUserId = {
+        ...formData,
+        userId: user.id
+      };
+
+      console.log("Submitting profile data with userId:", dataWithUserId);
+      await createProfileMutation.mutateAsync(dataWithUserId);
+    } catch (error) {
+      console.error("Form submission error:", error);
+      setDebugInfo(`Submission error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save profile",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="container max-w-2xl mx-auto py-8">
@@ -151,23 +181,30 @@ export default function ProfilePage() {
         </Button>
       </div>
 
+      {/* Debug Information */}
+      {debugInfo && (
+        <div className="mb-4 p-4 bg-gray-100 rounded">
+          <p className="text-sm font-mono">Debug: {debugInfo}</p>
+        </div>
+      )}
+
+      {/* Form Validation Errors */}
+      {Object.keys(form.formState.errors).length > 0 && (
+        <div className="mb-4 p-4 bg-red-50 text-red-900 rounded">
+          <h3 className="font-semibold">Form Validation Errors:</h3>
+          <pre className="text-sm mt-2">
+            {JSON.stringify(form.formState.errors, null, 2)}
+          </pre>
+        </div>
+      )}
+
       <div className="text-muted-foreground mb-6">
         Please complete your profile to participate in auctions.
       </div>
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit((data) => {
-            if (!user?.id) {
-              toast({
-                title: "Error",
-                description: "User ID not found. Please try logging in again.",
-                variant: "destructive",
-              });
-              return;
-            }
-            createProfileMutation.mutate({...data, userId: user.id}); //Added userId here
-          })}
+          onSubmit={form.handleSubmit(handleSubmit)}
           className="space-y-6"
         >
           <div className="mb-6">
@@ -292,7 +329,7 @@ export default function ProfilePage() {
             />
           </div>
 
-          {isSeller && (
+          {user.role === "seller" || user.role === "seller_admin" && (
             <>
               <Separator className="my-6" />
 
@@ -514,6 +551,7 @@ export default function ProfilePage() {
               type="submit"
               className="w-full sm:w-auto px-8"
               disabled={createProfileMutation.isPending}
+              onClick={() => setDebugInfo("Submit button clicked")}
             >
               {createProfileMutation.isPending ? (
                 <>
