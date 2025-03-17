@@ -16,11 +16,9 @@ if (!isPayPalConfigured) {
   console.error("[PAYPAL] Missing required environment variables");
   throw new Error("PayPal is not properly configured. Check PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
 }
-} else {
-  // In production, log a warning but don't crash
-  if (!isPayPalConfigured) {
-    console.warn("[PAYPAL] Warning: Missing PayPal environment variables in production");
-  }
+// In production, log a warning but don't crash
+if (!isPayPalConfigured && process.env.NODE_ENV === 'production') {
+  console.warn("[PAYPAL] Warning: Missing PayPal environment variables in production");
 }
 
 // Flag to indicate if PayPal functionality should be available
