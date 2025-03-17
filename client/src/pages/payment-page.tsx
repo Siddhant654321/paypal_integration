@@ -30,10 +30,10 @@ export default function PaymentPage() {
   const totalAmount = baseAmount + platformFee + insuranceFee;
 
   // Format amounts for display
-  const baseAmountDollars = formatCurrency(baseAmount);
-  const platformFeeDollars = formatCurrency(platformFee);
-  const insuranceAmountDollars = formatCurrency(INSURANCE_FEE);
-  const totalAmountDollars = formatCurrency(totalAmount);
+  const baseAmountDollars = formatCurrency(baseAmount/100);
+  const platformFeeDollars = formatCurrency(platformFee/100);
+  const insuranceAmountDollars = formatCurrency(insuranceFee/100);
+  const totalAmountDollars = formatCurrency(totalAmount/100);
 
   const createOrder = async () => {
     setPaymentError(null);
