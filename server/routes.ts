@@ -747,8 +747,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const processedData = {
           ...auctionData,
           sellerId: userId,
-          startPrice: Math.round(parseFloat(auctionData.startPrice) * 100), // Convert to cents
-          reservePrice: Math.round((auctionData.reservePrice || auctionData.startPrice) * 100),
+          startPrice: parseFloat(auctionData.startPrice), // Already in cents from client
+          reservePrice: parseFloat(auctionData.reservePrice || auctionData.startPrice),
           startDate: new Date(auctionData.startDate),
           endDate: new Date(auctionData.endDate),
           images: imageUrls,
@@ -761,8 +761,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: processedData.title,
           startPrice: `$${(processedData.startPrice / 100).toFixed(2)}`,
           reservePrice: `$${(processedData.reservePrice / 100).toFixed(2)}`,
-          rawStartPrice: processedData.startPrice,
-          priceType: typeof processedData.startPrice,
           startDate: processedData.startDate.toISOString(),
           endDate: processedData.endDate.toISOString(),
           imageCount: processedData.images.length
@@ -776,9 +774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("[AUCTION CREATE] Auction created successfully:", {
             auctionId: result.id,
             title: result.title,
-            sellerId: result.sellerId,
-            storedPrice: result.startPrice,
-            storedPriceType: typeof result.startPrice
+            sellerId: result.sellerId
           });
 
           // Notify admins about the new auction
