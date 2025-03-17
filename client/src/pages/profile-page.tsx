@@ -155,7 +155,7 @@ export default function ProfilePage() {
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit((data) => createProfileMutation.mutate(data))}
+          onSubmit={form.handleSubmit((data) => createProfileMutation.mutate({ ...data, userId: user.id }))}
           className="space-y-6"
         >
           <div className="mb-6">
