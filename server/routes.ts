@@ -701,8 +701,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const processedData = {
           ...auctionData,
           sellerId: userId,
-          startPrice: Math.round(parseFloat(auctionData.startPrice) * 100), // Convert to cents
-          reservePrice: Math.round((auctionData.reservePrice || auctionData.startPrice) * 100),
+          startPrice: parseFloat(auctionData.startPrice), // Already in cents from client
+          reservePrice: parseFloat(auctionData.reservePrice || auctionData.startPrice),
           startDate: new Date(auctionData.startDate),
           endDate: new Date(auctionData.endDate),
           images: imageUrls,
