@@ -120,12 +120,12 @@ const handleSubmit = form.handleSubmit(async (data) => {
 
     try {
       const processedData = {
-        ...data,
-        startPrice: priceInCents(data.startPrice),
-        reservePrice: data.reservePrice ? priceInCents(data.reservePrice) : undefined,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate)
-      };
+          ...data,
+          startPrice: parseFloat(data.startPrice),
+          reservePrice: data.reservePrice ? parseFloat(data.reservePrice) : undefined,
+          startDate: new Date(data.startDate),
+          endDate: new Date(data.endDate)
+        };
 
       console.log("[CreateAuction] Processed form data:", processedData);
 
