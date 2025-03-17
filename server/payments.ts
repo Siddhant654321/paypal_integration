@@ -316,7 +316,10 @@ export class PaymentService {
         purchaseUnits: orderResponse.data.purchase_units
       });
       
-      if (orderResponse.data.status !== 'APPROVED') {
+      // Wait for order to be approved if it's still in CREATED state
+      if (orderResponse.data.status === 'CREATED') {
+        throw new Error("Payment not yet approved. Please complete the PayPal checkout first.");
+      } else if (orderResponse.data.status !== 'APPROVED') {
         throw new Error(`Invalid order status for capture: ${orderResponse.data.status}`);
       }
       
