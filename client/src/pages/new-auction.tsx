@@ -69,44 +69,25 @@ export default function NewAuction() {
 
   const createAuctionMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      try {
-        console.log("Submitting auction form data...");
+      toast({
+        title: "Submitting...",
+        description: "Creating your auction...",
+      });
 
-        // Log form data contents
-        for (const [key, value] of formData.entries()) {
-          console.log(`Form field - ${key}:`, value);
-        }
+      const res = await fetch("/api/auctions", {
+        method: "POST",
+        body: formData,
+        credentials: "include"
+      });
 
-        const res = await fetch("/api/auctions", {
-          method: "POST",
-          body: formData,
-          credentials: "include"
-        });
-
-        console.log("Server response status:", res.status);
-
-        if (!res.ok) {
-          let errorMessage = "Failed to create auction";
-          try {
-            const errorData = await res.json();
-            console.error("Server error details:", errorData);
-            errorMessage = errorData.message || errorMessage;
-          } catch (e) {
-            console.error("Error parsing error response:", e);
-          }
-          throw new Error(errorMessage);
-        }
-
-        const data = await res.json();
-        console.log("Server response data:", data);
-        return data;
-      } catch (error) {
-        console.error("Mutation error:", error);
-        throw error;
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to create auction");
       }
+
+      return res.json();
     },
-    onSuccess: (data) => {
-      console.log("Auction created successfully:", data);
+    onSuccess: () => {
       toast({
         title: "Success",
         description: "Your auction has been created and is pending approval",
@@ -114,7 +95,6 @@ export default function NewAuction() {
       setLocation("/seller/dashboard");
     },
     onError: (error: Error) => {
-      console.error("Auction creation error:", error);
       toast({
         title: "Error creating auction",
         description: error.message,
@@ -123,20 +103,12 @@ export default function NewAuction() {
     },
   });
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = form.handleSubmit((data) => {
     try {
-      console.log("Form submitted with data:", data);
-
-      // Validate required fields
-      if (!data.title || !data.species || !data.category) {
-        console.log("Missing required fields");
-        toast({
-          title: "Missing Fields",
-          description: "Please fill in all required fields",
-          variant: "destructive",
-        });
-        return;
-      }
+      toast({
+        title: "Processing...",
+        description: "Preparing your auction data...",
+      });
 
       const formData = new FormData();
 
@@ -149,8 +121,6 @@ export default function NewAuction() {
         endDate: new Date(data.endDate).toISOString(),
       };
 
-      console.log("Processed form data:", processedData);
-
       // Add all fields to FormData
       Object.entries(processedData).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
@@ -160,23 +130,20 @@ export default function NewAuction() {
 
       // Add images if present
       if (selectedFiles.length > 0) {
-        console.log("Adding files to form data:", selectedFiles.length);
         selectedFiles.forEach(file => {
           formData.append('images', file);
         });
       }
 
-      console.log("Submitting to mutation...");
-      await createAuctionMutation.mutateAsync(formData);
+      createAuctionMutation.mutate(formData);
     } catch (error) {
-      console.error("Form submission error:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to process form data",
         variant: "destructive",
       });
     }
-  };
+  });
 
   const handleSuggestionsReceived = (suggestions: {
     startPrice: number;
@@ -199,7 +166,7 @@ export default function NewAuction() {
       <h1 className="text-3xl font-bold mb-8">Create New Auction</h1>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" encType="multipart/form-data">
+        <form onSubmit={onSubmit} className="space-y-6">
           <FormField
             control={form.control}
             name="title"
@@ -370,15 +337,13 @@ export default function NewAuction() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Start Date and Time</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input
-                        type="datetime-local"
-                        {...field}
-                        min={new Date().toISOString().split("T")[0] + "T00:00"}
-                      />
-                    </FormControl>
-                  </div>
+                  <FormControl>
+                    <Input
+                      type="datetime-local"
+                      {...field}
+                      min={new Date().toISOString().split("T")[0] + "T00:00"}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -390,15 +355,13 @@ export default function NewAuction() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>End Date and Time</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input
-                        type="datetime-local"
-                        {...field}
-                        min={form.watch("startDate")}
-                      />
-                    </FormControl>
-                  </div>
+                  <FormControl>
+                    <Input
+                      type="datetime-local"
+                      {...field}
+                      min={form.watch("startDate")}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -409,7 +372,6 @@ export default function NewAuction() {
             type="submit"
             className="w-full"
             disabled={createAuctionMutation.isPending}
-            onClick={() => console.log("Submit button clicked")}
           >
             {createAuctionMutation.isPending && (
               <LoadingSpinner className="mr-2 h-4 w-4" />
