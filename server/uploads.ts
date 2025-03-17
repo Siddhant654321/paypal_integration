@@ -116,34 +116,29 @@ async function processImage(file: Express.Multer.File, baseUrl: string): Promise
 }
 
 // Handler for file uploads
-export async function handleFileUpload(req: Request, res: Response) {
+export async function handleFileUpload(req: Request, file: Express.Multer.File) {
   try {
     console.log("[UPLOAD] Starting file upload handling");
 
-    const files = req.files as Express.Multer.File[];
-    if (!files || !Array.isArray(files)) {
-      console.log("[UPLOAD] No files found in request");
-      return res.status(400).json({ message: 'No files uploaded' });
+    if (!file) {
+      console.log("[UPLOAD] No file provided");
+      return null;
     }
 
-    console.log("[UPLOAD] Processing", files.length, "files");
+    console.log("[UPLOAD] Processing file:", file.originalname);
     const baseUrl = getBaseUrl(req);
 
-    const processedFiles = await Promise.all(
-      files.map(async (file) => await processImage(file, baseUrl))
-    );
-
-    const successfulUploads = processedFiles.filter(Boolean);
-    console.log("[UPLOAD] Successfully processed files:", {
-      total: files.length,
-      successful: successfulUploads.length
-    });
-
-    return res.status(201).json({
-      message: 'Files uploaded and optimized successfully',
-      files: successfulUploads,
-      count: successfulUploads.length
-    });
+    try {
+      const processedFile = await processImage(file, baseUrl);
+      if (processedFile) {
+        console.log("[UPLOAD] Successfully processed file:", file.originalname);
+        return processedFile;
+      }
+      return null;
+    } catch (error) {
+      console.error("[UPLOAD] Error processing file:", file.originalname, error);
+      return null;
+    }
   } catch (error) {
     console.error('[UPLOAD] Error uploading files:', {
       error: error instanceof Error ? error.message : 'Unknown error',

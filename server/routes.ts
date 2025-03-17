@@ -661,23 +661,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let imageUrls: string[] = [];
         let thumbnailUrls: string[] = [];
         
-        if (req.files && (req.files as Express.Multer.File[]).length > 0) {
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
           try {
-            // Handle file upload and get file URLs
-            const result = await handleFileUpload(req, 'auction');
+            console.log("[AUCTION CREATE] Processing files:", {
+              fileCount: req.files.length,
+              firstFile: req.files[0]?.originalname
+            });
+
+            // Process each file individually
+            const processedFiles = await Promise.all(
+              req.files.map(file => handleFileUpload(req, file))
+            );
+
+            // Filter out any null results and extract URLs
+            const successfulFiles = processedFiles.filter(result => result !== null);
             
-            if (result && result.files && result.files.length > 0) {
-              imageUrls = result.files.map(f => f.optimized);
-              thumbnailUrls = result.files.map(f => f.thumbnail);
+            if (successfulFiles.length > 0) {
+              imageUrls = successfulFiles.map(f => f.optimized);
+              thumbnailUrls = successfulFiles.map(f => f.thumbnail);
               
               console.log("[AUCTION CREATE] Image processing complete:", {
                 imageCount: imageUrls.length,
                 thumbnailCount: thumbnailUrls.length,
-                firstImage: imageUrls[0]?.substring(0, 50) + '...',
-                firstThumbnail: thumbnailUrls[0]?.substring(0, 50) + '...'
+                firstImage: imageUrls[0]?.substring(0, 50) + '...'
               });
             } else {
-              console.warn("[AUCTION CREATE] No files processed in upload result");
+              console.warn("[AUCTION CREATE] No files were successfully processed");
+              return res.status(400).json({ message: "Failed to process image files" });
             }
           } catch (error) {
             console.error("[AUCTION CREATE] Error processing files:", error);
