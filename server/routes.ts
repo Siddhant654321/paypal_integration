@@ -830,6 +830,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Update auction approval status
+    router.patch("/api/admin/auctions/:id/status", requireAuth, requireAdmin, async (req, res) => {
+      try {
+        const auctionId = parseInt(req.params.id);
+        const { approved, reason } = req.body;
+
+        console.log("[ADMIN] Updating auction status:", {
+          auctionId,
+          approved,
+          reason: reason || "No reason provided"
+        });
+
+        // Get the auction details
+        const auction = await storage.getAuction(auctionId);
+        if (!auction) {
+          return res.status(404).json({ message: "Auction not found" });
+        }
+
+        // Get the seller details
+        const seller = await storage.getUser(auction.sellerId);
+        if (!seller) {
+          return res.status(404).json({ message: "Seller not found" });
+        }
+
+        // Update the auction status
+        const updatedAuction = await storage.updateAuction(auctionId, {
+          approved,
+          status: approved ? "active" : "rejected"
+        });
+
+        // Send email notification based on approval status
+        if (approved) {
+          await EmailService.sendNotification("auction_approval", seller, {
+            auctionTitle: auction.title,
+            startDate: auction.startDate,
+            imageUrl: auction.imageUrl,
+            auctionId: auction.id
+          });
+
+          // Create in-app notification for approval
+          await NotificationService.createNotification({
+            userId: seller.id,
+            type: "auction",
+            message: `Your auction "${auction.title}" has been approved and is now live!`,
+            linkUrl: `/auctions/${auction.id}`,
+            status: "unread"
+          });
+        } else {
+          await EmailService.sendNotification("auction_denial", seller, {
+            auctionTitle: auction.title,
+            reason: reason || "No specific reason provided",
+            auctionId: auction.id
+          });
+
+          // Create in-app notification for denial
+          await NotificationService.createNotification({
+            userId: seller.id,
+            type: "auction",
+            message: `Your auction "${auction.title}" requires updates before it can be approved.`,
+            linkUrl: `/seller/auctions/${auction.id}/edit`,
+            status: "unread"
+          });
+        }
+
+        console.log("[ADMIN] Auction status updated successfully:", {
+          auctionId,
+          status: approved ? "approved" : "rejected",
+          notificationSent: true
+        });
+
+        res.json(updatedAuction);
+      } catch (error) {
+        console.error("[ADMIN] Error updating auction status:", error);
+        res.status(500).json({
+          message: "Failed to update auction status",
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    });
+
     // Place bid on auction (anyone can bid except the seller of the auction)
     router.post("/api/auctions/:id/bid", requireAuth, async (req, res) => {
       try {

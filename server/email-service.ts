@@ -269,6 +269,82 @@ const emailTemplates = {
       </div>
     `,
   }),
+  auction_approval: (data: {
+    auctionTitle: string;
+    startDate: Date;
+    imageUrl?: string;
+    auctionId: number;
+  }) => ({
+    subject: 'Your Auction Has Been Approved!',
+    html: `
+      ${emailStyles}
+      <div class="container">
+        <div class="header">
+          <h1>Auction Approved</h1>
+        </div>
+        <div class="content">
+          <h2>Great News!</h2>
+          <p>Your auction "<strong>${data.auctionTitle}</strong>" has been approved and is now live on the marketplace.</p>
+
+          <div class="auction-card">
+            ${data.imageUrl 
+              ? `<img src="${data.imageUrl}" alt="${data.auctionTitle}" class="auction-image">` 
+              : ''
+            }
+            <p>Your auction will start on: ${new Date(data.startDate).toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}</p>
+            <a href="${SITE_URL}/auctions/${data.auctionId}" class="button">View Your Auction</a>
+          </div>
+
+          <p>Buyers can now view and bid on your items. Good luck!</p>
+        </div>
+        <div class="footer">
+          <p>You received this email because you created an auction on our platform.</p>
+        </div>
+      </div>
+    `,
+  }),
+
+  auction_denial: (data: {
+    auctionTitle: string;
+    reason: string;
+    auctionId: number;
+  }) => ({
+    subject: 'Auction Review Update Required',
+    html: `
+      ${emailStyles}
+      <div class="container">
+        <div class="header">
+          <h1>Auction Needs Updates</h1>
+        </div>
+        <div class="content">
+          <h2>Action Required</h2>
+          <p>Your auction "<strong>${data.auctionTitle}</strong>" requires some updates before it can be approved.</p>
+
+          <div class="auction-card">
+            <h3>Reason for Review:</h3>
+            <p class="highlight">${data.reason}</p>
+
+            <p>Please review and update your auction based on the feedback provided.</p>
+            <a href="${SITE_URL}/seller/auctions/${data.auctionId}/edit" class="button">Edit Your Auction</a>
+          </div>
+
+          <p>Once you've made the necessary updates, your auction will be reviewed again.</p>
+        </div>
+        <div class="footer">
+          <p>You received this email because you created an auction on our platform.</p>
+          <p>Need help? Contact our support team.</p>
+        </div>
+      </div>
+    `,
+  }),
+
 };
 
 export class EmailService {
