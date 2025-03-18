@@ -313,6 +313,15 @@ export class PaymentService {
         throw new Error(`Payment already processed or invalid status: ${payment.status}`);
       }
 
+      // Verify order status before capture
+      const orderDetails = await this.getOrderStatus(orderId);
+      console.log("[PAYPAL] Pre-capture order status check:", orderDetails);
+
+      if (orderDetails.status !== 'APPROVED') {
+        console.error("[PAYPAL] Order not in APPROVED state:", orderDetails.status);
+        throw new Error("Please complete the PayPal checkout process first.");
+      }
+
       // Add longer delay and retry logic for capture
       const maxRetries = 3;
       let lastError = null;
@@ -321,7 +330,14 @@ export class PaymentService {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`[PAYPAL] Capture attempt ${attempt} of ${maxRetries}`);
-          await new Promise(resolve => setTimeout(resolve, 3000 * attempt)); // Increasing delay with each retry
+          // Shorter initial delay but still increasing
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+
+          // Verify order status again before each capture attempt
+          const currentStatus = await this.getOrderStatus(orderId);
+          if (currentStatus.status !== 'APPROVED') {
+            throw new Error(`Invalid order status for capture: ${currentStatus.status}`);
+          }
 
           // Capture the payment
         const captureResponse = await axios.post(
