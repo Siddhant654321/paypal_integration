@@ -20,8 +20,8 @@ const PRODUCTION_URL = 'https://api-m.paypal.com';
 const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 
 // Only use sandbox when explicitly configured, or in non-production
-const IS_SANDBOX = process.env.NODE_ENV !== 'production' || 
-                  (process.env.PAYPAL_ENV === 'sandbox' || process.env.VITE_PAYPAL_ENV === 'sandbox');
+const IS_SANDBOX = process.env.NODE_ENV !== 'production' ||
+  (process.env.PAYPAL_ENV === 'sandbox' || process.env.VITE_PAYPAL_ENV === 'sandbox');
 const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
 
 console.log("[PAYPAL] Initializing PayPal service:", {
@@ -59,7 +59,7 @@ export class PaymentService {
     } catch (error) {
       console.error("[PAYPAL] Error getting access token:", error);
       if (axios.isAxiosError(error) && error.response) {
-        console.error("[PAYPAL] API Error Response:", {
+        console.error("[PAYPAL] Auth Error Response:", {
           status: error.response.status,
           data: error.response.data
         });
@@ -151,8 +151,8 @@ export class PaymentService {
           return_url: `${baseUrl}/payment/success`,
           cancel_url: `${baseUrl}/payment/cancel`,
           brand_name: "Agriculture Marketplace",
-          landing_page: "LOGIN",
-          user_action: "PAY_NOW",
+          landing_page: "NO_PREFERENCE", // Changed to support both PayPal and card payments better
+          user_action: "CONTINUE",
           shipping_preference: "NO_SHIPPING"
         },
         purchase_units: [{
@@ -199,10 +199,10 @@ export class PaymentService {
       );
 
       const orderId = response.data.id;
-      console.log("[PAYPAL] Order created:", { 
-        orderId, 
+      console.log("[PAYPAL] Order created:", {
+        orderId,
         status: response.data.status,
-        links: response.data.links 
+        links: response.data.links
       });
 
       // Create payment record
@@ -224,8 +224,8 @@ export class PaymentService {
         paymentStatus: "pending"
       });
 
-      return { 
-        orderId, 
+      return {
+        orderId,
         payment,
         approvalUrl: response.data.links.find((link: any) => link.rel === "approve")?.href
       };
@@ -265,12 +265,12 @@ export class PaymentService {
         throw new Error(`Invalid payment status: ${payment.status}`);
       }
 
-      // Initial delay before checking order status
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Initial longer delay before checking order status
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       // Get and verify order status
       const orderStatus = await this.getOrderStatus(orderId);
-      console.log("[PAYPAL] Current order status:", orderStatus);
+      console.log("[PAYPAL] Initial order status check:", orderStatus);
 
       // For card payments, the status might be SAVED instead of APPROVED
       if (!['APPROVED', 'SAVED', 'COMPLETED'].includes(orderStatus.status)) {
@@ -278,8 +278,8 @@ export class PaymentService {
       }
 
       // Configure capture retry settings
-      const maxRetries = 3;
-      const baseDelay = 3000; // Increased delay
+      const maxRetries = 5; // Increased retries
+      const baseDelay = 4000; // Increased delay
       let captureSuccess = false;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -289,12 +289,13 @@ export class PaymentService {
           // Exponential backoff delay
           if (attempt > 1) {
             const delay = baseDelay * Math.pow(2, attempt - 1);
+            console.log(`[PAYPAL] Waiting ${delay}ms before next attempt`);
             await new Promise(resolve => setTimeout(resolve, delay));
           }
 
           // Get fresh order status before capture
           const currentStatus = await this.getOrderStatus(orderId);
-          console.log(`[PAYPAL] Pre-capture status check (attempt ${attempt}):`, currentStatus.status);
+          console.log(`[PAYPAL] Pre-capture status check (attempt ${attempt}):`, currentStatus);
 
           if (!['APPROVED', 'SAVED', 'COMPLETED'].includes(currentStatus.status)) {
             console.log(`[PAYPAL] Order not ready for capture: ${currentStatus.status}`);
@@ -337,6 +338,16 @@ export class PaymentService {
         } catch (error: any) {
           console.error(`[PAYPAL] Capture attempt ${attempt} failed:`, error.response?.data);
 
+          // Additional error logging
+          if (error.response?.data) {
+            console.error("[PAYPAL] Detailed error response:", {
+              status: error.response.status,
+              statusText: error.response.statusText,
+              data: error.response.data,
+              headers: error.response.headers
+            });
+          }
+
           if (error.response?.data?.details?.[0]) {
             const paypalError = error.response.data.details[0];
 
@@ -362,6 +373,13 @@ export class PaymentService {
               throw new Error(paypalError.description || "Payment capture failed. Please try again.");
             }
           }
+
+          // If we get a 5xx error, wait longer before retrying
+          if (error.response?.status >= 500) {
+            const serverErrorDelay = baseDelay * 2;
+            console.log(`[PAYPAL] Server error, waiting ${serverErrorDelay}ms before retry`);
+            await new Promise(resolve => setTimeout(resolve, serverErrorDelay));
+          }
         }
       }
 
@@ -386,7 +404,9 @@ export class PaymentService {
         message: `Payment received for auction #${payment.auctionId}`
       });
 
+      console.log("[PAYPAL] Payment successfully processed");
       return { success: true };
+
     } catch (error: any) {
       console.error("[PAYPAL] Payment capture failed:", error);
       throw error;
