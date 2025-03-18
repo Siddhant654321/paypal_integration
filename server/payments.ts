@@ -284,32 +284,15 @@ export class PaymentService {
 
       console.log("[PAYPAL] Current order status:", orderStatus);
 
-      // Find payment record first to ensure it exists
+      // Verify order is approved before capture
+      if (orderStatus.status !== 'APPROVED') {
+        throw new Error(`Cannot capture payment in status: ${orderStatus.status}`);
+      }
+
+      // Find payment record
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
         console.error("[PAYPAL] Payment record not found for order:", orderId);
-        throw new Error("Payment record not found");
-      }
-
-      // Verify the payment can be captured
-      if (payment.status !== 'pending') {
-        console.error("[PAYPAL] Invalid payment status for capture:", payment.status);
-        throw new Error(`Payment cannot be captured in status: ${payment.status}`);
-      }
-
-      // Verify PayPal order status
-      if (!['APPROVED', 'CREATED'].includes(orderStatus.status)) {
-        console.error("[PAYPAL] Invalid PayPal order status:", orderStatus.status);
-        throw new Error(`Cannot capture payment in PayPal status: ${orderStatus.status}`);
-      }
-
-      console.log("[PAYPAL] Payment verification passed, proceeding with capture");
-      // Remove duplicate payment lookup since we already have it from above
-      console.log("[PAYPAL] Proceeding with payment:", {
-        paymentId: payment.id,
-        status: payment.status,
-        orderId
-      });
         throw new Error("Payment record not found");
       }
 
