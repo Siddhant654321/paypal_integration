@@ -39,7 +39,7 @@ console.log("[PAYPAL] Initializing PayPal service:", {
   clientIdPrefix: process.env.PAYPAL_CLIENT_ID.substring(0, 8) + '...',
 });
 
-const PLATFORM_FEE_PERCENTAGE = 0.10; // 10% platform fee (updated from previous 5%)
+const PLATFORM_FEE_PERCENTAGE = 0.05; // 5% platform fee
 const SELLER_FEE_PERCENTAGE = 0.03; // 3% seller fee
 const INSURANCE_FEE = 800; // $8.00 in cents
 
