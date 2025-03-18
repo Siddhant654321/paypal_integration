@@ -77,8 +77,7 @@ export class PaymentService {
       console.log("[PAYPAL] Creating checkout session:", {
         auctionId,
         buyerId,
-        includeInsurance,
-        timestamp: new Date().toISOString()
+        includeInsurance
       });
 
       // Get auction details
@@ -145,6 +144,14 @@ export class PaymentService {
       // Create PayPal order
       const orderRequest = {
         intent: "CAPTURE",
+        application_context: {
+          return_url: `${process.env.APP_URL || window.location.origin}/payment/success`,
+          cancel_url: `${process.env.APP_URL || window.location.origin}/payment/cancel`,
+          brand_name: "Agriculture Marketplace",
+          landing_page: "LOGIN",
+          user_action: "PAY_NOW",
+          shipping_preference: "NO_SHIPPING"
+        },
         purchase_units: [{
           reference_id: `auction_${auctionId}`,
           description: `Payment for auction #${auctionId}`,
@@ -182,13 +189,18 @@ export class PaymentService {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
-            'PayPal-Request-Id': `order_${auctionId}_${Date.now()}`
+            'PayPal-Request-Id': `order_${auctionId}_${Date.now()}`,
+            'Prefer': 'return=representation'
           }
         }
       );
 
       const orderId = response.data.id;
-      console.log("[PAYPAL] Order created:", { orderId, status: response.data.status });
+      console.log("[PAYPAL] Order created:", { 
+        orderId, 
+        status: response.data.status,
+        links: response.data.links 
+      });
 
       // Create payment record
       const payment = await storage.insertPayment({
@@ -252,7 +264,7 @@ export class PaymentService {
       const orderStatus = await this.getOrderStatus(orderId);
       console.log("[PAYPAL] Current order status:", orderStatus);
 
-      if (orderStatus.status !== 'APPROVED') {
+      if (!['APPROVED', 'SAVED'].includes(orderStatus.status)) {
         throw new Error("Please complete the PayPal checkout process first");
       }
 
@@ -273,7 +285,7 @@ export class PaymentService {
 
           // Verify order status before capture
           const currentStatus = await this.getOrderStatus(orderId);
-          if (currentStatus.status !== 'APPROVED') {
+          if (!['APPROVED', 'SAVED'].includes(currentStatus.status)) {
             console.log(`[PAYPAL] Order not ready for capture: ${currentStatus.status}`);
             continue;
           }
@@ -286,7 +298,8 @@ export class PaymentService {
               headers: {
                 'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
-                'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+                'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`,
+                'Prefer': 'return=representation'
               }
             }
           );
@@ -311,7 +324,7 @@ export class PaymentService {
               throw new Error("Please complete the payment approval in PayPal.");
             }
 
-            // For other errors on final attempt
+            // For other errors, only throw on final attempt
             if (attempt === maxRetries) {
               throw new Error(paypalError.description || "Payment capture failed. Please try again.");
             }
@@ -390,7 +403,8 @@ export class PaymentService {
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
           }
         }
       );
