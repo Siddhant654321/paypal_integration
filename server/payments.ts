@@ -327,62 +327,77 @@ export class PaymentService {
       let lastError = null;
       let captureStatus = null;
 
+      // Initial status check with longer timeout
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`[PAYPAL] Capture attempt ${attempt} of ${maxRetries}`);
-          // Shorter initial delay but still increasing
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
 
-          // Verify order status again before each capture attempt
+          // Verify order status before capture attempt
           const currentStatus = await this.getOrderStatus(orderId);
+          console.log(`[PAYPAL] Current order status before capture: ${currentStatus.status}`);
+
+          // Handle different order statuses
+          if (currentStatus.status === 'CREATED') {
+            console.log('[PAYPAL] Order needs approval');
+            throw new Error('ORDER_NOT_APPROVED');
+          }
+
           if (currentStatus.status !== 'APPROVED') {
-            throw new Error(`Invalid order status for capture: ${currentStatus.status}`);
+            console.log(`[PAYPAL] Unexpected order status: ${currentStatus.status}`);
+            throw new Error(`ORDER_INVALID_STATUS: ${currentStatus.status}`);
+          }
+
+          // Add delay between retries
+          if (attempt > 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
           }
 
           // Capture the payment
-        const captureResponse = await axios.post(
-          `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
-          {},
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-              'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+          const captureResponse = await axios.post(
+            `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+            {},
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+              }
             }
+          );
+
+          captureStatus = captureResponse.data.status;
+          console.log("[PAYPAL] Capture response:", captureResponse.data);
+        } catch (error) {
+          console.error(`[PAYPAL] Capture attempt ${attempt} failed:`, error.response?.data);
+          lastError = error;
+
+          if (error.response?.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED') {
+            throw new Error("Payment method was declined. Please try a different payment method.");
           }
-        );
 
-        const captureStatus = captureResponse.data.status;
-        console.log("[PAYPAL] Capture response:", captureResponse.data);
-      } catch (error) {
-        console.error(`[PAYPAL] Capture attempt ${attempt} failed:`, error.response?.data);
-        lastError = error;
+          if (attempt === maxRetries) {
+            console.error("[PAYPAL] All capture attempts failed");
+            if (error.response?.data?.name === 'UNPROCESSABLE_ENTITY') {
+              throw new Error("Payment capture failed after multiple attempts. Please try the payment process again.");
+            }
+            throw lastError;
+          }
 
-        if (error.response?.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED') {
-          throw new Error("Payment method was declined. Please try a different payment method.");
+          console.log(`[PAYPAL] Retrying capture in ${2000 * (attempt + 1)}ms...`);
+          continue;
         }
 
-        if (attempt === maxRetries) {
-          console.error("[PAYPAL] All capture attempts failed");
-          if (error.response?.data?.name === 'UNPROCESSABLE_ENTITY') {
-            throw new Error("Payment capture failed after multiple attempts. Please try the payment process again.");
-          }
-          throw lastError;
-        }
-        
-        console.log(`[PAYPAL] Retrying capture in ${3000 * (attempt + 1)}ms...`);
-        continue;
+        // If we get here, the capture was successful
+        break;
       }
 
-      // If we get here, the capture was successful
-      break;
-    }
+      if (!captureStatus) {
+        throw lastError || new Error("Failed to capture payment after multiple attempts");
+      }
 
-    if (!captureStatus) {
-      throw lastError || new Error("Failed to capture payment after multiple attempts");
-    }
-
-    if (captureStatus === 'COMPLETED') {
+      if (captureStatus === 'COMPLETED') {
         // Update payment status to completed but funds held
         console.log("[PAYPAL] Updating payment status to completed_pending_shipment");
         await storage.updatePaymentStatus(payment.id, "completed_pending_shipment");
