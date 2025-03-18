@@ -281,7 +281,7 @@ export class PaymentService {
       // Get order status first
       const accessToken = await this.getAccessToken();
       const orderStatus = await this.getOrderStatus(orderId);
-      
+
       console.log("[PAYPAL] Current order status:", orderStatus);
 
       // Verify order is approved before capture
@@ -329,31 +329,20 @@ export class PaymentService {
         console.log("[PAYPAL] Updating payment status to completed_pending_shipment");
         await storage.updatePaymentStatus(payment.id, "completed_pending_shipment");
 
-      // Update auction status
-      console.log("[PAYPAL] Updating auction status to pending_fulfillment and payment_status");
-      await storage.updateAuction(payment.auctionId, {
-        status: "pending_fulfillment",
-        paymentStatus: "completed_pending_shipment"
-      });
-
-      // Notify seller that payment is complete and they can proceed with shipping
-      await NotificationService.createNotification({
-        userId: payment.sellerId,
-        type: "payment",
-        title: "Payment Received - Action Required",
-        message: "Payment has been received. Please submit shipping information to receive your funds."
-      });
-
-      return { success: true };
-    } catch (error) {
-      console.error("[PAYPAL] Error capturing payment:", error);
-      if (axios.isAxiosError(error) && error.response) {
-        console.error("[PAYPAL] API Error Response:", {
-          status: error.response.status,
-          data: error.response.data
+        // Update auction status
+        console.log("[PAYPAL] Updating auction status to pending_fulfillment");
+        await storage.updateAuction(payment.auctionId, {
+          status: "pending_fulfillment",
+          paymentStatus: "completed_pending_shipment"
         });
+
+        return { success: true };
+      } else {
+        throw new Error(`Unexpected capture status: ${captureStatus}`);
       }
-      throw error; // Propagate the error to be handled by the route handler
+    } catch (error) {
+      console.error("[PAYPAL] Capture failed:", error.response?.data || error);
+      throw error;
     }
   }
   static async releaseFundsToSeller(paymentId: number, trackingInfo: string) {
