@@ -298,11 +298,10 @@ export class PaymentService {
         status: payment.status
       });
 
-      // Only proceed with capture if order is in appropriate state
-      const validStates = ['APPROVED', 'COMPLETED'];
-      if (!validStates.includes(orderStatus.status)) {
+      // Only proceed with capture if order is in APPROVED state
+      if (orderStatus.status !== 'APPROVED') {
         console.error("[PAYPAL] Order not ready for capture:", orderStatus.status);
-        throw new Error("Order must be approved by buyer before capture. Please complete the PayPal checkout first.");
+        throw new Error("Please try the payment process again. If the issue persists, contact support.");
       }
 
       // Verify payment status
@@ -310,6 +309,9 @@ export class PaymentService {
         console.error("[PAYPAL] Invalid payment status for capture:", payment.status);
         throw new Error(`Payment already processed or invalid status: ${payment.status}`);
       }
+
+      // Add small delay before capture to ensure PayPal has processed the approval
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Capture the payment
       try {
