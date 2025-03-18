@@ -284,15 +284,15 @@ export class PaymentService {
       }
 
       // Initial longer delay before checking order status
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      await new Promise(resolve => setTimeout(resolve, 15000));
 
       // Get initial order status
       const initialStatus = await this.getOrderStatus(orderId);
       this.logPaymentFlow(orderId, 'INITIAL_STATUS_CHECK', initialStatus);
 
       // Configure capture retry settings
-      const maxRetries = 3;
-      const baseDelay = 8000;
+      const maxRetries = 5;
+      const baseDelay = 10000;
 
       // Try to capture the payment
       let captureSuccess = false;
@@ -327,7 +327,19 @@ export class PaymentService {
               await new Promise(resolve => setTimeout(resolve, delay));
               continue;
             }
-            throw new Error("Order not in capturable state");
+            throw new Error(`Order in invalid state: ${orderStatus.status}`);
+          }
+
+          // Additional verification of order state
+          if (!orderStatus.payer || !orderStatus.amount) {
+            console.log("[PAYPAL] Order missing required details:", { orderStatus });
+            if (attempt < maxRetries) {
+              const delay = baseDelay * Math.pow(2, attempt - 1);
+              console.log(`[PAYPAL] Waiting ${delay}ms for order details to populate`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            throw new Error("Order missing required details");
           }
 
           // Attempt capture
@@ -426,7 +438,8 @@ export class PaymentService {
         userId: payment.sellerId,
         type: "payment",
         title: "Payment Received",
-        message: `Payment received for auction #${payment.auctionId}`
+        message: `Payment received for auction #${payment.auctionId}`,
+        metadata: { auctionId: payment.auctionId }
       });
 
       this.logPaymentFlow(orderId, 'PAYMENT_SUCCESS_COMPLETED');
