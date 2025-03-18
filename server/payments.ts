@@ -328,25 +328,29 @@ export class PaymentService {
       let captureStatus = null;
 
       // Initial status check with longer timeout
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Verify order is in APPROVED state before attempting capture
+      const initialStatus = await this.getOrderStatus(orderId);
+      if (initialStatus.status !== 'APPROVED') {
+        console.log('[PAYPAL] Order not in APPROVED state:', initialStatus.status);
+        throw new Error('Please complete the PayPal checkout process first');
+      }
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`[PAYPAL] Capture attempt ${attempt} of ${maxRetries}`);
 
-          // Verify order status before capture attempt
-          const currentStatus = await this.getOrderStatus(orderId);
-          console.log(`[PAYPAL] Current order status before capture: ${currentStatus.status}`);
-
-          // Handle different order statuses
-          if (currentStatus.status === 'CREATED') {
-            console.log('[PAYPAL] Order needs approval');
-            throw new Error('ORDER_NOT_APPROVED');
+          // Add delay between capture attempts
+          if (attempt > 1) {
+            await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
           }
 
+          // Verify order status hasn't changed
+          const currentStatus = await this.getOrderStatus(orderId);
           if (currentStatus.status !== 'APPROVED') {
-            console.log(`[PAYPAL] Unexpected order status: ${currentStatus.status}`);
-            throw new Error(`ORDER_INVALID_STATUS: ${currentStatus.status}`);
+            console.log(`[PAYPAL] Order status changed to: ${currentStatus.status}`);
+            throw new Error('Order status changed during capture process. Please try again.');
           }
 
           // Add delay between retries
