@@ -304,9 +304,12 @@ export class PaymentService {
       }
 
       console.log("[PAYPAL] Payment verification passed, proceeding with capture");
-      const payment = await storage.findPaymentByPayPalId(orderId);
-      if (!payment) {
-        console.error("[PAYPAL] Payment record not found for order:", orderId);
+      // Remove duplicate payment lookup since we already have it from above
+      console.log("[PAYPAL] Proceeding with payment:", {
+        paymentId: payment.id,
+        status: payment.status,
+        orderId
+      });
         throw new Error("Payment record not found");
       }
 
