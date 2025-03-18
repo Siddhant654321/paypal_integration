@@ -316,14 +316,14 @@ export class PaymentService {
       // Add longer delay and retry logic for capture
       const maxRetries = 3;
       let lastError = null;
+      let captureStatus = null;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`[PAYPAL] Capture attempt ${attempt} of ${maxRetries}`);
           await new Promise(resolve => setTimeout(resolve, 3000 * attempt)); // Increasing delay with each retry
 
-      // Capture the payment
-      try {
+          // Capture the payment
         const captureResponse = await axios.post(
           `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
           {},
@@ -362,8 +362,11 @@ export class PaymentService {
       break;
     }
 
+    if (!captureStatus) {
+      throw lastError || new Error("Failed to capture payment after multiple attempts");
+    }
 
-      if (captureStatus === 'COMPLETED') {
+    if (captureStatus === 'COMPLETED') {
         // Update payment status to completed but funds held
         console.log("[PAYPAL] Updating payment status to completed_pending_shipment");
         await storage.updatePaymentStatus(payment.id, "completed_pending_shipment");

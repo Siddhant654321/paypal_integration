@@ -203,6 +203,13 @@ export default function PaymentSuccessPage() {
               <p>Please complete the payment approval in PayPal.</p>
             </div>
           )}
+        {status === "processing" && (
+            <div className="flex flex-col items-center space-y-4">
+              <img src="/assets/egg-loading.gif" alt="Processing payment" className="w-16 h-16" />
+              <p>Processing your payment...</p>
+              <p className="text-sm text-muted-foreground">This may take a few moments</p>
+            </div>
+          )}
         </CardContent>
 
         <CardFooter className="flex justify-center gap-4">
