@@ -310,20 +310,38 @@ export class PaymentService {
       }
 
       // Capture the payment
-      const captureResponse = await axios.post(
-        `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
-        {},
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+      try {
+        const captureResponse = await axios.post(
+          `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+          {},
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+            }
           }
-        }
-      );
+        );
 
-      const captureStatus = captureResponse.data.status;
-      console.log("[PAYPAL] Capture response:", captureResponse.data);
+        const captureStatus = captureResponse.data.status;
+        console.log("[PAYPAL] Capture response:", captureResponse.data);
+      } catch (error) {
+        console.error("[PAYPAL] Capture error details:", error.response?.data);
+        
+        if (error.response?.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED') {
+          throw new Error("Payment method was declined. Please try a different payment method.");
+        }
+        
+        if (error.response?.data?.name === 'UNPROCESSABLE_ENTITY') {
+          throw new Error("Order cannot be captured at this time. Please ensure the order is approved.");
+        }
+
+        if (error.response?.status === 422) {
+          throw new Error("Order must be approved before capture. Please complete the PayPal checkout first.");
+        }
+
+        throw error;
+      }
 
 
       if (captureStatus === 'COMPLETED') {
