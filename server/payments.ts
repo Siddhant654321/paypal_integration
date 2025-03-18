@@ -278,6 +278,17 @@ export class PaymentService {
     try {
       console.log("[PAYPAL] Processing payment capture for order:", orderId);
 
+      // Get order status first
+      const accessToken = await this.getAccessToken();
+      const orderStatus = await this.getOrderStatus(orderId);
+      
+      console.log("[PAYPAL] Current order status:", orderStatus);
+
+      // Verify order is approved before capture
+      if (orderStatus.status !== 'APPROVED') {
+        throw new Error(`Cannot capture payment in status: ${orderStatus.status}`);
+      }
+
       // Find payment record
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
@@ -296,43 +307,27 @@ export class PaymentService {
         throw new Error(`Payment cannot be captured in status: ${payment.status}`);
       }
 
-      const accessToken = await this.getAccessToken();
-      console.log("[PAYPAL] Attempting to capture payment for order:", orderId);
-
-      try {
-        // Single capture attempt
-        const captureResponse = await axios.post(
-          `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
-          {},
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-              'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
-            }
+      // Capture the payment
+      const captureResponse = await axios.post(
+        `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
           }
-        );
-
-        const captureStatus = captureResponse.data.status;
-        console.log("[PAYPAL] Capture successful:", {
-          status: captureStatus,
-          orderId: captureResponse.data.id
-        });
-
-        if (captureStatus === 'COMPLETED') {
-          return { success: true };
         }
+      );
 
-        throw new Error(`Unexpected capture status: ${captureStatus}`);
-      } catch (error) {
-        console.error("[PAYPAL] Capture failed:", error.response?.data || error);
-        throw error;
-      }
+      const captureStatus = captureResponse.data.status;
+      console.log("[PAYPAL] Capture response:", captureResponse.data);
 
 
-      // Update payment status to completed but funds held
-      console.log("[PAYPAL] Updating payment status to completed_pending_shipment");
-      await storage.updatePaymentStatus(payment.id, "completed_pending_shipment");
+      if (captureStatus === 'COMPLETED') {
+        // Update payment status to completed but funds held
+        console.log("[PAYPAL] Updating payment status to completed_pending_shipment");
+        await storage.updatePaymentStatus(payment.id, "completed_pending_shipment");
 
       // Update auction status
       console.log("[PAYPAL] Updating auction status to pending_fulfillment and payment_status");
