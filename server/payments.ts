@@ -326,16 +326,16 @@ export class PaymentService {
       const maxRetries = 3;
       let lastError = null;
       let captureStatus = null;
+      let currentOrderStatus = null;
 
       // Wait for order to be ready for capture
       const maxStatusChecks = 5;
-      let orderStatus;
       
       for (let i = 0; i < maxStatusChecks; i++) {
-        orderStatus = await this.getOrderStatus(orderId);
-        console.log(`[PAYPAL] Check ${i + 1}: Order status is ${orderStatus.status}`);
+        currentOrderStatus = await this.getOrderStatus(orderId);
+        console.log(`[PAYPAL] Check ${i + 1}: Order status is ${currentOrderStatus.status}`);
         
-        if (orderStatus.status === 'APPROVED') {
+        if (currentOrderStatus.status === 'APPROVED') {
           break;
         }
         
@@ -344,8 +344,8 @@ export class PaymentService {
         }
       }
 
-      if (orderStatus.status !== 'APPROVED') {
-        console.log('[PAYPAL] Order never reached APPROVED state:', orderStatus.status);
+      if (!currentOrderStatus || currentOrderStatus.status !== 'APPROVED') {
+        console.log('[PAYPAL] Order never reached APPROVED state:', currentOrderStatus?.status);
         throw new Error('Please complete the PayPal checkout process and approve the payment');
       }
 
