@@ -1,6 +1,7 @@
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/hooks/use-auth";
 import NavBar from "@/components/nav-bar";
@@ -52,13 +53,26 @@ function Router() {
 }
 
 function App() {
+  const paypalConfig = {
+    "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID,
+    currency: "USD",
+    intent: "capture",
+    "data-client-token": import.meta.env.VITE_PAYPAL_CLIENT_TOKEN,
+    "enable-funding": "card,credit,venmo",
+    "disable-funding": "paylater",
+    "data-namespace": "PayPalSDK",
+    "data-partner-attribution-id": import.meta.env.VITE_PAYPAL_BN_CODE || 'AgriMarketplace_SP'
+  };
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router />
-        <Toaster />
-      </AuthProvider>
-    </QueryClientProvider>
+    <PayPalScriptProvider options={paypalConfig}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Router />
+          <Toaster />
+        </AuthProvider>
+      </QueryClientProvider>
+    </PayPalScriptProvider>
   );
 }
 

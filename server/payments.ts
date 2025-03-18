@@ -3,7 +3,7 @@ import { NotificationService } from "./notification-service";
 import axios from 'axios';
 import { EmailService } from './email-service';
 
-// Payment Flow States
+// Payment Flow States and Logging
 type PaymentFlowState = {
   orderId: string;
   status: string;
@@ -17,8 +17,8 @@ const paymentFlowLog = new Map<string, PaymentFlowState[]>();
 const PRODUCTION_URL = 'https://api-m.paypal.com';
 const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 
-const IS_SANDBOX = process.env.NODE_ENV !== 'production' ||
-  (process.env.PAYPAL_ENV === 'sandbox' || process.env.VITE_PAYPAL_ENV === 'sandbox');
+// Explicitly check for sandbox mode
+const IS_SANDBOX = process.env.PAYPAL_ENV === 'sandbox' || process.env.VITE_PAYPAL_ENV === 'sandbox';
 const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
 
 console.log("[PAYPAL] Payment service configuration:", {
@@ -26,7 +26,8 @@ console.log("[PAYPAL] Payment service configuration:", {
   baseUrl: BASE_URL,
   clientIdPrefix: process.env.PAYPAL_CLIENT_ID?.substring(0, 8) + '...',
   environment: process.env.NODE_ENV,
-  paypalEnv: process.env.PAYPAL_ENV
+  paypalEnv: process.env.PAYPAL_ENV,
+  vitePaypalEnv: process.env.VITE_PAYPAL_ENV
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.05;
@@ -49,6 +50,23 @@ export class PaymentService {
     console.log(`[PAYPAL] Payment flow update for ${orderId}:`, {
       currentState: state,
       flowHistory: flowLog
+    });
+  }
+
+  private static logRequestResponse(stage: string, orderId: string, request: any, response: any) {
+    console.log(`[PAYPAL] ${stage} for order ${orderId}:`, {
+      request: {
+        url: request.url,
+        method: request.method,
+        headers: request.headers,
+        data: request.data
+      },
+      response: {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        data: response.data
+      }
     });
   }
 
@@ -78,8 +96,7 @@ export class PaymentService {
       if (axios.isAxiosError(error) && error.response) {
         console.error("[PAYPAL] Auth Error Details:", {
           status: error.response.status,
-          data: error.response.data,
-          message: error.message
+          data: error.response.data
         });
       }
       throw new Error("Failed to authenticate with PayPal");
@@ -95,7 +112,8 @@ export class PaymentService {
       console.log("[PAYPAL] Creating checkout session:", {
         auctionId,
         buyerId,
-        includeInsurance
+        includeInsurance,
+        sandbox: IS_SANDBOX
       });
 
       const auction = await storage.getAuction(auctionId);
@@ -113,7 +131,6 @@ export class PaymentService {
       const totalAmount = baseAmount + platformFee + insuranceFee;
       const sellerPayout = baseAmount - Math.round(baseAmount * SELLER_FEE_PERCENTAGE);
 
-      // Calculate dollar amounts
       const totalAmountDollars = (totalAmount / 100).toFixed(2);
       const baseAmountDollars = (baseAmount / 100).toFixed(2);
       const feeAmountDollars = ((platformFee + insuranceFee) / 100).toFixed(2);
@@ -132,12 +149,15 @@ export class PaymentService {
       const orderRequest = {
         intent: "CAPTURE",
         application_context: {
-          return_url: `${baseUrl}/payment/success`,
-          cancel_url: `${baseUrl}/payment/cancel`,
           brand_name: "Agriculture Marketplace",
           landing_page: "NO_PREFERENCE",
+          shipping_preference: "NO_SHIPPING",
           user_action: "PAY_NOW",
-          shipping_preference: "NO_SHIPPING"
+          payment_method: {
+            payee_preferred: "IMMEDIATE_PAYMENT_REQUIRED"
+          },
+          return_url: `${baseUrl}/payment/success`,
+          cancel_url: `${baseUrl}/payment/cancel`
         },
         purchase_units: [{
           reference_id: `auction_${auctionId}`,
@@ -180,10 +200,24 @@ export class PaymentService {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
             'PayPal-Request-Id': `order_${auctionId}_${Date.now()}`,
+            'PayPal-Partner-Attribution-Id': process.env.PAYPAL_BN_CODE || 'AgriMarketplace_SP',
             'Prefer': 'return=representation'
           }
         }
       );
+
+      this.logRequestResponse('Order Creation', response.data.id, {
+        url: `${BASE_URL}/v2/checkout/orders`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'PayPal-Request-Id': `order_${auctionId}_${Date.now()}`,
+          'PayPal-Partner-Attribution-Id': process.env.PAYPAL_BN_CODE || 'AgriMarketplace_SP',
+          'Prefer': 'return=representation'
+        },
+        data: orderRequest
+      }, response);
 
       const orderId = response.data.id;
       this.logPaymentFlow(orderId, 'ORDER_CREATED', {
@@ -249,44 +283,51 @@ export class PaymentService {
         throw new Error(`Invalid payment status: ${payment.status}`);
       }
 
-      // Initial delay and status check
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Initial longer delay before checking order status
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      // Get initial order status
       const initialStatus = await this.getOrderStatus(orderId);
       this.logPaymentFlow(orderId, 'INITIAL_STATUS_CHECK', initialStatus);
 
-      if (!['APPROVED', 'SAVED', 'COMPLETED'].includes(initialStatus.status)) {
-        throw new Error("Please complete the payment process first");
-      }
+      // Configure capture retry settings
+      const maxRetries = 3;
+      const baseDelay = 8000;
 
-      // Configure capture settings
-      const maxRetries = 5;
-      const baseDelay = 3000;
+      // Try to capture the payment
       let captureSuccess = false;
+      let captureError = null;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          this.logPaymentFlow(orderId, `CAPTURE_ATTEMPT_${attempt}_START`);
+          this.logPaymentFlow(orderId, `CAPTURE_ATTEMPT_${attempt}`);
 
-          // Add delay between attempts
-          if (attempt > 1) {
-            const delay = baseDelay * Math.pow(2, attempt - 1);
-            console.log(`[PAYPAL] Waiting ${delay}ms before attempt ${attempt}`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
+          // Get fresh order status before capture
+          const orderStatus = await this.getOrderStatus(orderId);
+          this.logPaymentFlow(orderId, `ORDER_STATUS_CHECK_${attempt}`, orderStatus);
 
-          // Verify current order status
-          const currentStatus = await this.getOrderStatus(orderId);
-          this.logPaymentFlow(orderId, `CAPTURE_ATTEMPT_${attempt}_STATUS_CHECK`, currentStatus);
+          // Log full order details
+          console.log(`[PAYPAL] Order status details (attempt ${attempt}):`, {
+            status: orderStatus.status,
+            payer: orderStatus.payer,
+            amount: orderStatus.amount,
+            links: orderStatus.links
+          });
 
-          if (!['APPROVED', 'SAVED', 'COMPLETED'].includes(currentStatus.status)) {
-            console.log(`[PAYPAL] Order not ready for capture: ${currentStatus.status}`);
-            continue;
-          }
-
-          if (currentStatus.status === 'COMPLETED') {
-            console.log('[PAYPAL] Order already captured');
+          if (orderStatus.status === 'COMPLETED') {
             captureSuccess = true;
             break;
+          }
+
+          if (!['APPROVED', 'SAVED'].includes(orderStatus.status)) {
+            console.log(`[PAYPAL] Order not ready for capture: ${orderStatus.status}`);
+            if (attempt < maxRetries) {
+              const delay = baseDelay * Math.pow(2, attempt - 1);
+              console.log(`[PAYPAL] Waiting ${delay}ms before next attempt`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            throw new Error("Order not in capturable state");
           }
 
           // Attempt capture
@@ -298,16 +339,27 @@ export class PaymentService {
                 'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
                 'PayPal-Request-Id': `capture_${orderId}_${attempt}_${Date.now()}`,
+                'PayPal-Partner-Attribution-Id': process.env.PAYPAL_BN_CODE || 'AgriMarketplace_SP',
                 'Prefer': 'return=representation'
               }
             }
           );
 
-          this.logPaymentFlow(orderId, `CAPTURE_ATTEMPT_${attempt}_RESPONSE`, {
-            status: captureResponse.status,
-            paypalStatus: captureResponse.data.status,
-            data: captureResponse.data
-          });
+          // Log the full capture request and response
+          this.logRequestResponse(`Capture Attempt ${attempt}`, orderId, {
+            url: `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'PayPal-Request-Id': `capture_${orderId}_${attempt}_${Date.now()}`,
+              'PayPal-Partner-Attribution-Id': process.env.PAYPAL_BN_CODE || 'AgriMarketplace_SP',
+              'Prefer': 'return=representation'
+            },
+            data: {}
+          }, captureResponse);
+
+          this.logPaymentFlow(orderId, `CAPTURE_RESPONSE_${attempt}`, captureResponse.data);
 
           if (captureResponse.data.status === 'COMPLETED') {
             captureSuccess = true;
@@ -315,14 +367,13 @@ export class PaymentService {
           }
 
         } catch (error: any) {
-          const errorDetails = {
-            attempt,
+          captureError = error;
+          this.logPaymentFlow(orderId, `CAPTURE_ERROR_${attempt}`, {
             message: error.message,
             response: error.response?.data,
-            status: error.response?.status
-          };
-
-          this.logPaymentFlow(orderId, `CAPTURE_ATTEMPT_${attempt}_ERROR`, errorDetails);
+            responseHeaders: error.response?.headers,
+            responseStatus: error.response?.status
+          });
 
           if (error.response?.data?.details?.[0]) {
             const paypalError = error.response.data.details[0];
@@ -337,29 +388,28 @@ export class PaymentService {
 
             if (paypalError.issue === 'TRANSACTION_REFUSED') {
               if (attempt < maxRetries) {
-                console.log('[PAYPAL] Transaction refused, will retry after delay');
+                const delay = baseDelay * Math.pow(2, attempt - 1);
+                console.log(`[PAYPAL] Transaction refused, waiting ${delay}ms before retry`);
+                await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
               }
               throw new Error("Transaction was refused. Please try a different payment method.");
             }
-
-            if (attempt === maxRetries) {
-              throw new Error(paypalError.description || "Payment capture failed. Please try again.");
-            }
           }
 
-          // Handle server errors with longer delay
-          if (error.response?.status >= 500) {
-            const serverErrorDelay = baseDelay * 2;
-            console.log(`[PAYPAL] Server error, waiting ${serverErrorDelay}ms before retry`);
-            await new Promise(resolve => setTimeout(resolve, serverErrorDelay));
+          // Handle other errors with exponential backoff
+          if (attempt < maxRetries) {
+            const delay = baseDelay * Math.pow(2, attempt - 1);
+            console.log(`[PAYPAL] Capture failed, waiting ${delay}ms before retry`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
           }
         }
       }
 
       if (!captureSuccess) {
-        this.logPaymentFlow(orderId, 'CAPTURE_FAILED_ALL_ATTEMPTS');
-        throw new Error("Failed to capture payment after multiple attempts");
+        this.logPaymentFlow(orderId, 'CAPTURE_FAILED');
+        throw captureError || new Error("Failed to capture payment after multiple attempts");
       }
 
       // Update payment status
@@ -385,7 +435,8 @@ export class PaymentService {
     } catch (error: any) {
       console.error("[PAYPAL] Payment capture failed:", error);
       this.logPaymentFlow(orderId, 'PAYMENT_ERROR', {
-        error: error.message,
+        message: error.message,
+        response: error.response?.data,
         stack: error.stack
       });
       throw error;
@@ -403,6 +454,7 @@ export class PaymentService {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
+            'PayPal-Partner-Attribution-Id': process.env.PAYPAL_BN_CODE || 'AgriMarketplace_SP',
             'Prefer': 'return=representation'
           }
         }
@@ -412,7 +464,8 @@ export class PaymentService {
         id: response.data.id,
         status: response.data.status,
         payer: response.data.payer,
-        amount: response.data.purchase_units[0]?.amount
+        amount: response.data.purchase_units[0]?.amount,
+        links: response.data.links
       };
 
       this.logPaymentFlow(orderId, 'ORDER_STATUS_CHECK', status);
@@ -425,180 +478,6 @@ export class PaymentService {
         response: error.response?.data
       });
       throw new Error("Failed to get order status");
-    }
-  }
-  static async handlePaymentFailure(orderId: string) {
-    try {
-      console.log("[PAYPAL] Processing payment failure for order:", orderId);
-      this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_START');
-
-      const payment = await storage.findPaymentByPayPalId(orderId);
-      if (!payment) {
-        throw new Error("Payment record not found");
-      }
-
-      this.logPaymentFlow(orderId, 'PAYMENT_RECORD_FOUND', { payment });
-
-      // Update payment status
-      await storage.updatePaymentStatus(payment.id, "failed");
-      this.logPaymentFlow(orderId, 'PAYMENT_STATUS_UPDATED', { status: 'failed' });
-
-      // Update auction status
-      await storage.updateAuction(payment.auctionId, {
-        status: "failed",
-        paymentStatus: "failed"
-      });
-      this.logPaymentFlow(orderId, 'AUCTION_STATUS_UPDATED', { status: 'failed' });
-
-      // Notify seller
-      await NotificationService.createNotification({
-        userId: payment.sellerId,
-        type: "payment",
-        title: "Payment Failed",
-        message: `Payment failed for auction #${payment.auctionId}`
-      });
-      this.logPaymentFlow(orderId, 'NOTIFICATION_SENT', { userId: payment.sellerId, type: 'payment', title: 'Payment Failed' });
-
-      console.log("[PAYPAL] Payment failure processed");
-      this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_COMPLETED');
-
-    } catch (error: any) {
-      console.error("[PAYPAL] Error handling payment failure:", error);
-      this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_ERROR', { error: error.message });
-      throw error;
-    }
-  }
-  static async releaseFundsToSeller(paymentId: number, trackingInfo: string) {
-    try {
-      console.log("[PAYPAL] Initiating fund release for payment:", paymentId);
-      this.logPaymentFlow(String(paymentId), 'FUND_RELEASE_START');
-
-      const payment = await storage.getPayment(paymentId);
-      if (!payment) {
-        throw new Error("Payment not found");
-      }
-
-      this.logPaymentFlow(String(paymentId), 'PAYMENT_RECORD_FOUND', { payment });
-
-      if (payment.status !== "completed_pending_shipment") {
-        throw new Error(`Invalid payment status for fund release: ${payment.status}`);
-      }
-
-      // Get seller's PayPal info
-      const sellerProfile = await storage.getProfile(payment.sellerId);
-
-      // Calculate seller payout (90% of the final bid amount)
-      const sellerPayout = Math.round(payment.amount * 0.90);
-
-      let payoutResult;
-
-      // Check if seller has PayPal info and PayPal is configured
-      if (!sellerProfile?.paypalMerchantId || !process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
-        console.warn("[PAYPAL] PayPal not fully configured, using simulated payout");
-
-        // If in production but PayPal not configured, create a simulated payout
-        payoutResult = await SellerPaymentService.createPayout(
-          paymentId,
-          payment.sellerId,
-          sellerPayout,
-          sellerProfile?.paypalMerchantId || `test-${payment.sellerId}@example.com`
-        );
-      } else {
-        console.log("[PAYPAL] Processing payout to seller:", {
-          sellerId: payment.sellerId,
-          merchantId: sellerProfile.paypalMerchantId.substring(0, 4) + '...',
-          amount: sellerPayout,
-          originalAmount: payment.amount
-        });
-
-        // Process payout to seller using PayPal
-        payoutResult = await SellerPaymentService.createPayout(
-          paymentId,
-          payment.sellerId,
-          sellerPayout,
-          sellerProfile.paypalMerchantId
-        );
-      }
-
-      if (!payoutResult || (!payoutResult.batch_header?.payout_batch_id && !payoutResult.simulated)) {
-        throw new Error("Failed to create payout");
-      }
-
-      // Update payment and tracking info
-      console.log("[PAYPAL] Payout successful, updating payment status to completed");
-      await storage.updatePayment(paymentId, {
-        status: "completed",
-        trackingInfo,
-        completedAt: new Date()
-      });
-      this.logPaymentFlow(String(paymentId), 'PAYMENT_STATUS_UPDATED', { status: 'completed' });
-
-      // Update auction status
-      console.log("[PAYPAL] Updating auction status to fulfilled");
-      await storage.updateAuction(payment.auctionId, {
-        status: "fulfilled",
-        paymentStatus: "completed",
-        trackingInfo
-      });
-      this.logPaymentFlow(String(paymentId), 'AUCTION_STATUS_UPDATED', { status: 'fulfilled' });
-
-      // Send tracking info to buyer
-      await NotificationService.createNotification({
-        userId: payment.buyerId,
-        type: "fulfillment",
-        title: "Order Shipped",
-        message: `Your order has been shipped. Tracking information: ${trackingInfo}`
-      });
-      this.logPaymentFlow(String(paymentId), 'NOTIFICATION_SENT', { userId: payment.buyerId, type: 'fulfillment' });
-
-      // Send notification to seller about payment
-      await NotificationService.createNotification({
-        userId: payment.sellerId,
-        type: "payment",
-        title: "Funds Released",
-        message: `Your funds of $${(sellerPayout / 100).toFixed(2)} have been released for auction #${payment.auctionId}`
-      });
-      this.logPaymentFlow(String(paymentId), 'NOTIFICATION_SENT', { userId: payment.sellerId, type: 'payment', title: 'Funds Released' });
-
-      return { success: true };
-    } catch (error) {
-      console.error("[PAYPAL] Error releasing funds:", error);
-      this.logPaymentFlow(String(paymentId), 'FUND_RELEASE_ERROR', { error: error.message });
-      throw error;
-    }
-  }
-  static async getPaymentStatus(auctionId: number): Promise<string> {
-    try {
-      console.log("[PAYPAL] Getting payment status for auction:", auctionId);
-
-      // Get the payment record
-      const payment = await storage.getPaymentByAuctionId(auctionId);
-      if (!payment) {
-        return "pending";
-      }
-
-      this.logPaymentFlow(String(auctionId), 'PAYMENT_RECORD_FOUND', { payment });
-
-      // If payment has PayPal order ID, verify its status
-      if (payment.paypalOrderId) {
-        const orderStatus = await this.getOrderStatus(payment.paypalOrderId);
-        this.logPaymentFlow(String(auctionId), 'ORDER_STATUS_CHECK', orderStatus);
-      }
-
-      // Get the auction to check both statuses
-      const auction = await storage.getAuction(auctionId);
-      this.logPaymentFlow(String(auctionId), 'AUCTION_RECORD_FOUND', auction);
-      console.log("[PAYPAL] Current status in tables:", {
-        paymentTableStatus: payment.status,
-        auctionTableStatus: auction?.paymentStatus
-      });
-
-      // Return the payment table status as it's more accurate
-      return payment.status;
-    } catch (error) {
-      console.error("[PAYPAL] Error getting payment status:", error);
-      this.logPaymentFlow(String(auctionId), 'PAYMENT_STATUS_ERROR', { error: error.message });
-      throw new Error("Failed to get payment status");
     }
   }
 }
@@ -725,4 +604,180 @@ class SellerPaymentService {
       throw new Error("Failed to process seller payout. Please ensure your PayPal account is properly configured.");
     }
   }
+}
+
+static async handlePaymentFailure(orderId: string) {
+  try {
+    console.log("[PAYPAL] Processing payment failure for order:", orderId);
+    this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_START');
+
+    const payment = await storage.findPaymentByPayPalId(orderId);
+    if (!payment) {
+      throw new Error("Payment record not found");
+    }
+
+    this.logPaymentFlow(orderId, 'PAYMENT_RECORD_FOUND', { payment });
+
+    // Update payment status
+    await storage.updatePaymentStatus(payment.id, "failed");
+    this.logPaymentFlow(orderId, 'PAYMENT_STATUS_UPDATED', { status: 'failed' });
+
+    // Update auction status
+    await storage.updateAuction(payment.auctionId, {
+      status: "failed",
+      paymentStatus: "failed"
+    });
+    this.logPaymentFlow(orderId, 'AUCTION_STATUS_UPDATED', { status: 'failed' });
+
+    // Notify seller
+    await NotificationService.createNotification({
+      userId: payment.sellerId,
+      type: "payment",
+      title: "Payment Failed",
+      message: `Payment failed for auction #${payment.auctionId}`
+    });
+    this.logPaymentFlow(orderId, 'NOTIFICATION_SENT', { userId: payment.sellerId, type: 'payment', title: 'Payment Failed' });
+
+    console.log("[PAYPAL] Payment failure processed");
+    this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_COMPLETED');
+
+  } catch (error: any) {
+    console.error("[PAYPAL] Error handling payment failure:", error);
+    this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_ERROR', { error: error.message });
+    throw error;
+  }
+}
+static async releaseFundsToSeller(paymentId: number, trackingInfo: string) {
+  try {
+    console.log("[PAYPAL] Initiating fund release for payment:", paymentId);
+    this.logPaymentFlow(String(paymentId), 'FUND_RELEASE_START');
+
+    const payment = await storage.getPayment(paymentId);
+    if (!payment) {
+      throw new Error("Payment not found");
+    }
+
+    this.logPaymentFlow(String(paymentId), 'PAYMENT_RECORD_FOUND', { payment });
+
+    if (payment.status !== "completed_pending_shipment") {
+      throw new Error(`Invalid payment status for fund release: ${payment.status}`);
+    }
+
+    // Get seller's PayPal info
+    const sellerProfile = await storage.getProfile(payment.sellerId);
+
+    // Calculate seller payout (90% of the final bid amount)
+    const sellerPayout = Math.round(payment.amount * 0.90);
+
+    let payoutResult;
+
+    // Check if seller has PayPal info and PayPal is configured
+    if (!sellerProfile?.paypalMerchantId || !process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+      console.warn("[PAYPAL] PayPal not fully configured, using simulated payout");
+
+      // If in production but PayPal not configured, create a simulated payout
+      payoutResult = await SellerPaymentService.createPayout(
+        paymentId,
+        payment.sellerId,
+        sellerPayout,
+        sellerProfile?.paypalMerchantId || `test-${payment.sellerId}@example.com`
+      );
+    } else {
+      console.log("[PAYPAL] Processing payout to seller:", {
+        sellerId: payment.sellerId,
+        merchantId: sellerProfile.paypalMerchantId.substring(0, 4) + '...',
+        amount: sellerPayout,
+        originalAmount: payment.amount
+      });
+
+      // Process payout to seller using PayPal
+      payoutResult = await SellerPaymentService.createPayout(
+        paymentId,
+        payment.sellerId,
+        sellerPayout,
+        sellerProfile.paypalMerchantId
+      );
+    }
+
+    if (!payoutResult || (!payoutResult.batch_header?.payout_batch_id && !payoutResult.simulated)) {
+      throw new Error("Failed to create payout");
+    }
+
+    // Update payment and tracking info
+    console.log("[PAYPAL] Payout successful, updating payment status to completed");
+    await storage.updatePayment(paymentId, {
+      status: "completed",
+      trackingInfo,
+      completedAt: new Date()
+    });
+    this.logPaymentFlow(String(paymentId), 'PAYMENT_STATUS_UPDATED', { status: 'completed' });
+
+    // Update auction status
+    console.log("[PAYPAL] Updating auction status to fulfilled");
+    await storage.updateAuction(payment.auctionId, {
+      status: "fulfilled",
+      paymentStatus: "completed",
+      trackingInfo
+    });
+    this.logPaymentFlow(String(paymentId), 'AUCTION_STATUS_UPDATED', { status: 'fulfilled' });
+
+    // Send tracking info to buyer
+    await NotificationService.createNotification({
+      userId: payment.buyerId,
+      type: "fulfillment",
+      title: "Order Shipped",
+      message: `Your order has been shipped. Tracking information: ${trackingInfo}`
+    });
+    this.logPaymentFlow(String(paymentId), 'NOTIFICATION_SENT', { userId: payment.buyerId, type: 'fulfillment' });
+
+    // Send notification to seller about payment
+    await NotificationService.createNotification({
+      userId: payment.sellerId,
+      type: "payment",
+      title: "Funds Released",
+      message: `Your funds of $${(sellerPayout / 100).toFixed(2)} have been released for auction #${payment.auctionId}`
+    });
+    this.logPaymentFlow(String(paymentId), 'NOTIFICATION_SENT', { userId: payment.sellerId, type: 'payment', title: 'Funds Released' });
+
+    return { success: true };
+  } catch (error) {
+    console.error("[PAYPAL] Error releasing funds:", error);
+    this.logPaymentFlow(String(paymentId), 'FUND_RELEASE_ERROR', { error: error.message });
+    throw error;
+  }
+}
+static async getPaymentStatus(auctionId: number): Promise<string> {
+  try {
+    console.log("[PAYPAL] Getting payment status for auction:", auctionId);
+
+    // Get the payment record
+    const payment = await storage.getPaymentByAuctionId(auctionId);
+    if (!payment) {
+      return "pending";
+    }
+
+    this.logPaymentFlow(String(auctionId), 'PAYMENT_RECORD_FOUND', { payment });
+
+    // If payment has PayPal order ID, verify its status
+    if (payment.paypalOrderId) {
+      const orderStatus = await this.getOrderStatus(payment.paypalOrderId);
+      this.logPaymentFlow(String(auctionId), 'ORDER_STATUS_CHECK', orderStatus);
+    }
+
+    // Get the auction to check both statuses
+    const auction = await storage.getAuction(auctionId);
+    this.logPaymentFlow(String(auctionId), 'AUCTION_RECORD_FOUND', auction);
+    console.log("[PAYPAL] Current status in tables:", {
+      paymentTableStatus: payment.status,
+      auctionTableStatus: auction?.paymentStatus
+    });
+
+    // Return the payment table status as it's more accurate
+    return payment.status;
+  } catch (error) {
+    console.error("[PAYPAL] Error getting payment status:", error);
+    this.logPaymentFlow(String(auctionId), 'PAYMENT_STATUS_ERROR', { error: error.message });
+    throw new Error("Failed to get payment status");
+  }
+}
 }
