@@ -11,7 +11,7 @@ export default function PaymentSuccessPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "success" | "error" | "pending_approval">("loading");
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
@@ -37,9 +37,20 @@ export default function PaymentSuccessPage() {
     })
     .then(async response => {
       if (!response.ok) {
-        // Try to get detailed error message
+        // Get error details
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to process payment", {
+        const errorMessage = data.message || "Failed to process payment";
+        console.error("[Payment] Capture failed:", errorMessage);
+
+        if (errorMessage.includes("must be approved")) {
+          // Payment needs buyer approval in PayPal
+          setStatus("pending_approval");
+          throw new Error("Please complete the payment approval in PayPal", {
+            cause: { code: 'PENDING_APPROVAL', status: response.status }
+          });
+        }
+
+        throw new Error(errorMessage, {
           cause: { code: data.error, status: response.status }
         });
       }
@@ -72,6 +83,9 @@ export default function PaymentSuccessPage() {
         setErrorCode(cause.code);
       } else if (cause?.code === 'ORDER_NOT_APPROVED') {
         setError("Payment not yet approved. Please complete the PayPal checkout process first.");
+        setErrorCode(cause.code);
+      } else if (cause?.code === 'PENDING_APPROVAL') {
+        setError("Please complete the payment approval in PayPal.");
         setErrorCode(cause.code);
       } else if (cause?.status === 404) {
         setError("Payment record not found. Please contact support if funds were deducted.");
@@ -107,10 +121,12 @@ export default function PaymentSuccessPage() {
             {status === "loading" && <LoadingSpinner />}
             {status === "success" && <CheckCircle2 className="text-green-600" />}
             {status === "error" && <XCircle className="text-red-600" />}
+            {status === "pending_approval" && <LoadingSpinner />}
 
             {status === "loading" && "Processing Payment"}
             {status === "success" && "Payment Successful"}
             {status === "error" && "Payment Error"}
+            {status === "pending_approval" && "Awaiting Payment Approval"}
           </CardTitle>
 
           {status === "success" && (
@@ -122,6 +138,11 @@ export default function PaymentSuccessPage() {
           {status === "error" && (
             <CardDescription className="text-red-600">
               {error || "An error occurred processing your payment."}
+            </CardDescription>
+          )}
+          {status === "pending_approval" && (
+            <CardDescription>
+              Please complete the payment approval in PayPal.
             </CardDescription>
           )}
         </CardHeader>
@@ -157,6 +178,8 @@ export default function PaymentSuccessPage() {
                   "Please try again with a different payment method. No charges have been made to your account."
                 ) : errorCode === 'ORDER_NOT_APPROVED' ? (
                   "Please return to the checkout page and complete the PayPal payment process."
+                ) : errorCode === 'PENDING_APPROVAL' ? (
+                  "Please complete the payment approval in PayPal."
                 ) : (
                   "We encountered an issue processing your payment. If funds were deducted from your account, they will be refunded automatically."
                 )}
@@ -173,6 +196,11 @@ export default function PaymentSuccessPage() {
                   Error Code: {errorCode}
                 </p>
               )}
+            </div>
+          )}
+          {status === "pending_approval" && (
+            <div className="space-y-4">
+              <p>Please complete the payment approval in PayPal.</p>
             </div>
           )}
         </CardContent>
@@ -196,6 +224,11 @@ export default function PaymentSuccessPage() {
                 </a>
               </Button>
             </>
+          )}
+          {status === "pending_approval" && (
+            <Button variant="outline" onClick={() => window.location.href = "https://www.paypal.com"}>
+              Complete PayPal Payment
+            </Button>
           )}
         </CardFooter>
       </Card>
