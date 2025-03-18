@@ -297,10 +297,26 @@ export class PaymentService {
       }
 
       const accessToken = await this.getAccessToken();
-      console.log("[PAYPAL] Attempting to capture payment for order:", orderId);
+
+      // First verify the order status
+      const orderResponse = await axios.get(
+        `${BASE_URL}/v2/checkout/orders/${orderId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log("[PAYPAL] Current order status:", orderResponse.data.status);
+
+      if (orderResponse.data.status !== 'APPROVED') {
+        throw new Error(`Cannot capture payment in status: ${orderResponse.data.status}`);
+      }
 
       try {
-        // Single capture attempt
+        console.log("[PAYPAL] Attempting to capture payment for order:", orderId);
         const captureResponse = await axios.post(
           `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
           {},
@@ -320,17 +336,7 @@ export class PaymentService {
         });
 
         if (captureStatus === 'COMPLETED') {
-          return { success: true };
-        }
-
-        throw new Error(`Unexpected capture status: ${captureStatus}`);
-      } catch (error) {
-        console.error("[PAYPAL] Capture failed:", error.response?.data || error);
-        throw error;
-      }
-
-
-      // Update payment status to completed but funds held
+          // Update payment status to completed but funds held
       console.log("[PAYPAL] Updating payment status to completed_pending_shipment");
       await storage.updatePaymentStatus(payment.id, "completed_pending_shipment");
 
