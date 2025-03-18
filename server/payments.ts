@@ -327,33 +327,26 @@ export class PaymentService {
       let lastError = null;
       let captureStatus = null;
 
-      // Initial status check with longer timeout
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      // Verify order is in APPROVED state before attempting capture
+      // Initial status check 
       const initialStatus = await this.getOrderStatus(orderId);
-      if (initialStatus.status !== 'APPROVED') {
-        console.log('[PAYPAL] Order not in APPROVED state:', initialStatus.status);
-        throw new Error('Please complete the PayPal checkout process first');
+      console.log('[PAYPAL] Initial order status:', initialStatus.status);
+
+      // Only proceed if order is APPROVED or COMPLETED
+      if (initialStatus.status !== 'APPROVED' && initialStatus.status !== 'COMPLETED') {
+        console.log('[PAYPAL] Order not ready for capture:', initialStatus.status);
+        throw new Error('Please complete the payment approval in PayPal first');
       }
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`[PAYPAL] Capture attempt ${attempt} of ${maxRetries}`);
 
-          // Add delay between capture attempts
+          // Add short delay between retries
           if (attempt > 1) {
-            await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
 
-          // Verify order status hasn't changed
-          const currentStatus = await this.getOrderStatus(orderId);
-          if (currentStatus.status !== 'APPROVED') {
-            console.log(`[PAYPAL] Order status changed to: ${currentStatus.status}`);
-            throw new Error('Order status changed during capture process. Please try again.');
-          }
-
-          // Add delay between retries
+          // Attempt capture directly
           if (attempt > 1) {
             await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
           }
@@ -377,19 +370,38 @@ export class PaymentService {
           console.error(`[PAYPAL] Capture attempt ${attempt} failed:`, error.response?.data);
           lastError = error;
 
-          if (error.response?.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED') {
-            throw new Error("Payment method was declined. Please try a different payment method.");
+          // Handle specific PayPal errors
+          if (error.response?.data) {
+            const paypalError = error.response.data;
+            console.error("[PAYPAL] Capture error response:", paypalError);
+
+            if (paypalError.details?.[0]?.issue === 'INSTRUMENT_DECLINED') {
+              throw new Error("Payment method was declined. Please try a different payment method.");
+            }
+
+            if (paypalError.details?.[0]?.issue === 'ORDER_NOT_APPROVED') {
+              throw new Error("Please complete the payment approval in PayPal.");
+            }
+
+            if (paypalError.name === 'UNPROCESSABLE_ENTITY') {
+              // For transaction refused, try again
+              if (paypalError.details?.[0]?.issue === 'TRANSACTION_REFUSED') {
+                if (attempt === maxRetries) {
+                  throw new Error("Transaction was refused. Please try the payment again.");
+                }
+                console.log(`[PAYPAL] Transaction refused, retrying in 1000ms...`);
+                continue;
+              }
+            }
           }
 
+          // For other errors on final attempt
           if (attempt === maxRetries) {
             console.error("[PAYPAL] All capture attempts failed");
-            if (error.response?.data?.name === 'UNPROCESSABLE_ENTITY') {
-              throw new Error("Payment capture failed after multiple attempts. Please try the payment process again.");
-            }
-            throw lastError;
+            throw new Error("Payment capture failed. Please try the payment process again.");
           }
 
-          console.log(`[PAYPAL] Retrying capture in ${2000 * (attempt + 1)}ms...`);
+          console.log(`[PAYPAL] Retrying capture...`);
           continue;
         }
 
