@@ -276,20 +276,16 @@ export class PaymentService {
 
   static async handlePaymentSuccess(orderId: string) {
     try {
-      console.log("[PAYPAL] Processing payment capture for order:", orderId);
+      console.log("[PAYPAL] Starting payment capture for order:", orderId);
 
-      // Get order status first
+      // Get access token for API calls
       const accessToken = await this.getAccessToken();
-      const orderStatus = await this.getOrderStatus(orderId);
 
+      // First verify the order exists and get its status
+      const orderStatus = await this.getOrderStatus(orderId);
       console.log("[PAYPAL] Current order status:", orderStatus);
 
-      // Verify order is approved before capture
-      if (orderStatus.status !== 'APPROVED') {
-        throw new Error(`Cannot capture payment in status: ${orderStatus.status}`);
-      }
-
-      // Find payment record
+      // Find our payment record
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
         console.error("[PAYPAL] Payment record not found for order:", orderId);
@@ -301,6 +297,12 @@ export class PaymentService {
         auctionId: payment.auctionId,
         status: payment.status
       });
+
+      // Only proceed with capture if order is in APPROVED state
+      if (!['APPROVED', 'COMPLETED'].includes(orderStatus.status)) {
+        console.error("[PAYPAL] Invalid order status for capture:", orderStatus.status);
+        throw new Error(`Cannot capture payment in status: ${orderStatus.status}`);
+      }
 
       if (payment.status !== 'pending') {
         console.error("[PAYPAL] Invalid payment status for capture:", payment.status);
