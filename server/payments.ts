@@ -299,40 +299,55 @@ export class PaymentService {
       const accessToken = await this.getAccessToken();
 
       // Verify order status before capture
-      const orderResponse = await axios.get(
-        `${BASE_URL}/v2/checkout/orders/${orderId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+      try {
+        console.log("[PAYPAL] Attempting to capture payment directly");
+        
+        // Try capturing the payment first
+        const captureResponse = await axios.post(
+          `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+          {},
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+            }
           }
+        );
+
+        const captureStatus = captureResponse.data.status;
+        console.log("[PAYPAL] Capture response:", {
+          status: captureStatus,
+          orderId: captureResponse.data.id
+        });
+
+        if (captureStatus === 'COMPLETED') {
+          return { success: true };
         }
-      );
 
-      // Log PayPal order details
-      const orderData = orderResponse.data;
-      console.log("[PAYPAL] Order details:", {
-        status: orderData.status,
-        id: orderData.id,
-        intent: orderData.intent
-      });
+        throw new Error(`Unexpected capture status: ${captureStatus}`);
+      } catch (captureError) {
+        console.error("[PAYPAL] Capture failed, checking order status:", captureError);
 
-      switch (orderData.status) {
-        case 'CREATED':
-          throw new Error("Payment not approved yet. The buyer needs to approve the payment in PayPal.");
-        case 'SAVED':
-          throw new Error("Payment is saved but not approved.");
-        case 'APPROVED':
-          // Only attempt capture when order is APPROVED
-          console.log("[PAYPAL] Order is approved, proceeding with capture");
-          break;
-        case 'VOIDED':
-          throw new Error("Order has been voided and cannot be captured");
-        case 'COMPLETED':
-          console.log("[PAYPAL] Order is already completed");
-          return { status: 'completed', success: true };
-        default:
-          throw new Error(`Cannot capture order in status: ${orderData.status}`);
+        // If capture fails, check order status
+        const orderResponse = await axios.get(
+          `${BASE_URL}/v2/checkout/orders/${orderId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const orderStatus = orderResponse.data.status;
+        console.log("[PAYPAL] Order status:", orderStatus);
+
+        if (orderStatus === 'COMPLETED') {
+          return { success: true };
+        }
+
+        throw new Error(`Payment cannot be captured in status: ${orderStatus}`);
       }
 
       // Proceed with capture only if APPROVED
