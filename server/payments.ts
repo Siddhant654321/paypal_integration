@@ -327,14 +327,26 @@ export class PaymentService {
       let lastError = null;
       let captureStatus = null;
 
-      // Initial status check 
-      const initialStatus = await this.getOrderStatus(orderId);
-      console.log('[PAYPAL] Initial order status:', initialStatus.status);
+      // Wait for order to be ready for capture
+      const maxStatusChecks = 5;
+      let orderStatus;
+      
+      for (let i = 0; i < maxStatusChecks; i++) {
+        orderStatus = await this.getOrderStatus(orderId);
+        console.log(`[PAYPAL] Check ${i + 1}: Order status is ${orderStatus.status}`);
+        
+        if (orderStatus.status === 'APPROVED') {
+          break;
+        }
+        
+        if (i < maxStatusChecks - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
 
-      // Only proceed if order is APPROVED or COMPLETED
-      if (initialStatus.status !== 'APPROVED' && initialStatus.status !== 'COMPLETED') {
-        console.log('[PAYPAL] Order not ready for capture:', initialStatus.status);
-        throw new Error('Please complete the payment approval in PayPal first');
+      if (orderStatus.status !== 'APPROVED') {
+        console.log('[PAYPAL] Order never reached APPROVED state:', orderStatus.status);
+        throw new Error('Please complete the PayPal checkout process and approve the payment');
       }
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
