@@ -265,20 +265,21 @@ export class PaymentService {
         throw new Error(`Invalid payment status: ${payment.status}`);
       }
 
-      // Add initial delay before checking order status
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Initial delay before checking order status
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Get and verify order status
       const orderStatus = await this.getOrderStatus(orderId);
       console.log("[PAYPAL] Current order status:", orderStatus);
 
-      if (!['APPROVED', 'SAVED'].includes(orderStatus.status)) {
-        throw new Error("Please complete the PayPal checkout process first");
+      // For card payments, the status might be SAVED instead of APPROVED
+      if (!['APPROVED', 'SAVED', 'COMPLETED'].includes(orderStatus.status)) {
+        throw new Error("Please complete the payment process first");
       }
 
       // Configure capture retry settings
       const maxRetries = 3;
-      const baseDelay = 2000;
+      const baseDelay = 3000; // Increased delay
       let captureSuccess = false;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -291,11 +292,20 @@ export class PaymentService {
             await new Promise(resolve => setTimeout(resolve, delay));
           }
 
-          // Verify order status before capture
+          // Get fresh order status before capture
           const currentStatus = await this.getOrderStatus(orderId);
-          if (!['APPROVED', 'SAVED'].includes(currentStatus.status)) {
+          console.log(`[PAYPAL] Pre-capture status check (attempt ${attempt}):`, currentStatus.status);
+
+          if (!['APPROVED', 'SAVED', 'COMPLETED'].includes(currentStatus.status)) {
             console.log(`[PAYPAL] Order not ready for capture: ${currentStatus.status}`);
             continue;
+          }
+
+          // Only attempt capture if not already completed
+          if (currentStatus.status === 'COMPLETED') {
+            console.log('[PAYPAL] Order already captured');
+            captureSuccess = true;
+            break;
           }
 
           // Attempt capture
@@ -306,11 +316,17 @@ export class PaymentService {
               headers: {
                 'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
-                'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`,
+                'PayPal-Request-Id': `capture_${orderId}_${attempt}_${Date.now()}`,
                 'Prefer': 'return=representation'
               }
             }
           );
+
+          console.log('[PAYPAL] Capture response:', {
+            status: captureResponse.status,
+            paypalStatus: captureResponse.data.status,
+            purchaseUnits: captureResponse.data.purchase_units
+          });
 
           if (captureResponse.data.status === 'COMPLETED') {
             captureSuccess = true;
@@ -324,15 +340,24 @@ export class PaymentService {
           if (error.response?.data?.details?.[0]) {
             const paypalError = error.response.data.details[0];
 
+            // Handle specific error cases
             if (paypalError.issue === 'INSTRUMENT_DECLINED') {
               throw new Error("Payment method was declined. Please try a different payment method.");
             }
 
             if (paypalError.issue === 'ORDER_NOT_APPROVED') {
-              throw new Error("Please complete the payment approval in PayPal.");
+              throw new Error("Please complete the payment approval process.");
             }
 
-            // For other errors, only throw on final attempt
+            if (paypalError.issue === 'TRANSACTION_REFUSED') {
+              if (attempt < maxRetries) {
+                console.log('[PAYPAL] Transaction refused, will retry after delay');
+                continue;
+              }
+              throw new Error("Transaction was refused. Please try a different payment method.");
+            }
+
+            // For other errors on final attempt
             if (attempt === maxRetries) {
               throw new Error(paypalError.description || "Payment capture failed. Please try again.");
             }
