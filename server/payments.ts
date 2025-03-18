@@ -285,6 +285,9 @@ export class PaymentService {
       const orderStatus = await this.getOrderStatus(orderId);
       console.log("[PAYPAL] Current order status:", orderStatus);
 
+      // Add delay to ensure PayPal has processed the approval
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
       // Find our payment record
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
@@ -331,11 +334,11 @@ export class PaymentService {
         console.log("[PAYPAL] Capture response:", captureResponse.data);
       } catch (error) {
         console.error("[PAYPAL] Capture error details:", error.response?.data);
-        
+
         if (error.response?.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED') {
           throw new Error("Payment method was declined. Please try a different payment method.");
         }
-        
+
         if (error.response?.data?.name === 'UNPROCESSABLE_ENTITY') {
           throw new Error("Order cannot be captured at this time. Please ensure the order is approved.");
         }
