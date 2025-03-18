@@ -141,12 +141,15 @@ export class PaymentService {
         totalAmountDollars
       });
 
+      // Get base URL for return URLs
+      const baseUrl = process.env.APP_URL || 'http://localhost:5001';
+
       // Create PayPal order
       const orderRequest = {
         intent: "CAPTURE",
         application_context: {
-          return_url: `${process.env.APP_URL || window.location.origin}/payment/success`,
-          cancel_url: `${process.env.APP_URL || window.location.origin}/payment/cancel`,
+          return_url: `${baseUrl}/payment/success`,
+          cancel_url: `${baseUrl}/payment/cancel`,
           brand_name: "Agriculture Marketplace",
           landing_page: "LOGIN",
           user_action: "PAY_NOW",
@@ -221,7 +224,12 @@ export class PaymentService {
         paymentStatus: "pending"
       });
 
-      return { orderId, payment };
+      return { 
+        orderId, 
+        payment,
+        approvalUrl: response.data.links.find((link: any) => link.rel === "approve")?.href
+      };
+
     } catch (error) {
       console.error("[PAYPAL] Error creating order:", error);
       if (axios.isAxiosError(error) && error.response) {
