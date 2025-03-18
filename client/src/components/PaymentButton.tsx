@@ -11,6 +11,7 @@ interface PaymentButtonProps {
 export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentError }: PaymentButtonProps) => {
   const [{ isResolved, options }] = usePayPalScriptReducer();
   const [orderID, setOrderID] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Log PayPal environment and configuration
   useEffect(() => {
@@ -25,6 +26,7 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
   const createOrder = async () => {
     try {
       console.log("[PAYPAL] Initiating order creation for amount:", amount);
+      setIsProcessing(true);
 
       const response = await fetch('/api/payments/create', {
         method: 'POST',
@@ -40,19 +42,23 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
         throw new Error(error.message || 'Failed to create payment');
       }
 
-      const { orderId } = await response.json();
-      console.log("[PAYPAL] Order created successfully:", orderId);
-      setOrderID(orderId);
-      return orderId;
+      const data = await response.json();
+      console.log("[PAYPAL] Order created successfully:", data);
+      setOrderID(data.orderId);
+      return data.orderId;
     } catch (error) {
       console.error("[PAYPAL] Error creating order:", error);
       onPaymentError(error instanceof Error ? error.message : 'Failed to create payment');
       throw error;
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const onApprove = async (data: { orderID: string }, actions: any) => {
     try {
+      setIsProcessing(true);
+
       if (!data.orderID) {
         throw new Error("No order ID received from PayPal");
       }
@@ -96,6 +102,8 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
     } catch (error) {
       console.error("[PAYPAL] Error capturing payment:", error);
       onPaymentError(error instanceof Error ? error.message : 'Failed to capture payment');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -117,6 +125,7 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
     <div className="w-full max-w-md mx-auto">
       <PayPalButtons
         style={{ layout: "vertical" }}
+        disabled={isProcessing}
         createOrder={createOrder}
         onApprove={onApprove}
         onCancel={onCancel}

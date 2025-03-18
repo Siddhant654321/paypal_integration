@@ -54,13 +54,13 @@ function Router() {
 
 function App() {
   const paypalConfig = {
-    "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID,
+    clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID, // Fixed property name
     currency: "USD",
     intent: "capture",
-    "data-client-token": import.meta.env.VITE_PAYPAL_CLIENT_TOKEN,
-    "enable-funding": "card,credit,venmo",
-    "disable-funding": "paylater",
-    "data-namespace": "PayPalSDK",
+    clientToken: import.meta.env.VITE_PAYPAL_CLIENT_TOKEN,
+    enableFunding: ["card", "credit", "venmo"],
+    disableFunding: ["paylater"],
+    dataNamespace: "PayPalSDK",
     "data-partner-attribution-id": import.meta.env.VITE_PAYPAL_BN_CODE || 'AgriMarketplace_SP'
   };
 
