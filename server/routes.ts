@@ -347,6 +347,20 @@ router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
   }
 });
 
+// Add the client token endpoint near other payment routes
+router.get("/api/payments/client-token", requireAuth, async (req, res) => {
+  try {
+    console.log("[PAYPAL] Generating client token for user:", req.user?.id);
+    const clientToken = await PaymentService.generateClientToken();
+    res.json({ clientToken });
+  } catch (error) {
+    console.error("[PAYPAL] Error generating client token:", error);
+    res.status(500).json({ 
+      message: error instanceof Error ? error.message : "Failed to generate client token" 
+    });
+  }
+});
+
 
 
 // Add fulfillment endpoint

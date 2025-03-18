@@ -480,6 +480,217 @@ export class PaymentService {
       throw new Error("Failed to get order status");
     }
   }
+  // Add the generateClientToken method to the PaymentService class
+  static async generateClientToken(): Promise<string> {
+    try {
+      console.log("[PAYPAL] Generating client token");
+
+      const accessToken = await this.getAccessToken();
+
+      const response = await axios.post(
+        `${BASE_URL}/v1/identity/generate-token`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'PayPal-Partner-Attribution-Id': process.env.PAYPAL_BN_CODE || 'AgriMarketplace_SP'
+          }
+        }
+      );
+
+      console.log("[PAYPAL] Client token generated successfully");
+      return response.data.client_token;
+
+    } catch (error) {
+      console.error("[PAYPAL] Error generating client token:", error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error("[PAYPAL] API Error Details:", {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+      throw new Error("Failed to generate PayPal client token");
+    }
+  }
+  static async handlePaymentFailure(orderId: string) {
+    try {
+      console.log("[PAYPAL] Processing payment failure for order:", orderId);
+      this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_START');
+
+      const payment = await storage.findPaymentByPayPalId(orderId);
+      if (!payment) {
+        throw new Error("Payment record not found");
+      }
+
+      this.logPaymentFlow(orderId, 'PAYMENT_RECORD_FOUND', { payment });
+
+      // Update payment status
+      await storage.updatePaymentStatus(payment.id, "failed");
+      this.logPaymentFlow(orderId, 'PAYMENT_STATUS_UPDATED', { status: 'failed' });
+
+      // Update auction status
+      await storage.updateAuction(payment.auctionId, {
+        status: "pending_fulfillment", // Keep the original status
+        paymentStatus: "failed"
+      });
+      this.logPaymentFlow(orderId, 'AUCTION_STATUS_UPDATED', { status: 'failed' });
+
+      // Notify seller
+      await NotificationService.createNotification({
+        userId: payment.sellerId,
+        type: "payment",
+        title: "Payment Failed",
+        message: `Payment failed for auction #${payment.auctionId}`,
+        metadata: { auctionId: payment.auctionId }
+      });
+      this.logPaymentFlow(orderId, 'NOTIFICATION_SENT', { userId: payment.sellerId, type: 'payment', title: 'Payment Failed' });
+
+      console.log("[PAYPAL] Payment failure processed");
+      this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_COMPLETED');
+
+    } catch (error: any) {
+      console.error("[PAYPAL] Error handling payment failure:", error);
+      this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_ERROR', { error: error.message });
+      throw error;
+    }
+  }
+
+  static async releaseFundsToSeller(paymentId: number, trackingInfo: string) {
+    try {
+      console.log("[PAYPAL] Initiating fund release for payment:", paymentId);
+      this.logPaymentFlow(String(paymentId), 'FUND_RELEASE_START');
+
+      const payment = await storage.getPayment(paymentId);
+      if (!payment) {
+        throw new Error("Payment not found");
+      }
+
+      this.logPaymentFlow(String(paymentId), 'PAYMENT_RECORD_FOUND', { payment });
+
+      if (payment.status !== "completed_pending_shipment") {
+        throw new Error(`Invalid payment status for fund release: ${payment.status}`);
+      }
+
+      // Get seller's PayPal info
+      const sellerProfile = await storage.getProfile(payment.sellerId);
+
+      // Calculate seller payout
+      const sellerPayout = payment.sellerPayout || Math.round(payment.amount * 0.90);
+
+      let payoutResult;
+
+      // Check if seller has PayPal info and PayPal is configured
+      if (!sellerProfile?.paypalMerchantId || !process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+        console.warn("[PAYPAL] PayPal not fully configured, using simulated payout");
+
+        // If in production but PayPal not configured, create a simulated payout
+        payoutResult = await SellerPaymentService.createPayout(
+          paymentId,
+          payment.sellerId,
+          sellerPayout,
+          sellerProfile?.paypalMerchantId || `test-${payment.sellerId}@example.com`
+        );
+      } else {
+        console.log("[PAYPAL] Processing payout to seller:", {
+          sellerId: payment.sellerId,
+          merchantId: sellerProfile.paypalMerchantId.substring(0, 4) + '...',
+          amount: sellerPayout,
+          originalAmount: payment.amount
+        });
+
+        // Process payout to seller using PayPal
+        payoutResult = await SellerPaymentService.createPayout(
+          paymentId,
+          payment.sellerId,
+          sellerPayout,
+          sellerProfile.paypalMerchantId
+        );
+      }
+
+      if (!payoutResult || (!payoutResult.batch_header?.payout_batch_id && !payoutResult.simulated)) {
+        throw new Error("Failed to create payout");
+      }
+
+      // Update payment and tracking info
+      console.log("[PAYPAL] Payout successful, updating payment status to completed");
+      await storage.updatePayment(paymentId, {
+        status: "completed",
+        trackingInfo,
+        completedAt: new Date()
+      });
+      this.logPaymentFlow(String(paymentId), 'PAYMENT_STATUS_UPDATED', { status: 'completed' });
+
+      // Update auction status
+      console.log("[PAYPAL] Updating auction status to fulfilled");
+      await storage.updateAuction(payment.auctionId, {
+        status: "fulfilled",
+        paymentStatus: "completed"
+      });
+      this.logPaymentFlow(String(paymentId), 'AUCTION_STATUS_UPDATED', { status: 'fulfilled' });
+
+      // Send tracking info to buyer
+      await NotificationService.createNotification({
+        userId: payment.buyerId,
+        type: "fulfillment",
+        title: "Order Shipped",
+        message: `Your order has been shipped. Tracking information: ${trackingInfo}`,
+        metadata: { auctionId: payment.auctionId, trackingInfo }
+      });
+      this.logPaymentFlow(String(paymentId), 'NOTIFICATION_SENT', { userId: payment.buyerId, type: 'fulfillment' });
+
+      // Send notification to seller about payment
+      await NotificationService.createNotification({
+        userId: payment.sellerId,
+        type: "payment",
+        title: "Funds Released",
+        message: `Your funds of $${(sellerPayout / 100).toFixed(2)} have been released for auction #${payment.auctionId}`,
+        metadata: { auctionId: payment.auctionId, amount: sellerPayout }
+      });
+      this.logPaymentFlow(String(paymentId), 'NOTIFICATION_SENT', { userId: payment.sellerId, type: 'payment', title: 'Funds Released' });
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("[PAYPAL] Error releasing funds:", error);
+      this.logPaymentFlow(String(paymentId), 'FUND_RELEASE_ERROR', { error: error.message });
+      throw error;
+    }
+  }
+
+  static async getPaymentStatus(auctionId: number): Promise<string> {
+    try {
+      console.log("[PAYPAL] Getting payment status for auction:", auctionId);
+
+      // Get the payment record
+      const payment = await storage.getPaymentByAuctionId(auctionId);
+      if (!payment) {
+        return "pending";
+      }
+
+      this.logPaymentFlow(String(auctionId), 'PAYMENT_RECORD_FOUND', { payment });
+
+      // If payment has PayPal order ID, verify its status
+      if (payment.paypalOrderId) {
+        const orderStatus = await this.getOrderStatus(payment.paypalOrderId);
+        this.logPaymentFlow(String(auctionId), 'ORDER_STATUS_CHECK', orderStatus);
+      }
+
+      // Get the auction to check both statuses
+      const auction = await storage.getAuction(auctionId);
+      this.logPaymentFlow(String(auctionId), 'AUCTION_RECORD_FOUND', auction);
+      console.log("[PAYPAL] Current status in tables:", {
+        paymentTableStatus: payment.status,
+        auctionTableStatus: auction?.paymentStatus
+      });
+
+      // Return the payment table status as it's more accurate
+      return payment.status;
+    } catch (error: any) {
+      console.error("[PAYPAL] Error getting payment status:", error);
+      this.logPaymentFlow(String(auctionId), 'PAYMENT_STATUS_ERROR', { error: error.message });
+      throw new Error("Failed to get payment status");
+    }
+  }
 }
 
 class SellerPaymentService {
@@ -604,180 +815,4 @@ class SellerPaymentService {
       throw new Error("Failed to process seller payout. Please ensure your PayPal account is properly configured.");
     }
   }
-}
-
-static async handlePaymentFailure(orderId: string) {
-  try {
-    console.log("[PAYPAL] Processing payment failure for order:", orderId);
-    this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_START');
-
-    const payment = await storage.findPaymentByPayPalId(orderId);
-    if (!payment) {
-      throw new Error("Payment record not found");
-    }
-
-    this.logPaymentFlow(orderId, 'PAYMENT_RECORD_FOUND', { payment });
-
-    // Update payment status
-    await storage.updatePaymentStatus(payment.id, "failed");
-    this.logPaymentFlow(orderId, 'PAYMENT_STATUS_UPDATED', { status: 'failed' });
-
-    // Update auction status
-    await storage.updateAuction(payment.auctionId, {
-      status: "failed",
-      paymentStatus: "failed"
-    });
-    this.logPaymentFlow(orderId, 'AUCTION_STATUS_UPDATED', { status: 'failed' });
-
-    // Notify seller
-    await NotificationService.createNotification({
-      userId: payment.sellerId,
-      type: "payment",
-      title: "Payment Failed",
-      message: `Payment failed for auction #${payment.auctionId}`
-    });
-    this.logPaymentFlow(orderId, 'NOTIFICATION_SENT', { userId: payment.sellerId, type: 'payment', title: 'Payment Failed' });
-
-    console.log("[PAYPAL] Payment failure processed");
-    this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_COMPLETED');
-
-  } catch (error: any) {
-    console.error("[PAYPAL] Error handling payment failure:", error);
-    this.logPaymentFlow(orderId, 'PAYMENT_FAILURE_ERROR', { error: error.message });
-    throw error;
-  }
-}
-static async releaseFundsToSeller(paymentId: number, trackingInfo: string) {
-  try {
-    console.log("[PAYPAL] Initiating fund release for payment:", paymentId);
-    this.logPaymentFlow(String(paymentId), 'FUND_RELEASE_START');
-
-    const payment = await storage.getPayment(paymentId);
-    if (!payment) {
-      throw new Error("Payment not found");
-    }
-
-    this.logPaymentFlow(String(paymentId), 'PAYMENT_RECORD_FOUND', { payment });
-
-    if (payment.status !== "completed_pending_shipment") {
-      throw new Error(`Invalid payment status for fund release: ${payment.status}`);
-    }
-
-    // Get seller's PayPal info
-    const sellerProfile = await storage.getProfile(payment.sellerId);
-
-    // Calculate seller payout (90% of the final bid amount)
-    const sellerPayout = Math.round(payment.amount * 0.90);
-
-    let payoutResult;
-
-    // Check if seller has PayPal info and PayPal is configured
-    if (!sellerProfile?.paypalMerchantId || !process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
-      console.warn("[PAYPAL] PayPal not fully configured, using simulated payout");
-
-      // If in production but PayPal not configured, create a simulated payout
-      payoutResult = await SellerPaymentService.createPayout(
-        paymentId,
-        payment.sellerId,
-        sellerPayout,
-        sellerProfile?.paypalMerchantId || `test-${payment.sellerId}@example.com`
-      );
-    } else {
-      console.log("[PAYPAL] Processing payout to seller:", {
-        sellerId: payment.sellerId,
-        merchantId: sellerProfile.paypalMerchantId.substring(0, 4) + '...',
-        amount: sellerPayout,
-        originalAmount: payment.amount
-      });
-
-      // Process payout to seller using PayPal
-      payoutResult = await SellerPaymentService.createPayout(
-        paymentId,
-        payment.sellerId,
-        sellerPayout,
-        sellerProfile.paypalMerchantId
-      );
-    }
-
-    if (!payoutResult || (!payoutResult.batch_header?.payout_batch_id && !payoutResult.simulated)) {
-      throw new Error("Failed to create payout");
-    }
-
-    // Update payment and tracking info
-    console.log("[PAYPAL] Payout successful, updating payment status to completed");
-    await storage.updatePayment(paymentId, {
-      status: "completed",
-      trackingInfo,
-      completedAt: new Date()
-    });
-    this.logPaymentFlow(String(paymentId), 'PAYMENT_STATUS_UPDATED', { status: 'completed' });
-
-    // Update auction status
-    console.log("[PAYPAL] Updating auction status to fulfilled");
-    await storage.updateAuction(payment.auctionId, {
-      status: "fulfilled",
-      paymentStatus: "completed",
-      trackingInfo
-    });
-    this.logPaymentFlow(String(paymentId), 'AUCTION_STATUS_UPDATED', { status: 'fulfilled' });
-
-    // Send tracking info to buyer
-    await NotificationService.createNotification({
-      userId: payment.buyerId,
-      type: "fulfillment",
-      title: "Order Shipped",
-      message: `Your order has been shipped. Tracking information: ${trackingInfo}`
-    });
-    this.logPaymentFlow(String(paymentId), 'NOTIFICATION_SENT', { userId: payment.buyerId, type: 'fulfillment' });
-
-    // Send notification to seller about payment
-    await NotificationService.createNotification({
-      userId: payment.sellerId,
-      type: "payment",
-      title: "Funds Released",
-      message: `Your funds of $${(sellerPayout / 100).toFixed(2)} have been released for auction #${payment.auctionId}`
-    });
-    this.logPaymentFlow(String(paymentId), 'NOTIFICATION_SENT', { userId: payment.sellerId, type: 'payment', title: 'Funds Released' });
-
-    return { success: true };
-  } catch (error) {
-    console.error("[PAYPAL] Error releasing funds:", error);
-    this.logPaymentFlow(String(paymentId), 'FUND_RELEASE_ERROR', { error: error.message });
-    throw error;
-  }
-}
-static async getPaymentStatus(auctionId: number): Promise<string> {
-  try {
-    console.log("[PAYPAL] Getting payment status for auction:", auctionId);
-
-    // Get the payment record
-    const payment = await storage.getPaymentByAuctionId(auctionId);
-    if (!payment) {
-      return "pending";
-    }
-
-    this.logPaymentFlow(String(auctionId), 'PAYMENT_RECORD_FOUND', { payment });
-
-    // If payment has PayPal order ID, verify its status
-    if (payment.paypalOrderId) {
-      const orderStatus = await this.getOrderStatus(payment.paypalOrderId);
-      this.logPaymentFlow(String(auctionId), 'ORDER_STATUS_CHECK', orderStatus);
-    }
-
-    // Get the auction to check both statuses
-    const auction = await storage.getAuction(auctionId);
-    this.logPaymentFlow(String(auctionId), 'AUCTION_RECORD_FOUND', auction);
-    console.log("[PAYPAL] Current status in tables:", {
-      paymentTableStatus: payment.status,
-      auctionTableStatus: auction?.paymentStatus
-    });
-
-    // Return the payment table status as it's more accurate
-    return payment.status;
-  } catch (error) {
-    console.error("[PAYPAL] Error getting payment status:", error);
-    this.logPaymentFlow(String(auctionId), 'PAYMENT_STATUS_ERROR', { error: error.message });
-    throw new Error("Failed to get payment status");
-  }
-}
 }

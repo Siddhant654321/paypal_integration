@@ -1,9 +1,9 @@
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import NavBar from "@/components/nav-bar";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
@@ -23,6 +23,37 @@ import SellerProfilePage from "@/pages/seller-profile";
 import BuyerRequestPage from "@/pages/buyer-request-page";
 import EditBuyerRequestPage from "@/pages/edit-buyer-request";
 import FAQPage from "@/pages/faq-page";
+import React from 'react';
+
+function PayPalProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+
+  const { data: clientToken, isLoading } = useQuery({
+    queryKey: ['/api/payments/client-token'],
+    enabled: !!user, // Only fetch when user is logged in
+  });
+
+  if (isLoading || !clientToken) {
+    return <>{children}</>; // Render without PayPal during loading
+  }
+
+  const paypalConfig = {
+    clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID,
+    currency: "USD",
+    intent: "capture",
+    clientToken: clientToken.clientToken,
+    enableFunding: ["card", "credit", "venmo"],
+    disableFunding: ["paylater"],
+    dataNamespace: "PayPalSDK",
+    "data-partner-attribution-id": import.meta.env.VITE_PAYPAL_BN_CODE || 'AgriMarketplace_SP'
+  };
+
+  return (
+    <PayPalScriptProvider options={paypalConfig}>
+      {children}
+    </PayPalScriptProvider>
+  );
+}
 
 function Router() {
   return (
@@ -53,26 +84,15 @@ function Router() {
 }
 
 function App() {
-  const paypalConfig = {
-    clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID, // Fixed property name
-    currency: "USD",
-    intent: "capture",
-    clientToken: import.meta.env.VITE_PAYPAL_CLIENT_TOKEN,
-    enableFunding: ["card", "credit", "venmo"],
-    disableFunding: ["paylater"],
-    dataNamespace: "PayPalSDK",
-    "data-partner-attribution-id": import.meta.env.VITE_PAYPAL_BN_CODE || 'AgriMarketplace_SP'
-  };
-
   return (
-    <PayPalScriptProvider options={paypalConfig}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <PayPalProvider>
           <Router />
           <Toaster />
-        </AuthProvider>
-      </QueryClientProvider>
-    </PayPalScriptProvider>
+        </PayPalProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 
