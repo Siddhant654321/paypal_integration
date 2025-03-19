@@ -324,7 +324,8 @@ export class PaymentService {
 
       // Configure capture retry settings
       const maxRetries = 5;
-      const baseDelay = 10000;
+      // Using different variable name to avoid conflict
+      const captureDelay = 10000;
 
       // Try to capture the payment
       let captureSuccess = false;
