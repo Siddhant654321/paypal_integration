@@ -490,41 +490,59 @@ export class PaymentService {
   }
 
   static async getOrderStatus(orderId: string) {
-    try {
-      console.log("[PAYPAL] Getting order status for:", orderId);
-      const accessToken = await this.getAccessToken();
+    let attempts = 0;
+    const maxAttempts = 3;
+    const baseDelay = 2000;
 
-      const response = await axios.get(
-        `${BASE_URL}/v2/checkout/orders/${orderId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'PayPal-Partner-Attribution-Id': process.env.PAYPAL_BN_CODE || 'AgriMarketplace_SP',
-            'Prefer': 'return=representation'
+    while (attempts < maxAttempts) {
+      try {
+        console.log(`[PAYPAL] Getting order status for ${orderId} (attempt ${attempts + 1}/${maxAttempts})`);
+        const accessToken = await this.getAccessToken();
+
+        const response = await axios.get(
+          `${BASE_URL}/v2/checkout/orders/${orderId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'PayPal-Partner-Attribution-Id': process.env.PAYPAL_BN_CODE || 'AgriMarketplace_SP',
+              'Prefer': 'return=representation'
+            }
           }
+        );
+
+        const status = {
+          id: response.data.id,
+          status: response.data.status,
+          payer: response.data.payer,
+          amount: response.data.purchase_units[0]?.amount,
+          links: response.data.links
+        };
+
+        this.logPaymentFlow(orderId, 'ORDER_STATUS_CHECK', status);
+        return status;
+
+      } catch (error: any) {
+        attempts++;
+        console.error(`[PAYPAL] Error getting order status (attempt ${attempts}/${maxAttempts}):`, error);
+        this.logPaymentFlow(orderId, 'ORDER_STATUS_ERROR', {
+          attempt: attempts,
+          error: error.message,
+          response: error.response?.data
+        });
+
+        if (attempts === maxAttempts) {
+          throw new Error(`Failed to get order status after ${maxAttempts} attempts: ${error.message}`);
         }
-      );
 
-      const status = {
-        id: response.data.id,
-        status: response.data.status,
-        payer: response.data.payer,
-        amount: response.data.purchase_units[0]?.amount,
-        links: response.data.links
-      };
-
-      this.logPaymentFlow(orderId, 'ORDER_STATUS_CHECK', status);
-      return status;
-
-    } catch (error: any) {
-      console.error("[PAYPAL] Error getting order status:", error);
-      this.logPaymentFlow(orderId, 'ORDER_STATUS_ERROR', {
-        error: error.message,
-        response: error.response?.data
-      });
-      throw new Error("Failed to get order status");
+        // Wait before retrying with exponential backoff
+        const delay = baseDelay * Math.pow(2, attempts - 1);
+        console.log(`[PAYPAL] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
+
+    throw new Error(`Failed to get order status after ${maxAttempts} attempts`);
   }
   // Add the generateClientToken method to the PaymentService class
   static async generateClientToken(): Promise<string> {
