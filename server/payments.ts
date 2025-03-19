@@ -11,7 +11,16 @@ type PaymentFlowState = {
   details?: any;
 };
 
+// Add a new type for order approval status
+type OrderApprovalStatus = {
+  approved: boolean;
+  approvedAt?: Date;
+};
+
 const paymentFlowLog = new Map<string, PaymentFlowState[]>();
+
+// Add a map to track order approvals
+const orderApprovals = new Map<string, OrderApprovalStatus>();
 
 // PayPal API Configuration
 const PRODUCTION_URL = 'https://api-m.paypal.com';
@@ -31,7 +40,7 @@ console.log("[PAYPAL] Payment service configuration:", {
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.05;
-const SELLER_FEE_PERCENTAGE = 0.03;
+const SELLER_FEE_PERCENTAGE = 0.9;
 const INSURANCE_FEE = 800;
 
 export class PaymentService {
@@ -269,6 +278,12 @@ export class PaymentService {
     try {
       console.log("[PAYPAL] Processing payment success for order:", orderId);
       this.logPaymentFlow(orderId, 'PAYMENT_SUCCESS_START');
+
+      // Check if order was approved by buyer
+      const approval = orderApprovals.get(orderId);
+      if (!approval?.approved) {
+        throw new Error("Order has not been approved by buyer");
+      }
 
       const accessToken = await this.getAccessToken();
 
@@ -575,6 +590,28 @@ export class PaymentService {
         });
       }
       throw new Error("Failed to generate PayPal client token");
+    }
+  }
+  static async approveOrder(orderId: string): Promise<void> {
+    try {
+      console.log("[PAYPAL] Approving order:", orderId);
+
+      // Verify order exists
+      const orderStatus = await this.getOrderStatus(orderId);
+      if (!orderStatus) {
+        throw new Error("Order not found");
+      }
+
+      // Mark order as approved
+      orderApprovals.set(orderId, {
+        approved: true,
+        approvedAt: new Date()
+      });
+
+      this.logPaymentFlow(orderId, 'ORDER_APPROVED_BY_BUYER');
+    } catch (error) {
+      console.error("[PAYPAL] Error approving order:", error);
+      throw error;
     }
   }
   static async handlePaymentFailure(orderId: string) {

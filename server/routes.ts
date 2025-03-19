@@ -274,6 +274,53 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
   }
 });
 
+// Add the order approval endpoint near other payment routes
+router.post("/api/auctions/:id/approve", requireAuth, async (req, res) => {
+  try {
+    const auctionId = parseInt(req.params.id);
+    console.log(`[APPROVAL] Processing order approval for auction ${auctionId}`);
+
+    // Get auction details
+    const auction = await storage.getAuction(auctionId);
+    if (!auction) {
+      return res.status(404).json({ message: "Auction not found" });
+    }
+
+    // Verify user is buyer
+    if (auction.buyerId !== req.user!.id) {
+      return res.status(403).json({ message: "Only the buyer can approve the order" });
+    }
+
+    // Get payment record
+    const payment = await storage.getPaymentByAuctionId(auctionId);
+    if (!payment || !payment.paypalOrderId) {
+      return res.status(404).json({ message: "Payment record not found" });
+    }
+
+    console.log(`[APPROVAL] Found payment record:`, {
+      paymentId: payment.id,
+      status: payment.status,
+      orderId: payment.paypalOrderId
+    });
+
+    // Approve the order with PayPal
+    await PaymentService.approveOrder(payment.paypalOrderId);
+
+    // Update auction status
+    await storage.updateAuction(auctionId, {
+      status: "pending_payment",
+      paymentStatus: "pending"
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[APPROVAL] Error approving order:", error);
+    res.status(500).json({ 
+      message: error instanceof Error ? error.message : "Failed to approve order" 
+    });
+  }
+});
+
 // Add detailed logging for payment capture endpoint
 router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
   try {

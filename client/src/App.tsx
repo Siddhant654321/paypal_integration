@@ -9,6 +9,7 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import AuctionPage from "@/pages/auction-page";
+import OrderReviewPage from "@/pages/order-review-page";
 import SellerDashboard from "@/pages/seller-dashboard";
 import BuyerDashboard from "@/pages/buyer-dashboard";
 import NewAuction from "@/pages/new-auction";
@@ -45,6 +46,7 @@ function Router() {
             <Route path="/auth" component={AuthPage} />
             <Route path="/profile" component={ProfilePage} />
             <Route path="/auction/:id" component={AuctionPage} />
+            <Route path="/auction/:id/review" component={OrderReviewPage} />
             <Route path="/auction/:id/pay" component={PaymentPage} />
             <Route path="/payment-success" component={PaymentSuccessPage} />
             <Route path="/payment-failure" component={PaymentFailurePage} />
