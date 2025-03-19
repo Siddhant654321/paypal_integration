@@ -283,20 +283,28 @@ export class PaymentService {
         throw new Error(`Invalid payment status: ${payment.status}`);
       }
 
-      // Initial delay to allow PayPal to process the order
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait for order to reach proper state with exponential backoff
+      const maxStatusChecks = 10;
+      const baseDelay = 2000; // 2 seconds
+      let currentStatus;
 
-      // Get initial order status
-      const initialStatus = await this.getOrderStatus(orderId);
-      console.log("[PAYPAL] Initial order status:", initialStatus.status);
+      for (let attempt = 0; attempt < maxStatusChecks; attempt++) {
+        currentStatus = await this.getOrderStatus(orderId);
+        console.log(`[PAYPAL] Status check ${attempt + 1}:`, currentStatus.status);
 
-      // Only proceed if order is in correct state
-      if (initialStatus.status === 'CREATED') {
-        throw new Error("Please complete the PayPal checkout process first");
+        if (currentStatus.status === 'APPROVED' || currentStatus.status === 'COMPLETED') {
+          break;
+        }
+
+        if (attempt < maxStatusChecks - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.log(`[PAYPAL] Waiting ${delay}ms for order approval`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
       }
 
-      if (initialStatus.status !== 'APPROVED' && initialStatus.status !== 'COMPLETED') {
-        throw new Error(`Order in invalid state: ${initialStatus.status}`);
+      if (!currentStatus || (currentStatus.status !== 'APPROVED' && currentStatus.status !== 'COMPLETED')) {
+        throw new Error("Please complete the payment approval in PayPal");
       }
 
       let lastError = null;
