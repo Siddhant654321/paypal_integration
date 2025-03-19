@@ -283,28 +283,39 @@ export class PaymentService {
         throw new Error(`Invalid payment status: ${payment.status}`);
       }
 
-      // Wait for order to reach proper state with exponential backoff
-      const maxStatusChecks = 10;
-      const baseDelay = 2000; // 2 seconds
-      let currentStatus;
+      // Initial check of order status
+      const initialStatus = await this.getOrderStatus(orderId);
+      console.log("[PAYPAL] Initial order status check:", initialStatus.status);
 
+      // If order is already completed, no need to capture
+      if (initialStatus.status === 'COMPLETED') {
+        console.log("[PAYPAL] Order already completed");
+        return { success: true };
+      }
+
+      // Maximum attempts and delay configuration
+      const maxStatusChecks = 5;
+      const baseDelay = 3000; // 3 seconds
+      let currentStatus = initialStatus;
+
+      // Wait for order to reach APPROVED state
       for (let attempt = 0; attempt < maxStatusChecks; attempt++) {
-        currentStatus = await this.getOrderStatus(orderId);
-        console.log(`[PAYPAL] Status check ${attempt + 1}:`, currentStatus.status);
-
-        if (currentStatus.status === 'APPROVED' || currentStatus.status === 'COMPLETED') {
+        if (currentStatus.status === 'APPROVED') {
+          console.log("[PAYPAL] Order is approved, proceeding to capture");
           break;
         }
 
         if (attempt < maxStatusChecks - 1) {
-          const delay = baseDelay * Math.pow(2, attempt);
-          console.log(`[PAYPAL] Waiting ${delay}ms for order approval`);
+          const delay = baseDelay * Math.pow(1.5, attempt);
+          console.log(`[PAYPAL] Waiting ${delay}ms for order approval, current status: ${currentStatus.status}`);
           await new Promise(resolve => setTimeout(resolve, delay));
+          currentStatus = await this.getOrderStatus(orderId);
         }
       }
 
-      if (!currentStatus || (currentStatus.status !== 'APPROVED' && currentStatus.status !== 'COMPLETED')) {
-        throw new Error("Please complete the payment approval in PayPal");
+      if (currentStatus.status !== 'APPROVED' && currentStatus.status !== 'COMPLETED') {
+        console.error("[PAYPAL] Order failed to reach APPROVED state:", currentStatus);
+        throw new Error(`Order is in invalid state: ${currentStatus.status}. Please complete the PayPal checkout process.`);
       }
 
       let lastError = null;
