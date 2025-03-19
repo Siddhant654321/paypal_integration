@@ -45,6 +45,8 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
       const data = await response.json();
       console.log("[PAYPAL] Order created successfully:", data);
       setOrderID(data.orderId);
+      // Redirect to review page
+      window.location.href = `/review-order?orderId=${data.orderId}&auctionId=${auctionId}`;
       return data.orderId;
     } catch (error) {
       console.error("[PAYPAL] Error creating order:", error);
