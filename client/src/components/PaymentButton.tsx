@@ -58,30 +58,10 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
   const onApprove = async (data: { orderID: string }, actions: any) => {
     try {
       setIsProcessing(true);
+      console.log("[PAYPAL] Payment approved by buyer, order ID:", data.orderID);
 
-      if (!data.orderID) {
-        throw new Error("No order ID received from PayPal");
-      }
-
-      console.log("[PAYPAL] Payment approved, order ID:", data.orderID);
-
-      // Verify the order ID matches what we created
-      if (orderID && orderID !== data.orderID) {
-        console.error("[PAYPAL] Order ID mismatch:", { created: orderID, received: data.orderID });
-        throw new Error("Payment verification failed");
-      }
-
-      // Get order details before capture
-      const orderDetails = await actions.order.get();
-      console.log("[PAYPAL] Order details before capture:", orderDetails);
-
-      if (!['APPROVED', 'SAVED'].includes(orderDetails.status)) {
-        throw new Error("Order not ready for capture. Please try again.");
-      }
-
-      console.log("[PAYPAL] Initiating payment capture for order:", data.orderID);
-
-      const response = await fetch('/api/payments/capture', {
+      // First, approve the order through our backend
+      const approvalResponse = await fetch(`/api/auctions/${auctionId}/approve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -89,19 +69,41 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
         body: JSON.stringify({ orderId: data.orderID })
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error("[PAYPAL] Capture failed:", error);
+      if (!approvalResponse.ok) {
+        const error = await approvalResponse.json();
+        throw new Error(error.message || 'Failed to approve order');
+      }
+
+      console.log("[PAYPAL] Order approved in backend");
+
+      // Now get the order details and verify it's ready for capture
+      const order = await actions.order.get();
+      console.log("[PAYPAL] Order details:", order);
+
+      if (!['APPROVED', 'COMPLETED'].includes(order.status)) {
+        throw new Error(`Order not ready for capture. Status: ${order.status}`);
+      }
+
+      // Finally, capture the payment
+      console.log("[PAYPAL] Capturing payment");
+      const captureResponse = await fetch('/api/payments/capture', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ orderId: data.orderID })
+      });
+
+      if (!captureResponse.ok) {
+        const error = await captureResponse.json();
         throw new Error(error.message || 'Failed to capture payment');
       }
 
-      const result = await response.json();
-      console.log("[PAYPAL] Payment captured successfully:", result);
-
+      console.log("[PAYPAL] Payment captured successfully");
       onPaymentSuccess();
     } catch (error) {
-      console.error("[PAYPAL] Error capturing payment:", error);
-      onPaymentError(error instanceof Error ? error.message : 'Failed to capture payment');
+      console.error("[PAYPAL] Error in payment process:", error);
+      onPaymentError(error instanceof Error ? error.message : 'Payment processing failed');
     } finally {
       setIsProcessing(false);
     }
@@ -117,10 +119,6 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
     onPaymentError('Payment failed. Please try again or use a different payment method.');
   };
 
-  const onInit = () => {
-    console.log("[PAYPAL] PayPal buttons initialized");
-  };
-
   return (
     <div className="w-full max-w-md mx-auto">
       <PayPalButtons
@@ -130,7 +128,6 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
         onApprove={onApprove}
         onCancel={onCancel}
         onError={onError}
-        onInit={onInit}
         forceReRender={[amount]}
       />
     </div>
