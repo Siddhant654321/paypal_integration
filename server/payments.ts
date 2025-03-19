@@ -283,12 +283,25 @@ export class PaymentService {
         throw new Error(`Invalid payment status: ${payment.status}`);
       }
 
-      // Initial longer delay before checking order status
-      await new Promise(resolve => setTimeout(resolve, 15000));
+      // Initial delay to allow PayPal to process the order
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Get initial order status
       const initialStatus = await this.getOrderStatus(orderId);
-      this.logPaymentFlow(orderId, 'INITIAL_STATUS_CHECK', initialStatus);
+      console.log("[PAYPAL] Initial order status:", initialStatus.status);
+
+      // Only proceed if order is in correct state
+      if (initialStatus.status === 'CREATED') {
+        throw new Error("Please complete the PayPal checkout process first");
+      }
+
+      if (initialStatus.status !== 'APPROVED' && initialStatus.status !== 'COMPLETED') {
+        throw new Error(`Order in invalid state: ${initialStatus.status}`);
+      }
+
+      let lastError = null;
+      let captureStatus = null;
+
 
       // Configure capture retry settings
       const maxRetries = 5;
