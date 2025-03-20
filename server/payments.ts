@@ -138,8 +138,11 @@ export class PaymentService {
       const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
-      
+
       const totalAmountDollars = (totalAmount / 100).toFixed(2);
+      const baseAmountDollars = (baseAmount / 100).toFixed(2);
+      const feeAmountDollars = ((platformFee + insuranceFee) / 100).toFixed(2);
+
 
       const accessToken = await this.getAccessToken();
 
@@ -150,7 +153,17 @@ export class PaymentService {
           description: `Payment for auction #${auctionId}`,
           amount: {
             currency_code: "USD",
-            value: totalAmountDollars
+            value: totalAmountDollars,
+            breakdown: {
+              item_total: {
+                currency_code: "USD",
+                value: baseAmountDollars
+              },
+              handling: {
+                currency_code: "USD",
+                value: feeAmountDollars
+              }
+            }
           }
         }],
         application_context: {
