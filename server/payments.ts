@@ -113,10 +113,86 @@ export class PaymentService {
  }
 
  static async createCheckoutSession(
-   auctionId: number,
-   buyerId: number,
-   includeInsurance: boolean = false
- ) {
+    auctionId: number,
+    buyerId: number,
+    includeInsurance: boolean = false
+  ) {
+    try {
+      console.log("[PAYPAL] Creating checkout session:", {
+        auctionId,
+        buyerId,
+        includeInsurance,
+        sandbox: IS_SANDBOX
+      });
+
+      const auction = await storage.getAuction(auctionId);
+      if (!auction) {
+        throw new Error("Auction not found");
+      }
+
+      if (auction.winningBidderId !== buyerId) {
+        throw new Error("Only the winning bidder can make payment");
+      }
+
+      const baseAmount = auction.currentPrice;
+      const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
+      const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
+      const totalAmount = baseAmount + platformFee + insuranceFee;
+      
+      const totalAmountDollars = (totalAmount / 100).toFixed(2);
+
+      const accessToken = await this.getAccessToken();
+
+      const orderRequest = {
+        intent: "CAPTURE",
+        purchase_units: [{
+          reference_id: `auction_${auctionId}`,
+          description: `Payment for auction #${auctionId}`,
+          amount: {
+            currency_code: "USD",
+            value: totalAmountDollars
+          }
+        }],
+        application_context: {
+          return_url: `${process.env.APP_URL}/payment/success`,
+          cancel_url: `${process.env.APP_URL}/payment/cancel`
+        }
+      };
+
+      const response = await axios.post(
+        `${BASE_URL}/v2/checkout/orders`,
+        orderRequest,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const orderId = response.data.id;
+
+      // Create payment record
+      await storage.insertPayment({
+        auctionId,
+        buyerId,
+        sellerId: auction.sellerId,
+        amount: totalAmount,
+        platformFee,
+        insuranceFee,
+        status: 'pending',
+        paypalOrderId: orderId
+      });
+
+      return {
+        orderId,
+        url: response.data.links.find((link: any) => link.rel === "approve")?.href
+      };
+    } catch (error) {
+      console.error("[PAYPAL] Error creating order:", error);
+      throw error;
+    }
+  } {
    try {
      console.log("[PAYPAL] Creating checkout session:", {
        auctionId,
