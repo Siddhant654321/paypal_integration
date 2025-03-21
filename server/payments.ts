@@ -127,8 +127,8 @@ export class PaymentService {
           brand_name: "Agriculture Marketplace",
           landing_page: "NO_PREFERENCE",
           user_action: "PAY_NOW",
-          return_url: `${process.env.APP_URL}/payment/success`,
-          cancel_url: `${process.env.APP_URL}/payment/cancel`
+          return_url: `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co/payment/success`,
+          cancel_url: `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co/payment/cancel`
         }
       };
 
