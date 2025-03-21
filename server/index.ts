@@ -158,15 +158,6 @@ async function initializeServer(): Promise<Express> {
     // Error handling middleware
     app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
       console.error("[ERROR]", err.message);
-      
-      // Handle service unavailable errors
-      if (err.message?.includes('service unavailable') || err.message?.includes('connection refused')) {
-        return res.status(503).json({
-          message: "Service temporarily unavailable",
-          error: process.env.NODE_ENV !== 'production' ? err.message : undefined
-        });
-      }
-
       if (process.env.NODE_ENV !== 'production') {
         res.status(500).json({
           message: "Internal server error",

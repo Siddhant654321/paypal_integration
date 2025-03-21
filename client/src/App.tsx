@@ -9,7 +9,7 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import AuctionPage from "@/pages/auction-page";
-import OrderReviewPage from "@/pages/order-review-page"; // Placeholder - needs implementation
+import OrderReviewPage from "@/pages/order-review-page";
 import SellerDashboard from "@/pages/seller-dashboard";
 import BuyerDashboard from "@/pages/buyer-dashboard";
 import NewAuction from "@/pages/new-auction";
