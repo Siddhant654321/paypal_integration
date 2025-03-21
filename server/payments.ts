@@ -134,18 +134,33 @@ export class PaymentService {
 
       console.log("[PAYPAL] Creating order with request:", orderRequest);
 
-      const response = await axios.post(
-        `${BASE_URL}/v2/checkout/orders`,
-        orderRequest,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'PayPal-Request-Id': `order_${auctionId}_${Date.now()}`,
-            'Prefer': 'return=representation'
+      try {
+        const response = await axios.post(
+          `${BASE_URL}/v2/checkout/orders`,
+          orderRequest,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'PayPal-Request-Id': `order_${auctionId}_${Date.now()}`,
+              'Prefer': 'return=representation'
+            }
           }
+        );
+      } catch (error) {
+        console.error("[PAYPAL] Order creation error details:", {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        });
+
+        if (error.response?.data?.details?.[0]) {
+          const detail = error.response.data.details[0];
+          throw new Error(`PayPal Error: ${detail.description || detail.issue}`);
         }
-      );
+        
+        throw new Error(error.response?.data?.message || "Failed to create payment session. Please try again.");
+      }
 
       const orderId = response.data.id;
       this.logPaymentFlow(orderId, 'ORDER_CREATED', response.data);

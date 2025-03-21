@@ -8,26 +8,27 @@ import { useToast } from "@/hooks/use-toast";
 export default function PaymentFailurePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+
   // Get error details from URL search params
   const searchParams = new URLSearchParams(window.location.search);
   const orderId = searchParams.get("orderId");
   const errorMessage = searchParams.get("error") || "Payment was cancelled or failed to complete.";
-  
+  const errorCode = searchParams.get("errorCode"); //Added to get errorCode
+
   useEffect(() => {
     // Log the failure for debugging
     console.log("[Payment Failure] Payment failed:", {
       orderId,
       error: errorMessage
     });
-    
+
     // Show error toast
     toast({
       title: "Payment Failed",
       description: errorMessage,
       variant: "destructive",
     });
-    
+
     // If we have an orderId, notify the backend about the failure
     if (orderId) {
       fetch(`/api/payments/${orderId}/fail`, {
@@ -54,25 +55,23 @@ export default function PaymentFailurePage() {
             {errorMessage}
           </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <div className="space-y-4">
-            <p>
-              We encountered an issue with your payment. If any funds were deducted,
-              they will be automatically refunded to your account.
+            <p className="text-lg font-semibold text-red-600">
+              {errorMessage || "Payment Processing Failed"}
             </p>
-            {orderId && (
-              <p className="text-sm text-muted-foreground">
-                Reference ID: {orderId}
-              </p>
+            <p className="text-sm text-gray-600">
+              {errorMessage ? 
+                "Please review the error and try again." : 
+                "There was an issue processing your payment. Please try again."}
+            </p>
+            {errorCode && (
+              <p className="text-xs text-gray-500">Error Code: {errorCode}</p>
             )}
-            <p className="text-sm">
-              If you continue to experience issues, please contact our support team
-              for assistance.
-            </p>
           </div>
         </CardContent>
-        
+
         <CardFooter className="flex justify-center gap-4">
           <Button variant="outline" onClick={() => window.history.back()}>
             Try Again
