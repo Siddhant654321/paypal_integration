@@ -213,6 +213,21 @@ export class PaymentService {
       console.log("[PAYPAL] Authorizing order:", orderId);
       const accessToken = await this.getAccessToken();
 
+      // First get order details to ensure it's in correct state
+      const orderDetails = await axios.get(
+        `${BASE_URL}/v2/checkout/orders/${orderId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (orderDetails.data.status !== 'APPROVED') {
+        throw new Error('Order must be approved before authorization');
+      }
+
       const response = await axios.post(
         `${BASE_URL}/v2/checkout/orders/${orderId}/authorize`,
         {},
@@ -220,10 +235,15 @@ export class PaymentService {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
+            'PayPal-Request-Id': `auth_${orderId}_${Date.now()}`,
             'Prefer': 'return=representation'
           }
         }
       );
+
+      if (!response.data?.purchase_units?.[0]?.payments?.authorizations?.[0]?.id) {
+        throw new Error('Authorization ID not found in response');
+      }
 
       this.logPaymentFlow(orderId, 'ORDER_AUTHORIZED', response.data);
 
