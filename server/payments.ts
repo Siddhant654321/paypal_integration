@@ -380,7 +380,7 @@ export class PaymentService {
       this.logPaymentFlow(orderId, 'PAYMENT_SUCCESS_START');
 
       const accessToken = await this.getAccessToken();
-      
+
       // Get order status first
       const orderStatus = await this.getOrderStatus(orderId);
       console.log("[PAYPAL] Current order status before capture:", orderStatus);
@@ -392,7 +392,7 @@ export class PaymentService {
           await storage.updatePayment(payment.id, {
             status: "pending_buyer_approval"
           });
-          
+
           // Notify buyer to approve
           await NotificationService.createNotification({
             userId: payment.buyerId,
@@ -413,7 +413,7 @@ export class PaymentService {
       while (attempts < maxAttempts) {
         try {
           console.log(`[PAYPAL] Attempting to capture payment (attempt ${attempts + 1}/${maxAttempts})`);
-          
+
           const response = await axios.post(
             `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
             {},
@@ -423,21 +423,29 @@ export class PaymentService {
                 'Content-Type': 'application/json',
                 'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`,
                 'Accept': 'application/json',
+                'PayPal-Partner-Attribution-Id': process.env.PAYPAL_BN_CODE || 'AgriMarketplace_SP',
                 'Prefer': 'return=representation'
+              },
+              validateStatus: function (status) {
+                return status >= 200 && status < 300;
               }
             }
           );
 
+          if (!response.data) {
+            throw new Error('No data received from PayPal');
+          }
+
           console.log("[PAYPAL] Payment captured:", JSON.stringify(response.data));
           this.logPaymentFlow(orderId, 'PAYMENT_CAPTURED', response.data);
-          
+
           // If we get here, capture was successful
           break;
         } catch (error: any) {
           attempts++;
           lastError = error;
           console.error(`[PAYPAL] Capture attempt ${attempts} failed:`, error.response?.data || error.message);
-          
+
           if (attempts < maxAttempts) {
             // Wait before retrying
             await new Promise(resolve => setTimeout(resolve, 2000 * attempts));
