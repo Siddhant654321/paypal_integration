@@ -190,11 +190,32 @@ export class PaymentService {
 
       const response = await axios.post(
         `${BASE_URL}/v2/checkout/orders/${orderId}/confirm-payment-source`,
-        {},
+        {
+          payment_source: {
+            paypal: {
+              name: {
+                given_name: "Agriculture",
+                surname: "Marketplace"
+              },
+              email_address: "buyer@agrimarketplace.com",
+              experience_context: {
+                payment_method_preference: "IMMEDIATE_PAYMENT_REQUIRED",
+                brand_name: "Agriculture Marketplace",
+                locale: "en-US",
+                landing_page: "LOGIN",
+                shipping_preference: "NO_SHIPPING",
+                user_action: "PAY_NOW",
+                return_url: `${process.env.APP_URL}/payment/success`,
+                cancel_url: `${process.env.APP_URL}/payment/cancel`
+              }
+            }
+          }
+        },
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
+            'PayPal-Request-Id': `confirm_${orderId}_${Date.now()}`,
             'Prefer': 'return=representation'
           }
         }
