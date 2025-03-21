@@ -110,15 +110,15 @@ export class PaymentService {
           description: `Payment for auction #${auctionId}`,
           amount: {
             currency_code: "USD",
-            value: totalAmountDollars,
+            value: (totalAmountDollars).toString(),
             breakdown: {
               item_total: {
                 currency_code: "USD",
-                value: baseAmountDollars
+                value: baseAmountDollars.toString()
               },
               handling: {
                 currency_code: "USD",
-                value: feeAmountDollars
+                value: feeAmountDollars.toString()
               }
             }
           }
@@ -147,42 +147,36 @@ export class PaymentService {
             }
           }
         );
-      } catch (error) {
-        console.error("[PAYPAL] Order creation error details:", {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status
+        const orderId = response.data.id;
+        this.logPaymentFlow(orderId, 'ORDER_CREATED', response.data);
+
+        // Create payment record
+        const payment = await storage.insertPayment({
+          auctionId,
+          buyerId,
+          sellerId: auction.sellerId,
+          amount: totalAmount,
+          platformFee,
+          insuranceFee,
+          sellerPayout,
+          status: 'pending',
+          paypalOrderId: orderId
         });
 
-        if (error.response?.data?.details?.[0]) {
-          const detail = error.response.data.details[0];
-          throw new Error(`PayPal Error: ${detail.description || detail.issue}`);
+        return {
+          orderId,
+          payment,
+          approvalUrl: response.data.links.find((link: any) => link.rel === "payer-action")?.href
+        };
+
+      } catch (error) {
+        console.error("[PAYPAL] Error creating order:", error.response?.data || error);
+        if (error.response?.data?.details) {
+          const details = error.response.data.details;
+          throw new Error(`PayPal Error: ${details.map(d => d.description || d.issue).join(', ')}`);
         }
-        
-        throw new Error(error.response?.data?.message || "Failed to create payment session. Please try again.");
+        throw new Error(error.message || "Failed to create payment session");
       }
-
-      const orderId = response.data.id;
-      this.logPaymentFlow(orderId, 'ORDER_CREATED', response.data);
-
-      // Create payment record
-      const payment = await storage.insertPayment({
-        auctionId,
-        buyerId,
-        sellerId: auction.sellerId,
-        amount: totalAmount,
-        platformFee,
-        insuranceFee,
-        sellerPayout,
-        status: 'pending',
-        paypalOrderId: orderId
-      });
-
-      return {
-        orderId,
-        payment,
-        approvalUrl: response.data.links.find((link: any) => link.rel === "payer-action")?.href
-      };
 
     } catch (error) {
       console.error("[PAYPAL] Error creating order:", error);
