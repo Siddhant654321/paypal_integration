@@ -379,6 +379,10 @@ export class PaymentService {
       console.log("[PAYPAL] Processing payment success for order:", orderId);
       this.logPaymentFlow(orderId, 'PAYMENT_SUCCESS_START');
 
+      // First get order status
+      const orderStatus = await this.getOrderStatus(orderId);
+      console.log("[PAYPAL] Current order status:", orderStatus);
+
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
         throw new Error("Payment record not found");
@@ -390,9 +394,22 @@ export class PaymentService {
         throw new Error(`Invalid payment status: ${payment.status}`);
       }
 
-      // Authorize and then capture the payment
-      await this.authorizeOrder(orderId);
-      await this.captureAuthorizedPayment(orderId, payment.paypalAuthorizationId);
+      // Only proceed if order is in APPROVED state
+      if (orderStatus.status !== 'APPROVED') {
+        throw new Error(`Invalid order status: ${orderStatus.status}. Expected: APPROVED`);
+      }
+
+      // Authorize the order first
+      const authResult = await this.authorizeOrder(orderId);
+      
+      // Get the authorization ID from the response
+      const authorizationId = authResult?.purchase_units?.[0]?.payments?.authorizations?.[0]?.id;
+      if (!authorizationId) {
+        throw new Error("Authorization ID not found in PayPal response");
+      }
+
+      // Capture the payment with the new authorization ID
+      await this.captureAuthorizedPayment(orderId, authorizationId);
 
       return { success: true };
 
