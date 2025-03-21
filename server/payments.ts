@@ -108,7 +108,6 @@ export class PaymentService {
         purchase_units: [{
           reference_id: `auction_${auctionId}`,
           description: `Payment for auction #${auctionId}`,
-          custom_id: `auction_${auctionId}`,
           amount: {
             currency_code: "USD",
             value: totalAmountDollars,
@@ -124,19 +123,12 @@ export class PaymentService {
             }
           }
         }],
-        payment_source: {
-          paypal: {
-            experience_context: {
-              payment_method_preference: "IMMEDIATE_PAYMENT_REQUIRED",
-              brand_name: "Agriculture Marketplace",
-              locale: "en-US",
-              landing_page: "LOGIN",
-              shipping_preference: "NO_SHIPPING",
-              user_action: "PAY_NOW",
-              return_url: `${process.env.APP_URL}/payment/success`,
-              cancel_url: `${process.env.APP_URL}/payment/cancel`
-            }
-          }
+        application_context: {
+          brand_name: "Agriculture Marketplace",
+          landing_page: "NO_PREFERENCE",
+          user_action: "PAY_NOW",
+          return_url: `${process.env.APP_URL}/payment/success`,
+          cancel_url: `${process.env.APP_URL}/payment/cancel`
         }
       };
 
@@ -301,7 +293,7 @@ export class PaymentService {
   static async captureAuthorizedPayment(orderId: string, authorizationId: string) {
     try {
       console.log("[PAYPAL] Capturing authorized payment:", { orderId, authorizationId });
-      
+
       // Verify we have valid IDs
       if (!orderId || !authorizationId) {
         throw new Error('Order ID and Authorization ID are required');
