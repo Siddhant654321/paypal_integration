@@ -321,59 +321,45 @@ router.post("/api/auctions/:id/approve", requireAuth, async (req, res) => {
   }
 });
 
-// Add detailed logging for payment capture endpoint
-router.post('/api/payments/:orderId/capture', requireAuth, async (req, res) => {
+// Add authorization endpoint near other payment routes
+router.post("/api/payments/:orderId/authorize", requireAuth, async (req, res) => {
   try {
-    const orderId = req.params.orderId;
+    const { orderId, authorizationId } = req.body;
+    console.log("[PAYPAL] Processing authorization:", { orderId, authorizationId });
 
+    if (!orderId || !authorizationId) {
+      return res.status(400).json({ message: "Order ID and Authorization ID are required" });
+    }
+
+    await PaymentService.authorizeOrder(orderId, authorizationId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[PAYPAL] Authorization error:", error);
+    res.status(500).json({ 
+      message: error instanceof Error ? error.message : "Failed to process authorization" 
+    });
+  }
+});
+
+// Update capture endpoint to use authorizationId
+router.post('/api/payments/capture', requireAuth, async (req, res) => {
+  try {
+    const { orderId, authorizationId } = req.body;
     console.log('[PAYMENT CAPTURE] Starting payment capture:', {
       orderId,
-      userId: req.user?.id,
-      timestamp: new Date().toISOString()
+      authorizationId,
+      userId: req.user?.id
     });
 
-    if (!orderId) {
-      console.log('[PAYMENT CAPTURE] Missing orderId parameter');
-      return res.status(400).json({ message: "Order ID is required" });
+    if (!orderId || !authorizationId) {
+      return res.status(400).json({ message: "Order ID and Authorization ID are required" });
     }
 
-    // Verify payment exists and is in correct state
-    const payment = await storage.getPaymentBySessionId(orderId);
-    console.log('[PAYMENT CAPTURE] Found payment record:', {
-      paymentId: payment?.id,
-      status: payment?.status,
-      auctionId: payment?.auctionId
-    });
-
-    if (!payment) {
-      console.log('[PAYMENT CAPTURE] Payment record not found');
-      return res.status(404).json({ message: "Payment not found" });
-    }
-
-    if (payment.status !== 'pending') {
-      console.log('[PAYMENT CAPTURE] Invalid payment status:', payment.status);
-      return res.status(400).json({ message: `Payment cannot be captured in status: ${payment.status}` });
-    }
-
-    // Attempt to capture the payment
-    console.log('[PAYMENT CAPTURE] Attempting to capture payment with PayPal');
-    await PaymentService.handlePaymentSuccess(orderId);
-
-    console.log('[PAYMENT CAPTURE] Payment captured successfully');
+    await PaymentService.captureAuthorizedPayment(orderId, authorizationId);
     res.json({ success: true });
   } catch (error) {
     console.error('[PAYMENT CAPTURE] Error:', error);
-
-    // Log the full error details
-    if (error instanceof Error) {
-      console.error('[PAYMENT CAPTURE] Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-    }
-
-    // Handle specific error cases
+    
     if (error instanceof Error && error.message.includes('INSTRUMENT_DECLINED')) {
       return res.status(400).json({ 
         message: "Payment method was declined. Please try a different payment method.",

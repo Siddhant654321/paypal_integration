@@ -60,38 +60,42 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
       setIsProcessing(true);
       console.log("[PAYPAL] Payment approved by buyer, order ID:", data.orderID);
 
-      // First, approve the order through our backend
-      const approvalResponse = await fetch(`/api/auctions/${auctionId}/approve`, {
+      // First, authorize the order through PayPal
+      const order = await actions.order.authorize();
+      console.log("[PAYPAL] Order authorized:", order);
+
+      if (order.status !== 'COMPLETED' && order.status !== 'AUTHORIZED') {
+        throw new Error(`Order authorization failed. Status: ${order.status}`);
+      }
+
+      // Then, notify our backend of the authorization
+      const authResponse = await fetch(`/api/payments/${data.orderID}/authorize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ orderId: data.orderID })
+        body: JSON.stringify({ 
+          orderId: data.orderID,
+          authorizationId: order.purchase_units[0].payments.authorizations[0].id
+        })
       });
 
-      if (!approvalResponse.ok) {
-        const error = await approvalResponse.json();
-        throw new Error(error.message || 'Failed to approve order');
+      if (!authResponse.ok) {
+        const error = await authResponse.json();
+        throw new Error(error.message || 'Failed to process authorization');
       }
 
-      console.log("[PAYPAL] Order approved in backend");
-
-      // Now get the order details and verify it's ready for capture
-      const order = await actions.order.get();
-      console.log("[PAYPAL] Order details:", order);
-
-      if (!['APPROVED', 'COMPLETED'].includes(order.status)) {
-        throw new Error(`Order not ready for capture. Status: ${order.status}`);
-      }
-
-      // Finally, capture the payment
-      console.log("[PAYPAL] Capturing payment");
+      // Finally, capture the authorized payment
+      console.log("[PAYPAL] Capturing authorized payment");
       const captureResponse = await fetch('/api/payments/capture', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ orderId: data.orderID })
+        body: JSON.stringify({ 
+          orderId: data.orderID,
+          authorizationId: order.purchase_units[0].payments.authorizations[0].id
+        })
       });
 
       if (!captureResponse.ok) {
