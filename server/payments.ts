@@ -104,7 +104,7 @@ export class PaymentService {
 
       // Create order with the correct structure according to PayPal API docs
       const orderRequest = {
-        intent: "AUTHORIZE",
+        intent: "CAPTURE",
         purchase_units: [{
           reference_id: `auction_${auctionId}`,
           description: `Payment for auction #${auctionId}`,
@@ -379,37 +379,40 @@ export class PaymentService {
       console.log("[PAYPAL] Processing payment success for order:", orderId);
       this.logPaymentFlow(orderId, 'PAYMENT_SUCCESS_START');
 
-      // First get order status
-      const orderStatus = await this.getOrderStatus(orderId);
-      console.log("[PAYPAL] Current order status:", orderStatus);
+      const accessToken = await this.getAccessToken();
+      
+      // Capture the payment directly
+      const response = await axios.post(
+        `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+          }
+        }
+      );
+
+      console.log("[PAYPAL] Payment captured:", response.data);
+      this.logPaymentFlow(orderId, 'PAYMENT_CAPTURED', response.data);
 
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
         throw new Error("Payment record not found");
       }
 
-      this.logPaymentFlow(orderId, 'PAYMENT_RECORD_FOUND', { payment });
+      // Update payment status
+      await storage.updatePayment(payment.id, {
+        status: "completed",
+        completedAt: new Date()
+      });
 
-      if (payment.status !== 'pending') {
-        throw new Error(`Invalid payment status: ${payment.status}`);
-      }
-
-      // Only proceed if order is in APPROVED state
-      if (orderStatus.status !== 'APPROVED') {
-        throw new Error(`Invalid order status: ${orderStatus.status}. Expected: APPROVED`);
-      }
-
-      // Authorize the order first
-      const authResult = await this.authorizeOrder(orderId);
-      
-      // Get the authorization ID from the response
-      const authorizationId = authResult?.purchase_units?.[0]?.payments?.authorizations?.[0]?.id;
-      if (!authorizationId) {
-        throw new Error("Authorization ID not found in PayPal response");
-      }
-
-      // Capture the payment with the new authorization ID
-      await this.captureAuthorizedPayment(orderId, authorizationId);
+      // Update auction status
+      await storage.updateAuction(payment.auctionId, {
+        status: "pending_fulfillment",
+        paymentStatus: "completed"
+      });
 
       return { success: true };
 
