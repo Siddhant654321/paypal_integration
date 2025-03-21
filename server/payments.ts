@@ -102,12 +102,13 @@ export class PaymentService {
 
       const accessToken = await this.getAccessToken();
 
-      // Create order with AUTHORIZE intent
+      // Create order with the correct structure according to PayPal API docs
       const orderRequest = {
         intent: "AUTHORIZE",
         purchase_units: [{
           reference_id: `auction_${auctionId}`,
           description: `Payment for auction #${auctionId}`,
+          custom_id: `auction_${auctionId}`,
           amount: {
             currency_code: "USD",
             value: totalAmountDollars,
@@ -138,6 +139,8 @@ export class PaymentService {
           }
         }
       };
+
+      console.log("[PAYPAL] Creating order with request:", orderRequest);
 
       const response = await axios.post(
         `${BASE_URL}/v2/checkout/orders`,
@@ -170,7 +173,8 @@ export class PaymentService {
 
       return {
         orderId,
-        payment
+        payment,
+        approvalUrl: response.data.links.find((link: any) => link.rel === "payer-action")?.href
       };
 
     } catch (error) {
@@ -186,25 +190,7 @@ export class PaymentService {
 
       const response = await axios.post(
         `${BASE_URL}/v2/checkout/orders/${orderId}/confirm-payment-source`,
-        {
-          payment_source: {
-            paypal: {
-              name: {
-                given_name: "Agriculture",
-                surname: "Marketplace"
-              },
-              email_address: "marketplace@example.com",
-              experience_context: {
-                payment_method_preference: "IMMEDIATE_PAYMENT_REQUIRED",
-                brand_name: "Agriculture Marketplace",
-                locale: "en-US",
-                landing_page: "LOGIN",
-                shipping_preference: "NO_SHIPPING",
-                user_action: "PAY_NOW"
-              }
-            }
-          }
-        },
+        {},
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -244,9 +230,10 @@ export class PaymentService {
       // Update payment status
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (payment) {
+        const authorizationId = response.data.purchase_units[0].payments.authorizations[0].id;
         await storage.updatePayment(payment.id, {
           status: "authorized",
-          paypalAuthorizationId: response.data.purchase_units[0].payments.authorizations[0].id
+          paypalAuthorizationId: authorizationId
         });
       }
 
@@ -306,7 +293,6 @@ export class PaymentService {
       throw error;
     }
   }
-
   static async handlePaymentSuccess(orderId: string) {
     try {
       console.log("[PAYPAL] Processing payment success for order:", orderId);

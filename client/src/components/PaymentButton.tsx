@@ -42,12 +42,12 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
     }
   };
 
-  const onApprove = async (data: { orderID: string }, actions: any) => {
+  const onApprove = async (data: { orderID: string }) => {
     try {
       setIsProcessing(true);
       console.log("[PAYPAL] Payment approved by buyer, order ID:", data.orderID);
 
-      // First, confirm the order with PayPal
+      // First, confirm the order
       const confirmResponse = await fetch(`/api/payments/${data.orderID}/confirm`, {
         method: 'POST',
         headers: {
@@ -60,7 +60,9 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
         throw new Error(error.message || 'Failed to confirm order');
       }
 
-      // Then, authorize the payment
+      console.log("[PAYPAL] Order confirmed");
+
+      // Then, authorize the order
       const authResponse = await fetch(`/api/payments/${data.orderID}/authorize`, {
         method: 'POST',
         headers: {
