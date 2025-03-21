@@ -106,7 +106,7 @@ export class PaymentService {
       const accessToken = await this.getAccessToken();
 
       const orderRequest = {
-        intent: "AUTHORIZE", // Changed from CAPTURE to AUTHORIZE
+        intent: "AUTHORIZE",
         application_context: {
           brand_name: "Agriculture Marketplace",
           landing_page: "NO_PREFERENCE",
