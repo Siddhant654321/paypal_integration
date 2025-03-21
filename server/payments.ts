@@ -1,7 +1,6 @@
 import { storage } from "./storage";
 import { NotificationService } from "./notification-service";
 import axios from 'axios';
-import { EmailService } from './email-service';
 
 // Payment Flow States and Logging
 type PaymentFlowState = {
@@ -17,7 +16,6 @@ const paymentFlowLog = new Map<string, PaymentFlowState[]>();
 const PRODUCTION_URL = 'https://api-m.paypal.com';
 const SANDBOX_URL = 'https://api-m.sandbox.paypal.com';
 
-// Explicitly check for sandbox mode
 const IS_SANDBOX = process.env.PAYPAL_ENV === 'sandbox' || process.env.VITE_PAYPAL_ENV === 'sandbox';
 const BASE_URL = IS_SANDBOX ? SANDBOX_URL : PRODUCTION_URL;
 
@@ -25,9 +23,7 @@ console.log("[PAYPAL] Payment service configuration:", {
   mode: IS_SANDBOX ? 'sandbox' : 'production',
   baseUrl: BASE_URL,
   clientIdPrefix: process.env.PAYPAL_CLIENT_ID?.substring(0, 8) + '...',
-  environment: process.env.NODE_ENV,
-  paypalEnv: process.env.PAYPAL_ENV,
-  vitePaypalEnv: process.env.VITE_PAYPAL_ENV
+  environment: process.env.NODE_ENV
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.05;
@@ -98,6 +94,7 @@ export class PaymentService {
       const platformFee = Math.round(baseAmount * PLATFORM_FEE_PERCENTAGE);
       const insuranceFee = includeInsurance ? INSURANCE_FEE : 0;
       const totalAmount = baseAmount + platformFee + insuranceFee;
+      const sellerPayout = baseAmount - Math.round(baseAmount * SELLER_FEE_PERCENTAGE);
 
       const totalAmountDollars = (totalAmount / 100).toFixed(2);
       const baseAmountDollars = (baseAmount / 100).toFixed(2);
@@ -105,16 +102,9 @@ export class PaymentService {
 
       const accessToken = await this.getAccessToken();
 
+      // Create order with AUTHORIZE intent
       const orderRequest = {
         intent: "AUTHORIZE",
-        application_context: {
-          brand_name: "Agriculture Marketplace",
-          landing_page: "NO_PREFERENCE",
-          shipping_preference: "NO_SHIPPING",
-          user_action: "PAY_NOW",
-          return_url: `${process.env.APP_URL}/payment/success`,
-          cancel_url: `${process.env.APP_URL}/payment/cancel`
-        },
         purchase_units: [{
           reference_id: `auction_${auctionId}`,
           description: `Payment for auction #${auctionId}`,
@@ -132,7 +122,21 @@ export class PaymentService {
               }
             }
           }
-        }]
+        }],
+        payment_source: {
+          paypal: {
+            experience_context: {
+              payment_method_preference: "IMMEDIATE_PAYMENT_REQUIRED",
+              brand_name: "Agriculture Marketplace",
+              locale: "en-US",
+              landing_page: "LOGIN",
+              shipping_preference: "NO_SHIPPING",
+              user_action: "PAY_NOW",
+              return_url: `${process.env.APP_URL}/payment/success`,
+              cancel_url: `${process.env.APP_URL}/payment/cancel`
+            }
+          }
+        }
       };
 
       const response = await axios.post(
@@ -151,6 +155,7 @@ export class PaymentService {
       const orderId = response.data.id;
       this.logPaymentFlow(orderId, 'ORDER_CREATED', response.data);
 
+      // Create payment record
       const payment = await storage.insertPayment({
         auctionId,
         buyerId,
@@ -158,6 +163,7 @@ export class PaymentService {
         amount: totalAmount,
         platformFee,
         insuranceFee,
+        sellerPayout,
         status: 'pending',
         paypalOrderId: orderId
       });
@@ -173,45 +179,80 @@ export class PaymentService {
     }
   }
 
-  static async authorizeOrder(orderId: string, authorizationId: string) {
+  static async confirmOrder(orderId: string) {
     try {
-      console.log("[PAYPAL] Processing order authorization:", { orderId, authorizationId });
-      this.logPaymentFlow(orderId, 'AUTHORIZATION_START');
-
-      const payment = await storage.findPaymentByPayPalId(orderId);
-      if (!payment) {
-        throw new Error("Payment record not found");
-      }
-
-      // Get the authorization details from PayPal
+      console.log("[PAYPAL] Confirming order:", orderId);
       const accessToken = await this.getAccessToken();
-      const authResponse = await axios.get(
-        `${BASE_URL}/v2/payments/authorizations/${authorizationId}`,
+
+      const response = await axios.post(
+        `${BASE_URL}/v2/checkout/orders/${orderId}/confirm-payment-source`,
+        {
+          payment_source: {
+            paypal: {
+              name: {
+                given_name: "Agriculture",
+                surname: "Marketplace"
+              },
+              email_address: "marketplace@example.com",
+              experience_context: {
+                payment_method_preference: "IMMEDIATE_PAYMENT_REQUIRED",
+                brand_name: "Agriculture Marketplace",
+                locale: "en-US",
+                landing_page: "LOGIN",
+                shipping_preference: "NO_SHIPPING",
+                user_action: "PAY_NOW"
+              }
+            }
+          }
+        },
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
           }
         }
       );
 
-      this.logPaymentFlow(orderId, 'AUTHORIZATION_VERIFIED', authResponse.data);
+      this.logPaymentFlow(orderId, 'ORDER_CONFIRMED', response.data);
+      return response.data;
+    } catch (error) {
+      console.error("[PAYPAL] Error confirming order:", error);
+      throw error;
+    }
+  }
 
-      if (authResponse.data.status !== 'CREATED' && authResponse.data.status !== 'AUTHORIZED') {
-        throw new Error(`Invalid authorization status: ${authResponse.data.status}`);
+  static async authorizeOrder(orderId: string) {
+    try {
+      console.log("[PAYPAL] Authorizing order:", orderId);
+      const accessToken = await this.getAccessToken();
+
+      const response = await axios.post(
+        `${BASE_URL}/v2/checkout/orders/${orderId}/authorize`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          }
+        }
+      );
+
+      this.logPaymentFlow(orderId, 'ORDER_AUTHORIZED', response.data);
+
+      // Update payment status
+      const payment = await storage.findPaymentByPayPalId(orderId);
+      if (payment) {
+        await storage.updatePayment(payment.id, {
+          status: "authorized",
+          paypalAuthorizationId: response.data.purchase_units[0].payments.authorizations[0].id
+        });
       }
 
-      // Update payment record with authorization info
-      await storage.updatePayment(payment.id, {
-        status: 'authorized',
-        paypalAuthorizationId: authorizationId
-      });
-
-      return { success: true };
-
+      return response.data;
     } catch (error) {
-      console.error("[PAYPAL] Authorization processing failed:", error);
-      this.logPaymentFlow(orderId, 'AUTHORIZATION_ERROR', { error });
+      console.error("[PAYPAL] Error authorizing order:", error);
       throw error;
     }
   }
@@ -219,58 +260,49 @@ export class PaymentService {
   static async captureAuthorizedPayment(orderId: string, authorizationId: string) {
     try {
       console.log("[PAYPAL] Capturing authorized payment:", { orderId, authorizationId });
-      this.logPaymentFlow(orderId, 'CAPTURE_START');
-
-      const payment = await storage.findPaymentByPayPalId(orderId);
-      if (!payment) {
-        throw new Error("Payment record not found");
-      }
-
-      if (payment.status !== 'authorized') {
-        throw new Error(`Invalid payment status for capture: ${payment.status}`);
-      }
-
       const accessToken = await this.getAccessToken();
-      const captureResponse = await axios.post(
+
+      const response = await axios.post(
         `${BASE_URL}/v2/payments/authorizations/${authorizationId}/capture`,
         {},
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
-            'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+            'Prefer': 'return=representation'
           }
         }
       );
 
-      this.logPaymentFlow(orderId, 'PAYMENT_CAPTURED', captureResponse.data);
+      this.logPaymentFlow(orderId, 'PAYMENT_CAPTURED', response.data);
 
       // Update payment status
-      await storage.updatePayment(payment.id, {
-        status: 'completed',
-        completedAt: new Date()
-      });
+      const payment = await storage.findPaymentByPayPalId(orderId);
+      if (payment) {
+        await storage.updatePayment(payment.id, {
+          status: "completed",
+          completedAt: new Date()
+        });
 
-      // Update auction status
-      await storage.updateAuction(payment.auctionId, {
-        status: "pending_fulfillment",
-        paymentStatus: "completed"
-      });
+        // Update auction status
+        await storage.updateAuction(payment.auctionId, {
+          status: "pending_fulfillment",
+          paymentStatus: "completed"
+        });
 
-      // Notify seller
-      await NotificationService.createNotification({
-        userId: payment.sellerId,
-        type: "payment",
-        title: "Payment Received",
-        message: `Payment received for auction #${payment.auctionId}`,
-        metadata: { auctionId: payment.auctionId }
-      });
+        // Notify seller
+        await NotificationService.createNotification({
+          userId: payment.sellerId,
+          type: "payment",
+          title: "Payment Received",
+          message: `Payment received for auction #${payment.auctionId}`,
+          metadata: { auctionId: payment.auctionId }
+        });
+      }
 
-      return { success: true };
-
+      return response.data;
     } catch (error) {
-      console.error("[PAYPAL] Capture failed:", error);
-      this.logPaymentFlow(orderId, 'CAPTURE_ERROR', { error });
+      console.error("[PAYPAL] Error capturing payment:", error);
       throw error;
     }
   }
@@ -290,8 +322,10 @@ export class PaymentService {
       if (payment.status !== 'pending') {
         throw new Error(`Invalid payment status: ${payment.status}`);
       }
-      //In the new flow, the order is authorized, not completed immediately.  We need to capture it.
-      await this.captureAuthorizedPayment(orderId, payment.paypalAuthorizationId); // Assuming paypalAuthorizationId is added to payment entity.
+
+      // Authorize and then capture the payment
+      await this.authorizeOrder(orderId);
+      await this.captureAuthorizedPayment(orderId, payment.paypalAuthorizationId);
 
       return { success: true };
 
@@ -406,11 +440,6 @@ export class PaymentService {
       }
 
       // Mark order as approved
-      //orderApprovals.set(orderId, {
-      //  approved: true,
-      //  approvedAt: new Date()
-      //});
-
       this.logPaymentFlow(orderId, 'ORDER_APPROVED_BY_BUYER');
     } catch (error) {
       console.error("[PAYPAL] Error approving order:", error);

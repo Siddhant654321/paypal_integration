@@ -321,22 +321,37 @@ router.post("/api/auctions/:id/approve", requireAuth, async (req, res) => {
   }
 });
 
+// Add confirmation endpoint
+router.post("/api/payments/:orderId/confirm", requireAuth, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    console.log("[PAYPAL] Processing order confirmation:", { orderId });
+
+    await PaymentService.confirmOrder(orderId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[PAYPAL] Confirmation error:", error);
+    res.status(500).json({ 
+      message: error instanceof Error ? error.message : "Failed to confirm order" 
+    });
+  }
+});
+
 // Add authorization endpoint near other payment routes
 router.post("/api/payments/:orderId/authorize", requireAuth, async (req, res) => {
   try {
-    const { orderId, authorizationId } = req.body;
-    console.log("[PAYPAL] Processing authorization:", { orderId, authorizationId });
+    const { orderId } = req.params;
+    console.log("[PAYPAL] Processing authorization:", { orderId });
 
-    if (!orderId || !authorizationId) {
-      return res.status(400).json({ message: "Order ID and Authorization ID are required" });
-    }
-
-    await PaymentService.authorizeOrder(orderId, authorizationId);
-    res.json({ success: true });
+    const authResult = await PaymentService.authorizeOrder(orderId);
+    res.json({ 
+      success: true,
+      authorizationId: authResult.purchase_units[0].payments.authorizations[0].id
+    });
   } catch (error) {
     console.error("[PAYPAL] Authorization error:", error);
     res.status(500).json({ 
-      message: error instanceof Error ? error.message : "Failed to process authorization" 
+      message: error instanceof Error ? error.message : "Failed to authorize payment" 
     });
   }
 });

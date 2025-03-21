@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
+import { PayPalButtons } from "@paypal/react-paypal-js";
 
 interface PaymentButtonProps {
   auctionId: number;
@@ -9,19 +9,7 @@ interface PaymentButtonProps {
 }
 
 export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentError }: PaymentButtonProps) => {
-  const [{ isResolved, options }] = usePayPalScriptReducer();
-  const [orderID, setOrderID] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // Log PayPal environment and configuration
-  useEffect(() => {
-    console.log("[PAYPAL] Client configuration:", {
-      sandbox: import.meta.env.VITE_PAYPAL_ENV === 'sandbox',
-      amount,
-      resolved: isResolved,
-      scriptOptions: options
-    });
-  }, [isResolved, amount, options]);
 
   const createOrder = async () => {
     try {
@@ -44,7 +32,6 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
 
       const data = await response.json();
       console.log("[PAYPAL] Order created successfully:", data);
-      setOrderID(data.orderId);
       return data.orderId;
     } catch (error) {
       console.error("[PAYPAL] Error creating order:", error);
@@ -60,33 +47,36 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
       setIsProcessing(true);
       console.log("[PAYPAL] Payment approved by buyer, order ID:", data.orderID);
 
-      // First, authorize the order through PayPal
-      const order = await actions.order.authorize();
-      console.log("[PAYPAL] Order authorized:", order);
+      // First, confirm the order with PayPal
+      const confirmResponse = await fetch(`/api/payments/${data.orderID}/confirm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
 
-      if (order.status !== 'COMPLETED' && order.status !== 'AUTHORIZED') {
-        throw new Error(`Order authorization failed. Status: ${order.status}`);
+      if (!confirmResponse.ok) {
+        const error = await confirmResponse.json();
+        throw new Error(error.message || 'Failed to confirm order');
       }
 
-      // Then, notify our backend of the authorization
+      // Then, authorize the payment
       const authResponse = await fetch(`/api/payments/${data.orderID}/authorize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          orderId: data.orderID,
-          authorizationId: order.purchase_units[0].payments.authorizations[0].id
-        })
+        }
       });
 
       if (!authResponse.ok) {
         const error = await authResponse.json();
-        throw new Error(error.message || 'Failed to process authorization');
+        throw new Error(error.message || 'Failed to authorize payment');
       }
 
+      const authData = await authResponse.json();
+      console.log("[PAYPAL] Payment authorized:", authData);
+
       // Finally, capture the authorized payment
-      console.log("[PAYPAL] Capturing authorized payment");
       const captureResponse = await fetch('/api/payments/capture', {
         method: 'POST',
         headers: {
@@ -94,7 +84,7 @@ export const PaymentButton = ({ auctionId, amount, onPaymentSuccess, onPaymentEr
         },
         body: JSON.stringify({ 
           orderId: data.orderID,
-          authorizationId: order.purchase_units[0].payments.authorizations[0].id
+          authorizationId: authData.authorizationId
         })
       });
 
