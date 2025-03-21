@@ -385,8 +385,24 @@ export class PaymentService {
       const orderStatus = await this.getOrderStatus(orderId);
       console.log("[PAYPAL] Current order status before capture:", orderStatus);
 
+      // If not approved, mark for buyer approval
       if (orderStatus.status !== 'APPROVED' && orderStatus.status !== 'COMPLETED') {
-        throw new Error(`Cannot capture payment - invalid order status: ${orderStatus.status}`);
+        const payment = await storage.findPaymentByPayPalId(orderId);
+        if (payment) {
+          await storage.updatePayment(payment.id, {
+            status: "pending_buyer_approval"
+          });
+          
+          // Notify buyer to approve
+          await NotificationService.createNotification({
+            userId: payment.buyerId,
+            type: "payment",
+            title: "Payment Approval Required",
+            message: "Please review and approve your purchase to complete payment.",
+            metadata: { orderId }
+          });
+        }
+        return { success: false, requiresApproval: true };
       }
 
       // Try to capture with retries
