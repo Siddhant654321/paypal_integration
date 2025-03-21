@@ -234,19 +234,32 @@ export class PaymentService {
       console.log("[PAYPAL] Authorizing order:", orderId);
       const accessToken = await this.getAccessToken();
 
-      // First get order details to ensure it's in correct state
+      // Get detailed order status
       const orderDetails = await axios.get(
         `${BASE_URL}/v2/checkout/orders/${orderId}`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
           }
         }
       );
 
-      if (orderDetails.data.status !== 'APPROVED') {
-        throw new Error('Order must be approved before authorization');
+      console.log("[PAYPAL] Order status:", {
+        orderId,
+        status: orderDetails.data.status,
+        intent: orderDetails.data.intent
+      });
+
+      // Verify order is in correct state
+      if (orderDetails.data.status !== 'APPROVED' && orderDetails.data.status !== 'COMPLETED') {
+        throw new Error(`Invalid order status for authorization: ${orderDetails.data.status}. Order must be approved first.`);
+      }
+
+      // Verify order intent
+      if (orderDetails.data.intent !== 'AUTHORIZE') {
+        throw new Error(`Invalid order intent: ${orderDetails.data.intent}. Expected: AUTHORIZE`);
       }
 
       const response = await axios.post(
@@ -288,7 +301,33 @@ export class PaymentService {
   static async captureAuthorizedPayment(orderId: string, authorizationId: string) {
     try {
       console.log("[PAYPAL] Capturing authorized payment:", { orderId, authorizationId });
+      
+      // Verify we have valid IDs
+      if (!orderId || !authorizationId) {
+        throw new Error('Order ID and Authorization ID are required');
+      }
+
       const accessToken = await this.getAccessToken();
+
+      // First verify the authorization status
+      const authStatus = await axios.get(
+        `${BASE_URL}/v2/payments/authorizations/${authorizationId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log("[PAYPAL] Authorization status:", {
+        id: authorizationId,
+        status: authStatus.data.status
+      });
+
+      if (authStatus.data.status !== 'CREATED' && authStatus.data.status !== 'AUTHORIZED') {
+        throw new Error(`Invalid authorization status: ${authStatus.data.status}`);
+      }
 
       const response = await axios.post(
         `${BASE_URL}/v2/payments/authorizations/${authorizationId}/capture`,
