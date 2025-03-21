@@ -381,22 +381,57 @@ export class PaymentService {
 
       const accessToken = await this.getAccessToken();
       
-      // Capture the payment directly
-      const response = await axios.post(
-        `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
-        {},
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`,
-            'Accept': 'application/json'
+      // Get order status first
+      const orderStatus = await this.getOrderStatus(orderId);
+      console.log("[PAYPAL] Current order status before capture:", orderStatus);
+
+      if (orderStatus.status !== 'APPROVED' && orderStatus.status !== 'COMPLETED') {
+        throw new Error(`Cannot capture payment - invalid order status: ${orderStatus.status}`);
+      }
+
+      // Try to capture with retries
+      let attempts = 0;
+      const maxAttempts = 3;
+      let lastError = null;
+
+      while (attempts < maxAttempts) {
+        try {
+          console.log(`[PAYPAL] Attempting to capture payment (attempt ${attempts + 1}/${maxAttempts})`);
+          
+          const response = await axios.post(
+            `${BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+            {},
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`,
+                'Accept': 'application/json',
+                'Prefer': 'return=representation'
+              }
+            }
+          );
+
+          console.log("[PAYPAL] Payment captured:", JSON.stringify(response.data));
+          this.logPaymentFlow(orderId, 'PAYMENT_CAPTURED', response.data);
+          
+          // If we get here, capture was successful
+          break;
+        } catch (error: any) {
+          attempts++;
+          lastError = error;
+          console.error(`[PAYPAL] Capture attempt ${attempts} failed:`, error.response?.data || error.message);
+          
+          if (attempts < maxAttempts) {
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempts));
           }
         }
-      );
+      }
 
-      console.log("[PAYPAL] Payment captured:", JSON.stringify(response.data));
-      this.logPaymentFlow(orderId, 'PAYMENT_CAPTURED', response.data);
+      if (attempts === maxAttempts) {
+        throw new Error(`Failed to capture payment after ${maxAttempts} attempts: ${lastError?.message}`);
+      }
 
       const payment = await storage.findPaymentByPayPalId(orderId);
       if (!payment) {
