@@ -222,7 +222,7 @@ router.get('/api/seller/status', requireAuth, async (req, res) => {
 });
 
 // Payment initiation route with enhanced logging
-router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, res) => {
+router.post('/api/auctions/:id/payment', requireAuth, requireProfile, async (req, res) => {
   try {
     const auctionId = parseInt(req.params.id);
     const { includeInsurance } = req.body;
@@ -274,49 +274,97 @@ router.post('/api/auctions/:id/pay', requireAuth, requireProfile, async (req, re
   }
 });
 
-// Add the order approval endpoint near other payment routes
-router.post("/api/auctions/:id/approve", requireAuth, async (req, res) => {
+// Payment initiation route - Creates a PayPal order
+router.post('/api/payments/create-order', requireAuth, requireProfile, async (req, res) => {
   try {
-    const auctionId = parseInt(req.params.id);
-    console.log(`[APPROVAL] Processing order approval for auction ${auctionId}`);
-
-    // Get auction details
-    const auction = await storage.getAuction(auctionId);
-    if (!auction) {
-      return res.status(404).json({ message: "Auction not found" });
-    }
-
-    // Verify user is buyer
-    if (auction.buyerId !== req.user!.id) {
-      return res.status(403).json({ message: "Only the buyer can approve the order" });
-    }
-
-    // Get payment record
-    const payment = await storage.getPaymentByAuctionId(auctionId);
-    if (!payment || !payment.paypalOrderId) {
-      return res.status(404).json({ message: "Payment record not found" });
-    }
-
-    console.log(`[APPROVAL] Found payment record:`, {
-      paymentId: payment.id,
-      status: payment.status,
-      orderId: payment.paypalOrderId
+    const { auctionId, includeInsurance } = req.body;
+    
+    console.log('[PAYMENT] Creating PayPal order:', {
+      auctionId,
+      buyerId: req.user?.id,
+      includeInsurance,
+      timestamp: new Date().toISOString()
     });
 
-    // Approve the order with PayPal
-    await PaymentService.approveOrder(payment.paypalOrderId);
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    // Update auction status
-    await storage.updateAuction(auctionId, {
-      status: "pending_payment",
-      paymentStatus: "pending"
+    const result = await PaymentService.createOrder(
+      auctionId,
+      req.user.id,
+      includeInsurance
+    );
+
+    console.log('[PAYMENT] Order created:', {
+      orderId: result.orderId,
+      status: 'created'
     });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[PAYMENT] Error creating order:', error);
+    res.json({ 
+      message: error instanceof Error ? error.message : "Failed to create order" 
+    });
+  }
+});
+
+// Payment capture endpoint 
+router.post('/api/payments/capture', requireAuth, async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    
+    console.log('[PAYMENT] Capturing payment for order:', orderId);
+
+    if (!orderId) {
+      return res.status(400).json({ message: "Order ID is required" });
+    }
+
+    const payment = await storage.findPaymentByPayPalId(orderId);
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    // Verify the payment belongs to this user
+    if (payment.buyerId !== req.user!.id) {
+      return res.status(403).json({ message: "Unauthorized to capture this payment" });
+    }
+
+    const result = await PaymentService.capturePayment(orderId);
+    if (result) {
+      // Update payment status
+      await storage.updatePaymentStatus(payment.id, "completed");
+      
+      // Update auction status
+      await storage.updateAuction(payment.auctionId, {
+        status: "pending_fulfillment",
+        paymentStatus: "completed"
+      });
+
+      // Notify seller
+      await NotificationService.createNotification({
+        userId: payment.sellerId,
+        type: "payment",
+        title: "Payment Received",
+        message: `Payment received for auction #${payment.auctionId}`,
+        metadata: { auctionId: payment.auctionId }
+      });
+    }
 
     res.json({ success: true });
   } catch (error) {
-    console.error("[APPROVAL] Error approving order:", error);
+    console.error('[PAYMENT] Capture error:', error);
+    
+    if (error instanceof Error && error.message.includes('not ready for capture')) {
+      return res.status(400).json({ 
+        message: "Payment not ready for capture. Please complete the PayPal checkout first.",
+        error: 'ORDER_NOT_APPROVED'
+      });
+    }
+
     res.status(500).json({ 
-      message: error instanceof Error ? error.message : "Failed to approve order" 
+      message: error instanceof Error ? error.message : "Failed to capture payment" 
     });
   }
 });

@@ -1,45 +1,60 @@
-import { useEffect, useState } from 'react';
-import { PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
+import { useState } from 'react';
+import { PayPalButtons } from "@paypal/react-paypal-js";
 
 interface PaymentButtonProps {
   auctionId: number;
   amount: number;
   onSuccess?: () => void;
-  onError?: (error: any) => void;
+  onError?: (error: string) => void;
 }
 
 export default function PaymentButton({ auctionId, amount, onSuccess, onError }: PaymentButtonProps) {
-  const [{ isResolved }] = usePayPalScriptReducer();
-  const [orderId, setOrderId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const createOrder = async () => {
     try {
-      const response = await fetch(`/api/auctions/${auctionId}/pay`, {
+      console.log("[PAYPAL] Creating order for auction:", auctionId);
+      const response = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ amount })
+        body: JSON.stringify({ 
+          auctionId, 
+          amount 
+        })
       });
 
-      const data = await response.json();
-      if (!data.orderId) {
-        throw new Error('Failed to create PayPal order');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create order');
       }
 
-      setOrderId(data.orderId);
+      const data = await response.json();
+      console.log("[PAYPAL] Order created:", data.orderId);
       return data.orderId;
     } catch (error) {
-      console.error('Error creating order:', error);
-      onError?.(error);
+      console.error('[PAYPAL] Error creating order:', error);
+      onError?.(error instanceof Error ? error.message : 'Failed to create order');
       throw error;
     }
   };
 
-  const onApprove = async (data: any) => {
+  const onApprove = async (data: any, actions: any) => {
     try {
-      // First approve the order
-      await fetch(`/api/auctions/${auctionId}/approve`, {
+      setIsProcessing(true);
+      console.log("[PAYPAL] Payment approved by buyer, order ID:", data.orderID);
+
+      // Get order details to verify status
+      const order = await actions.order.get();
+      console.log("[PAYPAL] Order details:", order);
+
+      if (!['APPROVED', 'COMPLETED'].includes(order.status)) {
+        throw new Error(`Order not ready for capture. Status: ${order.status}`);
+      }
+
+      // Capture the payment through our backend
+      const captureResponse = await fetch('/api/payments/capture', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -47,45 +62,44 @@ export default function PaymentButton({ auctionId, amount, onSuccess, onError }:
         body: JSON.stringify({ orderId: data.orderID })
       });
 
-      // Then capture the payment
-      const response = await fetch(`/api/payments/${data.orderID}/capture`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        onSuccess?.();
-      } else {
-        throw new Error(result.message || 'Payment capture failed');
+      if (!captureResponse.ok) {
+        const error = await captureResponse.json();
+        throw new Error(error.message || 'Failed to capture payment');
       }
+
+      console.log("[PAYPAL] Payment captured successfully");
+      onSuccess?.();
     } catch (error) {
-      console.error('Error processing payment:', error);
-      onError?.(error);
+      console.error("[PAYPAL] Error in payment process:", error);
+      onError?.(error instanceof Error ? error.message : 'Payment processing failed');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
+  const onCancel = () => {
+    console.log("[PAYPAL] Payment cancelled by user");
+    onError?.('Payment cancelled. Please try again.');
+  };
+
+  const handleError = (err: any) => {
+    console.error("[PAYPAL] Payment error:", err);
+    onError?.('Payment failed. Please try again or use a different payment method.');
+  };
+
   return (
-    <div>
-      {isResolved && (
-        <PayPalButtons
-          createOrder={createOrder}
-          onApprove={onApprove}
-          onError={(err) => {
-            console.error('PayPal error:', err);
-            onError?.(err);
-          }}
-          style={{
-            layout: 'vertical',
-            color: 'gold',
-            shape: 'rect',
-            label: 'pay'
-          }}
-        />
-      )}
+    <div className="w-full max-w-md mx-auto">
+      <PayPalButtons
+        style={{
+          layout: "vertical",
+          shape: "rect",
+        }}
+        createOrder={createOrder}
+        onApprove={onApprove}
+        onCancel={onCancel}
+        onError={handleError}
+        disabled={isProcessing}
+      />
     </div>
   );
 }
