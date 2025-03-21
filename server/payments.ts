@@ -389,12 +389,13 @@ export class PaymentService {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
-            'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`
+            'PayPal-Request-Id': `capture_${orderId}_${Date.now()}`,
+            'Accept': 'application/json'
           }
         }
       );
 
-      console.log("[PAYPAL] Payment captured:", response.data);
+      console.log("[PAYPAL] Payment captured:", JSON.stringify(response.data));
       this.logPaymentFlow(orderId, 'PAYMENT_CAPTURED', response.data);
 
       const payment = await storage.findPaymentByPayPalId(orderId);
