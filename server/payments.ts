@@ -164,7 +164,8 @@ export class PaymentService {
                 value: feeAmountDollars
               }
             }
-          }
+          },
+          custom_id: auctionId.toString()
         }],
         application_context: {
           return_url: `${process.env.APP_URL}/payment/success`,
