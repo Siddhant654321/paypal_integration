@@ -13,7 +13,11 @@ interface WinnerResponse {
     title: string;
     currentPrice: number;
     status: string;
-    paymentStatus: "pending" | "completed_pending_shipment" | "completed" | "failed";
+    paymentStatus:
+      | "pending"
+      | "completed_pending_shipment"
+      | "completed"
+      | "failed";
   };
   profile: {
     fullName: string;
@@ -47,28 +51,39 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
       console.log("[PAYMENT] Status updated:", {
         status: data?.status,
         auctionId,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
-    }
+    },
   });
 
   // Handle fulfillment submission
   const fulfillmentMutation = useMutation({
-    mutationFn: async (data: { carrier: string; trackingNumber: string; notes?: string }) => {
+    mutationFn: async (data: {
+      carrier: string;
+      trackingNumber: string;
+      notes?: string;
+    }) => {
       console.log("[FULFILLMENT] Submitting:", { auctionId, ...data });
-      const trackingInfo = `${data.carrier}: ${data.trackingNumber}${data.notes ? ` (${data.notes})` : ''}`;
-      return apiRequest("POST", `/api/auctions/${auctionId}/fulfill`, { trackingInfo });
+      const trackingInfo = `${data.carrier}: ${data.trackingNumber}${data.notes ? ` (${data.notes})` : ""}`;
+      return apiRequest("POST", `/api/auctions/${auctionId}/fulfill`, {
+        trackingInfo,
+      });
     },
     onSuccess: () => {
       toast({
         title: "Shipping details submitted successfully",
-        description: "The buyer will be notified and funds will be released to your account shortly.",
+        description:
+          "The buyer will be notified and funds will be released to your account shortly.",
       });
 
       // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: [`/api/auctions/${auctionId}`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/seller/balance'] });
-      console.log("[FULFILLMENT] Successful, payment status should update soon");
+      queryClient.invalidateQueries({
+        queryKey: [`/api/auctions/${auctionId}`],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/seller/balance"] });
+      console.log(
+        "[FULFILLMENT] Successful, payment status should update soon",
+      );
       refetch(); // Refetch payment status after fulfillment
 
       // Call the success callback if provided
@@ -99,7 +114,9 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          {error instanceof Error ? error.message : 'Failed to load winner details'}
+          {error instanceof Error
+            ? error.message
+            : "Failed to load winner details"}
         </AlertDescription>
       </Alert>
     );
@@ -109,20 +126,23 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
     return (
       <Alert>
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>No winning bidder information available</AlertDescription>
+        <AlertDescription>
+          No winning bidder information available
+        </AlertDescription>
       </Alert>
     );
   }
 
   const { auction, profile } = data;
-  const currentPaymentStatus = paymentStatusData?.status || auction.paymentStatus;
+  const currentPaymentStatus =
+    paymentStatusData?.status || auction.paymentStatus;
 
   // Log when the component renders and the payment status
   console.log("[PAYMENT] Rendering WinningBidderDetails:", {
     auctionId,
     originalPaymentStatus: auction.paymentStatus,
     currentPaymentStatus,
-    shouldShowForm: currentPaymentStatus === 'completed_pending_shipment'
+    shouldShowForm: currentPaymentStatus === "completed_pending_shipment",
   });
 
   return (
@@ -143,13 +163,17 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
             <div>
               <h3 className="font-medium">Shipping Address</h3>
               <p>{profile.address}</p>
-              <p>{profile.city}, {profile.state} {profile.zipCode}</p>
+              <p>
+                {profile.city}, {profile.state} {profile.zipCode}
+              </p>
             </div>
 
             <div>
               <h3 className="font-medium">Payment Status</h3>
-              <p className="capitalize">{currentPaymentStatus.replace(/_/g, ' ')}</p>
-              {currentPaymentStatus === 'completed_pending_shipment' && (
+              <p className="capitalize">
+                {currentPaymentStatus.replace(/_/g, " ")}
+              </p>
+              {currentPaymentStatus === "completed_pending_shipment" && (
                 <p className="text-sm text-yellow-600 mt-1">
                   Please submit shipping details below to receive your payout
                 </p>
@@ -159,14 +183,15 @@ export function WinningBidderDetails({ auctionId, onSuccess }: Props) {
         </CardContent>
       </Card>
 
-      {(currentPaymentStatus === 'completed_pending_shipment' || 
-   (currentPaymentStatus === 'pending' && auction?.status === 'ended')) && (
+      {(currentPaymentStatus === "completed_pending_shipment" ||
+        (currentPaymentStatus === "pending" &&
+          auction?.status === "ended")) && (
         <Card>
           <CardHeader>
             <CardTitle>Submit Shipping Details</CardTitle>
           </CardHeader>
           <CardContent>
-            <FulfillmentForm 
+            <FulfillmentForm
               onSubmit={(data) => fulfillmentMutation.mutate(data)}
               isPending={fulfillmentMutation.isPending}
             />
