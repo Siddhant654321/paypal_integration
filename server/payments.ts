@@ -25,7 +25,7 @@ console.log("[PAYPAL] Payment service configuration:", {
   mode: IS_SANDBOX ? "sandbox" : "production",
   baseUrl: BASE_URL,
   clientIdPrefix: process.env.PAYPAL_CLIENT_ID?.substring(0, 8) + "...",
-  environment: process.env.NODE_ENV,
+  environment: process.env.PAYPAL_ENV,
 });
 
 const PLATFORM_FEE_PERCENTAGE = 0.05;
@@ -900,7 +900,7 @@ class SellerPaymentService {
         console.warn("[PAYPAL] Cannot create payout: PayPal is not configured");
 
         // Record a simulated payout in development/testing mode
-        if (process.env.NODE_ENV === "production") {
+        if (process.env.PAYPAL_ENV === "production") {
           console.log(
             "[PAYPAL] In production without PayPal: Recording simulated payout",
           );

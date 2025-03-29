@@ -13,9 +13,14 @@ import {
   insertProfileSchema,
   insertBuyerRequestSchema,
   insertUserSchema,
-  insertPasswordResetTokenSchema
+  insertPasswordResetTokenSchema,
 } from "@shared/schema";
-import type { User, InsertUser, Profile, PasswordResetToken } from "@shared/schema";
+import type {
+  User,
+  InsertUser,
+  Profile,
+  PasswordResetToken,
+} from "@shared/schema";
 import { ZodError } from "zod";
 import path from "path";
 import multer from "multer";
@@ -24,7 +29,11 @@ import { PaymentService } from "./payments";
 import { buffer } from "micro";
 import { SellerPaymentService } from "./seller-payments";
 import { EmailService } from "./email-service";
-import { hashPassword, comparePasswords, generateToken } from "./utils/password";
+import {
+  hashPassword,
+  comparePasswords,
+  generateToken,
+} from "./utils/password";
 import { AuctionService } from "./auction-service";
 import { AIPricingService } from "./ai-service";
 import { db } from "./db";
@@ -33,7 +42,7 @@ import { NotificationService } from "./notification-service";
 import { generateToken } from "./utils/password";
 import passport from "passport";
 import { hashPassword } from "./auth";
-import {randomPaypalID} from "./utils/randomPaypalID";
+import { randomPaypalID } from "./utils/randomPaypalID";
 
 // Create an Express router instance
 const router = express.Router();
@@ -742,114 +751,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     // Add authentication endpoints with enhanced logging and response handling
-    
+
     // Password reset request route
     router.post("/api/forgot-password", async (req, res) => {
       try {
         const { email } = req.body;
-        
+
         if (!email) {
           return res.status(400).json({ message: "Email is required" });
         }
-        
+
         // Find user by email
         const user = await storage.getUserByEmail(email);
         if (!user) {
           // For security reasons, don't reveal if the email exists or not
-          return res.status(200).json({ 
-            message: "If that email exists in our system, you will receive a password reset link shortly." 
+          return res.status(200).json({
+            message:
+              "If that email exists in our system, you will receive a password reset link shortly.",
           });
         }
-        
+
         // Generate reset token
         const resetToken = generateToken(32);
         const expiryHours = 24; // Token valid for 24 hours
-        
+
         // Store token in database
-        await storage.createPasswordResetToken(user.id, resetToken, expiryHours);
-        
+        await storage.createPasswordResetToken(
+          user.id,
+          resetToken,
+          expiryHours,
+        );
+
         // Send reset email
         const emailSent = await EmailService.sendPasswordResetEmail(
-          email, 
+          email,
           resetToken,
-          user.username
+          user.username,
         );
-        
+
         if (!emailSent) {
           console.error("[PASSWORD RESET] Failed to send email to:", email);
-          return res.status(500).json({ message: "Failed to send reset email. Please try again later." });
+          return res
+            .status(500)
+            .json({
+              message: "Failed to send reset email. Please try again later.",
+            });
         }
-        
-        return res.status(200).json({ 
-          message: "If that email exists in our system, you will receive a password reset link shortly." 
+
+        return res.status(200).json({
+          message:
+            "If that email exists in our system, you will receive a password reset link shortly.",
         });
       } catch (error) {
-        console.error("[PASSWORD RESET] Error processing reset request:", error);
-        return res.status(500).json({ message: "An error occurred. Please try again later." });
+        console.error(
+          "[PASSWORD RESET] Error processing reset request:",
+          error,
+        );
+        return res
+          .status(500)
+          .json({ message: "An error occurred. Please try again later." });
       }
     });
-    
+
     // Verify reset token route
     router.get("/api/reset-password/:token", async (req, res) => {
       try {
         const { token } = req.params;
-        
+
         if (!token) {
           return res.status(400).json({ message: "Invalid reset token" });
         }
-        
+
         // Check if token exists and is valid
         const resetToken = await storage.getValidPasswordResetToken(token);
-        
+
         if (!resetToken) {
-          return res.status(400).json({ message: "Invalid or expired reset token" });
+          return res
+            .status(400)
+            .json({ message: "Invalid or expired reset token" });
         }
-        
-        return res.status(200).json({ 
+
+        return res.status(200).json({
           message: "Token is valid",
-          userId: resetToken.userId
+          userId: resetToken.userId,
         });
       } catch (error) {
         console.error("[PASSWORD RESET] Error verifying token:", error);
-        return res.status(500).json({ message: "An error occurred. Please try again later." });
+        return res
+          .status(500)
+          .json({ message: "An error occurred. Please try again later." });
       }
     });
-    
+
     // Reset password with token route
     router.post("/api/reset-password/:token", async (req, res) => {
       try {
         const { token } = req.params;
         const { newPassword } = req.body;
-        
+
         if (!token || !newPassword) {
-          return res.status(400).json({ message: "Token and new password are required" });
+          return res
+            .status(400)
+            .json({ message: "Token and new password are required" });
         }
-        
+
         // Validate password strength
         if (newPassword.length < 8) {
-          return res.status(400).json({ message: "Password must be at least 8 characters long" });
+          return res
+            .status(400)
+            .json({ message: "Password must be at least 8 characters long" });
         }
-        
+
         // Check if token exists and is valid
         const resetToken = await storage.getValidPasswordResetToken(token);
-        
+
         if (!resetToken) {
-          return res.status(400).json({ message: "Invalid or expired reset token" });
+          return res
+            .status(400)
+            .json({ message: "Invalid or expired reset token" });
         }
-        
+
         // Update user's password
         await storage.updateUserPassword(resetToken.userId, newPassword);
-        
+
         // Mark token as used
         await storage.markPasswordResetTokenAsUsed(resetToken.id);
-        
-        return res.status(200).json({ message: "Password has been reset successfully" });
+
+        return res
+          .status(200)
+          .json({ message: "Password has been reset successfully" });
       } catch (error) {
         console.error("[PASSWORD RESET] Error resetting password:", error);
-        return res.status(500).json({ message: "An error occurred. Please try again later." });
+        return res
+          .status(500)
+          .json({ message: "An error occurred. Please try again later." });
       }
     });
-    
+
     router.post("/api/login", (req, res, next) => {
       if (!req.body.username || !req.body.password) {
         console.log("[AUTH] Login failed: Missing credentials");
@@ -917,7 +955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             path: "/",
             httpOnly: true,
             secure:
-              process.env.NODE_ENV === "production" ||
+              process.env.PAYPAL_ENV === "production" ||
               process.env.REPL_SLUG !== undefined,
             sameSite: "lax",
           });
@@ -3239,7 +3277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             isConfigured:
               !!process.env.PAYPAL_CLIENT_ID &&
               !!process.env.PAYPAL_CLIENT_SECRET,
-            environment: process.env.NODE_ENV,
+            environment: process.env.PAYPAL_ENV,
             sandbox: process.env.PAYPAL_ENV === "sandbox",
           },
         });
@@ -4448,7 +4486,7 @@ router.post("/api/seller/connect", requireAuth, async (req, res) => {
     }
 
     // In sandbox mode, give the option to bypass PayPal integration
-    if (process.env.NODE_ENV !== "production" && req.query.test === "true") {
+    if (process.env.PAYPAL_ENV !== "production" && req.query.test === "true") {
       console.log("[API] Using test mode for seller account");
 
       const testMerchantId = randomPaypalID();
@@ -4476,7 +4514,7 @@ router.post("/api/seller/connect", requireAuth, async (req, res) => {
     res.status(500).json({
       error: "Failed to create seller account",
       details: error instanceof Error ? error.message : "Unknown error",
-      sandbox: process.env.NODE_ENV !== "production",
+      sandbox: process.env.PAYPAL_ENV !== "production",
     });
   }
 });
