@@ -1,6 +1,6 @@
-import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest, notifications, type Notification, type InsertNotification, payments, type Payment, type InsertPayment, PaymentStatus, sellerPayouts, type SellerPayout, type InsertSellerPayout } from "@shared/schema";
+import { users, type User, type InsertUser, auctions, type Auction, type InsertAuction, profiles, type Profile, type InsertProfile, bids, type Bid, type InsertBid, buyerRequests, type BuyerRequest, type InsertBuyerRequest, notifications, type Notification, type InsertNotification, payments, type Payment, type InsertPayment, PaymentStatus, sellerPayouts, type SellerPayout, type InsertSellerPayout, passwordResetTokens, type PasswordResetToken, type InsertPasswordResetToken } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, lt, gt, not } from "drizzle-orm";
 import { Store } from "express-session";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
@@ -58,6 +58,12 @@ export interface IStorage {
   getPaymentByAuctionId(auctionId: number): Promise<Payment | undefined>;
   getBidsForAuction(auctionId: number): Promise<Bid[]>;
   deleteAuction(auctionId: number): Promise<void>;
+  // Password reset related methods
+  createPasswordResetToken(userId: number, token: string, expiryHours: number): Promise<PasswordResetToken>;
+  getPasswordResetTokenByToken(token: string): Promise<PasswordResetToken | undefined>;
+  getValidPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenAsUsed(tokenId: number): Promise<void>;
+  updateUserPassword(userId: number, newPassword: string): Promise<User>;
 }
 
 // Implementation of the storage interface
@@ -1032,7 +1038,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createSellerPayOut(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout> {
+  async createSellerPayout(sellerId: number, data: InsertSellerPayout): Promise<SellerPayout> {
     try {
       log(`Creating seller payout for seller ${sellerId}`, "payouts");
       const [payout] = await db
@@ -1080,6 +1086,120 @@ export class DatabaseStorage implements IStorage {
       return user;
     } catch (error) {
       log(`Error getting user by email ${email}: ${error}`, "users");
+      throw error;
+    }
+  }
+
+  async createPasswordResetToken(userId: number, token: string, expiryHours: number): Promise<PasswordResetToken> {
+    try {
+      log(`Creating password reset token for user ${userId}`, "password-reset");
+      
+      // Calculate expiry date (default: 24 hours)
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + (expiryHours || 24));
+      
+      // Insert the token
+      const [resetToken] = await db
+        .insert(passwordResetTokens)
+        .values({
+          userId,
+          token,
+          expiresAt,
+        })
+        .returning();
+      
+      log(`Successfully created password reset token for user ${userId}`, "password-reset");
+      return resetToken;
+    } catch (error) {
+      log(`Error creating password reset token: ${error}`, "password-reset");
+      throw error;
+    }
+  }
+  
+  async getPasswordResetTokenByToken(token: string): Promise<PasswordResetToken | undefined> {
+    try {
+      log(`Looking up password reset token`, "password-reset");
+      
+      const [resetToken] = await db
+        .select()
+        .from(passwordResetTokens)
+        .where(eq(passwordResetTokens.token, token));
+      
+      return resetToken;
+    } catch (error) {
+      log(`Error getting password reset token: ${error}`, "password-reset");
+      throw error;
+    }
+  }
+  
+  async getValidPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    try {
+      log(`Validating password reset token`, "password-reset");
+      
+      const now = new Date();
+      
+      // Find token that is:
+      // 1. Matching the provided token
+      // 2. Not expired (expiry date > current time)
+      // 3. Not used
+      const [resetToken] = await db
+        .select()
+        .from(passwordResetTokens)
+        .where(
+          and(
+            eq(passwordResetTokens.token, token),
+            gt(passwordResetTokens.expiresAt, now),
+            eq(passwordResetTokens.used, false)
+          )
+        );
+      
+      if (resetToken) {
+        log(`Found valid password reset token for user ${resetToken.userId}`, "password-reset");
+      } else {
+        log(`No valid password reset token found`, "password-reset");
+      }
+      
+      return resetToken;
+    } catch (error) {
+      log(`Error validating password reset token: ${error}`, "password-reset");
+      throw error;
+    }
+  }
+  
+  async markPasswordResetTokenAsUsed(tokenId: number): Promise<void> {
+    try {
+      log(`Marking password reset token ${tokenId} as used`, "password-reset");
+      
+      await db
+        .update(passwordResetTokens)
+        .set({ used: true })
+        .where(eq(passwordResetTokens.id, tokenId));
+      
+      log(`Successfully marked password reset token ${tokenId} as used`, "password-reset");
+    } catch (error) {
+      log(`Error marking password reset token as used: ${error}`, "password-reset");
+      throw error;
+    }
+  }
+  
+  async updateUserPassword(userId: number, newPassword: string): Promise<User> {
+    try {
+      log(`Updating password for user ${userId}`, "password-reset");
+      
+      const [updatedUser] = await db
+        .update(users)
+        .set({ password: newPassword })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      if (!updatedUser) {
+        throw new Error(`Failed to update password for user ${userId}`);
+      }
+      
+      log(`Successfully updated password for user ${userId}`, "password-reset");
+      return updatedUser;
+    } catch (error) {
+      log(`Error updating user password: ${error}`, "password-reset");
       throw error;
     }
   }

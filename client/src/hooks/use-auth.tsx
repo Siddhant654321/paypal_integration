@@ -16,9 +16,14 @@ type AuthContextType = {
   loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
+  forgotPasswordMutation: UseMutationResult<void, Error, ForgotPasswordData>;
+  resetPasswordMutation: UseMutationResult<void, Error, ResetPasswordData>;
+  verifyResetTokenMutation: UseMutationResult<{ userId: number }, Error, { token: string }>;
 };
 
 type LoginData = Pick<InsertUser, "username" | "password">;
+type ForgotPasswordData = { email: string };
+type ResetPasswordData = { token: string; newPassword: string };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -192,6 +197,123 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     },
   });
+  
+  // Password reset request mutation
+  const forgotPasswordMutation = useMutation({
+    mutationFn: async (data: ForgotPasswordData) => {
+      console.log("[AUTH] Requesting password reset for email:", data.email);
+      
+      const response = await fetch('/api/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      });
+      
+      const responseData = await response.json().catch(() => ({}));
+      
+      if (!response.ok) {
+        console.error("[AUTH] Password reset request error:", responseData);
+        throw new Error(responseData.message || "Failed to request password reset");
+      }
+      
+      return responseData;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password Reset Email Sent",
+        description: "If the email exists in our system, you will receive password reset instructions shortly.",
+      });
+    },
+    onError: (error: Error) => {
+      console.error("[AUTH] Password reset request error:", error);
+      toast({
+        title: "Password Reset Request Failed",
+        description: error.message || "An error occurred. Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Verify reset token mutation
+  const verifyResetTokenMutation = useMutation({
+    mutationFn: async ({ token }: { token: string }) => {
+      console.log("[AUTH] Verifying reset token");
+      
+      const response = await fetch(`/api/reset-password/${token}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      const data = await response.json().catch(() => ({}));
+      
+      if (!response.ok) {
+        console.error("[AUTH] Token verification error:", data);
+        throw new Error(data.message || "Invalid or expired reset token");
+      }
+      
+      return { userId: data.userId };
+    },
+    onError: (error: Error) => {
+      console.error("[AUTH] Token verification error:", error);
+      toast({
+        title: "Invalid Reset Link",
+        description: error.message || "The password reset link is invalid or has expired.",
+        variant: "destructive",
+      });
+      
+      // Redirect to forgot password page after a short delay
+      setTimeout(() => {
+        setLocation("/auth?tab=forgot-password");
+      }, 2000);
+    },
+  });
+  
+  // Reset password mutation
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (data: ResetPasswordData) => {
+      console.log("[AUTH] Resetting password with token");
+      
+      const response = await fetch(`/api/reset-password/${data.token}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ newPassword: data.newPassword })
+      });
+      
+      const responseData = await response.json().catch(() => ({}));
+      
+      if (!response.ok) {
+        console.error("[AUTH] Password reset error:", responseData);
+        throw new Error(responseData.message || "Failed to reset password");
+      }
+      
+      return responseData;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password Reset Successful",
+        description: "Your password has been reset. Please log in with your new password.",
+      });
+      
+      // Redirect to login page after a short delay
+      setTimeout(() => {
+        setLocation("/auth?tab=login");
+      }, 2000);
+    },
+    onError: (error: Error) => {
+      console.error("[AUTH] Password reset error:", error);
+      toast({
+        title: "Password Reset Failed",
+        description: error.message || "An error occurred. Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <AuthContext.Provider
@@ -202,6 +324,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginMutation,
         logoutMutation,
         registerMutation,
+        forgotPasswordMutation,
+        resetPasswordMutation,
+        verifyResetTokenMutation,
       }}
     >
       {children}

@@ -1,54 +1,43 @@
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
-import { promisify } from "util";
+import crypto from 'crypto';
+import { scrypt, randomBytes } from 'crypto';
+import { promisify } from 'util';
 
 const scryptAsync = promisify(scrypt);
 
-export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16).toString("hex");
-  const derivedKey = await scryptAsync(password, salt, 64) as Buffer;
-  const hashedPassword = derivedKey.toString("hex");
-  console.log("[PASSWORD] Created new password hash:", {
-    saltLength: salt.length,
-    hashLength: hashedPassword.length,
-    format: "hash.salt"
-  });
-  return `${hashedPassword}.${salt}`;
+/**
+ * Generates a secure random token for password reset
+ * @param length Length of the token to generate
+ * @returns A random token string with the specified length
+ */
+export function generateToken(length: number): string {
+  return crypto
+    .randomBytes(Math.ceil(length / 2))
+    .toString('hex')
+    .slice(0, length);
 }
 
-export async function comparePasswords(supplied: string, stored: string): Promise<boolean> {
-  try {
-    console.log("[PASSWORD] Starting password comparison");
+/**
+ * Hashes a password using scrypt with a random salt
+ * @param password The password to hash
+ * @returns The hashed password with salt
+ */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString('hex');
+  const buf = await scryptAsync(password, salt, 64) as Buffer;
+  return `${buf.toString('hex')}.${salt}`;
+}
 
-    const [hashedPassword, salt] = stored.split(".");
-    if (!hashedPassword || !salt) {
-      console.error("[PASSWORD] Invalid stored password format:", {
-        hasHash: !!hashedPassword,
-        hasSalt: !!salt,
-        storedLength: stored.length
-      });
-      return false;
-    }
-
-    console.log("[PASSWORD] Password format validation:", {
-      saltLength: salt.length,
-      hashLength: hashedPassword.length,
-      format: "hash.salt"
-    });
-
-    const hashedBuf = Buffer.from(hashedPassword, "hex");
-    const suppliedBuf = await scryptAsync(supplied, salt, 64) as Buffer;
-
-    console.log("[PASSWORD] Generated hash comparison:", {
-      storedHashLength: hashedBuf.length,
-      generatedHashLength: suppliedBuf.length
-    });
-
-    const result = timingSafeEqual(hashedBuf, suppliedBuf);
-    console.log("[PASSWORD] Comparison result:", { matches: result });
-
-    return result;
-  } catch (error) {
-    console.error("[PASSWORD] Error comparing passwords:", error);
-    return false;
-  }
+/**
+ * Compares a provided password with a stored hash
+ * @param storedPassword The stored hashed password
+ * @param suppliedPassword The password to check
+ * @returns True if the passwords match, false otherwise
+ */
+export async function comparePasswords(
+  storedPassword: string,
+  suppliedPassword: string
+): Promise<boolean> {
+  const [hashedPassword, salt] = storedPassword.split('.');
+  const buf = await scryptAsync(suppliedPassword, salt, 64) as Buffer;
+  return buf.toString('hex') === hashedPassword;
 }

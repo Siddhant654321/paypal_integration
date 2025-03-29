@@ -71,6 +71,31 @@ const emailStyles = `
 
 // Email templates for different notification types
 const emailTemplates = {
+  passwordReset: (data: { resetLink: string; username: string }) => ({
+    subject: 'Reset Your Password',
+    html: `
+      ${emailStyles}
+      <div class="container">
+        <div class="header">
+          <h1>Password Reset Request</h1>
+        </div>
+        <div class="content">
+          <p>Hello ${data.username},</p>
+          <p>We received a request to reset your password. Please click the button below to create a new password:</p>
+          <p style="text-align: center;">
+            <a href="${data.resetLink}" class="button">Reset Password</a>
+          </p>
+          <p>If you didn't request a password reset, you can safely ignore this email and your password will remain unchanged.</p>
+          <p>This link will expire in 24 hours for security reasons.</p>
+          <p>If the button above doesn't work, copy and paste the following link into your browser:</p>
+          <p style="word-break: break-all;">${data.resetLink}</p>
+        </div>
+        <div class="footer">
+          <p>This is an automated message from the Auctions Platform. Please do not reply to this email.</p>
+        </div>
+      </div>
+    `
+  }),
   bid: (data: { auctionTitle: string; bidAmount: number; auctionId: number; isOutbid?: boolean }) => ({
     subject: data.isOutbid 
       ? `You've been outbid on ${data.auctionTitle}`
@@ -517,6 +542,34 @@ export class EmailService {
     }
   }
 
+  static async sendPasswordResetEmail(email: string, resetToken: string, username: string): Promise<boolean> {
+    try {
+      console.log(`[EMAIL] Sending password reset email to: ${email}`);
+      
+      // Generate reset link using the reset token
+      const resetLink = `${SITE_URL}/reset-password/${resetToken}`;
+      
+      await transporter.sendMail({
+        from: `"Pips 'n Chicks" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: 'Reset Your Password',
+        html: emailTemplates.passwordReset({
+          resetLink,
+          username
+        }).html
+      });
+      
+      console.log(`[EMAIL] Successfully sent password reset email to: ${email}`);
+      return true;
+    } catch (error) {
+      console.error('[EMAIL] Failed to send password reset email:', {
+        email,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return false;
+    }
+  }
+  
   static async sendTestEmails(testEmail: string) {
     try {
       console.log("[EMAIL] Sending test emails to:", testEmail);

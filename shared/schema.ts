@@ -353,3 +353,22 @@ export type SellerPayout = typeof sellerPayouts.$inferSelect;
 export type InsertSellerPayout = z.infer<typeof insertSellerPayoutSchema>;
 export type Fulfillment = typeof fulfillments.$inferSelect;
 export type InsertFulfillment = z.infer<typeof insertFulfillmentSchema>;
+
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  token: text("token").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").notNull().default(false),
+});
+
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens)
+  .omit({
+    id: true,
+    createdAt: true,
+    used: true,
+  });
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
